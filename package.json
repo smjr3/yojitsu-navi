@@ -1,0 +1,39 @@
+{
+  "name": "yojitsu-navi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "保守契約の予実（粗利）管理ダッシュボード",
+  "type": "module",
+  "scripts": {
+    "dev": "observable preview",
+    "build": "observable build",
+    "clean": "observable clean",
+    "fetch": "tsx scripts/fetch-worklogs.ts",
+    "validate": "tsx scripts/validate-data.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "check": "npm run typecheck && npm run validate && npm run test"
+  },
+  "dependencies": {
+    "@observablehq/framework": "^1.13.4",
+    "@observablehq/inputs": "^0.12.0",
+    "@observablehq/plot": "^0.6.17",
+    "d3": "^7.9.0",
+    "d3-dsv": "^3.0.1",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/d3-dsv": "^3.0.7",
+    "@types/node": "^22.10.0",
+    "fast-check": "^3.23.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

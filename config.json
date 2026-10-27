@@ -1,0 +1,39 @@
+{
+  "$schema": "./src/core/config.schema.json",
+  "fiscalYearStartMonth": 4,
+  "standardHoursPerMonth": 160,
+  "hoursPerBusinessDay": 8,
+  "burnRateDangerThreshold": 1.0,
+  "closingBusinessDay": 3,
+  "forecastMethodDefault": "recent3",
+  "forecastRecentMonths": 3,
+  "currency": { "code": "JPY", "defaultUnit": "yen" },
+  "labels": {
+    "customer": "顧客",
+    "project": "案件",
+    "contract": "契約",
+    "team": "チーム",
+    "member": "メンバー"
+  },
+  "worklogSource": {
+    "adapter": "csv",
+    "csv": { "path": "data/worklogs" },
+    "http": {
+      "url": "",
+      "authHeader": "Authorization",
+      "refetchMonths": 3,
+      "columns": {
+        "date": "date",
+        "memberId": "member_id",
+        "memberName": "member_name",
+        "customerName": "customer_name",
+        "projectName": "project_name",
+        "task": "task",
+        "hours": "hours"
+      }
+    }
+  },
+  "costTypes": [
+    { "id": "labor", "label": "工数原価" }
+  ]
+}
