@@ -1,5 +1,25 @@
 // Observable Framework 設定
 // https://observablehq.com/framework/config
+import { readFileSync } from "node:fs";
+
+/** data/contracts.csv の契約ID（作業ログ明細の動的パス用）。読めなければ空 */
+function contractIds() {
+  try {
+    const text = readFileSync(new URL("./data/contracts.csv", import.meta.url), "utf-8").replace(/^﻿/, "");
+    const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const idx = Math.max(0, header.indexOf("contract_id"));
+    const ids = new Set();
+    for (const line of lines.slice(1)) {
+      const id = (line.split(",")[idx] ?? "").trim().replace(/^"|"$/g, "");
+      if (/^[A-Za-z0-9_-]+$/.test(id)) ids.add(id);
+    }
+    return [...ids];
+  } catch {
+    return [];
+  }
+}
+
 export default {
   title: "予実ナビ",
   root: "src",
@@ -11,7 +31,9 @@ export default {
     { name: "計算ルール", path: "/rules" },
     { name: "データ確認", path: "/data-check" },
   ],
-  head: '<link rel="icon" href="data:,">',
+  // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
+  dynamicPaths: contractIds().map((id) => `/data/worklogs/${id}.json`),
+  head: '<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">',
   toc: false,
   pager: false,
   sidebar: true,
@@ -24,4 +46,6 @@ export default {
   // 依存ライブラリはビルド時に同梱され、CDNは不要（社内公開向け）
   globalStylesheets: [],
   typographyDefault: false,
+  // 画面のスタイル（既定テーマを読み込んだ上で上書き）
+  style: "style.css",
 };

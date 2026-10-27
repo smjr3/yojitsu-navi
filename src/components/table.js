@@ -1,0 +1,327 @@
+/**
+ * 一覧表: 並べ替え（aria-sort）・固定ヘッダ・右寄せ数値・状態チップ・行クリック・Excel 出力・木構造（チーム一覧）
+ *
+ * dataTable({
+ *   columns: [{ key, label, type: "text"|"money"|"percent"|"hours"|"int"|"status"|"custom",
+ *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
+ *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean }],
+ *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
+ *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効）,
+ *   summary?: row（tfoot の合計行）, maxHeight?: px, toolbar?: Node
+ * })
+ */
+import { html } from "htl";
+import { EMPTY_VALUE, formatHours, formatPercent, integer, money } from "./format.js";
+import { numberButton } from "./breakdown.js";
+import { statusChip } from "./kpi.js";
+
+const NUMERIC_TYPES = new Set(["money", "percent", "hours", "int"]);
+
+function isNumeric(col) {
+  return col.align === "num" || NUMERIC_TYPES.has(col.type);
+}
+
+function defaultRender(col, row, unit) {
+  const v = col.get ? col.get(row) : row[col.key];
+  switch (col.type) {
+    case "money":
+      return money(v, unit);
+    case "percent":
+      return formatPercent(v);
+    case "hours":
+      return formatHours(v);
+    case "int":
+      return integer(v);
+    case "status":
+      return v ? statusChip(v.kind, v.text, v.title ?? null) : "";
+    default:
+      return v === null || v === undefined || v === "" ? (col.empty ?? EMPTY_VALUE) : String(v);
+  }
+}
+
+function defaultExport(col, row, unit) {
+  const v = col.get ? col.get(row) : row[col.key];
+  switch (col.type) {
+    case "money":
+      return typeof v === "number" && Number.isFinite(v) ? (unit === "k" ? Math.round(v / 1000) : Math.round(v)) : null;
+    case "percent":
+      return typeof v === "number" && Number.isFinite(v) ? Math.round(v * 1000) / 10 : null;
+    case "hours":
+    case "int":
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    case "status":
+      return v ? v.text : "";
+    default:
+      return v === null || v === undefined ? "" : typeof v === "object" ? String(v.text ?? "") : v;
+  }
+}
+
+function exportLabel(col, unit) {
+  if (col.exportLabel) return col.exportLabel;
+  switch (col.type) {
+    case "money":
+      return `${col.label}（${unit === "k" ? "千円" : "円"}）`;
+    case "percent":
+      return `${col.label}（%）`;
+    case "hours":
+      return `${col.label}（h）`;
+    default:
+      return col.label;
+  }
+}
+
+function sortValue(col, row) {
+  if (col.sortValue) return col.sortValue(row);
+  const v = col.get ? col.get(row) : row[col.key];
+  if (v && typeof v === "object" && "text" in v) return v.text;
+  return v;
+}
+
+function compare(a, b, dir) {
+  const an = a === null || a === undefined || (typeof a === "number" && Number.isNaN(a));
+  const bn = b === null || b === undefined || (typeof b === "number" && Number.isNaN(b));
+  if (an && bn) return 0;
+  if (an) return 1; // 空は常に末尾
+  if (bn) return -1;
+  let r;
+  if (typeof a === "number" && typeof b === "number") r = a - b;
+  else r = String(a).localeCompare(String(b), "ja");
+  return dir === "desc" ? -r : r;
+}
+
+/** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存 */
+export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1" }) {
+  const XLSX = await import("xlsx");
+  const header = columns.map((c) => exportLabel(c, unit));
+  const body = rows.map((r) => columns.map((c) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit))));
+  const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+  ws["!cols"] = columns.map((c) => ({ wch: Math.max(10, Math.min(40, String(exportLabel(c, unit)).length * 2)) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheet.slice(0, 31));
+  XLSX.writeFile(wb, `${name}.xlsx`);
+}
+
+export function exportButton(getPayload, label = "Excel出力") {
+  const btn = html`<button type="button" class="yn-btn yn-btn-sm yn-export"><span aria-hidden="true">⤓</span> ${label}</button>`;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      await exportXlsx(getPayload());
+    } catch (error) {
+      console.error(error);
+      alert(`Excel 出力に失敗しました: ${error?.message ?? error}`);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  return btn;
+}
+
+export function dataTable({
+  columns,
+  rows,
+  rowKey = (r, i) => r.key ?? r.id ?? i,
+  unit = "yen",
+  sort = null,
+  rowHref = null,
+  caption = null,
+  exportName = null,
+  emptyText = "該当するデータがありません",
+  tree = false,
+  summary = null,
+  maxHeight = null,
+  toolbar = null,
+  id = null,
+}) {
+  const visibleCols = columns.filter((c) => !c.hidden);
+  let sortState = tree ? null : sort ? { ...sort } : null;
+  const collapsed = new Set();
+  let currentRows = rows;
+
+  const table = html`<table class="yn-table" id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
+  const thead = html`<thead></thead>`;
+  const tbody = html`<tbody></tbody>`;
+  table.append(thead, tbody);
+
+  function orderedRows() {
+    if (tree) {
+      // 折りたたみ: 祖先が collapsed なら非表示
+      const byKey = new Map(rows.map((r) => [r.key, r]));
+      return rows.filter((r) => {
+        let p = r.parentKey;
+        while (p !== null && p !== undefined) {
+          if (collapsed.has(p)) return false;
+          p = byKey.get(p)?.parentKey ?? null;
+        }
+        return true;
+      });
+    }
+    if (!sortState) return rows;
+    const col = columns.find((c) => c.key === sortState.key);
+    if (!col) return rows;
+    return rows
+      .map((r, i) => ({ r, i, v: sortValue(col, r) }))
+      .sort((a, b) => compare(a.v, b.v, sortState.dir) || a.i - b.i)
+      .map((x) => x.r);
+  }
+
+  function renderHead() {
+    thead.replaceChildren(
+      html`<tr>${visibleCols.map((col) => {
+        const numeric = isNumeric(col);
+        const sortable = !tree && col.sortable !== false;
+        const active = sortState && sortState.key === col.key;
+        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}`} style=${col.width ? `width:${col.width}` : null} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
+        if (sortable) {
+          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${col.label}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span></button>`;
+          btn.addEventListener("click", () => {
+            const first = numeric ? "desc" : "asc";
+            sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
+            renderHead();
+            renderBody();
+          });
+          th.append(btn);
+        } else th.textContent = col.label;
+        return th;
+      })}</tr>`,
+    );
+  }
+
+  function cellNode(col, row) {
+    const text = col.render ? col.render(row, unit) : defaultRender(col, row, unit);
+    if (col.breakdown && text !== EMPTY_VALUE && text !== "") {
+      const spec = () => col.breakdown(row);
+      return numberButton(text, spec, { ariaLabel: `${col.label} ${typeof text === "string" ? text : ""} の計算根拠を表示` });
+    }
+    return text;
+  }
+
+  function renderRow(row, i) {
+    const href = rowHref ? rowHref(row) : null;
+    const danger = row.isDanger || row.isDeficit || row.isOverBudget;
+    const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
+    visibleCols.forEach((col, ci) => {
+      const numeric = isNumeric(col);
+      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
+      const cell = ci === 0 ? html`<th scope="row" class=${cls}></th>` : html`<td class=${cls}></td>`;
+      let content = cellNode(col, row);
+      if (ci === 0) {
+        if (tree) {
+          const indent = html`<span class="yn-tree-indent" style=${`--depth:${row.depth ?? 0}`}></span>`;
+          cell.append(indent);
+          if (row.hasChildren) {
+            const open = !collapsed.has(row.key);
+            const toggle = html`<button type="button" class="yn-tree-toggle" aria-expanded=${open ? "true" : "false"} aria-label=${`${row.name ?? ""} の配下を${open ? "閉じる" : "開く"}`}><span aria-hidden="true">${open ? "▾" : "▸"}</span></button>`;
+            toggle.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              if (collapsed.has(row.key)) collapsed.delete(row.key);
+              else collapsed.add(row.key);
+              renderBody();
+            });
+            cell.append(toggle);
+          } else cell.append(html`<span class="yn-tree-toggle yn-tree-leaf" aria-hidden="true"></span>`);
+        }
+        if (href) content = html`<a class="yn-row-link" href=${href}>${content}</a>`;
+      }
+      cell.append(content);
+      tr.append(cell);
+    });
+    if (href) {
+      tr.addEventListener("click", (ev) => {
+        if (ev.defaultPrevented) return;
+        if (ev.target.closest("a, button, input, select, label")) return;
+        if (window.getSelection()?.toString()) return;
+        location.href = href;
+      });
+    }
+    return tr;
+  }
+
+  function renderBody() {
+    currentRows = orderedRows();
+    if (currentRows.length === 0) {
+      tbody.replaceChildren(html`<tr class="yn-table-empty"><td colspan=${visibleCols.length}>${emptyText}</td></tr>`);
+    } else {
+      tbody.replaceChildren(...currentRows.map(renderRow));
+    }
+    if (count) count.textContent = tree ? `${integer(rows.length)} 行` : `${integer(rows.length)} 件`;
+  }
+
+  renderHead();
+  const count = html`<span class="yn-table-count" aria-live="polite"></span>`;
+  renderBody();
+
+  if (summary) {
+    const tfoot = html`<tfoot><tr class="yn-summary-row">${visibleCols.map((col, ci) => {
+      const numeric = isNumeric(col);
+      const has = summary[col.key] !== undefined && summary[col.key] !== null;
+      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? "" : cellNode(col, summary);
+      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}`}>${content}</td>`;
+    })}</tr></tfoot>`;
+    table.append(tfoot);
+  }
+
+  const exportBtn = exportName
+    ? exportButton(() => ({
+        columns: visibleCols.filter((c) => c.export !== false),
+        rows: tree ? rows.map((r) => ({ ...r, name: `${"　".repeat(r.depth ?? 0)}${r.name ?? ""}` })) : currentRows,
+        unit,
+        name: exportName,
+        sheet: caption ?? exportName,
+      }))
+    : null;
+
+  const wrap = html`<div class="yn-table-block">
+    <div class="yn-table-toolbar">${count}${toolbar}${exportBtn}</div>
+    <div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? "一覧"}>${table}</div>
+  </div>`;
+  wrap.refresh = () => renderBody();
+  wrap.getRows = () => currentRows;
+  return wrap;
+}
+
+/**
+ * 全一覧で共通の数値列（予算・原価・粗利・粗利率・消化率・着地）。
+ * breakdowns: {budget(row), cost(row), grossProfit(row), margin(row), burnRate(row), forecast(row)} を渡すと各セルが根拠ボタンになる
+ */
+export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利", includeHours = false } = {}) {
+  const cols = [
+    { key: "budget", label: "予算", type: "money", breakdown: breakdowns.budget },
+    { key: "cost", label: "原価", type: "money", breakdown: breakdowns.cost },
+    { key: "grossProfit", label: "粗利", type: "money", breakdown: breakdowns.grossProfit },
+    { key: "grossMargin", label: "粗利率", type: "percent", breakdown: breakdowns.margin },
+    {
+      key: "burnRate",
+      label: "消化率",
+      type: "percent",
+      breakdown: breakdowns.burnRate,
+      render: (row) => {
+        const t = formatPercent(row.burnRate);
+        return row.isOverBudget ? html`<span class="yn-danger-text"><span aria-hidden="true">▲</span> ${t}</span>` : t;
+      },
+    },
+    {
+      key: "forecastGrossProfit",
+      label: forecastLabel,
+      type: "money",
+      breakdown: breakdowns.forecast,
+      render: (row, unit) => {
+        if (row.forecastGrossProfit === null || row.forecastGrossProfit === undefined) return EMPTY_VALUE;
+        const t = money(row.forecastGrossProfit, unit);
+        return row.isDeficit && row.forecastGrossProfit < 0 ? html`<span class="yn-danger-text"><span aria-hidden="true">▲</span> ${t}</span>` : t;
+      },
+    },
+  ];
+  if (includeHours) cols.splice(2, 0, { key: "hours", label: "時間", type: "hours", hideOnPhone: true });
+  return cols;
+}
+
+/** 行の状態（チップ用）。赤は 消化率超過 と 赤字着地 だけ */
+export function rowStatus(row) {
+  const parts = [];
+  if (row.isDeficit) parts.push("赤字見込み");
+  if (row.isOverBudget) parts.push("消化率超過");
+  if (parts.length) return { kind: "danger", text: parts.join("・") };
+  if (row.includesPreliminary) return { kind: "prelim", text: "速報含む" };
+  return { kind: "ok", text: "問題なし" };
+}

@@ -20,6 +20,29 @@
 
 数値をクリックすると「式 ＋ 実際に使った値」の内訳が開きます。
 
+`/contract?id=C008` 契約詳細（契約一覧・赤字見込み一覧の行から遷移）は、月ごとの予実・メンバー別の原価・3 方式の着地見込み・元の作業ログまで辿れます。
+
+### 画面のスクリーンショット
+
+| 全体サマリー | チーム一覧 |
+|---|---|
+| ![全体サマリー](docs/screenshots/index.png) | ![チーム一覧](docs/screenshots/teams.png) |
+
+| 契約一覧 | 契約詳細 |
+|---|---|
+| ![契約一覧](docs/screenshots/contracts.png) | ![契約詳細](docs/screenshots/contract.png) |
+
+| 計算根拠（内訳パネル） | データ確認 |
+|---|---|
+| ![計算根拠](docs/screenshots/breakdown.png) | ![データ確認](docs/screenshots/data-check.png) |
+
+| 計算ルール | ダークモード | スマートフォン幅 |
+|---|---|---|
+| ![計算ルール](docs/screenshots/rules.png) | ![ダークモード](docs/screenshots/index-dark.png) | ![スマートフォン幅](docs/screenshots/index-phone.png) |
+
+画面の構成・状態管理・ページの追加方法は [docs/UI_NOTES.md](docs/UI_NOTES.md) を参照。
+期間・チーム・単位・着地方式は URL クエリ（`?from=2026-04&to=2027-03&team=T111&unit=k&method=recent3`）に入るので、URL を共有すると同じ表示を再現できます。
+
 ## ローカルで動かす
 
 ```bash
@@ -35,7 +58,7 @@ npm run dev                         # http://localhost:3000
 ```bash
 npm run check        # typecheck + validate + test をまとめて
 npm run test         # vitest（unit / property / integration）
-npm run build        # dist/ に静的サイトを生成
+npm run build        # dist/ に静的サイトを生成（YOJITSU_AS_OF=2026-10-27 で計算基準日を固定できる）
 npx tsx scripts/generate-dummy.ts --seed 7 --asOf 2026-06-15   # 別シナリオで生成
 ```
 
@@ -155,5 +178,8 @@ scripts/
   lib/                   Node 用の補助（文字コード判定、CSV、読み込み）
 src/core/                計算コア（純粋関数。画面に依存しない）
 src/*.md                 画面（Observable Framework）
+src/components/          画面の部品（KPI・表・グラフ・内訳パネル・フィルタ・状態管理）
+src/data/                データローダ（model.json / worklogs/[contractId].json / dataset-issues.json）
+src/style.css            デザイントークンとスタイル（ライト／ダーク）
 tests/                   unit / property / integration / e2e
 ```
