@@ -42,25 +42,80 @@ export interface Config {
   currency: { code: string; defaultUnit: MoneyUnit };
   labels: { customer: string; project: string; contract: string; team: string; member: string };
   worklogSource: WorklogSourceConfig;
+  /** 所属・役職の取り込み元（省略 = none: 手入力） */
+  memberSource?: MemberSourceConfig;
   costTypes: CostTypeDef[];
+}
+
+/** 取得元の列指定。ドット区切りで入れ子（"member.id"）、配列なら複数候補（最初に値があるもの） */
+export type ColumnSpec = string | string[];
+
+export type DateFormat = "YYYY-MM-DD" | "YYYY/MM/DD" | "YYYYMMDD" | "ISO8601" | "epochMillis";
+
+export type PaginationConfig =
+  | { type: "none" }
+  | { type: "page"; pageParam: string; sizeParam: string; size: number; startPage?: number; maxPages?: number }
+  | { type: "offset"; offsetParam: string; limitParam: string; limit: number; maxPages?: number }
+  | { type: "link"; maxPages?: number }
+  | { type: "cursor"; cursorPath: string; cursorParam: string; maxPages?: number };
+
+/** 取り込まない行の条件。equals / notEquals / in のどれか1つを書く */
+export interface SourceFilter {
+  column: string;
+  equals?: string | number | boolean;
+  notEquals?: string | number | boolean;
+  in?: Array<string | number | boolean>;
+}
+
+/** http 取得元の共通設定（作業実績・メンバーで共有） */
+export interface HttpSourceOptions {
+  url: string;
+  authHeader: string;
+  /** 任意: JSON応答で配列がネストしている場合のパス（例 "data.items"） */
+  dataPath?: string;
+  /** 任意: 認証ヘッダの値の接頭辞（例 "Bearer"） */
+  authScheme?: string;
+  /** 任意: HTTPメソッド（既定 GET） */
+  method?: string;
+  /** 任意: ページング（既定 none） */
+  pagination?: PaginationConfig;
+  /** 任意: 追加のクエリ文字列（固定値）。{from} {to} {fromDate} {toDate} を置換 */
+  query?: string;
+  /** 任意: 取り込まない行の条件（すべてに合う行だけ取り込む） */
+  filters?: SourceFilter[];
+  /** 任意: CSV 応答の文字コード（既定 auto） */
+  encoding?: "auto" | "utf-8" | "shift_jis";
 }
 
 export interface WorklogSourceConfig {
   adapter: "csv" | "http" | "dummy";
   csv: { path: string };
-  http: {
-    url: string;
-    authHeader: string;
+  http: HttpSourceOptions & {
     refetchMonths: number;
-    /** 任意: JSON応答で配列がネストしている場合のパス（例 "data.items"） */
-    dataPath?: string;
-    /** 任意: 認証ヘッダの値の接頭辞（例 "Bearer"） */
-    authScheme?: string;
-    /** 任意: HTTPメソッド（既定 GET） */
-    method?: string;
-    /** 取得元の列名 → 予実ナビの項目名 */
-    columns: Record<keyof Worklog, string>;
+    /** 取得元の列名 → 予実ナビの項目名（配列は複数候補） */
+    columns: Record<keyof Worklog, ColumnSpec>;
+    /** 任意: 日付の形式（既定: 自動判定） */
+    dateFormat?: DateFormat;
+    /** 任意: 作業時間の単位（既定 hours） */
+    hoursUnit?: "hours" | "minutes" | "seconds";
   };
+}
+
+/** 所属・役職の取り込み項目（team_id は取り込まない） */
+export type MemberImportField = "memberId" | "name" | "kind" | "title" | "department" | "section";
+
+/** 所属・役職の取り込み元（人事系）。adapter が none の間は手入力 */
+export interface MemberSourceConfig {
+  adapter: "csv" | "http" | "none";
+  /** csv: 人事の CSV を置く運用 */
+  csv?: { path: string; encoding?: "auto" | "utf-8" | "shift_jis" };
+  http?: HttpSourceOptions;
+  /** 取得元の列名。memberId と name は必須、他は省略可（省略した項目は取り込まず、現在の値を引き継ぐ） */
+  columns?: Partial<Record<MemberImportField, ColumnSpec>>;
+  /** 任意: 区分の値の読み替え（例 {"正社員":"employee","委託":"partner"}） */
+  kindMap?: Record<string, MemberKind>;
+  /** 任意: 取り込まない行の条件（csv / http 共通。退職者の除外など） */
+  filters?: SourceFilter[];
 }
 
 // ---------------------------------------------------------------------------
