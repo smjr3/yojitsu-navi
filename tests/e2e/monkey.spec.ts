@@ -7,7 +7,7 @@
 import { test as base, expect, type ElementHandle, type Page } from "@playwright/test";
 import { watchErrors, assertNoErrors, waitForPage } from "./helpers/app.js";
 
-const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/data-check"];
+const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/data-check", "/team?id=S21", "/team?id=NOPE"];
 const seedsEnv = (process.env.MONKEY_SEEDS ?? "1,2,3").trim();
 const SEEDS = /^\d+$/.test(seedsEnv) && !seedsEnv.includes(",") ? Array.from({ length: Number(seedsEnv) }, (_, i) => i + 1) : seedsEnv.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
 const ACTIONS = Number(process.env.MONKEY_ACTIONS ?? 150);

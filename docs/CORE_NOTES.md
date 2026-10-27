@@ -65,3 +65,11 @@
 | memberSource の http | トークンは `MEMBER_API_TOKEN`（作業実績とは別）。`{from}` `{to}` には実行月が入る |
 | members.csv の追記 | 「現在の有効レコード」= `effective_from <= 実行月` で最新の行（無ければ最新の行）。取り込んだ項目に差がある人だけ `effective_from = 実行月` の行を追加し、他の列（team_id など）は現在の有効レコードから引き継ぐ。**その人の実行月の行が既にあれば追加せず更新**（同じ月に 2 行にしない）。取り込み元に無い人は削除せず件数だけ表示。取り込み元にいて members.csv に居ない人は team_id 空で追加。メンバーID重複は先頭を採用、メンバーID空の行は除外（件数をログ）。変化が無いときはファイルを書き換えない |
 | 別オーナーとの共有 | `Config` に `memberSource?` を追加（`masterEdit` は別担当が追加）。`WorklogSourceConfig.http.columns` の値は `string \| string[]`（`string` のみの既存設定はそのまま型が通る） |
+
+## チーム詳細（`core/team-detail.ts`）— 決定事項
+
+| 関数 | 決定 |
+|---|---|
+| `teamOrgChanges(teams, teamId, period)` | 期間内（両端含む）に発効した、そのチーム自身の改名・付け替え・新設と、直下に入った／出た他チームの付け替え・新設を月順に返す。`relation` = self / in / out。新設は全履歴の最古の `effectiveFrom` より後に初めて現れたものだけ（初期登録は変更ではない）。名前も親も同じ再登録は変更ではない。親 `""` と null は同じ。同じ月・同じチームの複数行は後の行を採用。改名と付け替えが同月なら 2 件（改名 → 付け替え）。孫以下の変更・子の改名は含めない |
+| `teamPath(tree, teamId)` | 最上位から自分まで。木に無ければ空。循環しても止まる |
+| `teamMemberCosts(model, contractIds, period, teamScope?)` | CostLine を人ごとに合算（所属は問わない）。原価の大きい順、同額は memberId 順。合計は `aggregate().cost`（原価の種類が labor のみのとき）と一致。`teamScope` を渡すと所属がその外（所属なし含む）の時間・原価を `outside*` に数える。構成比は合計 0 のとき null |

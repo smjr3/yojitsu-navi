@@ -63,7 +63,7 @@ if (model) {
     pageHeader({
       model,
       title: "チーム一覧",
-      lead: "組織階層（事業部 › 課 › チーム）ごとの予実。上位の行は配下すべてのチームの合計です。行をクリックすると、そのチームの契約一覧に移動します。",
+      lead: "組織階層（事業部 › 課 › チーム）ごとの予実。上位の行は配下すべてのチームの合計です。行をクリックすると、そのチームの詳細（KPI・契約・メンバー別原価）に移動します。",
       breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "チーム一覧" }],
       includesPreliminary: vm?.totals.includesPreliminary ?? false,
     }),
@@ -106,7 +106,7 @@ if (vm) {
       tree: true,
       caption: "チーム一覧",
       exportName: `teams_${scope.period.from}_${scope.period.to}`,
-      rowHref: (r) => store.href("./contracts", { team: r.teamId }),
+      rowHref: (r) => store.href("./team", {}, { id: r.teamId }),
       emptyText: "チームがありません",
     }),
   );

@@ -11,7 +11,7 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
+test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
   await gotoPage(page, "/teams");
   const teams = tableByCaption(page, "チーム一覧");
   const leaf = "T111";
@@ -21,6 +21,10 @@ test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約�
   const link = teams.locator(`tbody tr[data-key="${leaf}"] .yn-row-link`);
   await expect(link).toContainText(tree[leaf]!.name);
   await link.click();
+  // チーム行はチーム詳細へ。契約一覧への絞り込みは詳細内のリンクから
+  await expect(page).toHaveURL(/\/team\?/);
+  expect(query(page).get("id")).toBe(leaf);
+  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe(leaf);
   await expect(page.locator("h1")).toHaveText("契約一覧");
@@ -80,8 +84,11 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   for (const id of descendants) await expect(table.locator(`tbody tr[data-key="${id}"]`)).toHaveCount(1);
-  // 中間の課（S21）→ 契約一覧
+  // 中間の課（S21）→ チーム詳細 → 契約一覧
   await table.locator('tbody tr[data-key="S21"] .yn-row-link').click();
+  await expect(page).toHaveURL(/\/team\?/);
+  expect(query(page).get("id")).toBe("S21");
+  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("S21");
   const ids = teamContractIds("S21", FY, model)!;

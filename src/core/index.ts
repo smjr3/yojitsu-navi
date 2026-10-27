@@ -73,3 +73,12 @@ export {
 export { parseCsvTable, parseCsvText, parseDataset, parseNumberCell, type CsvTable, type DatasetFiles, type ParsedDataset } from "./csv.js";
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";
+export {
+  teamMemberCosts,
+  teamOrgChanges,
+  teamPath,
+  type TeamMemberCost,
+  type TeamOrgChange,
+  type TeamOrgChangeKind,
+  type TeamOrgChangeRelation,
+} from "./team-detail.js";
