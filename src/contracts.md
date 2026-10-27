@@ -14,7 +14,7 @@ import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
@@ -71,7 +71,7 @@ if (model) {
 ```
 
 ```js
-if (store) display(filterBar(store, model));
+if (store) mountFilterBar(store, model);
 ```
 
 ```js

@@ -153,7 +153,7 @@ isDeficit           = forecastGrossProfit < 0
 ## 12. 金額・表示
 
 - 内部は常に円の整数（原価は行ごとに四捨五入）。
-- 表示は円（既定）／千円を切替。千円は `Math.round(yen / 1000)` で表示。
+- 表示は百万円（既定）／千円／円を切替（2026-10-27 決定で既定を百万円に変更）。百万円は小数1桁 `Math.round(yen / 100000) / 10`（例 346.3百万円）、千円は `Math.round(yen / 1000)` で表示。既定は `config.json` の `currency.defaultUnit`（`millionYen` | `thousandYen` | `yen`）。
 - 割合は小数1桁（例 103.4%）。
 - 赤表示は消化率 > 閾値 と 着地が赤字 のみ。黄色警告は無し。
 

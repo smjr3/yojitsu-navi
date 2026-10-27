@@ -16,7 +16,9 @@ import {
   totalsFor,
   treeAt,
   yen,
+  DEFAULT_UNIT,
   type ForecastMethod,
+  type Unit,
   type Period,
 } from "./helpers/core.js";
 
@@ -24,7 +26,7 @@ const model = getModel();
 const FY = fiscalPeriod(model);
 
 /** 全体サマリーの KPI 5 枚を core の値と比べる */
-async function expectKpis(page: import("@playwright/test").Page, period: Period, teamId = "", method: ForecastMethod = "recent3", unit: "yen" | "k" = "yen") {
+async function expectKpis(page: import("@playwright/test").Page, period: Period, teamId = "", method: ForecastMethod = "recent3", unit: Unit = DEFAULT_UNIT) {
   const ids = teamContractIds(teamId, period, model);
   const totals = totalsFor(period, ids, model);
   const fc = forecastFor(method, ids, model);
@@ -37,7 +39,7 @@ async function expectKpis(page: import("@playwright/test").Page, period: Period,
 }
 
 test.describe("全体サマリー", () => {
-  test("KPI が core の aggregate / forecastTotals と一致（FY2026・円）", async ({ page }) => {
+  test("KPI が core の aggregate / forecastTotals と一致（FY2026・既定単位）", async ({ page }) => {
     await gotoPage(page, "/");
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
     const { totals, fc } = await expectKpis(page, FY);
@@ -50,11 +52,11 @@ test.describe("全体サマリー", () => {
     const q = query(page);
     expect(q.get("from")).toBe(FY.from);
     expect(q.get("to")).toBe(FY.to);
-    expect(q.get("unit")).toBe("yen");
+    expect(q.get("unit")).toBe(DEFAULT_UNIT);
     expect(q.get("method")).toBe("recent3");
   });
 
-  test("千円に切り替えると KPI と URL が変わる", async ({ page }) => {
+  test("千円・円・百万円に切り替えると KPI と URL が変わる", async ({ page }) => {
     await gotoPage(page, "/");
     await page.locator(".yn-seg-btn[data-unit=k]").click();
     await expect(page.locator(".yn-seg-btn[data-unit=k]")).toHaveAttribute("aria-pressed", "true");
@@ -63,6 +65,9 @@ test.describe("全体サマリー", () => {
     await page.locator(".yn-seg-btn[data-unit=yen]").click();
     await expectKpis(page, FY, "", "recent3", "yen");
     expect(query(page).get("unit")).toBe("yen");
+    await page.locator(".yn-seg-btn[data-unit=m]").click();
+    await expectKpis(page, FY, "", "recent3", "m");
+    expect(query(page).get("unit")).toBe("m");
   });
 
   for (const preset of ["prevFy", "recent3", "recent12", "fy"] as const) {
@@ -148,7 +153,7 @@ test.describe("全体サマリー", () => {
     expect(q.get("from")).toBe(FY.from);
     expect(q.get("to")).toBe(FY.to);
     expect(q.get("team")).toBe("");
-    expect(q.get("unit")).toBe("yen");
+    expect(q.get("unit")).toBe(DEFAULT_UNIT);
     expect(q.get("method")).toBe("recent3");
     // クエリに無いキーは localStorage の値が使われる（from だけ指定 → to は保存値）
     await gotoPage(page, url);

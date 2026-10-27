@@ -15,6 +15,11 @@ describe("表示 (SPEC §12)", () => {
     expect(formatYen(500, "thousandYen")).toBe("1千円");
     expect(formatYen(499, "thousandYen")).toBe("0千円");
     expect(formatYen(-1_500, "thousandYen")).toBe("-1千円"); // Math.round(-1.5) = -1
+    expect(formatYen(346_269_998, "millionYen")).toBe("346.3百万円");
+    expect(formatYen(1_234_567_890, "millionYen")).toBe("1,234.6百万円");
+    expect(formatYen(49_999, "millionYen")).toBe("0.0百万円");
+    expect(formatYen(-4_120_000, "millionYen")).toBe("-4.1百万円");
+    expect(formatYen(-40_000, "millionYen")).toBe("0.0百万円"); // -0 は符号なし
   });
 
   it("formatPercent は小数 1 桁（既定）", () => {

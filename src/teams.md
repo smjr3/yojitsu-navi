@@ -14,7 +14,7 @@ import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, aggregate } from "./core/ind
 import { createStore } from "./components/state.js";
 import { scopeFor, flattenTree, teamRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, teamCountColumns, withForecastCount } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
@@ -72,7 +72,7 @@ if (model) {
 ```
 
 ```js
-if (store) display(filterBar(store, model, { show: ["period", "method", "unit"] }));
+if (store) mountFilterBar(store, model, { show: ["period", "method", "unit"] });
 ```
 
 ```js

@@ -15,10 +15,13 @@ function isDisplayable(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** 円の整数を "1,234,567円" または "1,235千円"（Math.round(yen/1000)）で表示 */
+const millionFormat = fractionFormat(1);
+
+/** 円の整数を "1,234,567円"、"1,235千円"（Math.round(yen/1000)）、"1.2百万円"（小数 1 桁）で表示 */
 export function formatYen(yen: number | null | undefined, unit: MoneyUnit = "yen"): string {
   if (!isDisplayable(yen)) return EMPTY_VALUE;
-  if (unit === "thousandYen") return `${intFormat.format(Math.round(yen / 1000))}千円`;
+  if (unit === "millionYen") return `${millionFormat.format(Math.round(yen / 100_000) / 10 || 0)}百万円`;
+  if (unit === "thousandYen") return `${intFormat.format(Math.round(yen / 1000) || 0)}千円`;
   return `${intFormat.format(Math.round(yen))}円`;
 }
 

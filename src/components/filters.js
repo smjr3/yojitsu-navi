@@ -48,7 +48,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
     from.addEventListener("change", () => store.set({ from: from.value, to: from.value > state().to ? from.value : state().to }));
     to.addEventListener("change", () => store.set({ to: to.value, from: to.value < state().from ? to.value : state().from }));
     const presetBtns = presets.map((p) => {
-      const b = html`<button type="button" class="yn-seg-btn" data-preset=${p.id}>${p.label}</button>`;
+      const b = html`<button type="button" class="yn-seg-btn" data-preset=${p.id} title=${p.label}>${p.short ?? p.label}</button>`;
       b.addEventListener("click", () => store.setPeriod(p.period));
       return b;
     });
@@ -56,8 +56,8 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       <legend>期間</legend>
       <div class="yn-filter-row">
         <label class="visually-hidden" for="yn-filter-from">開始月</label>${from}<span class="yn-filter-sep" aria-hidden="true">〜</span><label class="visually-hidden" for="yn-filter-to">終了月</label>${to}
+        <div class="yn-seg" role="group" aria-label="期間のプリセット">${presetBtns}</div>
       </div>
-      <div class="yn-seg" role="group" aria-label="期間のプリセット">${presetBtns}</div>
     </fieldset>`;
     form.append(group);
     syncers.push((s) => {
@@ -74,7 +74,8 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   if (show.includes("team")) {
     const sel = html`<select class="yn-select" id="yn-filter-team">${teamOptions(model, state().team)}</select>`;
     sel.addEventListener("change", () => store.set({ team: sel.value }));
-    form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? "チーム"}</label>${sel}<small class="yn-filter-help">配下のチームを含めて集計</small></div>`);
+    form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? "チーム"}</label>${sel}<small class="yn-filter-help visually-hidden">配下のチームを含めて集計</small></div>`);
+    sel.title = "配下のチームを含めて集計";
     syncers.push((s) => {
       sel.value = s.team;
     });
@@ -87,11 +88,14 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       input.addEventListener("change", () => input.checked && store.set({ method: m }));
       return html`<label class="yn-radio" for=${`yn-method-${m}`}>${input}<span>${METHOD_LABELS[m]}</span></label>`;
     });
-    const help = html`<small class="yn-filter-help" id="yn-method-help"></small>`;
-    form.append(html`<fieldset class="yn-filter yn-filter-method" aria-describedby="yn-method-help"><legend>着地見込みの方式</legend><div class="yn-radio-group">${radios}</div>${help}</fieldset>`);
+    const help = html`<small class="yn-filter-help visually-hidden" id="yn-method-help"></small>`;
+    form.append(html`<fieldset class="yn-filter yn-filter-method" aria-describedby="yn-method-help"><legend>着地見込み</legend><div class="yn-radio-group yn-seg" role="radiogroup">${radios}</div>${help}</fieldset>`);
     syncers.push((s) => {
       for (const r of form.querySelectorAll('input[name="yn-method"]')) r.checked = r.value === s.method;
       help.textContent = METHOD_DESCRIPTIONS[s.method].replace("N", String(model.config.forecastRecentMonths));
+      for (const r of form.querySelectorAll('input[name="yn-method"]')) {
+        r.closest("label").title = METHOD_DESCRIPTIONS[r.value].replace("N", String(model.config.forecastRecentMonths));
+      }
     });
   }
 
@@ -101,7 +105,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       b.addEventListener("click", () => store.set({ unit: u.id }));
       return b;
     });
-    form.append(html`<div class="yn-filter yn-filter-unit"><span class="yn-filter-label" id="yn-unit-label">表示単位</span><div class="yn-seg" role="group" aria-labelledby="yn-unit-label">${btns}</div></div>`);
+    form.append(html`<div class="yn-filter yn-filter-unit"><span class="yn-filter-label" id="yn-unit-label">単位</span><div class="yn-seg" role="group" aria-labelledby="yn-unit-label">${btns}</div></div>`);
     syncers.push((s) => {
       for (const b of btns) b.setAttribute("aria-pressed", b.dataset.unit === s.unit ? "true" : "false");
     });
@@ -111,4 +115,21 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   sync(state());
   store.subscribe(sync);
   return form;
+}
+
+/**
+ * フィルタ行を上部ヘッダの固定バー（#yn-filterbar-slot）に差し込む。差し込み口が無ければ null を返す。
+ * ページでは display(filterBar(...)) の代わりに mountFilterBar(store, model, { show }) を呼ぶ。
+ */
+export function mountFilterBar(store, model, options = {}) {
+  const form = filterBar(store, model, options);
+  const slot = document.getElementById("yn-filterbar-slot");
+  if (!slot) return form;
+  slot.replaceChildren(form);
+  slot.classList.add("is-filled");
+  // 表示単位は「見せ方」の設定なので、絞り込みとは分けて上段（右上）に置く
+  const unit = form.querySelector(".yn-filter-unit");
+  const unitSlot = document.getElementById("yn-unit-slot");
+  if (unit && unitSlot) unitSlot.replaceChildren(unit);
+  return null;
 }
