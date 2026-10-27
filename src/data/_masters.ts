@@ -54,7 +54,7 @@ function readText(path: string): { text: string; encoding: DetectedEncoding | nu
 }
 
 export function buildMastersPayload(rootDir: string): MastersPayload {
-  const config = loadConfig(rootDir) as ReturnType<typeof loadConfig> & { memberSource?: { adapter?: unknown } };
+  const config = loadConfig(rootDir);
   const inRepo = git(rootDir, ["rev-parse", "--is-inside-work-tree"]) === "true";
   const shallow = inRepo && git(rootDir, ["rev-parse", "--is-shallow-repository"]) === "true";
   const prefix = inRepo ? (git(rootDir, ["rev-parse", "--show-prefix"]) ?? "") : "";
@@ -75,7 +75,7 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
     files,
     context: { contracts: ctx(DATA_FILES.contracts), mapping: ctx(DATA_FILES.mapping), holidays: ctx(DATA_FILES.holidays) },
     masterEdit: resolveMasterEdit(config.masterEdit),
-    memberSourceAdapter: typeof adapter === "string" && adapter !== "" ? adapter : "none",
+    memberSourceAdapter: adapter ?? "none",
     gitAvailable: inRepo && !shallow,
   };
 }
