@@ -2,7 +2,9 @@
  * 取り込んだメンバーを data/masters/members.csv に反映する（純粋関数。ファイルは触らない）
  *
  * 規則（docs/SPEC.md §20.2）:
- * - 現在の有効レコード = そのメンバーの effective_from <= 実行月 で最新の行（無ければ最新の行）
+ * - 現在の有効レコード = そのメンバーの effective_from <= 実行月 で最新の行。
+ *   未来日付の行しか無い人は、いちばん早い行を土台に実行月の行を足す
+ * - 実行月より後の行は残すが、旧値をそのまま引き継いでいる項目は新しい値に揃える
  * - name / kind / title / department / section のどれかが違う人だけ、effective_from = 実行月の行を追加
  *   （team_id など取り込まない列は直前の有効レコードを引き継ぐ）
  * - 実行月の行がすでにある人が同じ月にまた変わったときは、その行を更新する（同じ月に 2 行にしない）
@@ -42,11 +44,19 @@ const FIELD_COLUMN: Array<[keyof MemberImport, string]> = [
   ["section", "section"],
 ];
 
-function currentRecord(rows: Array<{ row: MemberCsvRow; idx: number }>, month: string): { row: MemberCsvRow; idx: number } {
-  const sorted = [...rows].sort((a, b) => (a.row.effective_from ?? "").localeCompare(b.row.effective_from ?? "") || a.idx - b.idx);
-  const upToNow = sorted.filter((r) => (r.row.effective_from ?? "") <= month);
-  const pick = upToNow.length > 0 ? upToNow[upToNow.length - 1] : sorted[sorted.length - 1];
-  return pick as { row: MemberCsvRow; idx: number };
+type Rec = { row: MemberCsvRow; idx: number };
+
+function sortedByFrom(rows: Rec[]): Rec[] {
+  return [...rows].sort((a, b) => (a.row.effective_from ?? "").localeCompare(b.row.effective_from ?? "") || a.idx - b.idx);
+}
+
+/**
+ * 実行月時点の有効レコード（effective_from <= 実行月で最新）。
+ * 実行月より前の行が 1 つも無い（未来日付の行しか無い）ときは undefined。
+ */
+function currentRecord(rows: Rec[], month: string): Rec | undefined {
+  const upToNow = sortedByFrom(rows).filter((r) => (r.row.effective_from ?? "") <= month);
+  return upToNow[upToNow.length - 1];
 }
 
 export function mergeMembers(existing: readonly MemberCsvRow[], imported: readonly MemberImport[], month: string): MergeResult {
@@ -71,7 +81,7 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
     if (!history) {
       const row: MemberCsvRow = {
         member_id: m.memberId,
-        name: m.name,
+        name: m.name ?? "",
         kind: m.kind ?? "employee",
         title: m.title ?? "",
         department: m.department ?? "",
@@ -85,19 +95,31 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
       changes.push({ memberId: m.memberId, kind: "added", fields: [] });
       continue;
     }
-    const cur = currentRecord(history, month).row;
+    // 未来日付の行しか無い人は、いちばん早い行を土台に実行月の行を足す（チームなどを引き継ぐ）
+    const curRec = currentRecord(history, month);
+    const cur = curRec?.row ?? (sortedByFrom(history)[0] as Rec).row;
     const diff: string[] = [];
     for (const [key, col] of FIELD_COLUMN) {
       const v = m[key];
       if (v === undefined) continue;
       if ((cur[col] ?? "").trim() !== v) diff.push(col);
     }
-    if (diff.length === 0) {
+    if (diff.length === 0 && curRec) {
       unchanged++;
       continue;
     }
     changed++;
     changes.push({ memberId: m.memberId, kind: "changed", fields: diff });
+    // 実行月より後の行（予定された変更）は残す。ただし旧値をそのまま引き継いでいる項目は新しい値に揃える
+    // （揃えないと、その日付になった時点で古い値に戻ってしまう）
+    const oldValues = { ...cur };
+    for (const f of history) {
+      if ((f.row.effective_from ?? "") <= month) continue;
+      for (const [key, col] of FIELD_COLUMN) {
+        const v = m[key];
+        if (v !== undefined && (f.row[col] ?? "").trim() === (oldValues[col] ?? "").trim()) f.row[col] = v;
+      }
+    }
     const apply = (target: MemberCsvRow) => {
       for (const [key, col] of FIELD_COLUMN) {
         const v = m[key];

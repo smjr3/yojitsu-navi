@@ -102,6 +102,8 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
       }
 
       const out: Worklog[] = [];
+      let outOfRange = 0;
+      let firstOut = "";
       let n = 0;
       for (const r of rows) {
         n++;
@@ -113,8 +115,19 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
         }
         // 期間外の行は捨てる（API 側の仕様にかかわらず月ファイルの境界を守る）
         const ym = w.date.slice(0, 7);
-        if (ym < from || ym > to) continue;
+        if (ym < from || ym > to) {
+          outOfRange++;
+          if (firstOut === "") firstOut = w.date;
+          continue;
+        }
         out.push(w);
+      }
+      if (outOfRange > 0) logFn(`[http] 期間外（${from}〜${to} 以外）の ${outOfRange} 行を除きました`);
+      // 取得できたのに全行が期間外 = 日付の読み違いの可能性が高い。空で月ファイルを上書きさせない
+      if (rows.length > 0 && out.length === 0) {
+        throw new Error(
+          `取得した ${rows.length} 行がすべて期間外（${from}〜${to} 以外）と判定されました。日付の形式（columns.date / dateFormat）を確認してください（変換後の日付の例: ${firstOut}）`,
+        );
       }
       logFn(`[http] ${out.length} 行を取得`);
       return out;

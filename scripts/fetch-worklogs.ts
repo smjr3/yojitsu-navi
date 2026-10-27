@@ -95,10 +95,17 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
 
   // 月ごとに振り分け（期間外は捨てる。対象月でデータが 0 件でも空ファイルを書く＝取り消しを反映）
   const byMonth = new Map<YearMonth, Worklog[]>(months.map((m) => [m, []]));
+  let outOfRange = 0;
   for (const w of rows) {
     const ym = w.date.slice(0, 7);
     const list = byMonth.get(ym);
     if (list) list.push(w);
+    else outOfRange++;
+  }
+  if (outOfRange > 0) log(`[fetch] 対象月（${from}〜${to}）以外の ${outOfRange} 行を除きました`);
+  // 取得行があるのに全て対象月外なら、日付の読み違いの可能性が高い。既存の月ファイルを空で上書きしない
+  if (rows.length > 0 && outOfRange === rows.length) {
+    throw new Error(`取得した ${rows.length} 行がすべて対象月（${from}〜${to}）の外でした。日付の形式を確認してください。月ファイルは書き換えていません`);
   }
 
   const dir = worklogDir(opts.rootDir, config);
