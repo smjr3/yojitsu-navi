@@ -183,3 +183,103 @@ isDeficit           = forecastGrossProfit < 0
 - UTF-8（BOM あり可）。Shift_JIS も読み込み時に自動判定（`scripts/` で対応）。
 - 1行目はヘッダ。列名は英語（`contract_id` など）で、`docs/DATA.md` に列定義を置く。
 - 空行・空白だけの行は無視。
+
+---
+
+# 2回目リリースの追加仕様（2026-10-28）
+
+範囲: チーム詳細（§16）、顧客別（§17）、メンバー別（§18）、マスタ編集（§19）、本番APIの列名対応（§20）。
+画面の共通ルール（数値列の並び・赤の条件・根拠ボタン・Excel 出力・URL 状態）は初回と同じ（`docs/UI_NOTES.md`）。
+
+## 16. チーム詳細 `/team?id=<teamId>`
+
+問い: 「このチームはなぜ悪いか」。
+- 母集団 = §11 と同じ（`contract.teamId` が自分または配下の契約。組織の基準月は `min(期間の終了月, asOf 月)`）。`id=__unassigned__` は「未設定」グループ。
+- 構成: パンくず（上位チームを辿れる）→ KPI（初回の全体サマリーと同じ5枚）→ 月次推移 → 配下チーム（直下の子ごとの行。子が無ければ出さない）→ 契約一覧（チームの契約のみ）→ メンバー別原価（このチームの契約に工数を付けた人。所属チームが別でも含める＝作業実績軸）→ 組織の変遷（期間内に親・名前が変わった場合だけ、月と内容を列挙）。
+- 存在しない ID・期間内に存在しないチームは空状態で「このチームは選択期間の組織にありません」とし、チーム一覧へのリンクを出す。
+- チーム一覧の行・全体サマリーのチーム別の行からチーム詳細に遷移できるようにする（初回の「契約一覧に絞り込み」はチーム詳細内のリンクに移す）。
+
+## 17. 顧客別 `/customers`、`/customer?key=<customerKey>`
+
+問い: 「どの顧客が悪いか」「この顧客の契約はどうか」。
+- 顧客キー `customerKey = normalizeName(contract.customerName)`（§4.1）。表示名はそのキーの契約のうち **契約ID昇順で最初の契約の `customerName`**。キーが空の契約は「顧客名なし」グループ（キー `__none__`）。
+- 一覧: 顧客ごとに契約数（期間内）・標準数値列（予算・原価・粗利・粗利率・消化率・着地粗利）・状態チップ（赤字見込み件数・予算超過）。チームで絞り込める（チームの契約に限定した顧客集計）。検索欄（`normalizeName` で部分一致）。
+- 詳細: KPI → 月次推移 → 契約一覧（その顧客の契約）→ 担当チーム別（契約の `teamId` ごと）。
+- 前年同期比は初回と同じ規則で KPI に出す（前年データが無い間は「比較データなし」）。
+
+## 18. メンバー別（人ごとの予実） `/members`、`/member?id=<memberId>`
+
+要件: 人ごとの予＝配分人月×基準時間×単価（2026-10-27 決定）。実＝その人の工数原価。
+
+### 18.1 計算
+メンバー x、月 m、契約 c:
+```
+plannedHours(x,c,m) = Σ_{a: a.memberId=x, a.contractId=c, a.startMonth<=m<=a.endMonth} a.allocation × standardHoursPerMonth
+plannedCost(x,c,m)  = round(plannedHours(x,c,m) × 単価(x,m))        // §6 の単価。行(x,c,m)ごとに四捨五入
+actualHours(x,c,m)  = 契約 c・月 m の CostLine のうち memberId=x の hours
+actualCost(x,c,m)   = 同 CostLine の amount
+```
+- 契約期間外の月のアサインは数えない（`plannedHours = 0`。`CONTRACT_INVALID` の契約も同様）。
+- メンバー月の合計 = Σ_c。`variance = plannedCost − actualCost`（正 = 計画より原価が少ない）。
+- 稼働率 `utilization = actualHours / plannedHours`（分母 0 → null）。100% 超を赤にはしない（赤は §12 の 2 つだけ）。表示のみ。
+- 未アサインの工数（アサインの無い契約に付けた工数）は `unplannedHours / unplannedCost` として別に持つ。
+- メンバーの所属・役職・単価は §5 の有効レコード（当時の値）。所属チームは期間の終了月の値で表示し、月ごとの値は内訳に出す。
+- `members.csv` に無いが工数のある ID も行に出す（名前は作業ログの `member_name`、`UNKNOWN_MEMBER` と同じ扱い）。
+- 計算はコアに置く: `Model.memberMonths: MemberMonth[]`（x, m ごと。契約別の内訳 `byContract[]` を持つ）を `buildModel` で作り、画面は期間で合算する `aggregateMembers(model, scope)` を使う。
+
+### 18.2 画面
+- 一覧 `/members`: メンバーごとに 所属チーム・役職・計画時間・実績時間・稼働率・計画原価・実績原価・差額。チーム絞り込みは「所属チーム（期間の終了月）」。検索欄。
+- 詳細 `/member?id=`: 基本情報（所属の変遷）→ KPI（計画原価・実績原価・差額・稼働率）→ 月次推移（計画と実績の時間）→ 契約別（計画・実績・差額。アサイン無しの契約は「アサインなし」チップ）→ 単価の変遷。
+- 計画・実績の数値はすべて根拠ボタン（`allocation × 基準時間 × 単価`、CostLine）を持つ。
+
+## 19. マスタ編集 `/masters`
+
+対象: `data/masters/members.csv`（所属・役職・チーム）、`data/masters/rates.csv`（単価）、`data/masters/teams.csv`（チーム）、`data/assignments.csv`（アサイン）。編集はリーダー層（GitLab の Developer 以上）だけが実際に保存できる。閲覧は誰でも可。
+
+### 19.1 編集の考え方
+- 履歴マスタ（§5）は **行を追加する** のが基本操作（「4月から単価変更」= 新しい `effective_from` の行を足す）。既存行の修正・削除もできるが、過去月の数値が変わる操作には確認ダイアログで「過去の計算結果が変わります（影響: N か月）」と出す。
+- 保存前にブラウザ内で `parseDataset` + `validateDataset`（§14 と同じ）を編集後のデータに対して実行し、error があれば保存ボタンを押せない（理由を行に表示）。warning は表示のみ。
+- 変更差分（追加・変更・削除の行）を保存前に一覧で見せる。
+- CSV の書き出しは列順・改行コード（LF）・UTF-8（BOM なし）を固定し、変更していない行はバイト単位で元のまま残す（差分を最小にする）。
+
+### 19.2 保存方式（config `masterEdit`）
+```jsonc
+"masterEdit": {
+  "mode": "gitlab",           // "gitlab" | "download"
+  "gitlab": {
+    "apiBaseUrl": "",         // 例 https://gitlab.example.local/api/v4（空なら Pages の URL から推定しない。download に自動で落とす）
+    "projectId": "",          // 数値ID または "group/project"
+    "targetBranch": "main",
+    "commitMode": "mr"        // "mr"（ブランチを作り MR を作成）| "direct"（targetBranch へ直接コミット）
+  }
+}
+```
+- `gitlab` モード: 利用者が自分の Personal Access Token（scope `api`）を入力する。トークンは `sessionStorage` にのみ保存し（タブを閉じると消える）、画面に再表示しない。`POST /projects/:id/repository/commits`（`actions[]` で複数ファイルを1コミット、各 action に `last_commit_id` を付けて競合を検出）。`mr` のときは `start_branch=targetBranch`、`branch=masters/<YYYYMMDD-HHmmss>-<user>` で新ブランチにコミットし、`POST /projects/:id/merge_requests` で MR を作る。結果画面に MR/コミットのリンクを出す。
+- 競合（他の人が先に更新、HTTP 400 で last_commit_id 不一致）・権限不足（401/403）・ネットワーク/CORS 失敗は、それぞれ人が読める文で案内し、**編集内容を失わない**。CORS/ネットワーク失敗時は「CSV をダウンロードして GitLab 画面からアップロード」に切り替えるボタンを出す。
+- `download` モード（または API が使えないとき）: 変更したファイルを CSV でダウンロードさせ、GitLab の Web IDE／ファイル画面でアップロードする手順を画面に表示する。
+- ビルド時に `src/data/masters.json.ts` が各ファイルの生テキストと、そのファイルの最終コミットID（`git log -1 --format=%H -- <path>`。取れなければ null）を出す。編集の土台はこの生テキスト。
+- 編集中の内容は `localStorage`（`yojitsu-navi:masters-draft:v1`）に下書き保存し、再訪時に復元を提案する。土台のコミットIDが変わっていたら「元データが更新されています」と警告する。
+
+## 20. 本番 API の列名対応（取り込みアダプタの設定化）
+
+本番の作業実績 API・所属データの仕様は本番でしか確認できないため、**コードを変えずに config だけで合わせられる** ようにする。
+
+### 20.1 作業実績（`worklogSource.http` の拡張）
+| 項目 | 意味 | 既定 |
+|---|---|---|
+| `columns.<field>` | 取得元の列名。ドット区切りで入れ子（`member.id`）。配列で複数候補（最初に値があるもの） | 現行どおり |
+| `dateFormat` | `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601`（時刻付き。JST に変換して日付） / `epochMillis` | 自動判定（左から順に試す） |
+| `hoursUnit` | `hours` / `minutes` / `seconds` | `hours` |
+| `pagination` | `{ type: "none" }` / `{ type: "page", pageParam, sizeParam, size, startPage }` / `{ type: "offset", offsetParam, limitParam, limit }` / `{ type: "link" }`（`Link: rel="next"`）/ `{ type: "cursor", cursorPath, cursorParam }` | `none` |
+| `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | 無し |
+| `filters` | 取り込まない行の条件 `[{ column, equals | notEquals | in }]` | 無し |
+| `encoding` | CSV 応答の文字コード（`auto` / `utf-8` / `shift_jis`） | `auto` |
+- 列が見つからないときはエラーで止め、**応答の最初の1行の列名一覧** を出す（設定ミスを見つけやすくする。値は出さない）。
+- `npm run fetch -- --dry-run --sample=5` で、取得→変換結果の先頭 N 行と列の対応表を表示し、ファイルを書かない（本番での初回設定用）。
+- 設定は `config.json`（コミットする）、トークンは環境変数のみ。
+
+### 20.2 所属・役職の取り込み（`memberSource`）
+所属部署・課・役職は人事系の元データから取り込む（2026-10-27 決定）。`memberSource` は `worklogSource` と同じ仕組み（`adapter: csv | http | none`、`columns`、`pagination` 等）で `memberId, name, kind, title, department, section` を取得し、`npm run fetch:members` で `data/masters/members.csv` を更新する。
+- `team_id` は取り込まない（画面で手入力）。取り込み結果と現在の有効レコードを比べ、`name/kind/title/department/section` のどれかが変わった人だけ `effective_from = 取り込み実行月` の新しい行を追加する（`team_id` は直前の有効レコードを引き継ぐ）。変化が無ければ何もしない（冪等）。
+- 取り込みに無い既存メンバーは削除しない（退職者の過去月を壊さない）。件数を表示する。
+- `memberSource.adapter = "none"`（既定）の間は従来どおり手入力。マスタ編集画面は `memberSource.adapter != "none"` のとき取り込み対象列を読み取り専用にする。
