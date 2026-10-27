@@ -9,6 +9,7 @@
     "build": "observable build",
     "clean": "observable clean",
     "fetch": "tsx scripts/fetch-worklogs.ts",
+    "fetch:members": "tsx scripts/fetch-members.ts",
     "validate": "tsx scripts/validate-data.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

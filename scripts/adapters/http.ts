@@ -2,73 +2,72 @@
  * http アダプタ: 社内の工数管理 API から JSON または CSV で作業実績を取得する（汎用）
  *
  * config.worklogSource.http:
- *   url          取得 URL。{from} {to} が年月（YYYY-MM）に置換される
+ *   url          取得 URL。{from} {to}（YYYY-MM）、{fromDate} {toDate}（YYYY-MM-DD。月初・月末）に置換される
  *                例: https://worklog.example.local/api/export?from={from}&to={to}
  *   authHeader   トークンを載せるヘッダ名（既定 Authorization）
  *   authScheme   （任意）ヘッダ値の接頭辞。既定は Authorization のとき "Bearer"、それ以外は無し
  *   dataPath     （任意）JSON 応答で配列が入っているキー。"data.items" のようにドット区切り
- *   columns      取得元の列名 → 予実ナビの項目名（date, memberId, ...）
+ *   columns      予実ナビの項目名 → 取得元の列名。"member.id" のように入れ子、["a","b"] で複数候補
+ *   dateFormat   （任意）YYYY-MM-DD / YYYY/MM/DD / YYYYMMDD / ISO8601 / epochMillis。既定は自動判定
+ *   hoursUnit    （任意）hours（既定）/ minutes / seconds
+ *   pagination   （任意）none / page / offset / link / cursor（src/core/types.ts の PaginationConfig）
+ *   query        （任意）追加のクエリ文字列（固定値）
+ *   filters      （任意）取り込まない行の条件 [{ column, equals | notEquals | in }]
+ *   encoding     （任意）CSV 応答の文字コード auto / utf-8 / shift_jis
  *   refetchMonths 直近何か月を取り直すか（fetch-worklogs.ts が使う）
  *
  * 環境変数:
- *   WORKLOG_API_TOKEN  認証トークン。ログには絶対に出さない
+ *   WORKLOG_API_TOKEN  認証トークン。ログ・例外メッセージには絶対に出さない
  *
  * 応答形式は Content-Type で判定する（application/json → JSON、text/csv 等 → CSV）。
  * 5xx とネットワークエラーは指数バックオフで最大 3 回再試行する。4xx は再試行しない。
+ * 実処理は ./http-source.ts（メンバー取り込みと共有）。
  */
-import { csvParse } from "d3-dsv";
-import type { Worklog, WorklogSourceConfig } from "../../src/core/types.js";
-import { stripBom } from "../lib/csv.js";
+import type { ColumnSpec, DateFormat, Worklog, WorklogSourceConfig } from "../../src/core/types.js";
+import {
+  assertColumns,
+  fetchRawRows,
+  passesFilters,
+  parseDate,
+  pickValue,
+  resolveMapping,
+  toHours,
+  type ColumnRequirement,
+  type HttpAdapterDeps,
+  type RawRow,
+} from "./http-source.js";
 import type { FetchOptions, WorklogAdapter } from "./types.js";
 
-/** types.ts の http 設定に、任意の拡張項目を加えたもの */
-export type HttpSourceConfig = WorklogSourceConfig["http"] & {
-  authScheme?: string;
-  dataPath?: string;
-  method?: "GET" | "POST";
-};
+export { RetryableError, extractArray, type HttpAdapterDeps } from "./http-source.js";
 
-export interface HttpAdapterDeps {
-  fetchImpl?: typeof fetch;
-  /** 再試行の待ち時間（テストでは 0 にする） */
-  sleep?: (ms: number) => Promise<void>;
-  maxAttempts?: number;
-  baseDelayMs?: number;
+/** types.ts の http 設定（後方互換のための別名） */
+export type HttpSourceConfig = WorklogSourceConfig["http"];
+
+export interface MapRowOptions {
+  dateFormat?: DateFormat | undefined;
+  hoursUnit?: "hours" | "minutes" | "seconds" | undefined;
 }
 
-/** 再試行すべきエラー */
-export class RetryableError extends Error {
-  override readonly name = "RetryableError";
-}
-
-const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/** JSON の中から dataPath で配列を取り出す */
-export function extractArray(json: unknown, dataPath: string | undefined): unknown[] {
-  let cur: unknown = json;
-  if (dataPath && dataPath.trim() !== "") {
-    for (const key of dataPath.split(".")) {
-      if (cur !== null && typeof cur === "object" && key in (cur as Record<string, unknown>)) {
-        cur = (cur as Record<string, unknown>)[key];
-      } else {
-        throw new Error(`応答 JSON に dataPath "${dataPath}" が見つかりません（キー "${key}"）`);
-      }
-    }
-  }
-  if (!Array.isArray(cur)) throw new Error(`応答 JSON が配列ではありません${dataPath ? `（dataPath=${dataPath}）` : ""}`);
-  return cur;
-}
+const FIELDS: Array<keyof Worklog> = ["date", "memberId", "memberName", "customerName", "projectName", "task", "hours"];
 
 /** 取得元の1行（列名 → 値）を Worklog にする */
-export function mapRow(row: Record<string, unknown>, columns: Record<keyof Worklog, string>): Worklog {
+export function mapRow(row: RawRow, columns: Record<keyof Worklog, ColumnSpec>, opts: MapRowOptions = {}): Worklog {
   const str = (k: keyof Worklog): string => {
-    const v = row[columns[k]];
+    const v = pickValue(row, columns[k]);
     return v === null || v === undefined ? "" : String(v);
   };
-  const hoursRaw = row[columns.hours];
-  const hours = typeof hoursRaw === "number" ? hoursRaw : Number(String(hoursRaw ?? "").trim());
+  const dateRaw = pickValue(row, columns.date);
+  let date = "";
+  if (dateRaw !== undefined) {
+    const d = parseDate(dateRaw, opts.dateFormat);
+    if (d === null) throw new Error(`日付を ${opts.dateFormat} として読めません。dateFormat の設定を確認してください`);
+    date = d;
+  }
+  // 時間が空のときは従来どおり 0 として扱う（validate や集計側で気づける）
+  const hoursRaw = pickValue(row, columns.hours);
+  const hours = hoursRaw === undefined ? 0 : toHours(hoursRaw, opts.hoursUnit);
   return {
-    date: str("date").trim().slice(0, 10).replace(/\//g, "-"),
+    date,
     memberId: str("memberId").trim(),
     memberName: str("memberName").trim(),
     customerName: str("customerName"),
@@ -78,99 +77,40 @@ export function mapRow(row: Record<string, unknown>, columns: Record<keyof Workl
   };
 }
 
-function buildUrl(template: string, from: string, to: string): string {
-  return template.replaceAll("{from}", encodeURIComponent(from)).replaceAll("{to}", encodeURIComponent(to));
-}
-
 export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
-  const maxAttempts = deps.maxAttempts ?? 3;
-  const baseDelayMs = deps.baseDelayMs ?? 1000;
-  const sleep = deps.sleep ?? defaultSleep;
-
-  async function requestOnce(url: string, init: RequestInit, log: (m: string) => void): Promise<Response> {
-    const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
-    let res: Response;
-    try {
-      res = await fetchImpl(url, init);
-    } catch (e) {
-      // ネットワークエラー（DNS、接続拒否、タイムアウト等）
-      throw new RetryableError(`ネットワークエラー: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    if (res.status >= 500) {
-      throw new RetryableError(`サーバエラー HTTP ${res.status}`);
-    }
-    if (!res.ok) {
-      // 4xx は設定・認証の問題なので再試行しない。本文の先頭だけ出す（トークンは含まれない）
-      const body = (await res.text().catch(() => "")).slice(0, 200);
-      throw new Error(`HTTP ${res.status} ${res.statusText}: ${body}`);
-    }
-    void log;
-    return res;
-  }
-
   return {
     name: "http",
-    async fetch({ from, to, config, env, log }: FetchOptions): Promise<Worklog[]> {
+    async fetch({ from, to, config, env, log, report }: FetchOptions): Promise<Worklog[]> {
       const logFn = log ?? ((m: string) => console.error(m));
-      const http = config.worklogSource.http as HttpSourceConfig;
+      const http = config.worklogSource.http;
       if (!http.url) throw new Error("config.worklogSource.http.url が設定されていません");
       const token = env.WORKLOG_API_TOKEN ?? "";
       if (token === "") throw new Error("環境変数 WORKLOG_API_TOKEN が設定されていません");
 
-      const headerName = http.authHeader || "Authorization";
-      const scheme = http.authScheme ?? (headerName.toLowerCase() === "authorization" ? "Bearer" : "");
-      const headers: Record<string, string> = {
-        Accept: "application/json, text/csv;q=0.9, text/plain;q=0.8",
-        [headerName]: scheme ? `${scheme} ${token}` : token,
-      };
-      const url = buildUrl(http.url, from, to);
-      const init: RequestInit = { method: http.method ?? "GET", headers };
-      // URL にトークンが含まれる設計は想定しないが、念のためログには URL のホストとパスだけ出す
-      const safeUrl = (() => {
-        try {
-          const u = new URL(url);
-          return `${u.origin}${u.pathname}`;
-        } catch {
-          return "(invalid url)";
-        }
-      })();
-      logFn(`[http] ${from}〜${to} を取得: ${safeUrl}`);
+      const raw = await fetchRawRows(http, { from, to, token, log: logFn, deps });
 
-      let res: Response | undefined;
-      let lastError: unknown;
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          res = await requestOnce(url, init, logFn);
-          break;
-        } catch (e) {
-          lastError = e;
-          if (!(e instanceof RetryableError) || attempt === maxAttempts) throw e;
-          const delay = baseDelayMs * 2 ** (attempt - 1);
-          logFn(`[http] ${e.message} — ${delay}ms 後に再試行 (${attempt}/${maxAttempts})`);
-          await sleep(delay);
-        }
-      }
-      if (!res) throw lastError instanceof Error ? lastError : new Error(String(lastError));
-
-      const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
-      const columns = http.columns;
-      let rows: Record<string, unknown>[];
-      if (contentType.includes("json")) {
-        const json: unknown = await res.json();
-        rows = extractArray(json, http.dataPath).map((r) => {
-          if (r === null || typeof r !== "object") throw new Error("応答 JSON の要素がオブジェクトではありません");
-          return r as Record<string, unknown>;
+      const reqs: ColumnRequirement[] = FIELDS.map((field) => ({ field, spec: http.columns[field] }));
+      assertColumns(raw[0], reqs, http.filters);
+      const rows = raw.filter((r) => passesFilters(r, http.filters));
+      if (report) {
+        report({
+          rawColumns: raw[0] ? Object.keys(raw[0]) : [],
+          mapping: resolveMapping(raw[0], reqs),
+          rawRowCount: raw.length,
+          filteredOut: raw.length - rows.length,
         });
-      } else if (contentType.includes("csv") || contentType.includes("text/plain") || contentType === "") {
-        const text = stripBom(await res.text());
-        rows = text.trim() === "" ? [] : (csvParse(text) as unknown as Record<string, unknown>[]);
-      } else {
-        throw new Error(`対応していない Content-Type: ${contentType}`);
       }
 
       const out: Worklog[] = [];
+      let n = 0;
       for (const r of rows) {
-        const w = mapRow(r, columns);
+        n++;
+        let w: Worklog;
+        try {
+          w = mapRow(r, http.columns, { dateFormat: http.dateFormat, hoursUnit: http.hoursUnit });
+        } catch (e) {
+          throw new Error(`${n} 行目: ${e instanceof Error ? e.message : String(e)}`);
+        }
         // 期間外の行は捨てる（API 側の仕様にかかわらず月ファイルの境界を守る）
         const ym = w.date.slice(0, 7);
         if (ym < from || ym > to) continue;

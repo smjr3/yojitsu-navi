@@ -44,3 +44,24 @@
 
 - 原価の種類: `CostProvider { costType, compute(contractId, month) }` を `buildModel(dataset, { extraProviders })` で追加できる。`config.costTypes` に ID を足せば `costs` のキーに現れる。
 - 性能: 作業ログは `(契約ID, 月)` で索引化（`indexWorklogs`）、マスタは `(キー → effectiveFrom 昇順)` で二分探索。5 万件 × 100 契約で 0.5 秒程度（`tests/unit/perf.test.ts`）。
+
+## 取り込みアダプタの設定化（api-adapter, SPEC §20）の決定事項
+
+実装は `scripts/adapters/http-source.ts`（作業実績 http アダプタとメンバー取り込みで共有）、`scripts/adapters/http.ts`、`scripts/adapters/members.ts`、`scripts/lib/members-merge.ts`。
+
+| 箇所 | 決定 |
+|---|---|
+| 列の探し方 | まず列名そのまま（`a.b` という名前の CSV 列も引ける）、無ければドット区切りで入れ子をたどる。配列は複数候補で、「値がある」（null・空文字・空白だけを除く）最初の列を使う |
+| 列が無いエラー | 応答の**最初の1行**に、設定した列（候補のどれか・filters の列を含む）が無ければ止める。列名一覧（入れ子は `a.b` 形式の葉まで）だけを出し、値は出さない。応答が 0 行なら確かめようがないので通す |
+| 後方互換 | `dateFormat` 無し = 自動判定。`YYYY-MM-DD…`（先頭 10 文字。時刻付きでも従来どおり先頭 10 文字）→ `YYYY/M/D` → `YYYYMMDD` → 12 桁以上の数字は epochMillis、の順。どれでもなければ従来どおり先頭 10 文字を返し validate に任せる。時間が空のとき 0、数値でないとき NaN も従来どおり |
+| dateFormat 指定 | 読めない値は `N 行目: 日付を … として読めません` で止める（値は出さない）。`ISO8601` はタイムゾーン無しを JST とみなし、あれば JST に換算した日付。`epochMillis` も JST の日付 |
+| hoursUnit | `minutes` は ÷60、`seconds` は ÷3600（丸めは CSV 書き出し時の小数 2 桁） |
+| ページング | `page` / `offset` は返った行数が size / limit 未満（0 含む）で終了。`link` は `Link: rel="next"`（相対 URL 可）。`cursor` は JSON 応答の `cursorPath` が null・空で終了（CSV 応答では使えない）。`link` は **別オリジンの next には従わない**（トークン漏えい防止） |
+| 無限ループ防止 | 上限ページ数 `maxPages`（既定 1000、超えたらエラー）。同じカーソル・同じ Link URL の繰り返し、2 行以上のページが以前のページと完全に同じ内容（ページ指定が効いていない）でエラー |
+| トークン | ヘッダにだけ載せる。ログは URL のオリジン+パスだけ。例外メッセージ・ログ・4xx 本文の先頭 200 文字のすべてに `redact`（トークンとその URL エンコード形を `***` に置換）を通す |
+| 文字コード | `encoding` は CSV 応答だけ。`auto` は UTF-8 として厳密に読めなければ Shift_JIS（既存の `decodeAuto`）。JSON は常に UTF-8 |
+| `--dry-run` | 取得とマッピングは実際に行い、ファイル（月 CSV・`_meta.json`・members.csv）を一切書かない。列の対応表（使う列・見つからない列）、応答行数、filters 除外数、先頭 N 行（`--sample=N`、既定 5）を表示 |
+| memberSource の列 | `memberId` / `name` は必須。`kind` / `title` / `department` / `section` は省略可で、**省略した項目は取り込まず現在の値を引き継ぐ**（新規メンバーは kind=employee、他は空）。`kindMap` で人事側の区分値を employee/partner に読み替え（未知の区分値はエラー）。`filters` は csv・http 共通で `memberSource` 直下 |
+| memberSource の http | トークンは `MEMBER_API_TOKEN`（作業実績とは別）。`{from}` `{to}` には実行月が入る |
+| members.csv の追記 | 「現在の有効レコード」= `effective_from <= 実行月` で最新の行（無ければ最新の行）。取り込んだ項目に差がある人だけ `effective_from = 実行月` の行を追加し、他の列（team_id など）は現在の有効レコードから引き継ぐ。**その人の実行月の行が既にあれば追加せず更新**（同じ月に 2 行にしない）。取り込み元に無い人は削除せず件数だけ表示。取り込み元にいて members.csv に居ない人は team_id 空で追加。メンバーID重複は先頭を採用、メンバーID空の行は除外（件数をログ）。変化が無いときはファイルを書き換えない |
+| 別オーナーとの共有 | `Config` に `memberSource?` を追加（`masterEdit` は別担当が追加）。`WorklogSourceConfig.http.columns` の値は `string \| string[]`（`string` のみの既存設定はそのまま型が通る） |
