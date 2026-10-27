@@ -1,0 +1,288 @@
+/**
+ * 遷移・並べ替え・絞り込み・Excel 出力
+ */
+import { createRequire } from "node:module";
+import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
+import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen } from "./helpers/core.js";
+
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx") as typeof import("xlsx");
+
+const model = getModel();
+const FY = fiscalPeriod(model);
+
+test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
+  await gotoPage(page, "/teams");
+  const teams = tableByCaption(page, "チーム一覧");
+  const leaf = "T111";
+  const tree = treeAt(FY.to, model);
+  expect(tree[leaf]!.children).toEqual([]);
+  // 行リンク（キーボード到達用）で遷移
+  const link = teams.locator(`tbody tr[data-key="${leaf}"] .yn-row-link`);
+  await expect(link).toContainText(tree[leaf]!.name);
+  await link.click();
+  await expect(page).toHaveURL(/\/contracts\?/);
+  expect(query(page).get("team")).toBe(leaf);
+  await expect(page.locator("h1")).toHaveText("契約一覧");
+  await expect(page.locator("#yn-filter-team")).toHaveValue(leaf);
+  const contracts = tableByCaption(page, "契約一覧");
+  const ids = teamContractIds(leaf, FY, model)!;
+  const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
+  expect(expected.length).toBeGreaterThan(0);
+  expect(new Set(await rowKeys(contracts))).toEqual(new Set(expected));
+  await expect(page.locator(".yn-section-hint").first()).toContainText(tree[leaf]!.name);
+  // 行をクリック（リンク以外のセル）で詳細へ
+  const firstKey = (await rowKeys(contracts))[0]!;
+  const h = await headerIndex(contracts);
+  await cell(contracts.locator(`tbody tr[data-key="${firstKey}"]`), col(h, "粗利率")).click({ position: { x: 2, y: 2 } });
+  await expect(page).toHaveURL(/\/contract\?/);
+  expect(query(page).get("id")).toBe(firstKey);
+  expect(query(page).get("team")).toBe(leaf);
+  await expect(page.locator("h1")).toContainText(firstKey);
+  await expect(page.locator("h1 .yn-title-id")).toHaveText(firstKey);
+  const r = contractResult(firstKey, model);
+  await expect(page.locator("h1")).toContainText(r.contract.customerName);
+  // パンくず
+  const crumbs = page.locator('nav[aria-label="パンくず"] li');
+  await expect(crumbs).toHaveCount(3);
+  await expect(crumbs.nth(0).locator("a")).toHaveText("全体サマリー");
+  await expect(crumbs.nth(1).locator("a")).toHaveText("契約一覧");
+  await expect(crumbs.nth(1).locator("a")).toHaveAttribute("href", new RegExp(`team=${leaf}`));
+  await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(firstKey);
+  // 主担当チームのリンクと「同じチームの契約一覧」
+  await expect(page.locator(".yn-facts a").first()).toHaveText(tree[r.contract.teamId!]!.name);
+  const same = page.getByRole("link", { name: "同じチームの契約一覧" });
+  await expect(same).toBeVisible();
+  await same.click();
+  await expect(page).toHaveURL(/\/contracts\?/);
+  expect(query(page).get("team")).toBe(r.contract.teamId);
+  await expect(page.locator("#yn-filter-team")).toHaveValue(r.contract.teamId!);
+  // パンくずで全体サマリーへ（状態を引き継ぐ）
+  await page.locator('nav[aria-label="パンくず"] a', { hasText: "全体サマリー" }).click();
+  await expect(page.locator("h1")).toHaveText("全体サマリー");
+  expect(query(page).get("team")).toBe(r.contract.teamId);
+  await expect(page.locator("#yn-filter-team")).toHaveValue(r.contract.teamId!);
+});
+
+test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る。中間の課からも契約一覧へ", async ({ page }) => {
+  await gotoPage(page, "/teams");
+  const table = tableByCaption(page, "チーム一覧");
+  const tree = treeAt(FY.to, model);
+  const d1 = tree["D1"]!;
+  const descendants = d1.descendantIds.filter((id) => id !== "D1");
+  expect(descendants.length).toBeGreaterThan(0);
+  const toggle = table.locator('tbody tr[data-key="D1"] .yn-tree-toggle');
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  for (const id of descendants) await expect(table.locator(`tbody tr[data-key="${id}"]`)).toHaveCount(0);
+  await expect(table.locator('tbody tr[data-key="D2"]')).toHaveCount(1);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  for (const id of descendants) await expect(table.locator(`tbody tr[data-key="${id}"]`)).toHaveCount(1);
+  // 中間の課（S21）→ 契約一覧
+  await table.locator('tbody tr[data-key="S21"] .yn-row-link').click();
+  await expect(page).toHaveURL(/\/contracts\?/);
+  expect(query(page).get("team")).toBe("S21");
+  const ids = teamContractIds("S21", FY, model)!;
+  const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
+  expect(new Set(await rowKeys(tableByCaption(page, "契約一覧")))).toEqual(new Set(expected));
+});
+
+test("サイドバーのナビゲーションで全ページに行ける", async ({ page }) => {
+  await gotoPage(page, "/");
+  const nav = page.locator("#observablehq-sidebar");
+  for (const [name, h1] of [
+    ["チーム一覧", "チーム一覧"],
+    ["契約一覧", "契約一覧"],
+    ["計算ルール", "計算ルール"],
+    ["データ確認", "データ確認"],
+    ["全体サマリー", "全体サマリー"],
+  ] as const) {
+    await nav.getByRole("link", { name, exact: true }).click();
+    await expect(page.locator("h1")).toHaveText(h1);
+  }
+});
+
+test("見出しクリックで並べ替え: aria-sort が切り替わり、数値順（辞書順ではない）に並ぶ", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const table = tableByCaption(page, "契約一覧");
+  const h = await headerIndex(table);
+  const th = table.locator("thead th").nth(col(h, "予算"));
+  const btn = th.locator("button.yn-sort");
+  await expect(th).toHaveAttribute("aria-sort", "none");
+  const values = async () => {
+    const rows = dataRows(table);
+    const n = await rows.count();
+    const out: Array<{ text: string; value: number }> = [];
+    for (let i = 0; i < n; i++) {
+      const text = await cellText(rows.nth(i), col(h, "予算"));
+      out.push({ text, value: parseNumber(text)! });
+    }
+    return out;
+  };
+  await btn.click();
+  await expect(th).toHaveAttribute("aria-sort", "descending");
+  // 他の見出しは none に戻る
+  await expect(table.locator('thead th[aria-sort="descending"], thead th[aria-sort="ascending"]')).toHaveCount(1);
+  const desc = await values();
+  for (let i = 1; i < desc.length; i++) expect(desc[i]!.value, `${desc[i - 1]!.text} ≥ ${desc[i]!.text}`).toBeLessThanOrEqual(desc[i - 1]!.value);
+  // 辞書順とは異なる並びであること（1,000,000 と 120,000 のような組が含まれる）
+  const lexical = [...desc].sort((a, b) => b.text.localeCompare(a.text)).map((x) => x.text);
+  expect(lexical, "数値順と辞書順が区別できるデータ").not.toEqual(desc.map((x) => x.text));
+  await btn.click();
+  await expect(th).toHaveAttribute("aria-sort", "ascending");
+  const asc = await values();
+  for (let i = 1; i < asc.length; i++) expect(asc[i]!.value).toBeGreaterThanOrEqual(asc[i - 1]!.value);
+  expect(asc.map((x) => x.value)).toEqual([...desc.map((x) => x.value)].reverse());
+  // 文字列列は昇順から
+  const nameTh = table.locator("thead th").first();
+  await nameTh.locator("button.yn-sort").click();
+  await expect(nameTh).toHaveAttribute("aria-sort", "ascending");
+  await expect(th).toHaveAttribute("aria-sort", "none");
+  // 並べ替え後も件数は変わらない
+  await expect(dataRows(table)).toHaveCount(desc.length);
+});
+
+test("絞り込み: 赤字見込み / 消化率超過 / 速報含む / 期間外も表示 / 検索", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const table = () => tableByCaption(page, "契約一覧");
+  const all = contractsInPeriod(FY, undefined, model);
+  const ex = new Map(all.map((r) => [r.contract.contractId, contractRowExpected(r, FY, "recent3", model)]));
+  const expectRows = async (ids: string[], label: string) => {
+    if (ids.length === 0) {
+      await expect(page.getByText("該当する契約がありません"), label).toBeVisible();
+      return;
+    }
+    // 絞り込みは入力イベント → セル再計算で反映されるので、期待の集合になるまで待つ
+    await expect
+      .poll(async () => ((await table().count()) ? [...(await rowKeys(table()))].sort() : []), { message: label, timeout: 10_000 })
+      .toEqual([...ids].sort());
+    await expect(page.locator(".yn-table-count")).toHaveText(`${ids.length} 件`);
+  };
+  // 赤字見込み
+  const deficit = [...ex].filter(([, e]) => e.isDeficit).map(([id]) => id);
+  expect(deficit).toContain("C008");
+  await page.locator("#yn-f-deficit").check();
+  await expectRows(deficit, "赤字見込み");
+  const h = await headerIndex(table());
+  for (const id of deficit) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("赤字見込み");
+  await page.locator("#yn-f-deficit").uncheck();
+  await expectRows([...ex.keys()], "解除");
+  // 消化率超過
+  const over = [...ex].filter(([, e]) => e.isOverBudget).map(([id]) => id);
+  await page.locator("#yn-f-over").check();
+  await expectRows(over, "消化率超過");
+  for (const id of over) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("予算超過");
+  await page.locator("#yn-f-over").uncheck();
+  // 速報含む
+  const prelim = [...ex].filter(([, e]) => e.includesPreliminary).map(([id]) => id);
+  await page.locator("#yn-f-prelim").check();
+  await expectRows(prelim, "速報含む");
+  await page.locator("#yn-f-prelim").uncheck();
+  // 検索（顧客名）: さくら製菓は FY2026 の C005 だけ（C014 は前年度で期間外）
+  const search = page.locator("#yn-f-text");
+  await search.fill("さくら");
+  await expectRows(["C005"], "検索 さくら");
+  // 期間外の契約も表示 → C014 も出る
+  await page.locator("#yn-f-showOutside").check();
+  await expectRows(["C005", "C014"], "検索 さくら + 期間外");
+  await page.locator("#yn-f-showOutside").uncheck();
+  // 契約ID で検索
+  await search.fill("c008");
+  await expectRows(["C008"], "検索 c008（大文字小文字を区別しない）");
+  // チーム名で検索
+  const tree = treeAt(FY.to, model);
+  const teamName = tree["T121"]!.name;
+  await search.fill(teamName);
+  await expectRows(contractsInPeriod(FY, teamContractIds("T121", FY, model), model).map((r) => r.contract.contractId), `検索 ${teamName}`);
+  // 該当なし
+  await search.fill("存在しない契約 zzz");
+  await expectRows([], "該当なし");
+  await search.fill("");
+  await expectRows([...ex.keys()], "検索解除");
+  // URL の f= / q= で初期状態を与えられる
+  await gotoPage(page, "/contracts?f=deficit&q=C0");
+  await expect(page.locator("#yn-f-deficit")).toBeChecked();
+  await expect(search).toHaveValue("C0");
+  await expectRows(deficit, "URL f=deficit&q=C0");
+});
+
+test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表と一致する", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const table = tableByCaption(page, "契約一覧");
+  const h = await headerIndex(table);
+  // 表の現在の並び（既定: 状態 → 消化率）で値を控える
+  const rows = dataRows(table);
+  const n = await rows.count();
+  const seen: Array<{ id: string; budget: number; cost: number; gp: number; forecast: number | null }> = [];
+  for (let i = 0; i < n; i++) {
+    const row = rows.nth(i);
+    seen.push({
+      id: (await row.getAttribute("data-key"))!,
+      budget: parseNumber(await cellText(row, col(h, "予算")))!,
+      cost: parseNumber(await cellText(row, col(h, "原価")))!,
+      gp: parseNumber(await cellText(row, col(h, "粗利")))!,
+      forecast: parseNumber(await cellText(row, col(h, "着地粗利"))),
+    });
+  }
+  const exportBtn = page.locator(".yn-table-block").filter({ has: table }).locator(".yn-table-toolbar .yn-export");
+  await expect(exportBtn).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await exportBtn.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+  expect(download.suggestedFilename()).toBe(`contracts_${FY.from}_${FY.to}.xlsx`);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const wb = XLSX.readFile(path!);
+  const sheetName = wb.SheetNames[0]!;
+  const ws = wb.Sheets[sheetName]!;
+  const aoa = XLSX.utils.sheet_to_json<Array<string | number | null>>(ws, { header: 1, defval: null });
+  // 1 行目は単位の注記、見出しは「契約ID」を含む最初の行
+  const headerRow = aoa.findIndex((r) => r.some((c) => c === "契約ID"));
+  expect(headerRow, "見出し行（契約ID を含む行）がある").toBeGreaterThanOrEqual(0);
+  if (headerRow > 0) expect(String(aoa[0]![0] ?? ""), "先頭行は単位の注記").toContain("単位");
+  const header = aoa[headerRow]!.map((x) => String(x ?? ""));
+  for (const label of ["契約ID", "顧客", "案件", "チーム", "契約期間", "予算（円）", "原価（円）", "粗利（円）", "粗利率（%）", "消化率（%）", "着地粗利（円）", "状態"]) {
+    expect(header, `見出し ${label}`).toContain(label);
+  }
+  const body = aoa.slice(headerRow + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+  expect(body.length, "行数 = 表示中の行数（合計行は含まない）").toBe(seen.length);
+  const ci = (label: string) => header.indexOf(label);
+  for (let i = 0; i < seen.length; i++) {
+    const r = body[i]!;
+    const s = seen[i]!;
+    expect(r[ci("契約ID")], `行 ${i} の契約ID（並び順も同じ）`).toBe(s.id);
+    expect(typeof r[ci("予算（円）")], "金額は数値セル").toBe("number");
+    expect(r[ci("予算（円）")]).toBe(s.budget);
+    expect(r[ci("原価（円）")]).toBe(s.cost);
+    expect(r[ci("粗利（円）")]).toBe(s.gp);
+    expect(r[ci("着地粗利（円）")]).toBe(s.forecast);
+    const e = contractRowExpected(contractResult(s.id, model), FY, "recent3", model);
+    expect(r[ci("予算（円）")]).toBe(e.totals.budget);
+    const margin = r[ci("粗利率（%）")];
+    if (e.totals.grossMargin !== null) expect(margin).toBeCloseTo(Math.round(e.totals.grossMargin * 1000) / 10, 6);
+    const cust = contractResult(s.id, model).contract.customerName;
+    expect(r[ci("顧客")]).toBe(cust);
+  }
+  // 千円表示にしても Excel の金額は円の整数（注記のとおり）
+  await page.locator(".yn-seg-btn[data-unit=k]").click();
+  await expect(cell(dataRows(tableByCaption(page, "契約一覧")).first(), col(h, "予算"))).toContainText("千円");
+  const dl2 = page.waitForEvent("download");
+  await page.locator(".yn-table-block").filter({ has: tableByCaption(page, "契約一覧") }).locator(".yn-export").click();
+  const d2 = await dl2;
+  const wb2 = XLSX.readFile((await d2.path())!);
+  const aoa2 = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb2.Sheets[wb2.SheetNames[0]!]!, { header: 1, defval: null });
+  const headerRow2 = aoa2.findIndex((r) => r.some((c) => c === "契約ID"));
+  const header2 = aoa2[headerRow2]!.map((x) => String(x ?? ""));
+  const budgetCol2 = header2.findIndex((x) => x.startsWith("予算（"));
+  expect(budgetCol2).toBeGreaterThanOrEqual(0);
+  const first = aoa2[headerRow2 + 1]!;
+  const id = String(first[header2.indexOf("契約ID")]);
+  const budgetYen = contractRowExpected(contractResult(id, model), FY, "recent3", model).totals.budget;
+  if (header2[budgetCol2] === "予算（円）") expect(first[budgetCol2]).toBe(budgetYen);
+  else if (header2[budgetCol2] === "予算（千円）") expect(first[budgetCol2]).toBe(Math.round(budgetYen / 1000));
+  else throw new Error(`予算列の単位が不明: ${header2[budgetCol2]}`);
+  expect(String(yen(budgetYen))).toContain("円");
+});
