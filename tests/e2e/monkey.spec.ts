@@ -77,7 +77,7 @@ for (const path of PAGES) {
               const m = text.match(/.{0,40}(\bNaN\b|\bundefined\b|\bnull\b|\bInfinity\b|\[object Object\]).{0,40}/);
               return m ? m[0] : null;
             })(),
-            emptyYen: /—\s*(千円|円)/.test(text) ? text.match(/.{0,40}—\s*(千円|円).{0,20}/)?.[0] ?? "—円" : null,
+            emptyYen: /—\s*(百万円|千円|円)/.test(text) ? text.match(/.{0,40}—\s*(百万円|千円|円).{0,20}/)?.[0] ?? "—円" : null,
             dialogs: document.querySelectorAll("dialog[open]").length,
           };
         });
