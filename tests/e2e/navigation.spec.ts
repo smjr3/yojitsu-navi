@@ -54,7 +54,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   await expect(crumbs.nth(1).locator("a")).toHaveAttribute("href", new RegExp(`team=${leaf}`));
   await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(firstKey);
   // 主担当チームのリンクと「同じチームの契約一覧」
-  await expect(page.locator(".yn-facts a").first()).toHaveText(tree[r.contract.teamId!]!.name);
+  await expect(page.locator(".yn-facts > div").filter({ hasText: "主担当" }).locator("a")).toHaveText(tree[r.contract.teamId!]!.name);
   const same = page.getByRole("link", { name: "同じチームの契約一覧" });
   await expect(same).toBeVisible();
   await same.click();
