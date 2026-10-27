@@ -12,6 +12,8 @@ title: 契約詳細
 ```js
 import { html } from "htl";
 import { aggregate, FORECAST_METHODS } from "./core/index.js";
+import { customerKey } from "./core/index.js";
+import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -91,7 +93,7 @@ if (vm) {
     }),
   );
   display(html`<dl class="yn-facts" aria-label="契約の基本情報">
-    <div><dt>${model.config.labels?.customer ?? "顧客"}</dt><dd>${c.customerName}</dd></div>
+    <div><dt>${model.config.labels?.customer ?? "顧客"}</dt><dd><a href=${customerHref(store, customerKey(c.customerName))}>${c.customerName}</a></dd></div>
     <div><dt>${model.config.labels?.project ?? "案件"}</dt><dd>${c.projectName}</dd></div>
     <div><dt>主担当${model.config.labels?.team ?? "チーム"}</dt><dd>${c.teamId ? html`<a href=${store.href("./contracts", { team: c.teamId })}>${vm.teamLabel}</a>` : html`<span class="yn-chip yn-chip-neutral">未設定</span>`}</dd></div>
     <div><dt>契約期間</dt><dd>${monthJa(c.startMonth)}〜${monthJa(c.endMonth)}（${result.months.length}か月）</dd></div>

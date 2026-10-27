@@ -136,3 +136,11 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 | `ForecastTotals` に「年度に掛かる契約数」 | `teamRow()` が `contractMonthsInFY` の有無で `fyContractCount` を数えている |
 | `Warning` に `row` | データ確認では `ref` を文字列化して表示 |
 | `Model.worklogDetailPath` | `model.json.ts` が付けている（`"data/worklogs/{contractId}.json"`）。型には無い |
+
+## 顧客別（SPEC §17）決定事項
+
+- `/customers`（サイドバー: チーム一覧の次）と `/customer?key=`（サイドバーには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・契約数・予算・原価・粗利・粗利率・消化率・着地粗利・状態）。
+- URL の `key` は `encodeURIComponent`（`customerHref`）。読むのは `URLSearchParams.get`。日本語・記号・空白・`/ # ? % + &` を含む顧客名で往復できる（E2E は model.json を書き換えて確認）。見つからない key・key なしは空状態。
+- 一覧: 選んだチーム（配下含む）の契約だけで顧客を集計。期間内に契約が無い顧客は既定で非表示（「期間外の顧客も表示」で出す）。検索は `normalizeName` で両辺を正規化した部分一致（URL の `q` で復元）。合計行は表示中の顧客の全契約を母集団にした `aggregate()` / `forecastTotals()`。着地粗利は年度に掛かる契約が 0 件の顧客だけ「—」。状態チップはチーム行と同じ（赤字 N件・予算超過）。
+- 詳細: KPI 5 枚（全体サマリーと同じ。前年同期比も同じ規則）→ 月次推移 → この顧客の契約（期間外は既定で非表示、切替あり）→ 担当チーム別（契約の `teamId` ごと。配下はまとめない。行クリックは `/contracts?team=&q=<顧客名>`）。顧客詳細はチームフィルタを持たない（期間・方式・単位のみ）。
+- 契約詳細の顧客名から顧客詳細へのリンク（追加のみ）。
