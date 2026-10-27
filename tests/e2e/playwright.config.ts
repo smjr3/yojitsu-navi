@@ -28,6 +28,9 @@ export default defineConfig({
     baseURL: BASE_URL,
     locale: "ja-JP",
     timezoneId: "Asia/Tokyo",
+    // 計算ルール等のコードブロックにある Framework 標準のコピーボタンが navigator.clipboard.writeText を呼ぶ。
+    // headless の CI ではクリップボード権限が無く未捕捉の例外になるため、権限を付与する
+    permissions: ["clipboard-read", "clipboard-write"],
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
