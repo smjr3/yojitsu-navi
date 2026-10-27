@@ -136,3 +136,44 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 | `ForecastTotals` に「年度に掛かる契約数」 | `teamRow()` が `contractMonthsInFY` の有無で `fyContractCount` を数えている |
 | `Warning` に `row` | データ確認では `ref` を文字列化して表示 |
 | `Model.worklogDetailPath` | `model.json.ts` が付けている（`"data/worklogs/{contractId}.json"`）。型には無い |
+
+## マスタ編集 `/masters`（2 回目リリース、SPEC §19）
+
+問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 4 ファイルのタブ → 表 → 検証 → 変更内容（差分）→ 保存。
+
+| ファイル | 役割 |
+|---|---|
+| `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `docFromDraft` / `staleDraftFiles`） |
+| `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
+| `src/data/masters.json.ts`（`_masters.ts`） | 4 ファイルの生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
+| `src/components/masters.js` | 画面（状態を持ち、変わった部分を描き直して `data-fk` でフォーカスを戻す） |
+| `src/masters.md` | ページ（model.json は計算基準月・データ最小月・config のためだけに読む） |
+
+core の index.ts には足していない（並行開発の衝突を避けるため、ページ・部品は `./core/masterEdit.js` / `./core/gitlab.js` を直接 import）。
+
+### 決定事項
+
+| 箇所 | 曖昧点 | 決定 |
+|---|---|---|
+| §19.1「過去月」 | どこまでが過去か | **データの最小月（`meta.minMonth`）〜計算基準月（`meta.asOfMonth`、速報月を含む）**。実績が画面に出ている月を過去とする |
+| §19.1 影響月数 | 何を比べるか | 履歴マスタはキー列（member_id / key / team_id）ごとに「月 m の有効レコード（§5、同じ適用開始月は後の行）」の値を、アサインはメンバー×契約ごとに「月 m に掛かる行の allocation の集合」を編集前後で比べ、違う月を数える。キーを変えたら旧・新の両方。その月に工数があって原価が本当に変わるかまでは見ない（画面に作業実績を持たないため） |
+| §19.1 確認ダイアログ | どの操作で出すか | 既存行の修正・削除は **常に** 確認（変わる値と影響月数）。追加は過去に影響するときだけ確認、未来の追加はそのまま反映。ブラウザ標準の `confirm()` は使わず `<dialog>`（Esc で閉じる・フォーカスが戻る） |
+| §19.1 追加の位置 | 行をどこに入れるか | ファイル末尾（同じキー・同じ適用開始月なら後の行が有効、の規則と一致し、差分も末尾の行だけになる）。「＋ 新しい月」は選んだ行を写し、適用開始月（アサインは開始月）を基準月の翌月にする |
+| §19.1 書き出し | 未変更行の保持 | 元のレコードのテキスト（引用符の付け方・空白まで）をそのまま使う。変更・追加した行だけ「カンマ・`"`・改行を含むときだけ引用符」で書く。改行は LF、BOM なし、末尾改行 1 つ、列順は元ファイルのヘッダ順（必須列が無ければ末尾に足す）。空行・空白だけの行は書かない（読み込みでも捨てられる行）。元が CRLF / BOM 付き / Shift_JIS なら全行が変わるので画面で注記する |
+| §19.1 入力 | 値の正規化 | 入力値は前後の空白を除く（CSV 読み込みも trim するため）。数値・月の形式チェックはダイアログで止めず、`validateEdited`（§14 と同じ検証）のエラーとして行に出す（CI と同じ文言）。必須の未入力だけはダイアログで止める |
+| §19.1 検証 | 作業実績 | 画面には作業実績を持たないので `worklogs: []` で検証する（未紐付け・単価なしの警告は保存後の「データ確認」で見る）。編集対象外のファイル（contracts 等）のエラーも保存を止める |
+| §19.2 既定 | config.json | `mode: "download"`、gitlab の値は空。`mode: "gitlab"` でも `apiBaseUrl` か `projectId` が空なら download |
+| §19.2 認証 | ヘッダ | `PRIVATE-TOKEN`。最初に `GET /user` でトークンを確かめ、username をブランチ名に使う。ブランチ名の日時は JST、user は英数・`._-` 以外を `-` |
+| §19.2 401 | トークン | 無効・期限切れなので sessionStorage から消し、再入力を促す |
+| §19.2 競合 | 判定 | commits API の 400 で本文が `changed since` / `last_commit_id` 等を含むもの、または 409。404 は「projectId / 権限を確認」（other） |
+| §19.2 部分失敗 | コミット成功・MR 作成失敗 | エラー（other / permission）にブランチ名とコミットを添え、「GitLab の画面からこのブランチの MR を作成」と案内（ダウンロード切替は出さない） |
+| §19.2 保存後 | 続けて編集 | 保存成功で下書きを消し、編集をロック。「新しく編集を始める（元のデータから）」で元に戻す（同じ変更を 2 度送らない） |
+| §19.2 最終コミット ID | 浅いクローン | 浅いクローンでは誤った ID を返しうるので null（競合検出なし。画面に注記）。CI の build ジョブは `GIT_DEPTH: "0"` |
+| §19.2 下書き | 土台が変わったとき | 下書きには土台の生テキストと最終コミット ID も保存し、復元はその土台に対する編集として戻す（GitLab 保存時は古い `last_commit_id` で競合として止まる）。復元か破棄を選ぶまで自動保存しない |
+| §20.2 | 取り込み列 | `memberSourceAdapter != "none"` のとき members の name / kind / title / department / section は読み取り専用。既存行は削除不可（取り込みで管理する行のため）。追加はメンバーIDを選ぶと取り込み列を最新行から写す |
+| 色 | エラーの色 | 赤は使わない（§12）。検証エラーは警告色（`--yn-warn-*`）＋「!」＋「エラー」の文字 |
+| 単価の表示 | 単位 | 金額の表示単位（円／千円／百万円）の切替に関係なく、CSV の値（円）をそのまま表示・入力する |
+
+### テスト
+
+単体 `tests/unit/masterEdit.test.ts`・`tests/unit/gitlab.test.ts`（モック fetch で全分岐）、プロパティ `tests/property/masterEdit.property.test.ts`（書き出し→再読み込みで同値、未変更行のバイト保持、任意の編集列で差分が正しい）、結合 `tests/integration/masters.test.ts`（ダミーデータの 4 ファイルで 編集→書き戻し→loadDataset / validate-data / buildModel）、E2E `tests/e2e/masters.spec.ts`（masters.json を `page.route` で書き換えて gitlab モード・取り込みモードを再現し、GitLab API を `page.route` でモック）、モンキー（`/masters` を対象に追加）。

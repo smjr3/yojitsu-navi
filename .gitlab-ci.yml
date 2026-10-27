@@ -90,6 +90,10 @@ test:
 build:
   stage: build
   <<: *normal-rules
+  variables:
+    # マスタ編集（src/data/masters.json.ts）が各 CSV の最終コミット ID を履歴から取るため、浅いクローンにしない
+    # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
+    GIT_DEPTH: "0"
   script:
     - npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
