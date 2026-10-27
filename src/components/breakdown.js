@@ -471,3 +471,189 @@ export function hoursSpec({ totals, config, subtitle = null }) {
     ],
   };
 }
+
+// ---------------------------------------------------------------------------
+// メンバー別（SPEC §18）: 計画 = 配分 × 基準時間 × 単価、実績 = 原価行（CostLine）
+// months はそのメンバーの MemberMonth（期間で絞ったもの）。contractIds を渡すとその契約の行だけ
+// ---------------------------------------------------------------------------
+
+/** メンバー 1 人の金額は小さいので、百万円表示（"m"）のときは根拠パネルを円で出す */
+function memberUnit(unit) {
+  return unit === "m" ? "yen" : unit;
+}
+
+function contractLabelOf(model, contractId) {
+  const r = model?.contracts?.find((x) => x.contract.contractId === contractId);
+  return r ? `${r.contract.customerName} / ${r.contract.projectName}` : "";
+}
+
+function rateSourceText(mm) {
+  if (mm.rateMissing) return html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">○</span>単価なし（0円）</span>`;
+  if (!mm.rateSource) return "—";
+  const personal = mm.rateSource.key === mm.memberId;
+  return `${personal ? "個人単価" : `役職「${mm.rateSource.key}」`}（${mm.rateSource.effectiveFrom}〜）`;
+}
+
+function memberRows(months, contractIds) {
+  const set = contractIds ? new Set(contractIds) : null;
+  const out = [];
+  for (const mm of months) for (const row of mm.byContract) if (!set || set.has(row.contractId)) out.push({ mm, row });
+  return out;
+}
+
+function contractCell(model, contractId, contractHref) {
+  return html`${contractHref ? html`<a href=${contractHref(contractId)}>${contractId}</a>` : contractId} <span class="yn-muted">${contractLabelOf(model, contractId)}</span>`;
+}
+
+/** 計画（時間・原価）の根拠: 契約×月ごとに 配分 × 基準時間 × 単価 */
+export function memberPlanSpec({ model, member, months, contractIds = null, unit, measure = "cost", subtitle = null, contractHref = null }) {
+  unit = memberUnit(unit);
+  const rows = memberRows(months, contractIds).filter(({ row }) => row.assignmentCount > 0);
+  const std = months[0]?.standardHoursPerMonth ?? model?.config?.standardHoursPerMonth ?? 0;
+  const hours = rows.reduce((s, { row }) => s + row.plannedHours, 0);
+  const cost = rows.reduce((s, { row }) => s + row.plannedCost, 0);
+  const missing = rows.some(({ mm }) => mm.rateMissing);
+  const label = measure === "hours" ? "計画時間" : "計画原価";
+  return {
+    title: `${label}の計算根拠 — ${member.memberName}（${member.memberId}）`,
+    subtitle,
+    formula: [`計画時間 = 配分人月 × 基準時間（${std}h）`, "計画原価 = round(計画時間 × その月の時間単価)（契約・月ごとに円に丸める）", `${label} = Σ 契約・月ごとの${label}`],
+    rows: [
+      { label: "アサインの行（契約×月）", value: `${rows.length}件` },
+      { label: "基準時間（1人月）", value: `${std}h` },
+      { label: "計画時間", value: formatHours(hours), emphasis: measure === "hours" },
+      { label: "計画原価", value: money(cost, unit), emphasis: measure !== "hours", note: missing ? "単価が見つからない月は 0 円で計算しています" : null },
+    ],
+    sections: [
+      rows.length
+        ? {
+            title: "契約・月ごとの計画",
+            table: {
+              columns: [{ label: "月" }, { label: "契約" }, { label: "配分", align: "num" }, { label: "計画時間", align: "num" }, { label: "単価", align: "num" }, { label: "単価の出どころ" }, { label: "計画原価", align: "num" }],
+              rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), decimal(row.allocation, 3), formatHours(row.plannedHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.plannedCost, unit)]),
+              foot: ["合計", "", "", formatHours(hours), "", "", money(cost, unit)],
+            },
+          }
+        : { title: "契約・月ごとの計画", text: "この範囲にアサインはありません（計画 0）。" },
+    ],
+    note: "配分は assignments.csv の allocation（同じ契約・月に複数行あれば合計）。契約期間外の月のアサインは数えません。",
+  };
+}
+
+/** 実績（時間・原価）の根拠: 契約×月ごとの原価行 → 元の作業ログ */
+export function memberActualSpec({ model, member, months, contractIds = null, unit, measure = "cost", subtitle = null, contractHref = null }) {
+  unit = memberUnit(unit);
+  const rows = memberRows(months, contractIds).filter(({ row }) => row.actualHours > 0 || row.actualCost !== 0);
+  const hours = rows.reduce((s, { row }) => s + row.actualHours, 0);
+  const cost = rows.reduce((s, { row }) => s + row.actualCost, 0);
+  const unplannedHours = rows.filter(({ row }) => row.assignmentCount === 0).reduce((s, { row }) => s + row.actualHours, 0);
+  const label = measure === "hours" ? "実績時間" : "実績原価";
+  const ids = [...new Set(rows.map(({ row }) => row.contractId))];
+  const monthSet = new Set(rows.map(({ mm }) => mm.month));
+  const sections = [
+    rows.length
+      ? {
+          title: "契約・月ごとの原価行",
+          table: {
+            columns: [{ label: "月" }, { label: "契約" }, { label: "時間", align: "num" }, { label: "単価", align: "num" }, { label: "単価の出どころ" }, { label: "原価", align: "num" }, { label: "アサイン" }],
+            rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), formatHours(row.actualHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.actualCost, unit), row.assignmentCount > 0 ? "あり" : "なし"]),
+            foot: ["合計", "", formatHours(hours), "", "", money(cost, unit), ""],
+          },
+        }
+      : { title: "契約・月ごとの原価行", text: "この範囲に作業実績はありません。" },
+  ];
+  if (rows.length) {
+    sections.push({
+      title: "元の作業ログ",
+      lazyLabel: "作業ログを読み込む",
+      lazy: async () => {
+        const all = [];
+        for (const id of ids) {
+          const data = await fetchWorklogs(id);
+          for (const m of data.months) if (monthSet.has(m.month)) for (const w of m.worklogs) if (w.memberId === member.memberId) all.push(w);
+        }
+        all.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        if (all.length === 0) return html`<p class="yn-note">作業ログはありません。</p>`;
+        return html`<div><p class="yn-note">作業ログ 1 行ごとの金額は行単位で丸めているため、合計が原価行と最大 0.5 円/件ずれることがあります（原価は原価行が正）。</p>${worklogTable(all, { unit })}</div>`;
+      },
+    });
+  }
+  return {
+    title: `${label}の計算根拠 — ${member.memberName}（${member.memberId}）`,
+    subtitle,
+    formula: ["実績原価 = round(その月の作業時間の合計 × その月の時間単価)（契約・月ごと。契約詳細の原価行と同じ値）", `${label} = Σ 契約・月ごとの${label}`],
+    rows: [
+      { label: "原価行（契約×月）", value: `${rows.length}件` },
+      { label: "実績時間", value: formatHours(hours), emphasis: measure === "hours" },
+      { label: "うちアサインの無い契約・月", value: formatHours(unplannedHours), note: unplannedHours > 0 ? "応援など、アサインが登録されていない作業" : null },
+      { label: "実績原価", value: money(cost, unit), emphasis: measure !== "hours" },
+    ],
+    sections,
+  };
+}
+
+/** 差額 = 計画原価 − 実績原価 */
+export function memberVarianceSpec({ plannedCost, actualCost, unit, subtitle = null }) {
+  unit = memberUnit(unit);
+  const v = plannedCost - actualCost;
+  return {
+    title: "差額の計算根拠",
+    subtitle,
+    formula: ["差額 = 計画原価 − 実績原価（プラス = 計画より原価が少ない）"],
+    rows: [
+      { label: "計画原価", value: money(plannedCost, unit) },
+      { label: "実績原価", value: money(actualCost, unit) },
+      { label: "差額", value: money(v, unit), emphasis: true, note: v > 0 ? "計画より原価が少ない" : v < 0 ? "計画より原価が多い" : "計画どおり" },
+    ],
+    note: "差額は色分けしません（赤は消化率超過と赤字見込みだけ）。",
+  };
+}
+
+/** 稼働率 = 実績時間 ÷ 計画時間 */
+export function memberUtilizationSpec({ plannedHours, actualHours, utilization, unplannedHours = 0, subtitle = null }) {
+  return {
+    title: "稼働率の計算根拠",
+    subtitle,
+    formula: ["稼働率 = 実績時間 ÷ 計画時間（計画時間 = 配分人月 × 基準時間）"],
+    rows: [
+      { label: "実績時間", value: formatHours(actualHours), note: unplannedHours > 0 ? `うちアサインの無い契約 ${formatHours(unplannedHours)}` : null },
+      { label: "計画時間", value: formatHours(plannedHours) },
+      { label: "稼働率", value: formatPercent(utilization), emphasis: true, note: utilization === null ? "計画時間が 0 のため計算できません" : null },
+    ],
+    note: "100% を超えても赤にはしません（表示のみ）。アサインの無い契約への作業も実績時間に含みます。",
+  };
+}
+
+const MEMBER_MEASURES = {
+  plannedHours: { label: "計画時間", hours: true, formula: "計画時間 = Σ メンバーの 配分人月 × 基準時間" },
+  actualHours: { label: "実績時間", hours: true, formula: "実績時間 = Σ メンバーの作業時間" },
+  plannedCost: { label: "計画原価", formula: "計画原価 = Σ メンバーの round(計画時間 × 単価)（契約・月ごとに丸め）" },
+  actualCost: { label: "実績原価", formula: "実績原価 = Σ メンバーの原価行（同じ期間の契約原価の合計と一致）" },
+  variance: { label: "差額", formula: "差額 = 計画原価 − 実績原価" },
+  utilization: { label: "稼働率", percent: true, formula: "稼働率 = Σ 実績時間 ÷ Σ 計画時間" },
+};
+
+/** メンバー一覧の合計行（表示中のメンバー。total は aggregateMembers の total） */
+export function memberTotalsSpec({ members, total, measure, unit, period }) {
+  unit = memberUnit(unit);
+  const d = MEMBER_MEASURES[measure];
+  const fmt = (v) => (d.hours ? formatHours(v) : d.percent ? formatPercent(v) : money(v, unit));
+  const parts =
+    measure === "utilization"
+      ? [{ label: "実績時間", value: formatHours(total.actualHours) }, { label: "計画時間", value: formatHours(total.plannedHours) }]
+      : measure === "variance"
+        ? [{ label: "計画原価", value: money(total.plannedCost, unit) }, { label: "実績原価", value: money(total.actualCost, unit) }]
+        : [];
+  return {
+    title: `${d.label}（合計）の計算根拠`,
+    subtitle: periodJa(period),
+    formula: [d.formula],
+    rows: [{ label: "対象メンバー", value: `${members.length}人` }, ...parts, { label: `${d.label}（合計）`, value: fmt(total[measure]), emphasis: true }],
+    sections: [
+      {
+        title: "メンバーごとの内訳",
+        table: { columns: [{ label: "メンバー" }, { label: d.label, align: "num" }], rows: members.map((m) => [`${m.memberName}（${m.memberId}）`, fmt(m[measure])]) },
+      },
+    ],
+  };
+}
