@@ -60,9 +60,12 @@ export function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
-/** 時間を "7.25" のような最短表記にする（0.1 のような浮動小数の誤差を抑える） */
+/**
+ * 時間を "7.25" のような最短表記にする（0.1 のような浮動小数の誤差を抑える）。
+ * 分・秒単位の API（10 分 = 0.1667h）を行ごとに 0.01h へ丸めると合計がずれるため、小数 4 桁まで残す。
+ */
 export function formatHours(h: number): string {
-  return String(Math.round(h * 100) / 100);
+  return String(Math.round(h * 10000) / 10000);
 }
 
 /** 安定した順序（日付→メンバー→顧客→案件→時間）に並べ替えた新しい配列を返す。生成と取得で共通に使う */

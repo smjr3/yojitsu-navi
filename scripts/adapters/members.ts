@@ -34,7 +34,8 @@ import { decodeAuto } from "../lib/encoding.js";
 /** 取り込んだ 1 人分。undefined の項目は「取り込み元が持っていない」＝比較・上書きしない */
 export interface MemberImport {
   memberId: string;
-  name: string;
+  /** 空・未指定のときは既存の氏名を残す */
+  name?: string;
   kind?: MemberKind;
   title?: string;
   department?: string;
@@ -68,7 +69,10 @@ export function mapMemberRow(row: RawRow, ms: MemberSourceConfig): MemberImport 
   };
   const memberId = str("memberId") ?? "";
   if (memberId === "") return null;
-  const out: MemberImport = { memberId, name: str("name") ?? "" };
+  const out: MemberImport = { memberId };
+  // 氏名が空 = 取り込まない（現在の値を引き継ぐ。空で上書きしない）
+  const name = str("name");
+  if (name !== undefined && name !== "") out.name = name;
   for (const f of OPTIONAL_FIELDS) {
     const v = str(f);
     if (v === undefined) continue;
@@ -102,6 +106,7 @@ export function importMembers(raw: RawRow[], ms: MemberSourceConfig, report?: (r
   const byId = new Map<string, MemberImport>();
   let dup = 0;
   let noId = 0;
+  let noName = 0;
   for (const r of rows) {
     const m = mapMemberRow(r, ms);
     if (!m) {
@@ -112,8 +117,10 @@ export function importMembers(raw: RawRow[], ms: MemberSourceConfig, report?: (r
       dup++;
       continue; // 重複は先頭を採用
     }
+    if (m.name === undefined) noName++;
     byId.set(m.memberId, m);
   }
+  if (noName > 0) log?.(`[members] 氏名が空の ${noName} 人は、既存の氏名をそのまま残します（新しい人は氏名が空になります）`);
   if (noId > 0) log?.(`[members] メンバーIDが空の ${noId} 行を除きました`);
   if (dup > 0) log?.(`[members] メンバーIDが重複する ${dup} 行は先頭を採用しました`);
   return [...byId.values()];

@@ -194,7 +194,12 @@ export function parseDateWithFormat(v: unknown, fmt: DateFormat): string | null 
  */
 export function parseDate(v: unknown, fmt?: DateFormat): string | null {
   if (fmt) return parseDateWithFormat(v, fmt);
-  if (typeof v === "number") return Number.isFinite(v) && v >= 1e11 ? epochToDate(v) : String(v);
+  if (typeof v === "number") {
+    if (Number.isFinite(v) && v >= 1e11) return epochToDate(v);
+    // 20261027 のような 8 桁の整数は YYYYMMDD（文字列の "20261027" と同じ扱い）
+    if (Number.isInteger(v) && v >= 10000101 && v <= 99991231) return parseDate(String(v));
+    return String(v);
+  }
   const s = String(v ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const slash = /^(\d{4})\/(\d{1,2})\/(\d{1,2})/.exec(s);
@@ -231,6 +236,7 @@ export interface HttpAdapterDeps {
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export const DEFAULT_MAX_PAGES = 1000;
+const MAX_REDIRECTS = 5;
 
 /** 文字列からトークンを隠す */
 export function redact(text: string, token: string): string {
@@ -239,6 +245,15 @@ export function redact(text: string, token: string): string {
   const enc = encodeURIComponent(token);
   if (enc !== token) out = out.split(enc).join("***");
   return out;
+}
+
+function decodeKey(kv: string): string {
+  const k = kv.split("=")[0] ?? "";
+  try {
+    return decodeURIComponent(k.replace(/\+/g, " "));
+  } catch {
+    return k;
+  }
 }
 
 /** JSON の中からドット区切りのパスで値を取り出す */
@@ -373,10 +388,21 @@ async function fetchRawRowsInner(http: HttpSourceOptions, ctx: FetchRowsContext)
   async function requestOnce(url: string): Promise<Response> {
     const fetchImpl = ctx.deps?.fetchImpl ?? globalThis.fetch;
     let res: Response;
-    try {
-      res = await fetchImpl(url, { method, headers });
-    } catch (e) {
-      throw new RetryableError(`ネットワークエラー: ${e instanceof Error ? e.message : String(e)}`);
+    // リダイレクトは自分で追う。fetch 任せだと Authorization 以外の独自ヘッダ（X-API-Key 等）が別オリジンへ送られる
+    let current = url;
+    for (let hop = 0; ; hop++) {
+      try {
+        res = await fetchImpl(current, { method, headers, redirect: "manual" });
+      } catch (e) {
+        throw new RetryableError(`ネットワークエラー: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      if (res.status < 300 || res.status >= 400 || res.status === 304) break;
+      const loc = res.headers.get("location");
+      if (!loc) break;
+      if (hop >= MAX_REDIRECTS) throw new Error(`リダイレクトが ${MAX_REDIRECTS} 回を超えました`);
+      const next = new URL(loc, current);
+      if (next.origin !== new URL(url).origin) throw new Error("リダイレクト先が別のサーバのため中止しました（トークン保護）");
+      current = next.toString();
     }
     if (res.status >= 500) throw new RetryableError(`サーバエラー HTTP ${res.status}`);
     if (!res.ok) {
@@ -429,9 +455,12 @@ async function fetchRawRowsInner(http: HttpSourceOptions, ctx: FetchRowsContext)
   const origin = new URL(baseUrl).origin;
   const maxPages = ("maxPages" in pagination ? pagination.maxPages : undefined) ?? DEFAULT_MAX_PAGES;
 
+  // 既存のクエリ文字列は書き換えず（, などの符号化を保つ）、同名があれば置き換え、無ければ末尾に足す
   const withParams = (params: Record<string, string>): string => {
     const u = new URL(baseUrl);
-    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+    const keep = u.search === "" ? [] : u.search.slice(1).split("&").filter((kv) => !(decodeKey(kv) in params));
+    const add = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    u.search = [...keep, ...add].join("&");
     return u.toString();
   };
 

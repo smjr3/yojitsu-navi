@@ -162,6 +162,8 @@ Node 22 以上。
 2. **config を書く**
    - 列名: `columns` に「予実ナビの項目 → 取得元の列名」。入れ子は `"member.id"`、候補が複数あるなら `["emp_no", "member.id"]`
    - 日付: `dateFormat`（`YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601` / `epochMillis`。省略で自動判定）
+     - 時刻付きの日付（`2026-10-31T23:30:00Z` など）は、自動判定だと先頭 10 文字（UTC の日付）を取るため JST では翌日の作業が前日になる。時刻付きの API では `dateFormat: ISO8601` を推奨（JST に変換して日付を取る）。8 桁の数値（`20261027`）は `YYYYMMDD` として読む
+     - 取得できたのに全行が対象期間外になるときは、ファイルを書かずにエラーで止まる（日付の読み違いで月ファイルが空になるのを防ぐ）。分・秒単位の API は小数 4 桁まで保持して換算する
    - 時間の単位: `hoursUnit`（`hours` / `minutes` / `seconds`）
    - 件数が多い API: `pagination`（`page` / `offset` / `link` / `cursor`）
    - 取り消し行などを除く: `filters`、固定の絞り込み: `query`、Shift_JIS の CSV: `encoding`
