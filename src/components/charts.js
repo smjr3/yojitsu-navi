@@ -152,6 +152,73 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {
   return dataTable({ columns, rows, unit, caption: "月次推移", exportName, sort: { key: "month", dir: "asc" } });
 }
 
+/**
+ * メンバーの月次推移: 計画時間（青＝予）と実績時間（橙＝実）の棒を並べる。
+ * series は core の memberMonthlySeries() の出力。基準月以降の月は背景を薄く塗り、実績がまだ無いことを示す。
+ */
+export function memberHoursChart({ series, dark = false, width = 640, height = 260, asOfMonth, title = "計画と実績の時間" }) {
+  const c = chartColors(dark);
+  const data = series.map((d, i) => ({ ...d, i }));
+  const n = data.length;
+  if (n === 0) return html`<div class="yn-chart-empty">表示する月がありません</div>`;
+  // 目盛りの間引き: 1 目盛りあたり 44px 以上（390px 幅で月ラベルが重ならないように）
+  const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 64) / 44))));
+  const ticks = data.filter((d) => d.i % every === 0).map((d) => d.i);
+  const firstFuture = data.find((d) => d.month >= asOfMonth);
+  const barW = Math.max(6, Math.min(22, ((width - 80) / n) * 0.4));
+  const bw = barW / ((width - 80) / n);
+  const gap = 0.03;
+  const plot = Plot.plot({
+    width,
+    height,
+    marginLeft: 48,
+    marginRight: 16,
+    marginTop: 24,
+    marginBottom: 32,
+    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
+    y: { grid: true, label: "時間（h）", labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    marks: [
+      Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
+      Plot.ruleY([0], { stroke: c.axis }),
+      firstFuture ? Plot.rectX([{ x1: firstFuture.i - 0.5, x2: n - 0.5 }], { x1: "x1", x2: "x2", fill: c.muted, fillOpacity: 0.06 }) : null,
+      Plot.rectY(data, { x1: (d) => d.i - gap - bw, x2: (d) => d.i - gap, y: "plannedHours", fill: c.budget, ry2: 3 }),
+      Plot.rectY(data, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "actualHours", fill: c.cost, ry2: 3 }),
+      Plot.ruleX(data, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
+      Plot.tip(
+        data,
+        Plot.pointerX({
+          x: "i",
+          y: (d) => Math.max(d.plannedHours, d.actualHours),
+          anchor: "bottom",
+          dy: -6,
+          fill: c.surface,
+          stroke: c.axis,
+          fontSize: 12,
+          channels: {
+            月: (d) => `${monthJa(d.month)}（${STATUS_LABELS[d.status]}）`,
+            計画: (d) => formatHours(d.plannedHours),
+            実績: (d) => formatHours(d.actualHours),
+            稼働率: (d) => (d.utilization === null ? "—（計画なし）" : `${(d.utilization * 100).toFixed(1)}%`),
+          },
+          format: { x: false, y: false },
+        }),
+      ),
+    ].filter(Boolean),
+  });
+  plot.setAttribute("role", "img");
+  plot.setAttribute("aria-label", `${title}。月ごとの計画時間と実績時間の棒グラフ。値は下の表で確認できます。`);
+  return plot;
+}
+
+export function memberHoursLegend(dark) {
+  const c = chartColors(dark);
+  return chartLegend([
+    { label: "計画時間（配分 × 基準時間）", color: c.budget },
+    { label: "実績時間（作業実績）", color: c.cost },
+  ]);
+}
+
 /** 消化率メーター（0〜120% の目盛、100% に基準線） */
 export function burnMeter(rate, threshold = 1) {
   const max = 1.2;

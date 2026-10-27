@@ -196,3 +196,33 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 ### テスト
 
 単体 `tests/unit/masterEdit.test.ts`・`tests/unit/gitlab.test.ts`（モック fetch で全分岐）、プロパティ `tests/property/masterEdit.property.test.ts`（書き出し→再読み込みで同値、未変更行のバイト保持、任意の編集列で差分が正しい）、結合 `tests/integration/masters.test.ts`（ダミーデータの 4 ファイルで 編集→書き戻し→loadDataset / validate-data / buildModel）、E2E `tests/e2e/masters.spec.ts`（masters.json を `page.route` で書き換えて gitlab モード・取り込みモードを再現し、GitLab API を `page.route` でモック）、モンキー（`/masters` を対象に追加）。
+
+## メンバー別（`/members`・`/member?id=`、SPEC §18.2）
+
+| ページ | 問い | 構成 |
+|---|---|---|
+| `/members` メンバー別（サイドバーに出す） | 誰が計画どおりに動いているか | KPI 4 枚（計画原価・実績原価・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
+| `/member?id=` メンバー詳細（サイドバーに出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・部署、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
+
+### データの流れ
+
+- 両ページは `model.json` と `data/member-months.json`（`src/data/member-months.json.ts`）を `Promise.all` で並行して読み、`{...model, memberMonths}` にして core の `aggregateMembers` / `memberMonthlySeries` に渡す（`loadJson` に `{json: async () => ...}` を渡して読み込み中・エラー表示を共通化）。他のページは member-months.json を読まない（model.json は 540 KB のまま）。
+- 単価の変遷は member-months.json の `rateHistory[memberId]`（ビルド時に `memberRateHistory` で計算）。
+
+### 決定事項
+
+| 箇所 | 決定 |
+|---|---|
+| 比較の母集団 | **経過月**（期間開始〜`min(期間終了, 基準月)`）。KPI・一覧・契約別・合計行はすべてこの期間を `aggregateMembers` に渡す。期間全体（未来月を含む）の計画は注記と KPI の補足（「期間全体 X円」）、詳細の月次推移で示す。期間がすべて未来なら期間全体（実績 0）で表示し注記。SPEC §18.2 に追記済み。Excel のファイル名も比較期間（`members_2026-04_2026-10.xlsx`） |
+| 稼働率・差額の色 | 色を付けない（赤は §12 の 2 つだけ）。差額は `moneySigned`（+ / − / ±0）。E2E で `.yn-danger-text` 等が 0 件であることを確認 |
+| 一覧の列 | メンバー（1 行目 名前、2 行目 ID・所属チーム・役職）／計画時間／実績時間／稼働率／計画原価／実績原価／差額／状態。所属チーム・役職・区分・ID は列を分けると 1280・1024px に収まらないため 2 行目に入れ、Excel には別列（`exportOnly`）で出す。状態（マスタ未登録・単価なし・アサイン外 Nh）はニュートラルのチップで、820px 以下で隠す。速報は行ごとに出さず見出しのバッジだけ（ほぼ全員に付くため） |
+| 既定の並び | 差額の昇順（計画より原価が多い人が先頭） |
+| チーム絞り込み | 所属チーム（基準月の値、配下を含む）。「未設定」は所属チームが空か基準月の組織に無いメンバー。絞り込みは「全員を集計 → 該当 ID で `aggregateMembers(memberIds)` を呼び直す」（合計もコア） |
+| 検索 | 名前・ID・役職・所属チームを `normalizeName` で部分一致（150ms デバウンス、URL の `q` を初期値に）。合計行は表示中のメンバーで `aggregateMembers` を呼び直す |
+| 根拠パネル | `memberPlanSpec`（契約×月ごとの 配分・計画時間・単価・単価の出どころ・計画原価）、`memberActualSpec`（契約×月の原価行 → 作業ログを遅延読み込み。契約ごとの `fetchWorklogs` をメンバーで絞る）、`memberVarianceSpec`、`memberUtilizationSpec`、`memberTotalsSpec`（合計行・一覧の KPI）。時間の列も同じ spec を `measure: "hours"` で使う。単位が百万円（`"m"`）のときは根拠パネルだけ円で出す（1 人の金額は小さいため） |
+| 詳細の月表 | 期間全体の各月。未来の月は実績・稼働率・差額を「—」（根拠ボタンなし）、計画は表示。合計行は経過月の合計（ラベルに期間を明記） |
+| 詳細の契約別 | 経過月。アサインの無い契約は「アサインなし」、アサイン期間外の月に作業があれば「アサイン外 Nh」（ニュートラル）。行クリックで契約詳細 |
+| 遷移 | 一覧の行 → 詳細、詳細の契約行 → 契約詳細、契約詳細「メンバー別の原価」の行 → メンバー詳細（`rowHref` を追加しただけ） |
+| 存在判定 | members.csv にあるか、memberMonths に出てくれば存在。どちらも無い ID は空状態＋「メンバー別へ戻る」 |
+| KPI 4 枚の並び | `.yn-kpi-4`（style.css の members 節）: コンテナ 760px 以上で 4 列、未満は 2×2、480px 以下は 1 列（auto-fit の 3+1 崩れを防ぐ） |
+| グラフ | `charts.memberHoursChart`（計画=青＝予、実績=橙＝実。既存の予算／原価と同じ色の意味）。基準月以降は背景を薄く。目盛りは 44px/目盛りで間引く（390px でも重ならない） |

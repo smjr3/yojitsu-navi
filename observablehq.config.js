@@ -29,6 +29,7 @@ export default {
     { name: "チーム一覧", path: "/teams" },
     { name: "顧客別", path: "/customers" },
     { name: "契約一覧", path: "/contracts" },
+    { name: "メンバー別", path: "/members" },
     { name: "計算ルール", path: "/rules" },
     { name: "データ確認", path: "/data-check" },
     { name: "マスタ編集", path: "/masters" },

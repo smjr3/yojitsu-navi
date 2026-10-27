@@ -2018,4 +2018,22 @@ th[aria-sort="descending"] .yn-sort-icon {
     border: 1px solid var(--yn-hairline);
     border-radius: var(--yn-radius-sm);
   }
+
+/* ==== members ==== */
+/* メンバー別の KPI 4 枚: 幅が足りれば 4 列、足りなければ 2×2（3+1 に崩さない） */
+.yn-kpi-grid.yn-kpi-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container (min-width: 760px) {
+  .yn-kpi-grid.yn-kpi-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .yn-kpi-grid.yn-kpi-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.yn-member-history {
+  margin: 0 0 16px;
 }

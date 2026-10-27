@@ -401,6 +401,141 @@ export interface Model {
   unmapped: UnmappedWorklogGroup[];
   /** 顧客なし等で除外した工数の合計 */
   excludedHours: number;
+  /**
+   * メンバー×月の計画と実績（§18.1）。memberId 昇順 → month 昇順。
+   * 画面用の model.json では空にし、data/member-months.json で別に配る（メンバー別の画面だけが読む）
+   */
+  memberMonths: MemberMonth[];
+}
+
+// ---------------------------------------------------------------------------
+// メンバー別（SPEC §18）
+// ---------------------------------------------------------------------------
+
+/** メンバー x・月 m・契約 c の計画と実績（MemberMonth.byContract の 1 行） */
+export interface MemberContractMonth {
+  contractId: string;
+  /** その月に掛かるアサインの配分の合計（契約期間外の月・除外された契約は 0） */
+  allocation: number;
+  /** 掛かったアサインの件数。0 = アサインなし（この行の実績は unplanned に入る） */
+  assignmentCount: number;
+  /** allocation × standardHoursPerMonth */
+  plannedHours: number;
+  /** round(plannedHours × hourlyRate)。行（x, c, m）ごとに丸める */
+  plannedCost: number;
+  /** 契約 c・月 m の CostLine のうち memberId = x の時間 */
+  actualHours: number;
+  /** 同 CostLine の金額 */
+  actualCost: number;
+}
+
+/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 基準時間 × 単価、実績 = 工数原価） */
+export interface MemberMonth {
+  memberId: string;
+  month: YearMonth;
+  /** 当月のメンバーマスタの名前。無ければ作業ログの名前、それも無ければ ID */
+  memberName: string;
+  /** members.csv に（どの月にも）存在しない */
+  memberUnknown: boolean;
+  /** 当月の有効レコードの値（無ければ null） */
+  kind: MemberKind | null;
+  title: string | null;
+  teamId: string | null;
+  /** §6 の単価（当月） */
+  hourlyRate: number;
+  rateSource: { key: string; effectiveFrom: YearMonth } | null;
+  rateMissing: boolean;
+  /** 計算に使った基準時間（config.standardHoursPerMonth） */
+  standardHoursPerMonth: number;
+  plannedHours: number;
+  /** Σ_c plannedCost(x, c, m)（行ごとに丸めた額の合計） */
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  /** アサインの無い契約に付けた工数（actual のうちの内数） */
+  unplannedHours: number;
+  unplannedCost: number;
+  /** plannedCost − actualCost（正 = 計画より原価が少ない） */
+  variance: number;
+  /** 契約別の内訳（contractId 昇順） */
+  byContract: MemberContractMonth[];
+}
+
+/** aggregateMembers の契約別の行（期間内の合計） */
+export interface MemberContractTotals {
+  contractId: string;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
+  /** アサインが掛かった月の数（0 = 期間内にアサインなし） */
+  assignedMonths: number;
+  /** 期間内で計画か実績のある月 */
+  months: YearMonth[];
+}
+
+/** aggregateMembers のメンバー 1 人分（期間内の合計） */
+export interface MemberTotals {
+  memberId: string;
+  memberName: string;
+  memberUnknown: boolean;
+  /** 所属・役職・区分は基準月（期間の終了月。未来は asOf 月）の値。基準月に有効レコードが無ければ期間内の最後の値 */
+  teamId: string | null;
+  title: string | null;
+  kind: MemberKind | null;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  /** actualHours ÷ plannedHours（plannedHours 0 → null） */
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
+  /** 単価が見つからない月を含む */
+  rateMissing: boolean;
+  /** 実績に速報月を含む */
+  includesPreliminary: boolean;
+  /** 期間内で計画か実績のある月（昇順） */
+  months: YearMonth[];
+  byContract: MemberContractTotals[];
+}
+
+export interface MemberAggregate {
+  period: Period;
+  /** 所属チームを決めた月 = min(period.to, asOfMonth) */
+  baseMonth: YearMonth;
+  /** memberId 昇順 */
+  members: MemberTotals[];
+  total: {
+    memberCount: number;
+    plannedHours: number;
+    plannedCost: number;
+    actualHours: number;
+    actualCost: number;
+    variance: number;
+    utilization: number | null;
+    unplannedHours: number;
+    unplannedCost: number;
+  };
+}
+
+/** memberMonthlySeries の 1 点（期間の全月。データの無い月は 0） */
+export interface MemberMonthlyPoint {
+  month: YearMonth;
+  status: MonthStatus;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
 }
 
 // ---------------------------------------------------------------------------

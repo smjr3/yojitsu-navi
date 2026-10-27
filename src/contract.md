@@ -247,7 +247,7 @@ if (vm) {
     { key: "months", label: "作業月数", type: "int", hideOnPhone: true },
   ];
   if (rows.length === 0) display(emptyState({ title: "作業実績がありません", text: "この期間に紐付いた作業ログはありません。", icon: "○" }));
-  else display(dataTable({ columns, rows, unit, caption: "メンバー別の原価", exportName: `contract_${c.contractId}_members`, sort: { key: "amount", dir: "desc" } }));
+  else display(dataTable({ columns, rows, unit, caption: "メンバー別の原価", exportName: `contract_${c.contractId}_members`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
 }
 ```
 
