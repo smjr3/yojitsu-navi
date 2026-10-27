@@ -1,5 +1,4 @@
 {
-  "$schema": "./src/core/config.schema.json",
   "fiscalYearStartMonth": 4,
   "standardHoursPerMonth": 160,
   "hoursPerBusinessDay": 8,

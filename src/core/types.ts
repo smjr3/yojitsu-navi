@@ -52,6 +52,12 @@ export interface WorklogSourceConfig {
     url: string;
     authHeader: string;
     refetchMonths: number;
+    /** 任意: JSON応答で配列がネストしている場合のパス（例 "data.items"） */
+    dataPath?: string;
+    /** 任意: 認証ヘッダの値の接頭辞（例 "Bearer"） */
+    authScheme?: string;
+    /** 任意: HTTPメソッド（既定 GET） */
+    method?: string;
     /** 取得元の列名 → 予実ナビの項目名 */
     columns: Record<keyof Worklog, string>;
   };
@@ -315,6 +321,10 @@ export interface Model {
   /** 木構造の最上位チームID一覧（表示順） */
   rootTeamIds: string[];
   members: MemberRecord[];
+  /** 画面側で過去月の組織（teamTreeAt）を引くための履歴 */
+  teams: TeamRecord[];
+  /** 画面側で月の状態・営業日を再計算するための祝日 */
+  holidays: Holiday[];
   warnings: Warning[];
   unmapped: UnmappedWorklogGroup[];
   /** 顧客なし等で除外した工数の合計 */

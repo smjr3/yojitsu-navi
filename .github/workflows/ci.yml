@@ -1,0 +1,76 @@
+# 予実ナビ — GitHub Actions（GitHub ミラー／フォーク用。本番の公開は GitLab Pages）
+#
+# push と Pull Request で: 依存インストール → 型チェック → データ検証 → テスト → ビルド → E2E
+# E2E は tests/e2e/playwright.config.ts が存在するときだけ実行する（別途追加予定）。
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 依存インストール
+        run: npm ci --no-audit --no-fund
+
+      - name: 型チェック
+        run: npm run typecheck
+
+      - name: データ検証
+        run: npm run validate
+
+      - name: テスト（unit / property / integration）
+        run: npm run test
+
+      - name: ビルド
+        run: npm run build
+
+      - name: E2E の有無を確認
+        id: e2e
+        run: |
+          if [ -f tests/e2e/playwright.config.ts ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "tests/e2e/playwright.config.ts が無いので E2E はスキップします"
+          fi
+
+      - name: Playwright ブラウザのインストール
+        if: steps.e2e.outputs.present == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E テスト
+        if: steps.e2e.outputs.present == 'true'
+        run: npm run test:e2e
+
+      - name: E2E レポートを保存
+        if: steps.e2e.outputs.present == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: ビルド成果物を保存
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
