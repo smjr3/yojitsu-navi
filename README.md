@@ -17,6 +17,7 @@
 | `/contracts` 契約一覧 | 契約ごとの予実と消化率。赤 = 消化率 100% 超 or 着地赤字 |
 | `/rules` 計算ルール | 画面の数値がどう計算されているかの説明 |
 | `/data-check` データ確認 | 未紐付けの作業実績、単価なしメンバー、警告の一覧 |
+| `/masters` マスタ編集 | メンバー・単価・チーム・アサインの CSV を画面で編集し、GitLab に保存（または CSV をダウンロード）。下の「マスタ編集の設定」 |
 
 数値をクリックすると「式 ＋ 実際に使った値」の内訳が開きます。
 
@@ -185,6 +186,41 @@ npm run fetch:members                           # members.csv を更新
 - 取り込み元に無い人は削除しません（退職者の過去月を壊さないため）。何度流しても同じ結果です
 - 人事 API のときは `adapter: "http"`、環境変数 `MEMBER_API_TOKEN`
 - CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `MEMBER_FETCH_ENABLED=1` を設定します（既定は無効）
+
+## マスタ編集の設定（GitLab のトークン・projectId・CORS が通らない場合の download 運用）
+
+`/masters` は `data/masters/members.csv`・`rates.csv`・`teams.csv`・`data/assignments.csv` を画面で編集する画面です（SPEC §19）。
+編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。保存方式は `config.json` の `masterEdit` で決めます。
+
+```jsonc
+"masterEdit": {
+  "mode": "download",              // 既定。"gitlab" にすると API で保存
+  "gitlab": {
+    "apiBaseUrl": "",              // 例 https://gitlab.example.local/api/v4
+    "projectId": "",               // 数値ID または "group/yojitsu-navi"
+    "targetBranch": "main",
+    "commitMode": "mr"             // "mr"（ブランチ masters/<日時>-<ユーザー> にコミットして MR を作る）| "direct"
+  }
+}
+```
+
+**GitLab に直接保存する（gitlab モード）**
+
+1. `mode` を `"gitlab"` にし、`apiBaseUrl` と `projectId` を入れてコミットする（どちらかが空なら自動で download モードになる）。
+2. 保存する人は GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、画面の「GitLab の Personal Access Token」に入れる。
+   トークンはそのタブの `sessionStorage` にだけ置き、タブを閉じると消える（画面に再表示しない・サーバーやリポジトリには保存しない）。
+3. 保存できるのはプロジェクトの Developer 以上（`direct` で保護ブランチに直接コミットするなら、その権限も必要）。閲覧は誰でもできる。
+4. 競合検出: ビルド時に各ファイルの最終コミット ID を取り、コミットの `last_commit_id` に付ける。編集中に他の人が同じファイルを更新していると GitLab が拒否し、画面に「他の人が先に更新しました」と出る（編集内容は下書きに残る）。
+   このため CI の build ジョブは `GIT_DEPTH: "0"`（浅いクローンにしない）にしている。ID が取れないと画面に「競合を検出できません」と出る。
+
+**CORS**: Pages（`*.pages.<社内ドメイン>`）と GitLab 本体はオリジンが違うので、ブラウザから API を呼ぶには GitLab 側が CORS を許可している必要がある。
+GitLab の API は Personal Access Token 付きの CORS リクエストを許可するのが既定だが、リバースプロキシや WAF で `OPTIONS` が止められていると「GitLab に接続できませんでした」になる。
+その場合は画面の「CSV ダウンロードに切り替える」で下の download 運用に切り替えられる（編集内容はそのまま）。恒常的に通らないなら `mode` を `"download"` に戻す。
+
+**download 運用（既定）**: 画面で編集 → 検証と変更内容を確認 → 変更したファイルを「◯◯.csv をダウンロード」→ GitLab で同じパスのファイルを開いて「置換」（Replace）→ 新しいブランチで MR を作成 → マージで CI が反映。
+ダウンロードされる CSV は UTF-8（BOM なし）・LF・元と同じ列順で、変更していない行は元のファイルとバイト単位で同じ（差分は変更した行だけ）。
+
+`memberSource.adapter` が `"none"` 以外（人事データから所属・役職を取り込む設定）のときは、メンバーの氏名・区分・役職・部署・課は読み取り専用になり、所属チームと適用開始月だけ編集できる。
 
 ## 原価の種類を追加する
 

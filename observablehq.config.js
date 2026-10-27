@@ -31,6 +31,7 @@ export default {
     { name: "契約一覧", path: "/contracts" },
     { name: "計算ルール", path: "/rules" },
     { name: "データ確認", path: "/data-check" },
+    { name: "マスタ編集", path: "/masters" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
   // ID はパスとして安全な形に encodeURIComponent する（ローダ側で decodeURIComponent）。画面の fetchWorklogs も同じ符号化で取得する
