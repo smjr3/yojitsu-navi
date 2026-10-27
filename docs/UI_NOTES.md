@@ -12,7 +12,7 @@ src/
     worklogs/[contractId].json.ts 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
   components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む）
-    format.js      金額・割合・時間・月・日時の書式。単位 "yen" | "k"（千円）を core の MoneyUnit に変換
+    format.js      金額・割合・時間・月・日時の書式。単位 "m"（百万円）| "k"（千円）| "yen" を core の MoneyUnit に変換
     state.js       期間・チーム・単位・着地方式の状態 ⇄ URL クエリ ⇄ localStorage
     analysis.js    scope（期間×チーム）の決定、前年同期比、契約行／チーム行の組み立て、見込み原価の月割り
     layout.js      ページヘッダ（基準日・取得日時・速報バッジ・パンくず）、空／エラー／読み込み状態、loadJson
@@ -47,10 +47,10 @@ src/
 |---|---|---|
 | `from`, `to` | `YYYY-MM`（`meta.minMonth`〜`maxMonth` に収める。逆転は入れ替え） | asOf の年度をデータ範囲に収めたもの |
 | `team` | チームID / `""`（全体）/ `__unassigned__`（未設定） | `""` |
-| `unit` | `yen` / `k`（千円） | `config.currency.defaultUnit` |
+| `unit` | `m`（百万円）/ `k`（千円）/ `yen` | `config.currency.defaultUnit`（既定 `millionYen`） |
 | `method` | `recent3` / `all` / `assignment` | `config.forecastMethodDefault` |
 
-優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v1`） > 既定値**。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
+優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
 フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。
 契約詳細の `id`、契約一覧の `f`（`deficit|over|prelim`）と `q`（検索）はストアの外（ページ固有）。`store.href("./contracts", {team}, {id})` で状態を引き継いだリンクを作る。
 

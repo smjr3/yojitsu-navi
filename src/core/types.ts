@@ -13,7 +13,7 @@ export type ISODate = string;
 export type CostTypeId = string;
 
 export type ForecastMethod = "recent3" | "all" | "assignment";
-export type MoneyUnit = "yen" | "thousandYen";
+export type MoneyUnit = "yen" | "thousandYen" | "millionYen";
 export type MonthStatus = "final" | "preliminary" | "future" | "outside";
 
 // ---------------------------------------------------------------------------

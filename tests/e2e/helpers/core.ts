@@ -26,7 +26,7 @@ import { AS_OF, ROOT_DIR } from "../constants.js";
 export { UNASSIGNED_TEAM_ID, aggregate, forecastTotals, formatPercent, formatYen };
 export type { ContractResult, ForecastMethod, Model, Period, Totals };
 
-export type Unit = "yen" | "k";
+export type Unit = "yen" | "k" | "m";
 
 let cached: Model | null = null;
 
@@ -62,9 +62,9 @@ export function presetPeriod(id: "fy" | "prevFy" | "recent3" | "recent12", model
   }
 }
 
-/** 画面と同じ金額書式（unit: "yen" | "k"） */
+/** 画面と同じ金額書式（unit: "yen" | "k" | "m"） */
 export function yen(value: number | null | undefined, unit: Unit = "yen"): string {
-  return formatYen(value, unit === "k" ? "thousandYen" : "yen");
+  return formatYen(value, unit === "k" ? "thousandYen" : unit === "m" ? "millionYen" : "yen");
 }
 
 /** 期間の終了月時点の組織木（analysis.treeAt と同じ） */

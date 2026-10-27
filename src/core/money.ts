@@ -15,11 +15,18 @@ function isDisplayable(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** 円の整数を "1,234,567円" または "1,235千円"（Math.round(yen/1000)）で表示 */
+/** 表示単位に丸めた値（百万円は小数1桁、千円・円は整数） */
+export function roundToUnit(yen: number, unit: MoneyUnit = "yen"): number {
+  const v = unit === "millionYen" ? Math.round(yen / 100_000) / 10 : unit === "thousandYen" ? Math.round(yen / 1000) : Math.round(yen);
+  return v === 0 ? 0 : v; // -0 を 0 にする（"-0.0百万円" と出さない）
+}
+
+/** 円の整数を "1,234,567円"、"1,235千円"（Math.round(yen/1000)）、"1.2百万円"（小数1桁）で表示 */
 export function formatYen(yen: number | null | undefined, unit: MoneyUnit = "yen"): string {
   if (!isDisplayable(yen)) return EMPTY_VALUE;
-  if (unit === "thousandYen") return `${intFormat.format(Math.round(yen / 1000))}千円`;
-  return `${intFormat.format(Math.round(yen))}円`;
+  if (unit === "millionYen") return `${fractionFormat(1).format(roundToUnit(yen, unit))}百万円`;
+  if (unit === "thousandYen") return `${intFormat.format(roundToUnit(yen, unit))}千円`;
+  return `${intFormat.format(roundToUnit(yen, unit))}円`;
 }
 
 /** 割合（1.034 → "103.4%"）。既定は小数 1 桁 */

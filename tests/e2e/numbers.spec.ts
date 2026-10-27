@@ -165,7 +165,7 @@ test.describe("全体サマリー", () => {
     await page.locator(".yn-seg-btn[data-preset=recent3]").click();
     const period = presetPeriod("recent3", model);
     await expectKpis(page, period, "", "all", "k");
-    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v1"));
+    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "k", method: "all", from: period.from, to: period.to });
     // クエリ無しで別ページへ → 保存された状態が使われ、URL に正規化される
     await gotoPage(page, "/teams");

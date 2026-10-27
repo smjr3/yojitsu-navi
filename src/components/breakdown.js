@@ -12,8 +12,14 @@
  * spec は関数でもよい（開いたときに初めて計算する）。
  */
 import { html } from "htl";
-import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money, monthJa, periodJa, profitLabel } from "./format.js";
+import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
 import { grossMarginOf } from "./analysis.js";
+
+/**
+ * 計算根拠は丸めずに見せる（SPEC §12）: 画面の表示単位（百万円など）に関係なく、内訳の金額は常に円で出す。
+ * spec 関数の unit 引数は呼び出し側との互換のため受け取るだけにしている。
+ */
+const money = (yen, _unit) => moneyInUnit(yen, "yen");
 
 let dialogEl = null;
 let lastOpener = null;

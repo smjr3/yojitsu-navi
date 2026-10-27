@@ -1,19 +1,25 @@
 /**
  * 表示用の書式（計算コア money.ts のラッパ ＋ 単位切替 ＋ 日付・月・ラベル）
  *
- * 画面側の単位は "yen" | "k"（千円）。計算コアの MoneyUnit（"yen" | "thousandYen"）へ変換する。
+ * 画面側の単位は "m"（百万円・既定）| "k"（千円）| "yen"。計算コアの MoneyUnit へ変換する。
  */
-import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen } from "../core/index.js";
+import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../core/index.js";
 
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths };
 
 export const UNITS = [
-  { id: "yen", label: "円", coreUnit: "yen" },
+  { id: "m", label: "百万円", coreUnit: "millionYen" },
   { id: "k", label: "千円", coreUnit: "thousandYen" },
+  { id: "yen", label: "円", coreUnit: "yen" },
 ];
 
 export function toCoreUnit(unit) {
-  return unit === "k" ? "thousandYen" : "yen";
+  return UNITS.find((u) => u.id === unit)?.coreUnit ?? "yen";
+}
+
+/** config の MoneyUnit → 画面の単位 ID */
+export function fromCoreUnit(coreUnit) {
+  return UNITS.find((u) => u.coreUnit === coreUnit)?.id ?? "m";
 }
 
 /** 金額（円の整数）を選択中の単位で表示 */
@@ -28,7 +34,7 @@ export function money(yen, unit = "yen") {
 export function moneySigned(yen, unit = "yen") {
   if (typeof yen !== "number" || !Number.isFinite(yen)) return EMPTY_VALUE;
   const s = money(yen, unit);
-  if (unit === "k" ? Math.round(yen / 1000) === 0 : Math.round(yen) === 0) return `±${money(0, unit)}`;
+  if (roundToUnit(yen, toCoreUnit(unit)) === 0) return `±${money(0, unit)}`;
   return yen < 0 ? s : `+${s}`;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen } from "../../src/core/money.js";
+import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../../src/core/money.js";
 
 describe("表示 (SPEC §12)", () => {
   it("formatYen 円", () => {
@@ -7,6 +7,25 @@ describe("表示 (SPEC §12)", () => {
     expect(formatYen(0)).toBe("0円");
     expect(formatYen(-30_000, "yen")).toBe("-30,000円");
     expect(formatYen(1.4)).toBe("1円");
+  });
+
+  it("formatYen 百万円は小数1桁（Math.round(yen / 100000) / 10）", () => {
+    expect(formatYen(12_345_678, "millionYen")).toBe("12.3百万円");
+    expect(formatYen(12_350_000, "millionYen")).toBe("12.4百万円");
+    expect(formatYen(1_234_567_890, "millionYen")).toBe("1,234.6百万円");
+    expect(formatYen(0, "millionYen")).toBe("0.0百万円");
+    expect(formatYen(49_999, "millionYen")).toBe("0.0百万円");
+    expect(formatYen(50_000, "millionYen")).toBe("0.1百万円");
+    expect(formatYen(-150_000, "millionYen")).toBe("-0.1百万円"); // Math.round(-1.5) = -1
+    expect(formatYen(null, "millionYen")).toBe("—");
+    expect(formatYen(-10_000, "millionYen")).toBe("0.0百万円"); // -0 を出さない
+    expect(formatYen(-400, "thousandYen")).toBe("0千円");
+  });
+
+  it("roundToUnit は formatYen と同じ丸め", () => {
+    expect(roundToUnit(12_345_678, "millionYen")).toBe(12.3);
+    expect(roundToUnit(1_234_567, "thousandYen")).toBe(1235);
+    expect(roundToUnit(1234.5, "yen")).toBe(1235);
   });
 
   it("formatYen 千円は Math.round(yen / 1000)", () => {
