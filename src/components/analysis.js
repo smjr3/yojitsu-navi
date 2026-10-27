@@ -9,10 +9,22 @@ import {
   addMonths,
   aggregate,
   contractsForTeam,
+  fiscalYearMonths,
   forecastTotals,
   monthlySeries,
   teamTreeForMonth,
 } from "../core/index.js";
+
+/** 粗利率（コアの aggregate() と同じ規則: 予算 0 は null）。Totals が無い場面（月ごと・見込み）だけで使う */
+export function grossMarginOf(budget, cost) {
+  if (typeof budget !== "number" || typeof cost !== "number" || !Number.isFinite(budget) || !Number.isFinite(cost)) return null;
+  return budget !== 0 ? (budget - cost) / budget : null;
+}
+
+/** 組織の基準月: 期間終了月、ただし未来の組織は使わない（min(period.to, asOfMonth)） */
+export function treeMonthFor(model, period) {
+  return period.to < model.meta.asOfMonth ? period.to : model.meta.asOfMonth;
+}
 
 /** 期間の終了月の組織（SPEC §11: チーム一覧は期間終了月の組織で表示） */
 export function treeAt(model, month) {
@@ -45,14 +57,17 @@ export function contractTeamName(model, contract, tree) {
  */
 export function scopeFor(model, state) {
   const period = { from: state.from, to: state.to };
-  const { tree } = treeAt(model, period.to);
+  const treeMonth = treeMonthFor(model, period);
+  const { tree } = treeAt(model, treeMonth);
   let contractIds;
   let label = "全体";
+  let teamMissing = false;
   if (state.team) {
     contractIds = contractsForTeam(model, state.team, tree).map((c) => c.contractId);
     label = teamName(model, state.team, tree);
+    teamMissing = state.team !== UNASSIGNED_TEAM_ID && !tree[state.team];
   }
-  return { period, contractIds, teamId: state.team, teamLabel: label, tree };
+  return { period, contractIds, teamId: state.team, teamLabel: label, tree, treeMonth, teamMissing };
 }
 
 /** 集計一式（KPI 行で使う） */
@@ -64,48 +79,64 @@ export function summarize(model, scope, method) {
 }
 
 /**
- * 残り月ごとの見込み原価（グラフ用）。
- * recent3/all は平均 × 1 か月、assignment は明細を月で合算。年度外の月は無し。
+ * 残り月ごとの見込み原価（グラフ・月表用）。年度外の月は無し。
+ * 契約ごとの月割りの合計は必ずコアの remainingCost に一致させる:
+ *   recent3/all   remainingCost を残り月で均等割り（端数は最終月）
+ *   assignment    明細（assignmentLines）を月で合算（合計 = remainingCost）
  */
 export function forecastMonthlyCost(model, contractIds, method) {
   const set = contractIds ? new Set(contractIds) : null;
   const byMonth = new Map();
+  const add = (m, v) => byMonth.set(m, (byMonth.get(m) ?? 0) + v);
   for (const r of model.contracts) {
     if (set && !set.has(r.contract.contractId)) continue;
     const f = r.forecasts[method];
     if (!f) continue;
     const b = f.breakdown;
-    for (const m of b.remainingMonths) {
-      let v = 0;
-      if (method === "assignment") {
+    const n = b.remainingMonths.length;
+    if (n === 0) continue;
+    if (method === "assignment") {
+      for (const m of b.remainingMonths) {
+        let v = 0;
         for (const line of b.assignmentLines) if (line.month === m) v += line.amount;
-      } else {
-        v = b.averageMonthlyCost;
+        add(m, v);
       }
-      byMonth.set(m, (byMonth.get(m) ?? 0) + v);
+    } else {
+      const base = Math.floor(b.remainingCost / n);
+      b.remainingMonths.forEach((m, i) => add(m, i === n - 1 ? b.remainingCost - base * (n - 1) : base));
     }
   }
-  for (const [m, v] of byMonth) byMonth.set(m, Math.round(v));
   return byMonth;
 }
 
-/** 月次推移に見込み原価を重ねる（status が preliminary/future の月に forecastCost を持たせる） */
+/**
+ * 月次推移に見込み原価を重ねる。
+ *   isActual   基準月より前（実績）
+ *   forecastCost  基準月以降で年度内の月: 見込み原価（見込みが無ければ 0）。年度外の月は null
+ *   outsideFY  基準月以降で年度外の月（見込み対象外。原価・粗利は無し）
+ */
 export function seriesWithForecast(model, scope, method) {
   const series = monthlySeries(model, { period: scope.period, contractIds: scope.contractIds });
   const fc = forecastMonthlyCost(model, scope.contractIds, method);
+  const fy = new Set(fiscalYearMonths(model.meta.fiscalYear, model.config.fiscalYearStartMonth));
   return series.map((p) => {
-    const isRemaining = p.month >= model.meta.asOfMonth && fc.has(p.month);
-    const forecastCost = isRemaining ? fc.get(p.month) : null;
+    const isActual = p.month < model.meta.asOfMonth;
+    const inFY = fy.has(p.month);
+    const forecastCost = isActual || !inFY ? null : (fc.get(p.month) ?? 0);
     return {
       ...p,
-      isActual: p.month < model.meta.asOfMonth,
+      isActual,
+      outsideFY: !isActual && !inFY,
       forecastCost,
       forecastGrossProfit: forecastCost === null ? null : p.budget - forecastCost,
     };
   });
 }
 
-/** 前年同期（経過月だけを比べる）。比較できなければ null */
+/**
+ * 前年同期（経過月 = 期間開始〜基準月 の累計を、12 か月前の同じ月と比べる）。比較できなければ null。
+ * 前年のデータが途中からしか無いときは、データのある月に両方を詰めて partial: true を返す。
+ */
 export function priorYearComparison(model, scope) {
   if (!model.meta.hasPriorYearData) return null;
   const asOf = model.meta.asOfMonth;
@@ -113,11 +144,17 @@ export function priorYearComparison(model, scope) {
   if (scope.period.from > elapsedTo) return null;
   const current = { from: scope.period.from, to: elapsedTo };
   const prior = { from: addMonths(current.from, -12), to: addMonths(current.to, -12) };
-  if (prior.from < model.meta.minMonth) return null;
+  let partial = false;
+  if (prior.from < model.meta.minMonth) {
+    prior.from = model.meta.minMonth;
+    current.from = addMonths(model.meta.minMonth, 12);
+    partial = true;
+    if (prior.from > prior.to) return null;
+  }
   const now = aggregate(model, { period: current, contractIds: scope.contractIds });
   const before = aggregate(model, { period: prior, contractIds: scope.contractIds });
   if (before.budget === 0 && before.cost === 0) return null;
-  return { current, prior, now, before };
+  return { current, prior, now, before, partial };
 }
 
 /** 契約1件の期間集計 ＋ 着地（契約一覧の行） */
@@ -156,12 +193,15 @@ export function teamRow(model, teamId, name, depth, period, method, tree, extra 
   const ids = contracts.map((c) => c.contractId);
   const totals = aggregate(model, { period, contractIds: ids });
   const f = forecastTotals(model, ids, method);
+  // 契約数は「期間内」、着地は「年度内」の契約が母集団（列ラベルで区別する）
+  const fyContractCount = contracts.filter((c) => (model.contracts.find((r) => r.contract.contractId === c.contractId)?.forecasts[method]?.breakdown.contractMonthsInFY.length ?? 0) > 0).length;
   return {
     teamId,
     name,
     depth,
     contractIds: ids,
     contractCount: totals.contractCount,
+    fyContractCount,
     totals,
     forecast: f,
     budget: totals.budget,

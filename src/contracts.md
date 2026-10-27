@@ -10,9 +10,10 @@ title: 契約一覧
 
 ```js
 import { html } from "htl";
+import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
-import { pageHeader, sectionTitle, emptyState, loadJson } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -50,7 +51,7 @@ const vm = (() => {
   const ids = scope.contractIds ? new Set(scope.contractIds) : null;
   const all = model.contracts
     .filter((r) => !ids || ids.has(r.contract.contractId))
-    .map((r) => ({ ...contractRow(model, r, scope.period, state.method, scope.tree), key: r.contract.contractId }));
+    .map((r) => ({ ...contractRow(model, r, scope.period, state.method, scope.tree), key: r.contract.contractId, searchText: normalizeName(`${r.contract.contractId} ${r.contract.customerName} ${r.contract.projectName}`) }));
   return { scope, all, unit: state.unit, method: state.method, includesPreliminary: all.some((r) => r.includesPreliminary) };
 })();
 ```
@@ -74,8 +75,15 @@ if (store) display(filterBar(store, model));
 ```
 
 ```js
+if (vm?.scope.teamMissing) {
+  display(note(`選択したチーム「${vm.scope.teamLabel}」は ${monthJa(vm.scope.treeMonth)} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件になります。`, "warn"));
+}
+```
+
+```js
+// 絞り込みフォームは model だけに依存し 1 回だけ描く（期間・単位を変えても検索欄を作り直さない）
 const chips = (() => {
-  if (!vm) return null;
+  if (!model) return null;
   const form = html`<form class="yn-chip-filters" role="group" aria-label="契約の絞り込み"></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
   const mk = (key, label, title) => {
@@ -86,10 +94,15 @@ const chips = (() => {
     });
     return html`<label class="yn-toggle-chip" for=${`yn-f-${key}`} title=${title}>${input}<span>${label}</span></label>`;
   };
-  const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder="顧客・案件・契約IDで検索" value=${listFilter.text} aria-label="顧客・案件・契約IDで検索">`;
+  const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder="顧客・案件・契約IDで検索" value=${listFilter.text} aria-label="顧客・案件・契約IDで検索（全角・半角、大文字・小文字は区別しません）">`;
+  let timer = null;
   text.addEventListener("input", () => {
-    listFilter.text = text.value;
-    form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    // 150ms デバウンス（1 文字ごとに表を作り直さない）
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      listFilter.text = text.value;
+      form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    }, 150);
   });
   form.append(
     html`<span class="yn-filter-label">絞り込み</span>`,
@@ -117,13 +130,14 @@ const listState = chips ? Generators.input(chips) : null;
 if (vm) {
   const { scope, all, unit } = vm;
   const f = listState ?? listFilter;
-  const q = (f.text ?? "").trim().toLowerCase();
+  // 検索はコアの normalizeName（NFKC・空白整理・小文字化・法人格除去）で両辺を正規化して部分一致
+  const q = normalizeName(f.text ?? "");
   const rows = all.filter((r) => {
     if (!f.showOutside && !r.inPeriod) return false;
     if (f.deficit && !r.isDeficit) return false;
     if (f.over && !r.isOverBudget) return false;
     if (f.prelim && !r.includesPreliminary) return false;
-    if (q && !`${r.contractId} ${r.customerName} ${r.projectName} ${r.teamName}`.toLowerCase().includes(q)) return false;
+    if (q && !r.searchText.includes(q) && !normalizeName(r.teamName).includes(q)) return false;
     return true;
   });
   const outside = all.filter((r) => !r.inPeriod).length;
@@ -145,24 +159,53 @@ if (vm) {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
         cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
         grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
-        margin: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
+        margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
         burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
         forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
       },
     }),
     { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
-  const sum = rows.reduce(
-    (s, r) => {
-      s.budget += r.budget;
-      s.cost += r.cost;
-      s.hours += r.hours;
-      if (r.forecastGrossProfit !== null) s.forecastGrossProfit += r.forecastGrossProfit;
-      return s;
-    },
-    { budget: 0, cost: 0, hours: 0, forecastGrossProfit: 0 },
-  );
-  const summary = { name: `合計（${rows.length}件）`, customerName: null, projectName: null, teamName: null, period: null, contractId: null, budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, burnRate: null, forecastGrossProfit: sum.forecastGrossProfit, isDeficit: false, isOverBudget: false, status: null };
+  // 合計行はコアの aggregate() / forecastTotals() の結果（表示中の契約だけを母集団に 1 回の走査）
+  const shownIds = rows.map((r) => r.contractId);
+  const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });
+  const sumForecast = forecastTotals(model, shownIds, vm.method);
+  const sumSubtitle = `表示中の ${rows.length} 件 ・ ${periodJa(scope.period)}`;
+  const summary = {
+    name: `合計（${rows.length}件）`,
+    customerName: null,
+    projectName: null,
+    teamName: null,
+    period: null,
+    contractId: null,
+    budget: sumTotals.budget,
+    cost: sumTotals.cost,
+    grossProfit: sumTotals.grossProfit,
+    grossMargin: sumTotals.grossMargin,
+    burnRate: sumTotals.burnRate,
+    isOverBudget: sumTotals.isOverBudget,
+    forecastGrossProfit: sumForecast.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
+    isDeficit: false,
+    status: null,
+  };
+  const summaryBreakdown = (col) => {
+    switch (col.key) {
+      case "budget":
+        return () => bd.budgetAggregateSpec({ model, contractIds: shownIds, period: scope.period, unit });
+      case "cost":
+        return () => bd.costAggregateSpec({ model, contractIds: shownIds, period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) });
+      case "grossProfit":
+        return () => bd.grossProfitSpec({ budget: sumTotals.budget, cost: sumTotals.cost, unit, subtitle: sumSubtitle });
+      case "grossMargin":
+        return () => bd.marginSpec({ totals: sumTotals, unit, subtitle: sumSubtitle });
+      case "burnRate":
+        return () => bd.burnRateSpec({ totals: sumTotals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: sumSubtitle });
+      case "forecastGrossProfit":
+        return () => bd.forecastTotalsSpec({ model, totals: sumForecast, unit, contractIds: shownIds, detailHref: (id) => store.href("./contract", {}, { id }) });
+      default:
+        return null;
+    }
+  };
   if (rows.length === 0) {
     display(emptyState({ title: "該当する契約がありません", text: "絞り込み条件か期間・チームを変えてください。", icon: "○" }));
   } else {
@@ -176,6 +219,7 @@ if (vm) {
         sort: { key: "status", dir: "asc" },
         rowHref: (r) => store.href("./contract", {}, { id: r.contractId }),
         summary,
+        summaryBreakdown,
       }),
     );
   }

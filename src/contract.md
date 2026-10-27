@@ -13,21 +13,21 @@ title: 契約詳細
 import { html } from "htl";
 import { aggregate, FORECAST_METHODS } from "./core/index.js";
 import { createStore } from "./components/state.js";
-import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt } from "./components/analysis.js";
+import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, METHOD_DESCRIPTIONS, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
+import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, METHOD_DESCRIPTIONS, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
 ```js
 const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const contractId = new URLSearchParams(location.search).get("id") ?? "";
 const result = model ? model.contracts.find((r) => r.contract.contractId === contractId) ?? null : null;
-const store = model ? createStore(model, result ? { initial: {} } : {}) : null;
+const store = model ? createStore(model) : null;
 ```
 
 ```js
@@ -54,7 +54,7 @@ const vm = (() => {
   const totals = aggregate(model, scope);
   const series = seriesWithForecast(model, scope, state.method);
   const months = result.months.filter((m) => period.from <= m.month && m.month <= period.to);
-  const { tree } = treeAt(model, period.to);
+  const { tree } = treeAt(model, treeMonthFor(model, period));
   return { contract: c, result, period, inRange, totals, series, months, unit: state.unit, method: state.method, teamLabel: contractTeamName(model, c, tree) };
 })();
 ```
@@ -126,7 +126,7 @@ if (vm) {
       statTile({
         label: "粗利",
         value: money(totals.grossProfit, unit),
-        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
+        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
         status: totals.grossProfit < 0 ? { kind: "danger", text: "赤字" } : null,
         breakdown: () => bd.grossProfitSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }),
       }),
@@ -163,42 +163,46 @@ if (vm) {
 ```js
 if (vm) {
   const { contract: c, months, unit } = vm;
-  display(sectionTitle("月ごとの予実", `各月の予算・原価・粗利。予定（未来）の月は選択中の方式（${METHOD_LABELS[vm.method]}）による見込み原価を「見込」として表示します。数値をクリックすると、その月の計算根拠（予算の月割り・メンバー別の原価行・作業ログ・見込みの算出）が開きます。`));
+  display(sectionTitle("月ごとの予実", `各月の予算・原価・粗利。予定（未来）の月は選択中の方式（${METHOD_LABELS[vm.method]}）による見込み原価（残り原価を残り月で均等割り）を「見込」として表示します。${fiscalYearLabel(model.meta.fiscalYear)} より後の月は見込み対象外（年度外）です。数値をクリックすると、その月の計算根拠（予算の月割り・メンバー別の原価行・作業ログ・見込みの算出）が開きます。`));
   const fc = forecastMonthlyCost(model, [c.contractId], vm.method);
   const forecast = result.forecasts[vm.method];
   const rows = months.map((m) => {
     const isForecast = m.status === "future";
-    const cost = isForecast ? (fc.has(m.month) ? fc.get(m.month) : null) : m.cost;
+    const outsideFY = isForecast && !fc.has(m.month);
+    const cost = isForecast ? (outsideFY ? null : fc.get(m.month)) : m.cost;
     const grossProfit = cost === null ? null : m.budget - cost;
     return {
-    key: m.month,
-    month: m.month,
-    status: m.status,
-    isForecast,
-    budget: m.budget,
-    cost,
-    grossProfit,
-    grossMargin: cost === null || !m.budget ? null : grossProfit / m.budget,
-    hours: m.hours,
-    businessDays: m.businessDays,
-    members: m.costLines.length,
-    rateMissing: m.costLines.some((l) => l.rateMissing),
-    cm: m,
+      key: m.month,
+      month: m.month,
+      status: m.status,
+      isForecast,
+      outsideFY,
+      budget: m.budget,
+      cost,
+      grossProfit,
+      grossMargin: cost === null ? null : grossMarginOf(m.budget, cost),
+      hours: m.hours,
+      businessDays: m.businessDays,
+      members: m.costLines.length,
+      rateMissing: m.costLines.some((l) => l.rateMissing),
+      cm: m,
     };
   });
-  const fcCell = (r, text, chip = false) => (r.isForecast ? html`<span class="yn-cell-forecast" title=${`見込み（${METHOD_LABELS[vm.method]}）`}>${text}${chip ? statusChip("neutral", "見込") : null}</span>` : text);
+  // 年度外の月は EMPTY_VALUE（文字列）を返す → 表は根拠ボタンを付けない
+  const fcCell = (r, text, chip = false) => (r.outsideFY ? EMPTY_VALUE : r.isForecast ? html`<span class="yn-cell-forecast" title=${`見込み（${METHOD_LABELS[vm.method]}）`}>${text}${chip ? statusChip("neutral", "見込") : null}</span>` : text);
   const columns = [
     { key: "month", label: "月", type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
-    { key: "status", label: "状態", type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: STATUS_LABELS[r.status] }), sortValue: (r) => r.status },
+    { key: "status", label: "状態", type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: r.outsideFY ? "年度外" : STATUS_LABELS[r.status], title: r.outsideFY ? `${fiscalYearLabel(model.meta.fiscalYear)} の外のため着地見込みの対象外` : null }), sortValue: (r) => r.status },
     { key: "budget", label: "予算", type: "money", breakdown: (r) => bd.budgetMonthSpec({ contract: c, cm: r.cm, unit }) },
-    { key: "cost", label: "原価", type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, subtitle: `${monthJa(r.month)} の見込み原価（1か月分）` }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
-    { key: "grossProfit", label: "粗利", type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` }) },
-    { key: "grossMargin", label: "粗利率", type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` }) },
+    { key: "cost", label: "原価", type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.outsideFY ? null : r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, subtitle: `${monthJa(r.month)} の見込み原価（残り原価 ${money(forecast.breakdown.remainingCost, unit)} を残り ${forecast.breakdown.remainingMonths.length} か月で均等割り。端数は最終月）` }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
+    { key: "grossProfit", label: "粗利", type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => (r.outsideFY ? null : bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` })) },
+    { key: "grossMargin", label: "粗利率", type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => (r.outsideFY ? null : bd.marginSpec({ budget: r.budget, cost: r.cost, grossMargin: r.grossMargin, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` })) },
     { key: "hours", label: "時間", type: "hours", hideNarrow: true },
     { key: "members", label: "作業者数", type: "int", hideOnPhone: true, hideNarrow: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-danger-text" title="単価の無いメンバーを含みます">（単価なし含む）</span>` : integer(r.members)) },
     { key: "businessDays", label: "営業日", type: "int", hideOnPhone: true, hideNarrow: true },
   ];
-  const sum = rows.reduce((s, r) => ({ budget: s.budget + r.budget, cost: s.cost + (r.isForecast ? 0 : r.cost), hours: s.hours + r.hours }), { budget: 0, cost: 0, hours: 0 });
+  // 合計行は KPI と同じコアの Totals（期間の予算合計、原価・粗利は実績月のみ）。合計行の数値に根拠ボタンは付けない
+  const t = vm.totals;
   display(
     dataTable({
       columns,
@@ -207,7 +211,7 @@ if (vm) {
       caption: "月ごとの予実",
       exportName: `contract_${c.contractId}_monthly`,
       sort: { key: "month", dir: "asc" },
-      summary: { name: "合計（原価・粗利は実績月のみ）", budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, hours: sum.hours, members: null, businessDays: null, status: null },
+      summary: { name: "合計（原価・粗利は実績月のみ）", budget: t.budget, cost: t.cost, grossProfit: t.grossProfit, grossMargin: t.grossMargin, hours: t.hours, members: null, businessDays: null, status: null },
     }),
   );
 }

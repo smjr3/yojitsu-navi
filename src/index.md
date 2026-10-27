@@ -18,9 +18,9 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { filterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns, withForecastCount } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel } from "./components/format.js";
+import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -70,10 +70,18 @@ if (store) display(filterBar(store, model));
 ```
 
 ```js
+if (vm?.scope.teamMissing) {
+  display(note(`選択したチーム「${vm.scope.teamLabel}」は ${monthJa(vm.scope.treeMonth)} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件として集計しています。`, "warn"));
+}
+```
+
+```js
 if (vm) {
   const { scope, totals, forecast, compare, unit } = vm;
   const asOfMonth = model.meta.asOfMonth;
   const subtitle = `${periodJa(scope.period)} ・ ${scope.teamLabel}`;
+  // 前年同期比: タイルの値（期間全体）とは母集団が違うので、何と何を比べたかを文で明示する
+  const spanLabel = (p) => (p.from === p.to ? monthJa(p.from) : p.from.slice(0, 4) === p.to.slice(0, 4) ? `${monthJa(p.from)}〜${Number(p.to.slice(5, 7))}月` : `${monthJa(p.from)}〜${monthJa(p.to)}`);
   const cmp = (key, { good = null, points = false } = {}) => {
     if (!compare) return { text: "前年同期の比較データなし", direction: null, good: null };
     const a = compare.now[key];
@@ -81,7 +89,7 @@ if (vm) {
     if (a === null || b === null || a === undefined || b === undefined) return { text: "前年同期の比較データなし", direction: null, good: null };
     const d = a - b;
     const dir = d > 0 ? "up" : d < 0 ? "down" : "flat";
-    const text = `${points ? pointsSigned(d) : moneySigned(d, unit)} 前年同期（${monthJa(compare.prior.from)}〜${monthJa(compare.prior.to)}）比`;
+    const text = `${points ? pointsSigned(d) : moneySigned(d, unit)} ・ ${spanLabel(compare.current)}の累計を前年同期（${spanLabel(compare.prior)}）と比較${compare.partial ? "。前年はデータのある月のみ" : ""}`;
     return { text, direction: dir, good: good === null ? null : good(d) };
   };
   const elapsedLabel = (months) =>
@@ -100,14 +108,14 @@ if (vm) {
       statTile({
         label: "原価（工数原価）",
         value: money(totals.cost, unit),
-        sub: `${formatPercent(totals.budget ? totals.cost / totals.budget : null)} / 予算 ・ ${Math.round(totals.hours).toLocaleString("ja-JP")}h`,
+        sub: `原価率 ${formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin)} ・ ${integer(Math.round(totals.hours))}h`,
         compare: cmp("cost", { good: (d) => d <= 0 }),
         breakdown: () => bd.costAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
       }),
       statTile({
         label: "粗利",
         value: money(totals.grossProfit, unit),
-        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
+        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
         compare: cmp("grossProfit", { good: (d) => d >= 0 }),
         status: totals.grossProfit < 0 ? { kind: "danger", text: "赤字" } : null,
         breakdown: () => bd.grossProfitSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }),
@@ -171,7 +179,7 @@ if (vm) {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
           cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
           grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
-          margin: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
+          margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.contractId} ${r.customerName} / ${r.projectName}` }),
           forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
         },
@@ -197,26 +205,28 @@ if (vm) {
   }
   const rows = targets.map((n) => ({ ...teamRow(model, n.teamId, n.name, n.depth, scope.period, method, tree), key: n.teamId }));
   if (!scope.teamId) {
+    // 未設定（チーム無し）の行は、期間内に契約があるときだけ末尾に出す（チーム一覧と同じ規則）
     const un = teamRow(model, UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, 0, scope.period, method, tree);
-    if (un.contractIds.length) rows.push({ ...un, key: UNASSIGNED_TEAM_ID });
+    if (un.contractCount > 0) rows.push({ ...un, key: UNASSIGNED_TEAM_ID });
   }
-  display(sectionTitle("チーム別", scope.teamId ? `${scope.teamLabel} の配下チーム（${monthJa(scope.period.to)} 時点の組織）` : `事業部ごとの集計（${monthJa(scope.period.to)} 時点の組織）。行をクリックすると契約一覧に絞り込みます。`, html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>チーム一覧へ</a>`));
+  display(sectionTitle("チーム別", `${scope.teamId ? `${scope.teamLabel} の配下チーム` : "事業部ごとの集計"}（${monthJa(scope.treeMonth)} 時点の組織）。契約数は期間内の契約、着地粗利は ${fiscalYearLabel(model.meta.fiscalYear)} に掛かる契約（件数を併記）が母集団です。行をクリックすると契約一覧に絞り込みます。`, html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>チーム一覧へ</a>`));
   if (rows.length === 0) {
     display(emptyState({ title: "配下のチームはありません", text: "このチームは末端のチームです。契約一覧で契約ごとの数値を確認できます。", actions: [{ label: "契約一覧を開く", href: store.href("./contracts") }] }));
   } else {
     const columns = [
       { key: "name", label: "チーム", type: "text" },
-      { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true, hideNarrow: true },
+      ...teamCountColumns(),
       ...standardColumns({
+        forecastLabel: "着地粗利",
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit }),
           cost: (r) => bd.costAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
           grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: r.name }),
-          margin: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: r.name }),
+          margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: r.name }),
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: r.name }),
           forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
         },
-      }),
+      }).map(withForecastCount),
       { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
     display(dataTable({ columns, rows, unit, caption: "チーム別の集計", exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contracts", { team: r.teamId }) }));

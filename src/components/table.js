@@ -4,11 +4,14 @@
  * dataTable({
  *   columns: [{ key, label, type: "text"|"money"|"percent"|"hours"|"int"|"status"|"custom",
  *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
- *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean }],
+ *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean,
+ *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効）,
- *   summary?: row（tfoot の合計行）, maxHeight?: px, toolbar?: Node
+ *   summary?: row（tfoot の合計行）, summaryBreakdown?(col) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
+ *   maxHeight?: px, toolbar?: Node
  * })
+ * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
  */
 import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
@@ -46,7 +49,7 @@ function defaultExport(col, row, unit) {
   const v = col.get ? col.get(row) : row[col.key];
   switch (col.type) {
     case "money":
-      return typeof v === "number" && Number.isFinite(v) ? (unit === "k" ? Math.round(v / 1000) : Math.round(v)) : null;
+      return typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
     case "percent":
       return typeof v === "number" && Number.isFinite(v) ? Math.round(v * 1000) / 10 : null;
     case "hours":
@@ -63,7 +66,7 @@ function exportLabel(col, unit) {
   if (col.exportLabel) return col.exportLabel;
   switch (col.type) {
     case "money":
-      return `${col.label}（${unit === "k" ? "千円" : "円"}）`;
+      return `${col.label}（円）`;
     case "percent":
       return `${col.label}（%）`;
     case "hours":
@@ -71,6 +74,15 @@ function exportLabel(col, unit) {
     default:
       return col.label;
   }
+}
+
+function cssEscape(s) {
+  return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&");
+}
+
+function focusIn(rootEl, selector) {
+  const el = rootEl.querySelector(selector);
+  if (el) el.focus();
 }
 
 function sortValue(col, row) {
@@ -93,16 +105,23 @@ function compare(a, b, dir) {
   return dir === "desc" ? -r : r;
 }
 
-/** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存 */
+/** ファイル名に使えない文字を _ に（契約IDがそのまま入るため） */
+export function safeFileName(name) {
+  return String(name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "export";
+}
+
+export const EXPORT_UNIT_NOTE = "単位: 円（金額は選択中の表示単位に関係なく円の整数）・割合は %・時間は h";
+
+/** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存。金額は常に円の整数 */
 export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1" }) {
   const XLSX = await import("xlsx");
   const header = columns.map((c) => exportLabel(c, unit));
   const body = rows.map((r) => columns.map((c) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit))));
-  const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+  const ws = XLSX.utils.aoa_to_sheet([[EXPORT_UNIT_NOTE], header, ...body]);
   ws["!cols"] = columns.map((c) => ({ wch: Math.max(10, Math.min(40, String(exportLabel(c, unit)).length * 2)) }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheet.slice(0, 31));
-  XLSX.writeFile(wb, `${name}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, safeFileName(sheet).slice(0, 31));
+  XLSX.writeFile(wb, `${safeFileName(name)}.xlsx`);
 }
 
 export function exportButton(getPayload, label = "Excel出力") {
@@ -133,6 +152,7 @@ export function dataTable({
   emptyText = "該当するデータがありません",
   tree = false,
   summary = null,
+  summaryBreakdown = null,
   maxHeight = null,
   toolbar = null,
   id = null,
@@ -176,25 +196,33 @@ export function dataTable({
         const numeric = isNumeric(col);
         const sortable = !tree && col.sortable !== false;
         const active = sortState && sortState.key === col.key;
-        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`} style=${col.width ? `width:${col.width}` : null} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
+        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`} style=${col.width ? `width:${col.width}` : null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
-          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${col.label}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span></button>`;
+          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${col.label}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
           btn.addEventListener("click", () => {
             const first = numeric ? "desc" : "asc";
             sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
             renderHead();
             renderBody();
+            // 再描画で消えたフォーカスを同じ列のボタンへ戻す（キーボード操作の継続）
+            focusIn(thead, `th[data-key="${cssEscape(col.key)}"] button`);
           });
           th.append(btn);
-        } else th.textContent = col.label;
+        } else th.append(col.label, col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : "");
         return th;
       })}</tr>`,
     );
   }
 
-  function cellNode(col, row) {
+  function cellNode(col, row, isSummary = false) {
     const text = col.render ? col.render(row, unit) : defaultRender(col, row, unit);
-    if (col.breakdown && text !== EMPTY_VALUE && text !== "") {
+    if (text === EMPTY_VALUE || text === "") return text;
+    if (isSummary) {
+      // 合計行は行用の breakdown(row) を使わない（契約IDなどを持たないため）。summaryBreakdown(col) があればそれを開く
+      const spec = summaryBreakdown ? summaryBreakdown(col, row) : null;
+      return spec ? numberButton(text, spec, { ariaLabel: `合計の${col.label} ${typeof text === "string" ? text : ""} の計算根拠を表示` }) : text;
+    }
+    if (col.breakdown) {
       const spec = () => col.breakdown(row);
       return numberButton(text, spec, { ariaLabel: `${col.label} ${typeof text === "string" ? text : ""} の計算根拠を表示` });
     }
@@ -222,6 +250,7 @@ export function dataTable({
               if (collapsed.has(row.key)) collapsed.delete(row.key);
               else collapsed.add(row.key);
               renderBody();
+              focusIn(tbody, `tr[data-key="${cssEscape(String(row.key))}"] .yn-tree-toggle`);
             });
             cell.append(toggle);
           } else cell.append(html`<span class="yn-tree-toggle yn-tree-leaf" aria-hidden="true"></span>`);
@@ -260,7 +289,7 @@ export function dataTable({
     const tfoot = html`<tfoot><tr class="yn-summary-row">${visibleCols.map((col, ci) => {
       const numeric = isNumeric(col);
       const has = summary[col.key] !== undefined && summary[col.key] !== null;
-      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? "" : cellNode(col, summary);
+      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? "" : cellNode(col, summary, true);
       return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`}>${content}</td>`;
     })}</tr></tfoot>`;
     table.append(tfoot);
@@ -339,6 +368,30 @@ export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利
   ];
   if (includeHours) cols.splice(2, 0, { key: "hours", label: "時間", type: "hours", hideOnPhone: true });
   return cols;
+}
+
+/** チーム行の契約数列: 「契約数（期間内）」。年度内の契約数は Excel に別列で出す */
+export function teamCountColumns() {
+  return [
+    { key: "contractCount", label: "契約数", sublabel: "（期間内）", type: "int", hideOnPhone: true, hideNarrow: true, exportLabel: "契約数（期間内）" },
+    { key: "fyContractCount", label: "契約数（年度内）", type: "int", exportOnly: true },
+  ];
+}
+
+/** チーム行の着地粗利列: 見出しに「（年度内）」、セルの 2 行目に年度内の契約件数（契約数列とは母集団が違うため） */
+export function withForecastCount(col) {
+  if (col.key !== "forecastGrossProfit") return col;
+  const base = col.render;
+  return {
+    ...col,
+    sublabel: "（年度内）",
+    exportLabel: "着地粗利（年度内）（円）",
+    render: (row, unit) => {
+      const t = base(row, unit);
+      if (t === EMPTY_VALUE || typeof row.fyContractCount !== "number") return t;
+      return html`<span class="yn-cell-stack">${t}<span class="yn-muted yn-cell-count" title="年度に掛かる契約の件数">${integer(row.fyContractCount)}件</span></span>`;
+    },
+  };
 }
 
 /**

@@ -12,7 +12,7 @@ function contractIds() {
     const ids = new Set();
     for (const line of lines.slice(1)) {
       const id = (line.split(",")[idx] ?? "").trim().replace(/^"|"$/g, "");
-      if (/^[A-Za-z0-9_-]+$/.test(id)) ids.add(id);
+      if (id !== "") ids.add(id);
     }
     return [...ids];
   } catch {
@@ -32,7 +32,8 @@ export default {
     { name: "データ確認", path: "/data-check" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
-  dynamicPaths: contractIds().map((id) => `/data/worklogs/${id}.json`),
+  // ID はパスとして安全な形に encodeURIComponent する（ローダ側で decodeURIComponent）。画面の fetchWorklogs も同じ符号化で取得する
+  dynamicPaths: contractIds().map((id) => `/data/worklogs/${encodeURIComponent(id)}.json`),
   head: '<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">',
   toc: false,
   pager: false,

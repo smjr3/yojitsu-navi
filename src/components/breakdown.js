@@ -13,6 +13,7 @@
  */
 import { html } from "htl";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money, monthJa, periodJa, profitLabel } from "./format.js";
+import { grossMarginOf } from "./analysis.js";
 
 let dialogEl = null;
 let lastOpener = null;
@@ -332,9 +333,12 @@ export function grossProfitSpec({ budget, cost, unit, label = "粗利", subtitle
   };
 }
 
-/** 粗利率 */
-export function marginSpec({ budget, cost, unit, subtitle = null }) {
-  const gp = budget - cost;
+/**
+ * 粗利率。コアの Totals（aggregate の結果）があれば totals を渡す（値を再計算しない）。
+ * Totals が無い場面（月ごと・見込み）は budget/cost から grossMarginOf() で求める。
+ */
+export function marginSpec({ totals = null, budget = totals?.budget, cost = totals?.cost, grossMargin = totals ? totals.grossMargin : grossMarginOf(budget, cost), unit, subtitle = null }) {
+  const gp = totals ? totals.grossProfit : budget - cost;
   return {
     title: "粗利率の計算根拠",
     subtitle,
@@ -343,7 +347,7 @@ export function marginSpec({ budget, cost, unit, subtitle = null }) {
       { label: "予算", value: money(budget, unit) },
       { label: "原価", value: money(cost, unit) },
       { label: "粗利", value: money(gp, unit) },
-      { label: "粗利率", value: budget !== 0 ? formatPercent(gp / budget) : EMPTY_VALUE, emphasis: true, note: budget === 0 ? "予算が 0 のため計算できません" : null },
+      { label: "粗利率", value: formatPercent(grossMargin), emphasis: true, note: grossMargin === null ? "予算が 0 のため計算できません" : null },
     ],
   };
 }

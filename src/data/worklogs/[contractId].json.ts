@@ -5,7 +5,9 @@
  */
 import { argValue, buildModelFromData } from "../_shared.js";
 
-const contractId = argValue("contractId");
+const rawId = argValue("contractId");
+// observablehq.config.js の dynamicPaths は encodeURIComponent 済みの ID でパスを作る
+const contractId = rawId === undefined ? undefined : decodeURIComponent(rawId);
 if (!contractId) {
   console.error("--contractId=... が必要です");
   process.exit(1);

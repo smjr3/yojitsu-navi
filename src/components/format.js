@@ -21,21 +21,23 @@ export function money(yen, unit = "yen") {
   return formatYen(yen, toCoreUnit(unit));
 }
 
-/** 符号付き金額（差分表示用）。0 は "±0円" */
+/**
+ * 符号付き金額（差分表示用）。0 は "±0円"。
+ * マイナス記号はコアの formatYen（Intl ja-JP の "-"）の出力をそのまま使い、画面で別の記号を組み立てない。
+ */
 export function moneySigned(yen, unit = "yen") {
   if (typeof yen !== "number" || !Number.isFinite(yen)) return EMPTY_VALUE;
-  const body = money(Math.abs(yen), unit);
-  if (unit === "k" ? Math.round(yen / 1000) === 0 : Math.round(yen) === 0) return `±${body}`;
-  return `${yen < 0 ? "−" : "+"}${body}`;
+  const s = money(yen, unit);
+  if (unit === "k" ? Math.round(yen / 1000) === 0 : Math.round(yen) === 0) return `±${money(0, unit)}`;
+  return yen < 0 ? s : `+${s}`;
 }
 
-/** 割合の差（ポイント）。0.012 → "+1.2pt" */
+/** 割合の差（ポイント）。0.012 → "+1.2pt"。マイナスは formatPercent と同じ記号 */
 export function pointsSigned(delta, digits = 1) {
   if (typeof delta !== "number" || !Number.isFinite(delta)) return EMPTY_VALUE;
-  const v = delta * 100;
-  const s = new Intl.NumberFormat("ja-JP", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Math.abs(v));
-  if (Number(s) === 0) return `±${s}pt`;
-  return `${v < 0 ? "−" : "+"}${s}pt`;
+  const s = formatPercent(delta, digits).replace(/%$/, "pt");
+  if (Number(s.slice(0, -2)) === 0) return `±${s.replace(/^-/, "")}`;
+  return delta < 0 ? s : `+${s}`;
 }
 
 /** 軸ラベル用の短い金額（百万円） */

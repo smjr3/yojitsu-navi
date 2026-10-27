@@ -51,9 +51,12 @@ src/
 | `method` | `recent3` / `all` / `assignment` | `config.forecastMethodDefault` |
 
 優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v1`） > 既定値**。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
+フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。
 契約詳細の `id`、契約一覧の `f`（`deficit|over|prelim`）と `q`（検索）はストアの外（ページ固有）。`store.href("./contracts", {team}, {id})` で状態を引き継いだリンクを作る。
 
-ページでは `Generators.observe` でストアを反応的な値 `state` にし、`vm`（view model）セルで `scopeFor()` → 集計 → 各セルが再描画される。フィルタ行は 1 回だけ描き、ストアを購読して自分の表示を同期する（フォーカスを失わない）。
+ページでは `Generators.observe` でストアを反応的な値 `state` にし、`vm`（view model）セルで `scopeFor()` → 集計 → 各セルが再描画される。フィルタ行は 1 回だけ描き、ストアを購読して自分の表示を同期する（フォーカスを失わない）。契約一覧の絞り込みフォーム（チップ・検索欄）も `model` だけに依存して 1 回だけ描き、検索は 150ms デバウンス、両辺をコアの `normalizeName()`（NFKC・小文字化・法人格除去）で正規化して部分一致する。
+
+`scopeFor()` が返す組織木の基準月は **`min(期間の終了月, 基準月)`**（未来に発効する組織では集計しない）。選んだチームがその月の組織に無いときは `scope.teamMissing` で注記を出す。「未設定」（チーム無し）の行は、全体サマリーとチーム一覧とも **期間内に契約があるときだけ末尾に表示** する。
 
 > 注意: Observable のセル名に `view`, `width`, `dark`, `html`, `Plot` など組み込み名を使わない（`view` を使うと組み込みの `view()` と衝突して undefined になる）。
 
@@ -68,7 +71,7 @@ src/
 
 1. `npm run build` → `src/data/model.json.ts` が `data/` を読み `buildModel()`。`asOf` は `YOJITSU_AS_OF`（CI で固定したい場合）か今日（JST）。
 2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.ts` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
-3. 画面は `breakdown.js` の `fetchWorklogs(id)` で必要なときだけ取得する。ビルド済みサイトでは `/data/worklogs/<id>.json`、`npm run dev` では `/_file/data/worklogs/<id>.json` で配信されるので順に試す（プレビューでは最初の 404 がコンソールに出るが動作に影響なし）。
+3. 画面は `breakdown.js` の `fetchWorklogs(id)` で必要なときだけ取得する。ビルド済みサイトでは `/data/worklogs/<id>.json`、`npm run dev` では `/_file/data/worklogs/<id>.json` で配信されるので順に試す（プレビューでは最初の 404 がコンソールに出るが動作に影響なし）。契約 ID はパスに入れる前に `encodeURIComponent` する（`dynamicPaths` 側も同じ。ローダは `decodeURIComponent` で元に戻す）ので、`/` や空白を含む ID でも列挙から漏れない。Excel のファイル名も `safeFileName()` で `\ / : * ? " < > |` を `_` に置換する。
 4. 生成物の大きさ（ダミーデータ）: `model.json` 540 KB、`dataset-issues.json` 6 KB、作業ログ明細は契約ごとに 1 KB〜650 KB（合計約 4.3 MB、`dist/` 全体 6.3 MB）。
 
 ## 計算根拠パネル（breakdown.js）
@@ -79,18 +82,21 @@ spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMon
 
 ## 表（table.js）
 
-`dataTable({columns, rows, unit, sort, rowHref, caption, exportName, tree, summary, maxHeight})`。
-列は `{key, label, type: money|percent|hours|int|status|text, get, render, sortValue, exportValue, breakdown, hideOnPhone}`。
-`<th scope="col">` にソートボタンと `aria-sort`、先頭列は `<th scope="row">`。行クリックは `rowHref` のリンク（キーボードはリンクで到達）＋行全体のクリック。
-Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は選択中の単位の数値（列名に単位）、割合は % の数値、月は `YYYY-MM`。
+`dataTable({columns, rows, unit, sort, rowHref, caption, exportName, tree, summary, summaryBreakdown, maxHeight})`。
+列は `{key, label, sublabel, type: money|percent|hours|int|status|text, get, render, sortValue, exportValue, breakdown, hideOnPhone, hideNarrow}`。`sublabel` は見出しの 2 行目（「（期間内）」「（年度内）」など母集団の注記。幅を増やさない）。
+`<th scope="col">` にソートボタンと `aria-sort`、先頭列は `<th scope="row">`。行クリックは `rowHref` のリンク（キーボードはリンクで到達）＋行全体のクリック。並べ替え・木の開閉で thead/tbody を描き直したあとは `data-key` で同じボタンにフォーカスを戻す（キーボード操作が途切れない）。
+合計行（`summary`）は行用の `breakdown(row)` を使わず、`summaryBreakdown(col)` が spec を返す列だけ根拠ボタンになる（契約一覧は表示中の契約 ID を母集団に `aggregate()` / `forecastTotals()` で合計し、同じ ID 集合で根拠を開く。契約詳細の月表の合計行は KPI と同じ `Totals` を表示し、根拠ボタンは付けない）。
+Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は **表示単位に関係なく常に円の整数**（列名「…（円）」、1 行目に「単位: 円」の注記、2 行目が見出し）。千円表示は画面だけの都合で、行ごとに丸めた値を出力して合計がずれることを避ける。割合は % の数値、月は `YYYY-MM`。
 幅の工夫（1280px・サイドバー開で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。契約一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（契約数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
 状態チップ（`rowStatus()`）は配列で、契約は「赤字見込み」「予算超過」、チーム行は「赤字 N件」（配下の赤字見込み契約数）「予算超過」。既定の並びは `statusSortValue()`（赤を先頭、その中は消化率の高い順）。
-契約詳細の月表は、予定（future）の月に選択方式の見込み原価（`forecastMonthlyCost`）を斜体＋「見込」チップで表示し、粗利・粗利率もそれに基づく（実績の無い月に 100% を出さない）。合計行の原価・粗利は実績月のみ。
+契約詳細の月表は、予定（future）の月に選択方式の見込み原価（`forecastMonthlyCost`）を斜体＋「見込」チップで表示し、粗利・粗利率もそれに基づく（実績の無い月に 100% を出さない）。年度外の未来月（着地見込みの対象外）は状態を「年度外」とし、原価・粗利・粗利率は「—」（根拠ボタン無し）。月次推移の表とグラフも同じ扱い（グラフは予算棒をさらに薄くし、下に注記）。合計行の原価・粗利は実績月のみ。
+チーム行の「契約数」は期間内の契約、「着地粗利」は年度に掛かる契約が母集団で別物。見出しの 2 行目で「（期間内）」「（年度内）」と示し、着地粗利セルの 2 行目に年度内の件数を併記する（Excel には「契約数（年度内）」列）。
+粗利率は画面で再計算しない: `Totals` がある場面は `totals.grossMargin`、無い場面（月ごと・見込み）は `analysis.grossMarginOf()` の 1 か所（コアと同じ「予算 0 は null」）。マイナス記号はコアの `formatYen` / `formatPercent` の出力（Intl ja-JP の `-`）に統一し、`moneySigned` / `pointsSigned` も `+` を足すだけで記号を組み立てない。
 
 ## グラフ（charts.js）
 
 dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、原価 = 橙 `#eb6834`、粗利 = 青緑 `#1baf7a`（ダークは `#3987e5 / #d95926 / #199e70`）。`validate_palette.js` でライト／ダークとも全チェック通過（青緑はライトで 3:1 未満の WARN → 表の双子と凡例で補う）。
-基準月以降は見込み（薄い塗り ＋ 破線枠、折れ線は破線、背景に薄い帯）。見込み原価の月割りは `analysis.seriesWithForecast()`（recent3/all は平均 × 1、assignment は明細を月で合算）。ツールチップは `Plot.tip` + `pointerX`（1 本の縦線で全系列）。軸の単位は最大値で 百万円／万円／円 を自動選択。
+基準月以降は見込み（薄い塗り ＋ 破線枠、折れ線は破線、背景に薄い帯）。見込み原価の月割りは `analysis.forecastMonthlyCost()`: 契約ごとに **コアの `remainingCost` を残り月で均等割り（端数は最終月）**、assignment は明細を月で合算。どちらも契約ごとの月割りの合計がコアの `remainingCost` と一致する（KPI の着地原価と表の合計が一致する）。ツールチップは `Plot.tip` + `pointerX`（1 本の縦線で全系列）。軸の単位は最大値で 百万円／万円／円 を自動選択。
 
 ## スタイル（style.css）
 
@@ -122,10 +128,11 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 | 欲しいもの | 現在の回避 |
 |---|---|
-| 残り月ごとの見込み原価（グラフ用）。`ForecastBreakdown` は合計 `remainingCost` と平均しか持たない | `analysis.forecastMonthlyCost()` で平均 × 1 か月／アサイン明細の月合算を画面側で計算（recent3/all は丸め前の平均を使うので合計が `remainingCost` と最大 1 円ずれうる） |
+| 残り月ごとの見込み原価（グラフ用）。`ForecastBreakdown` は合計 `remainingCost` と平均しか持たない | `analysis.forecastMonthlyCost()` で `remainingCost` を残り月に均等割り（端数は最終月）／アサイン明細の月合算。合計は `remainingCost` に一致。コアに `remainingCostByMonth` があれば置き換える |
 | `forecastTotals()` に「年度に掛かる契約数」 | `contractCount` は選んだ契約の数。年度対象外（`contractMonthsInFY` が空）の契約は内訳で除外して数えている |
 | `TeamTreeResult` の `rootTeamIds`（`teamTreeForMonth()` は `tree` だけ返す） | `parentTeamId === null` のノードを拾って順序は `Object.values` 順（ファイル初出順）に依存 |
 | `Totals` に「期間内の契約ID一覧」 | 契約一覧では契約ごとに `aggregate()` を呼び `contractCount > 0` で期間内判定（21 契約なら問題ない。数百契約なら 1 回の走査にまとめたい） |
-| 前年同期比の定義 | 画面側で「経過月（from〜asOf月）と同じ月を 12 か月前にずらす」と決めた。`hasPriorYearData` に加えて前期の予算・原価が 0 なら「比較データなし」 |
+| 前年同期比の定義 | 画面側で「経過月（from〜asOf月）の累計と、同じ月を 12 か月前にずらした累計を比べる」と決めた（タイルの値＝期間全体とは母集団が違うので、タイルの文で「4〜10月の累計を前年同期と比較」と明示）。前年のデータが途中からしか無いときは両方をデータのある月に詰め、`partial` で「前年はデータのある月のみ」と注記。`hasPriorYearData` に加えて前期の予算・原価が 0 なら「比較データなし」 |
+| `ForecastTotals` に「年度に掛かる契約数」 | `teamRow()` が `contractMonthsInFY` の有無で `fyContractCount` を数えている |
 | `Warning` に `row` | データ確認では `ref` を文字列化して表示 |
 | `Model.worklogDetailPath` | `model.json.ts` が付けている（`"data/worklogs/{contractId}.json"`）。型には無い |

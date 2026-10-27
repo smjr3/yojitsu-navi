@@ -77,7 +77,7 @@
     --yn-danger: #d03b3b;
     --yn-danger-text: #ee7a7a;
     --yn-danger-bg: #3a1515;
-    --yn-good-text: #0ca30c;
+    --yn-good-text: #2fbf4a; /* 5.97:1 on --yn-good-bg */
     --yn-good-bg: #10300f;
     --yn-warn-text: #fab219;
     --yn-warn-bg: #3a2a08;
@@ -109,7 +109,7 @@
   --yn-series-gp: #199e70;
   --yn-danger-text: #ee7a7a;
   --yn-danger-bg: #3a1515;
-  --yn-good-text: #0ca30c;
+  --yn-good-text: #2fbf4a; /* 5.97:1 on --yn-good-bg */
   --yn-good-bg: #10300f;
   --yn-warn-text: #fab219;
   --yn-warn-bg: #3a2a08;
@@ -636,6 +636,7 @@ h3 {
   margin-top: auto;
   padding-top: 4px;
   border-top: 1px solid var(--yn-hairline);
+  line-height: 1.4;
 }
 .yn-kpi-compare.is-good {
   color: var(--yn-good-text);
@@ -1131,8 +1132,9 @@ h3 {
   color: inherit;
   cursor: pointer;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 0 4px;
   width: 100%;
 }
 .yn-sort-icon {
@@ -1479,4 +1481,31 @@ th[aria-sort="descending"] .yn-sort-icon {
   a[href]::after {
     content: "";
   }
+}
+
+/* グラフ下の注記（年度外の月など） */
+.yn-chart-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--yn-text-muted);
+}
+
+/* 見出しの 2 行目（母集団の注記）とセルの 2 行目（件数） */
+.yn-th-sub {
+  display: block;
+  flex-basis: 100%;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--yn-text-muted);
+  line-height: 1.2;
+}
+.yn-cell-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+.yn-cell-count {
+  font-size: 11px;
+  white-space: nowrap;
 }

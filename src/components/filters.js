@@ -112,8 +112,3 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   store.subscribe(sync);
   return form;
 }
-
-/** 現在の条件を 1 行で（見出し下の説明に使う） */
-export function filterSummary(model, state, teamLabel) {
-  return `${monthJa(state.from)}〜${monthJa(state.to)} ・ ${teamLabel} ・ 着地: ${METHOD_LABELS[state.method]} ・ 単位: ${state.unit === "k" ? "千円" : "円"}`;
-}
