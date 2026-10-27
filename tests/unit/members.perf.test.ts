@@ -73,7 +73,7 @@ describe("性能（メンバー別）", () => {
     const model = buildModel(bigDataset(100, 20_000, 400), { asOf: "2026-10-27" });
     const period = { from: "2026-04", to: "2027-03" };
     const start = performance.now();
-    for (let i = 0; i < 200; i++) aggregateMembers(model, { period, teamIds: i % 2 ? ["T1", "T2"] : undefined });
+    for (let i = 0; i < 200; i++) aggregateMembers(model, i % 2 ? { period, teamIds: ["T1", "T2"] } : { period });
     for (let i = 0; i < 200; i++) memberMonthlySeries(model, `M${i}`, period);
     expect(performance.now() - start).toBeLessThan(2000);
   });

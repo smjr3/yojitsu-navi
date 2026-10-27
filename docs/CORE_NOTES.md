@@ -44,3 +44,32 @@
 
 - 原価の種類: `CostProvider { costType, compute(contractId, month) }` を `buildModel(dataset, { extraProviders })` で追加できる。`config.costTypes` に ID を足せば `costs` のキーに現れる。
 - 性能: 作業ログは `(契約ID, 月)` で索引化（`indexWorklogs`）、マスタは `(キー → effectiveFrom 昇順)` で二分探索。5 万件 × 100 契約で 0.5 秒程度（`tests/unit/perf.test.ts`）。
+
+## メンバー別（SPEC §18.1）— `src/core/members.ts`
+
+`buildModel` が `Model.memberMonths: MemberMonth[]`（メンバー×月、`byContract[]` に契約別の内訳）を作る。画面は `aggregateMembers(model, scope)`（期間・メンバー・契約・所属チームで合算）と `memberMonthlySeries(model, memberId, period, contractIds?)` を使う。単価は §6 の `rateFor` をそのまま使い、計画と実績で同じ単価になる（重複実装なし）。
+
+| 項目 | 決定 |
+|---|---|
+| 行を作る（x, m） | アサインが掛かる月（契約期間内）か、CostLine がある月だけ。どちらも無い月は作らない（`memberMonthlySeries` は 0 で埋める） |
+| 計画の対象 | `buildModel` の計算対象の契約（`CONTRACT_INVALID`・重複を除いた `model.contracts`）だけ。未知の契約ID・契約期間外の月・`allocation` が数値でないアサインは数えない（§10 assignment と同じ） |
+| 丸め | 同じ（x, c, m）の `allocation` を合計してから `round(Σallocation × 基準時間 × 単価)` を 1 回。メンバー月の `plannedCost` は行の丸めた額の合計（全体で丸め直さない）。着地見込み assignment 方式はアサイン行ごとに丸めるので、同じ（x, c, m）にアサイン行が複数あると最大 0.5 円/行ずれる（ダミーデータでは一致することを結合テストで確認） |
+| 実績 | 契約・月の CostLine のうち `memberId = x`。原価の種類を問わない（Σ メンバー実績 = Σ 契約原価 が常に成り立つ） |
+| 未アサイン（unplanned） | （x, c, m）に掛かるアサイン行が **0 件** の実績。配分 0 のアサインは「アサインあり（計画 0）」として unplanned に入れない。`assignmentCount` で区別 |
+| 所属・役職・区分（月ごと） | その月の有効レコード。空文字のチーム・役職は null |
+| 名前 | 当月のマスタ名 → 作業ログの `member_name`（CostLine.memberName）→ ID |
+| 未登録メンバー | `memberUnknown = true`。個人単価があれば使い、無ければ 0・`rateMissing`（§6 手順 4 と同じ） |
+| 所属チームの基準月（集計） | `memberBaseMonth = min(period.to, asOfMonth)`（§11 の組織木と同じ。未来の組織で集計しない）。基準月に有効レコードが無ければ期間内の最後の MemberMonth の値 |
+| `aggregateMembers` の `teamIds` | 基準月の所属チームがこの集合に入るメンバーだけ（配下を含めるなら呼び出し側が `descendantIds` を渡す）。`includeNoTeam` で未所属も含める |
+| `contractIds` | byContract をその契約に絞って数える（チーム詳細の「このチームの契約に工数を付けた人」に使える） |
+| `includesPreliminary` | 実績時間 > 0 の速報月を含むか |
+| 並び | memberMonths は memberId → month 昇順、byContract は contractId 昇順。`aggregateMembers` の members は memberId 昇順 |
+| 単価の変遷 | `memberRateHistory(dataset | MasterIndex, memberId, period)`。月ごとに `rateFor` を引き、単価・出どころ・役職が同じ月をまとめる。マスタにあるが入社前の月は飛ばす。`Model` は単価マスタを持たない（NaN 単価を Model に漏らさないため `Model.rates` は足さなかった）ので Dataset から計算する |
+
+### model.json のサイズ
+
+`memberMonths` はダミーデータで 603 行・契約別 1,920 行、JSON で **486 KB**（model.json 540 KB の 9 割）。全ページが読む model.json に入れると倍近くなるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`、503 KB・gzip 25 KB）でメンバー別の画面だけに配る。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
+
+### 性能
+
+`tests/unit/members.perf.test.ts`: perf.test.ts と同じ規模（作業ログ 5 万件 × 契約 100 件 × 200 人）＋アサイン 400 行で、memberMonths を含む Model 構築 2 秒以内（実測 約 0.6〜1 秒）、`buildMemberMonths` 単体 300ms 以内、`aggregateMembers` 200 回 ＋ 月次推移 200 人分で 2 秒以内。
