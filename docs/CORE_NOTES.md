@@ -44,3 +44,11 @@
 
 - 原価の種類: `CostProvider { costType, compute(contractId, month) }` を `buildModel(dataset, { extraProviders })` で追加できる。`config.costTypes` に ID を足せば `costs` のキーに現れる。
 - 性能: 作業ログは `(契約ID, 月)` で索引化（`indexWorklogs`）、マスタは `(キー → effectiveFrom 昇順)` で二分探索。5 万件 × 100 契約で 0.5 秒程度（`tests/unit/perf.test.ts`）。
+
+## チーム詳細（`core/team-detail.ts`）— 決定事項
+
+| 関数 | 決定 |
+|---|---|
+| `teamOrgChanges(teams, teamId, period)` | 期間内（両端含む）に発効した、そのチーム自身の改名・付け替え・新設と、直下に入った／出た他チームの付け替え・新設を月順に返す。`relation` = self / in / out。新設は全履歴の最古の `effectiveFrom` より後に初めて現れたものだけ（初期登録は変更ではない）。名前も親も同じ再登録は変更ではない。親 `""` と null は同じ。同じ月・同じチームの複数行は後の行を採用。改名と付け替えが同月なら 2 件（改名 → 付け替え）。孫以下の変更・子の改名は含めない |
+| `teamPath(tree, teamId)` | 最上位から自分まで。木に無ければ空。循環しても止まる |
+| `teamMemberCosts(model, contractIds, period, teamScope?)` | CostLine を人ごとに合算（所属は問わない）。原価の大きい順、同額は memberId 順。合計は `aggregate().cost`（原価の種類が labor のみのとき）と一致。`teamScope` を渡すと所属がその外（所属なし含む）の時間・原価を `outside*` に数える。構成比は合計 0 のとき null |
