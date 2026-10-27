@@ -83,6 +83,9 @@ spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMon
 列は `{key, label, type: money|percent|hours|int|status|text, get, render, sortValue, exportValue, breakdown, hideOnPhone}`。
 `<th scope="col">` にソートボタンと `aria-sort`、先頭列は `<th scope="row">`。行クリックは `rowHref` のリンク（キーボードはリンクで到達）＋行全体のクリック。
 Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は選択中の単位の数値（列名に単位）、割合は % の数値、月は `YYYY-MM`。
+幅の工夫（1280px・サイドバー開で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。契約一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（契約数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
+状態チップ（`rowStatus()`）は配列で、契約は「赤字見込み」「予算超過」、チーム行は「赤字 N件」（配下の赤字見込み契約数）「予算超過」。既定の並びは `statusSortValue()`（赤を先頭、その中は消化率の高い順）。
+契約詳細の月表は、予定（future）の月に選択方式の見込み原価（`forecastMonthlyCost`）を斜体＋「見込」チップで表示し、粗利・粗利率もそれに基づく（実績の無い月に 100% を出さない）。合計行の原価・粗利は実績月のみ。
 
 ## グラフ（charts.js）
 

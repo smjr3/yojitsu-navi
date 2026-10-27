@@ -14,7 +14,7 @@ import { createStore } from "./components/state.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
-import { dataTable, standardColumns, rowStatus } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
@@ -130,15 +130,16 @@ if (vm) {
   display(
     sectionTitle(
       "契約ごとの予実",
-      `${periodJa(scope.period)} ・ ${scope.teamLabel} ・ 着地: ${METHOD_LABELS[vm.method]}（${model.meta.fiscalYear}年度）${outside > 0 && !f.showOutside ? ` ・ 期間外の契約 ${outside}件は非表示` : ""}`,
+      `${periodJa(scope.period)} ・ ${scope.teamLabel} ・ 着地: ${METHOD_LABELS[vm.method]}（${model.meta.fiscalYear}年度）。契約列は 顧客 / 案件 と ID・チーム・期間（YY/MM）。既定の並び: 赤字見込み・予算超過の契約を先頭に、消化率の高い順。${outside > 0 && !f.showOutside ? `選択期間に掛からない契約 ${outside}件は非表示（表示する → 「期間外の契約も表示」をチェック）。` : ""}`,
     ),
   );
   const columns = [
-    { key: "contractId", label: "契約ID", type: "text", width: "6rem" },
-    { key: "customerName", label: "顧客", type: "text" },
-    { key: "projectName", label: "案件", type: "text" },
-    { key: "teamName", label: "チーム", type: "text", hideOnPhone: true },
-    { key: "period", label: "契約期間", type: "text", get: (r) => `${r.startMonth}〜${r.endMonth}`, sortValue: (r) => r.startMonth, hideOnPhone: true },
+    { key: "name", label: "契約", type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+    { key: "contractId", label: "契約ID", type: "text", exportOnly: true },
+    { key: "customerName", label: "顧客", type: "text", exportOnly: true },
+    { key: "projectName", label: "案件", type: "text", exportOnly: true },
+    { key: "teamName", label: "チーム", type: "text", exportOnly: true },
+    { key: "period", label: "契約期間", type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
     ...standardColumns({
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
@@ -149,7 +150,7 @@ if (vm) {
         forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
       },
     }),
-    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => (r.isDeficit || r.isOverBudget ? 0 : r.includesPreliminary ? 1 : 2) },
+    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
   const sum = rows.reduce(
     (s, r) => {
@@ -161,7 +162,7 @@ if (vm) {
     },
     { budget: 0, cost: 0, hours: 0, forecastGrossProfit: 0 },
   );
-  const summary = { name: `合計（${rows.length}件）`, budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, burnRate: null, forecastGrossProfit: sum.forecastGrossProfit, isDeficit: false, isOverBudget: false, status: null };
+  const summary = { name: `合計（${rows.length}件）`, customerName: null, projectName: null, teamName: null, period: null, contractId: null, budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, burnRate: null, forecastGrossProfit: sum.forecastGrossProfit, isDeficit: false, isOverBudget: false, status: null };
   if (rows.length === 0) {
     display(emptyState({ title: "該当する契約がありません", text: "絞り込み条件か期間・チームを変えてください。", icon: "○" }));
   } else {

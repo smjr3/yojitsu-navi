@@ -143,7 +143,7 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {
     { key: "cost", label: "原価（実績）", type: "money", render: (r, u) => (r.cost === null ? (r.actualCostPrelim !== null && r.actualCostPrelim > 0 ? `${money(r.actualCostPrelim, u)}（速報）` : "—") : money(r.cost, u)) },
     { key: "forecastCost", label: "原価（見込み）", type: "money" },
     { key: "grossProfit", label: "粗利", type: "money", render: (r, u) => (r.grossProfit === null ? (r.forecastGrossProfit === null ? "—" : `${money(r.forecastGrossProfit, u)}（見込み）`) : money(r.grossProfit, u)) },
-    { key: "hours", label: "時間", type: "hours", hideOnPhone: true },
+    { key: "hours", label: "時間", type: "hours", hideOnPhone: true, hideNarrow: true },
   ];
   return dataTable({ columns, rows, unit, caption: "月次推移", exportName, sort: { key: "month", dir: "asc" } });
 }

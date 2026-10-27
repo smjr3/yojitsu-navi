@@ -13,14 +13,14 @@ title: 契約詳細
 import { html } from "htl";
 import { aggregate, FORECAST_METHODS } from "./core/index.js";
 import { createStore } from "./components/state.js";
-import { seriesWithForecast, contractTeamName, treeAt } from "./components/analysis.js";
+import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { money, formatPercent, formatHours, monthJa, periodJa, METHOD_LABELS, METHOD_DESCRIPTIONS, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
+import { money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, METHOD_DESCRIPTIONS, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -115,6 +115,8 @@ if (vm && !vm.inRange) {
 if (vm) {
   const { contract: c, totals, unit, period } = vm;
   const f = result.forecasts[vm.method];
+  const elapsedLabel = (months) =>
+    months.length === 0 ? "経過月なし" : `${monthSpanJa(months)}の${months.length}か月${months[months.length - 1] > model.meta.lastFinalMonth ? "（速報含む）" : ""}`;
   const subtitle = `${c.contractId} ${c.customerName} / ${c.projectName} ・ ${periodJa(period)}`;
   const inFY = f.breakdown.contractMonthsInFY.length > 0;
   display(
@@ -131,7 +133,7 @@ if (vm) {
       statTile({
         label: "消化率（経過月の累計）",
         value: formatPercent(totals.burnRate),
-        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${totals.burnRateBreakdown.elapsedMonths.length}か月経過</span>`,
+        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${elapsedLabel(totals.burnRateBreakdown.elapsedMonths)} ・ 基準 ${formatPercent(model.config.burnRateDangerThreshold, 0)}</span>`,
         status: totals.isOverBudget ? { kind: "danger", text: "予算超過" } : totals.burnRate === null ? { kind: "neutral", text: "経過月なし" } : { kind: "ok", text: "範囲内" },
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle }),
       }),
@@ -161,33 +163,42 @@ if (vm) {
 ```js
 if (vm) {
   const { contract: c, months, unit } = vm;
-  display(sectionTitle("月ごとの予実", "各月の予算・原価・粗利。数値をクリックすると、その月の計算根拠（予算の月割り・メンバー別の原価行・作業ログ）が開きます。"));
-  const rows = months.map((m) => ({
+  display(sectionTitle("月ごとの予実", `各月の予算・原価・粗利。予定（未来）の月は選択中の方式（${METHOD_LABELS[vm.method]}）による見込み原価を「見込」として表示します。数値をクリックすると、その月の計算根拠（予算の月割り・メンバー別の原価行・作業ログ・見込みの算出）が開きます。`));
+  const fc = forecastMonthlyCost(model, [c.contractId], vm.method);
+  const forecast = result.forecasts[vm.method];
+  const rows = months.map((m) => {
+    const isForecast = m.status === "future";
+    const cost = isForecast ? (fc.has(m.month) ? fc.get(m.month) : null) : m.cost;
+    const grossProfit = cost === null ? null : m.budget - cost;
+    return {
     key: m.month,
     month: m.month,
     status: m.status,
+    isForecast,
     budget: m.budget,
-    cost: m.cost,
-    grossProfit: m.grossProfit,
-    grossMargin: m.budget ? m.grossProfit / m.budget : null,
+    cost,
+    grossProfit,
+    grossMargin: cost === null || !m.budget ? null : grossProfit / m.budget,
     hours: m.hours,
     businessDays: m.businessDays,
     members: m.costLines.length,
     rateMissing: m.costLines.some((l) => l.rateMissing),
     cm: m,
-  }));
+    };
+  });
+  const fcCell = (r, text, chip = false) => (r.isForecast ? html`<span class="yn-cell-forecast" title=${`見込み（${METHOD_LABELS[vm.method]}）`}>${text}${chip ? statusChip("neutral", "見込") : null}</span>` : text);
   const columns = [
     { key: "month", label: "月", type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
     { key: "status", label: "状態", type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: STATUS_LABELS[r.status] }), sortValue: (r) => r.status },
     { key: "budget", label: "予算", type: "money", breakdown: (r) => bd.budgetMonthSpec({ contract: c, cm: r.cm, unit }) },
-    { key: "cost", label: "原価", type: "money", breakdown: (r) => bd.costMonthSpec({ contract: c, cm: r.cm, unit, model }) },
-    { key: "grossProfit", label: "粗利", type: "money", breakdown: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}` }) },
-    { key: "grossMargin", label: "粗利率", type: "percent", breakdown: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}` }) },
-    { key: "hours", label: "時間", type: "hours" },
-    { key: "members", label: "作業者数", type: "int", hideOnPhone: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-danger-text" title="単価の無いメンバーを含みます">（単価なし含む）</span>` : integer(r.members)) },
-    { key: "businessDays", label: "営業日", type: "int", hideOnPhone: true },
+    { key: "cost", label: "原価", type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, subtitle: `${monthJa(r.month)} の見込み原価（1か月分）` }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
+    { key: "grossProfit", label: "粗利", type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` }) },
+    { key: "grossMargin", label: "粗利率", type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` }) },
+    { key: "hours", label: "時間", type: "hours", hideNarrow: true },
+    { key: "members", label: "作業者数", type: "int", hideOnPhone: true, hideNarrow: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-danger-text" title="単価の無いメンバーを含みます">（単価なし含む）</span>` : integer(r.members)) },
+    { key: "businessDays", label: "営業日", type: "int", hideOnPhone: true, hideNarrow: true },
   ];
-  const sum = rows.reduce((s, r) => ({ budget: s.budget + r.budget, cost: s.cost + r.cost, hours: s.hours + r.hours }), { budget: 0, cost: 0, hours: 0 });
+  const sum = rows.reduce((s, r) => ({ budget: s.budget + r.budget, cost: s.cost + (r.isForecast ? 0 : r.cost), hours: s.hours + r.hours }), { budget: 0, cost: 0, hours: 0 });
   display(
     dataTable({
       columns,
@@ -196,7 +207,7 @@ if (vm) {
       caption: "月ごとの予実",
       exportName: `contract_${c.contractId}_monthly`,
       sort: { key: "month", dir: "asc" },
-      summary: { name: "合計", budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, hours: sum.hours, members: null, businessDays: null, status: null },
+      summary: { name: "合計（原価・粗利は実績月のみ）", budget: sum.budget, cost: sum.cost, grossProfit: sum.budget - sum.cost, grossMargin: sum.budget ? (sum.budget - sum.cost) / sum.budget : null, hours: sum.hours, members: null, businessDays: null, status: null },
     }),
   );
 }

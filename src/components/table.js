@@ -11,7 +11,7 @@
  * })
  */
 import { html } from "htl";
-import { EMPTY_VALUE, formatHours, formatPercent, integer, money } from "./format.js";
+import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
 import { statusChip } from "./kpi.js";
 
@@ -32,8 +32,11 @@ function defaultRender(col, row, unit) {
       return formatHours(v);
     case "int":
       return integer(v);
-    case "status":
-      return v ? statusChip(v.kind, v.text, v.title ?? null) : "";
+    case "status": {
+      if (!v) return "";
+      const list = Array.isArray(v) ? v : [v];
+      return html`<span class="yn-chip-row">${list.map((s) => statusChip(s.kind, s.text, s.title ?? null))}</span>`;
+    }
     default:
       return v === null || v === undefined || v === "" ? (col.empty ?? EMPTY_VALUE) : String(v);
   }
@@ -50,7 +53,7 @@ function defaultExport(col, row, unit) {
     case "int":
       return typeof v === "number" && Number.isFinite(v) ? v : null;
     case "status":
-      return v ? v.text : "";
+      return v ? (Array.isArray(v) ? v.map((s) => s.text).join("・") : v.text) : "";
     default:
       return v === null || v === undefined ? "" : typeof v === "object" ? String(v.text ?? "") : v;
   }
@@ -73,6 +76,7 @@ function exportLabel(col, unit) {
 function sortValue(col, row) {
   if (col.sortValue) return col.sortValue(row);
   const v = col.get ? col.get(row) : row[col.key];
+  if (Array.isArray(v)) return v.map((s) => s.text).join("・");
   if (v && typeof v === "object" && "text" in v) return v.text;
   return v;
 }
@@ -133,7 +137,8 @@ export function dataTable({
   toolbar = null,
   id = null,
 }) {
-  const visibleCols = columns.filter((c) => !c.hidden);
+  const visibleCols = columns.filter((c) => !c.hidden && !c.exportOnly);
+  const exportCols = columns.filter((c) => !c.hidden && c.export !== false);
   let sortState = tree ? null : sort ? { ...sort } : null;
   const collapsed = new Set();
   let currentRows = rows;
@@ -171,7 +176,7 @@ export function dataTable({
         const numeric = isNumeric(col);
         const sortable = !tree && col.sortable !== false;
         const active = sortState && sortState.key === col.key;
-        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}`} style=${col.width ? `width:${col.width}` : null} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
+        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`} style=${col.width ? `width:${col.width}` : null} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
           const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${col.label}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span></button>`;
           btn.addEventListener("click", () => {
@@ -202,7 +207,7 @@ export function dataTable({
     const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
-      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
+      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
       const cell = ci === 0 ? html`<th scope="row" class=${cls}></th>` : html`<td class=${cls}></td>`;
       let content = cellNode(col, row);
       if (ci === 0) {
@@ -256,14 +261,14 @@ export function dataTable({
       const numeric = isNumeric(col);
       const has = summary[col.key] !== undefined && summary[col.key] !== null;
       const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? "" : cellNode(col, summary);
-      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}`}>${content}</td>`;
+      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`}>${content}</td>`;
     })}</tr></tfoot>`;
     table.append(tfoot);
   }
 
   const exportBtn = exportName
     ? exportButton(() => ({
-        columns: visibleCols.filter((c) => c.export !== false),
+        columns: exportCols,
         rows: tree ? rows.map((r) => ({ ...r, name: `${"　".repeat(r.depth ?? 0)}${r.name ?? ""}` })) : currentRows,
         unit,
         name: exportName,
@@ -271,13 +276,33 @@ export function dataTable({
       }))
     : null;
 
+  const scrollHint = html`<span class="yn-scroll-hint" aria-live="polite" hidden>横にスクロールできます <span aria-hidden="true">→</span></span>`;
+  const wrapEl = html`<div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? "一覧"}>${table}</div>`;
+  const scroller = html`<div class="yn-table-scroll">${wrapEl}</div>`;
   const wrap = html`<div class="yn-table-block">
-    <div class="yn-table-toolbar">${count}${toolbar}${exportBtn}</div>
-    <div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? "一覧"}>${table}</div>
+    <div class="yn-table-toolbar">${count}${scrollHint}${toolbar}${exportBtn}</div>
+    ${scroller}
   </div>`;
+  // 横スクロールの有無と位置を示す（端に影、ツールバーに案内）
+  const updateScroll = () => {
+    const scrollable = wrapEl.scrollWidth > wrapEl.clientWidth + 1;
+    scroller.classList.toggle("is-scrollable", scrollable);
+    scroller.classList.toggle("at-start", wrapEl.scrollLeft <= 1);
+    scroller.classList.toggle("at-end", !scrollable || wrapEl.scrollLeft + wrapEl.clientWidth >= wrapEl.scrollWidth - 1);
+    scrollHint.hidden = !scrollable;
+  };
+  wrapEl.addEventListener("scroll", updateScroll, { passive: true });
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(updateScroll).observe(wrapEl);
+  queueMicrotask(updateScroll);
   wrap.refresh = () => renderBody();
   wrap.getRows = () => currentRows;
   return wrap;
+}
+
+/** 契約名のセル: 1 行目 顧客 / 案件、2 行目 ID・チーム・期間（幅を節約し、title に正式表記） */
+export function contractNameCell(r) {
+  const full = `${r.contractId} ${r.customerName} / ${r.projectName}（${r.teamName}、${r.startMonth}〜${r.endMonth}）`;
+  return html`<span class="yn-cell-2line" title=${full}><span class="yn-cell-main">${r.customerName} / ${r.projectName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.contractId}</span> ・ ${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}</span></span>`;
 }
 
 /**
@@ -316,12 +341,25 @@ export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利
   return cols;
 }
 
-/** 行の状態（チップ用）。赤は 消化率超過 と 赤字着地 だけ */
+/**
+ * 行の状態（チップの配列）。赤は 消化率超過 と 赤字着地 だけ。
+ * 契約: 「赤字見込み」「予算超過」。チーム（deficitCount を持つ行）: 「赤字 N件」「予算超過」。
+ */
 export function rowStatus(row) {
-  const parts = [];
-  if (row.isDeficit) parts.push("赤字見込み");
-  if (row.isOverBudget) parts.push("消化率超過");
-  if (parts.length) return { kind: "danger", text: parts.join("・") };
-  if (row.includesPreliminary) return { kind: "prelim", text: "速報含む" };
-  return { kind: "ok", text: "問題なし" };
+  const chips = [];
+  const isTeam = typeof row.deficitCount === "number";
+  if (isTeam ? row.deficitCount > 0 : row.isDeficit) {
+    chips.push(isTeam ? { kind: "danger", text: `赤字 ${row.deficitCount}件`, title: `配下の契約のうち、年度末に赤字で着地する見込みの契約が ${row.deficitCount} 件あります` } : { kind: "danger", text: "赤字見込み", title: "年度末に赤字で着地する見込み" });
+  }
+  if (row.isOverBudget) chips.push({ kind: "danger", text: "予算超過", title: "経過月の累計原価が累計予算を超えています（消化率が基準超）" });
+  if (chips.length) return chips;
+  if (row.includesPreliminary) return [{ kind: "prelim", text: "速報含む", title: "確定前の月を含みます" }];
+  return [{ kind: "ok", text: "問題なし" }];
+}
+
+/** 状態列の並び順: 赤（赤字・予算超過）を先頭、その中は消化率の高い順 */
+export function statusSortValue(row) {
+  const danger = row.isDeficit || row.isOverBudget || (row.deficitCount ?? 0) > 0;
+  const rate = typeof row.burnRate === "number" && Number.isFinite(row.burnRate) ? row.burnRate : -1;
+  return (danger ? 0 : 1000) - rate;
 }

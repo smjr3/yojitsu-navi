@@ -18,9 +18,9 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { filterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { money, moneySigned, pointsSigned, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel } from "./components/format.js";
+import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel } from "./components/format.js";
 ```
 
 ```js
@@ -84,6 +84,8 @@ if (vm) {
     const text = `${points ? pointsSigned(d) : moneySigned(d, unit)} 前年同期（${monthJa(compare.prior.from)}〜${monthJa(compare.prior.to)}）比`;
     return { text, direction: dir, good: good === null ? null : good(d) };
   };
+  const elapsedLabel = (months) =>
+    months.length === 0 ? "経過月なし" : `${monthSpanJa(months)}の${months.length}か月${months[months.length - 1] > model.meta.lastFinalMonth ? "（速報含む）" : ""}`;
   const budgetLabel = vm.fy ? `年度予算（${fiscalYearLabel(vm.fy)}）` : "期間の予算";
   const deficitCount = forecast.deficitContractIds.length;
   display(
@@ -113,7 +115,7 @@ if (vm) {
       statTile({
         label: "消化率（経過月の累計）",
         value: formatPercent(totals.burnRate),
-        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${totals.burnRateBreakdown.elapsedMonths.length}か月経過 ・ 基準 ${formatPercent(model.config.burnRateDangerThreshold, 0)}</span>`,
+        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${elapsedLabel(totals.burnRateBreakdown.elapsedMonths)} ・ 基準 ${formatPercent(model.config.burnRateDangerThreshold, 0)}</span>`,
         status: totals.isOverBudget ? { kind: "danger", text: "予算超過" } : totals.burnRate === null ? { kind: "neutral", text: "経過月なし" } : { kind: "ok", text: "範囲内" },
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth, subtitle }),
       }),
@@ -160,9 +162,10 @@ if (vm) {
     display(emptyState({ title: "赤字見込みの契約はありません", text: `${scope.teamLabel} の契約はすべて黒字で着地する見込みです。`, icon: "✓" }));
   } else {
     const columns = [
-      { key: "contractId", label: "契約ID", type: "text", width: "6rem" },
-      { key: "name", label: "顧客 / 案件", type: "text", get: (r) => `${r.customerName} / ${r.projectName}` },
-      { key: "teamName", label: "チーム", type: "text", hideOnPhone: true },
+      { key: "name", label: "契約", type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+      { key: "contractId", label: "契約ID", type: "text", exportOnly: true },
+      { key: "teamName", label: "チーム", type: "text", exportOnly: true },
+      { key: "period", label: "契約期間", type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
       ...standardColumns({
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
@@ -173,7 +176,7 @@ if (vm) {
           forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
         },
       }),
-      { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortable: false },
+      { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
     display(dataTable({ columns, rows, unit, caption: "赤字見込みの契約", exportName: `deficit_contracts_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contract", {}, { id: r.contractId }) }));
   }
@@ -203,7 +206,7 @@ if (vm) {
   } else {
     const columns = [
       { key: "name", label: "チーム", type: "text" },
-      { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true },
+      { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true, hideNarrow: true },
       ...standardColumns({
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit }),
@@ -214,7 +217,7 @@ if (vm) {
           forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
         },
       }),
-      { key: "status", label: "状態", type: "status", get: (r) => (r.deficitCount > 0 ? { kind: "danger", text: `赤字見込み ${r.deficitCount}件` } : rowStatus(r)), sortable: false },
+      { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
     display(dataTable({ columns, rows, unit, caption: "チーム別の集計", exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contracts", { team: r.teamId }) }));
   }

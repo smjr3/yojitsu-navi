@@ -433,8 +433,8 @@ h3 {
   appearance: none;
   background: none;
   border: 0;
-  padding: 0 2px;
-  margin: 0 -2px;
+  padding: 0;
+  margin: 0;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -935,7 +935,7 @@ h3 {
 }
 .yn-table th,
 .yn-table td {
-  padding: 7px 10px;
+  padding: 6px 7px;
   border-bottom: 1px solid var(--yn-hairline);
   vertical-align: middle;
   white-space: nowrap;
@@ -983,6 +983,130 @@ h3 {
   font-weight: 700;
   border-top: 1px solid var(--yn-hairline-strong);
   border-bottom: 0;
+}
+.yn-table thead th:first-child,
+.yn-table tbody th:first-child,
+.yn-table tfoot td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--yn-card);
+}
+.yn-table thead th:first-child {
+  z-index: 3;
+}
+.yn-table tbody tr:hover th:first-child {
+  background: color-mix(in srgb, var(--yn-card), var(--yn-text-1) 4%);
+}
+.yn-table-scroll {
+  position: relative;
+}
+.yn-table-scroll::before,
+.yn-table-scroll::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  z-index: 4;
+  border-radius: var(--yn-radius);
+}
+.yn-table-scroll::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.14), transparent);
+}
+.yn-table-scroll::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.14), transparent);
+}
+.yn-table-scroll.is-scrollable:not(.at-start)::before,
+.yn-table-scroll.is-scrollable:not(.at-end)::after {
+  opacity: 1;
+}
+.yn-scroll-hint {
+  font-size: 12px;
+  color: var(--yn-text-muted);
+}
+.yn-cell-2line {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.3;
+  max-width: 200px;
+  vertical-align: middle;
+}
+.yn-cell-main,
+.yn-cell-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.yn-cell-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--yn-text-muted);
+}
+.yn-cell-id {
+  font-family: var(--monospace);
+  font-size: 11px;
+  color: var(--yn-text-2);
+}
+.yn-chip-row {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.yn-table .yn-chip {
+  font-size: 11px;
+  padding: 1px 6px;
+}
+.yn-cell-forecast {
+  font-style: italic;
+  color: var(--yn-text-2);
+}
+.yn-cell-forecast .yn-chip {
+  font-style: normal;
+  margin-left: 4px;
+}
+@container (max-width: 820px) {
+  .yn-table {
+    font-size: 12px;
+  }
+  .yn-table th,
+  .yn-table td {
+    padding: 4px 6px;
+  }
+  .hide-narrow {
+    display: none !important;
+  }
+  .yn-cell-2line {
+    max-width: 180px;
+  }
+  .yn-tree-indent {
+    width: calc(var(--depth, 0) * 12px);
+  }
+}
+@container (max-width: 700px) {
+  .yn-table {
+    font-size: 11.5px;
+  }
+  .yn-table th,
+  .yn-table td {
+    padding: 3px 5px;
+  }
+  .yn-cell-2line {
+    max-width: 140px;
+  }
+  .yn-tree-indent {
+    width: calc(var(--depth, 0) * 10px);
+  }
+  .yn-tree-toggle {
+    width: 18px;
+    margin-right: 2px;
+  }
 }
 .yn-table-compact th,
 .yn-table-compact td {
@@ -1036,7 +1160,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 /* 木構造 */
 .yn-tree-indent {
   display: inline-block;
-  width: calc(var(--depth, 0) * 20px);
+  width: calc(var(--depth, 0) * 16px);
 }
 .yn-tree-toggle {
   appearance: none;

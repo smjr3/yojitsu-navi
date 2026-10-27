@@ -77,13 +77,13 @@ if (store) display(filterBar(store, model, { show: ["period", "method", "unit"] 
 ```js
 if (vm) {
   const { scope, rows, unit } = vm;
-  display(sectionTitle("組織別の予実", `${periodJa(scope.period)} ・ ${monthJa(scope.period.to)} 時点の組織で表示 ・ 着地: ${METHOD_LABELS[vm.method]}（${model.meta.fiscalYear}年度）`));
+  display(sectionTitle("組織別の予実", `${periodJa(scope.period)} ・ ${monthJa(scope.period.to)} 時点の組織で表示 ・ 着地: ${METHOD_LABELS[vm.method]}（${model.meta.fiscalYear}年度）。状態の「赤字 N件」は配下で赤字見込みの契約数、「予算超過」は消化率が基準超。`));
   if (scope.period.to !== model.meta.asOfMonth) {
     display(note(`過去月の組織はその月時点のもので集計しています。現在（${monthJa(model.meta.asOfMonth)}）の組織と異なる場合があります。`));
   }
   const columns = [
     { key: "name", label: "チーム", type: "text" },
-    { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true },
+    { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true, hideNarrow: true },
     ...standardColumns({
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit }),
@@ -94,7 +94,7 @@ if (vm) {
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
       },
     }),
-    { key: "status", label: "状態", type: "status", get: (r) => (r.deficitCount > 0 ? { kind: "danger", text: `赤字見込み ${r.deficitCount}件` } : rowStatus(r)) },
+    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), hideNarrow: true },
   ];
   display(
     dataTable({

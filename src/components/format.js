@@ -69,6 +69,22 @@ export function monthShort(ym, withYear = false) {
   return withYear || m === 1 ? `${ym.slice(2, 4)}/${m}` : `${m}月`;
 }
 
+/** 契約期間の短い表記 "26/04–27/03"（title に正式表記を入れて使う） */
+export function periodCompact(from, to) {
+  const f = (ym) => (typeof ym === "string" && ym.length >= 7 ? `${ym.slice(2, 4)}/${ym.slice(5, 7)}` : "");
+  return `${f(from)}–${f(to)}`;
+}
+
+/** 月の並び "2026-04".."2026-10" を "2026年4月〜10月"（年が同じなら年は1回）で */
+export function monthSpanJa(months) {
+  if (!months || months.length === 0) return "なし";
+  const a = months[0];
+  const b = months[months.length - 1];
+  if (a === b) return monthJa(a);
+  if (a.slice(0, 4) === b.slice(0, 4)) return `${monthJa(a)}〜${Number(b.slice(5, 7))}月`;
+  return `${monthJa(a)}〜${monthJa(b)}`;
+}
+
 /** 期間 "2026-04〜2027-03" を "2026年4月〜2027年3月" で */
 export function periodJa(period) {
   if (!period) return EMPTY_VALUE;
