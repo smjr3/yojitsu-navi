@@ -118,6 +118,10 @@ export function rateFor(index: MasterIndex, memberId: string, month: YearMonth):
   const personal = index.rates.at(memberId, month);
   const member = memberAt(index, memberId, month);
   const memberUnknown = !index.members.has(memberId);
+  // hourlyRate が数値でない（NaN/Infinity: validateDataset では RATE_INVALID）レコードは「単価なし」として扱い、NaN を集計に漏らさない
+  if (personal && !Number.isFinite(personal.hourlyRate)) {
+    return { hourlyRate: 0, rateSource: null, rateMissing: true, memberUnknown };
+  }
   if (personal) {
     return {
       hourlyRate: personal.hourlyRate,
@@ -128,7 +132,7 @@ export function rateFor(index: MasterIndex, memberId: string, month: YearMonth):
   }
   if (member && member.title !== "") {
     const byTitle = index.rates.at(member.title, month);
-    if (byTitle) {
+    if (byTitle && Number.isFinite(byTitle.hourlyRate)) {
       return {
         hourlyRate: byTitle.hourlyRate,
         rateSource: { key: byTitle.key, effectiveFrom: byTitle.effectiveFrom },

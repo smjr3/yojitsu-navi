@@ -44,6 +44,7 @@ export function contractInvalidReason(contract: Contract): string | null {
   if (contract.startMonth > contract.endMonth) return `開始月 ${contract.startMonth} が終了月 ${contract.endMonth} より後です`;
   if (typeof contract.totalAmount !== "number" || !Number.isFinite(contract.totalAmount)) return "契約総額が数値ではありません";
   if (contract.totalAmount < 0) return `契約総額が負です: ${contract.totalAmount}`;
+  if (!Number.isInteger(contract.totalAmount)) return `契約総額が整数ではありません: ${contract.totalAmount}`;
   return null;
 }
 

@@ -45,6 +45,8 @@ function validateContracts(dataset: Dataset, push: IssueSink): void {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が数値ではありません`, file, row, ref: { contractId: c.contractId } });
     } else if (c.totalAmount < 0) {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が負です: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
+    } else if (!Number.isInteger(c.totalAmount)) {
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount は円の整数で入力してください: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
     }
   });
 }

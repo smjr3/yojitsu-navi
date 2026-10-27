@@ -93,7 +93,8 @@ export function createLaborProvider(
           rateSource: rate.rateSource,
           rateMissing: rate.rateMissing,
           amount: roundYen(acc.hours * rate.hourlyRate),
-          memberTeamId: member?.teamId ?? null,
+          // 空文字のチームIDは「非所属」= null に揃える（CSV 以外の入力でも null になる）
+          memberTeamId: member?.teamId ? member.teamId : null,
         });
       }
       return { lines, worklogs: entries };

@@ -26,13 +26,19 @@ export function monthStatus(month: YearMonth, ctx: StatusContext): MonthStatus {
 }
 
 /**
- * 確定済みの最新月。asOf が前月分の確定日以降なら前月、そうでなければ前々月。
- * （前々月の確定日は前月中にあるので必ず確定している）
+ * 確定済みの最新月 = 状態が final の最大月。通常は asOf が前月分の確定日以降なら前月、そうでなければ前々月。
+ * 確定日は翌月の営業日が足りないと翌々月以降に繰り越す（nthBusinessDay）ので、前々月も未確定なら更に遡る。
+ * 確定日は月に対して単調（m1 < m2 なら closing(m1) < closing(m2)）なので、最初に final になった月が最大の final 月。
  */
 export function lastFinalMonth(ctx: StatusContext): YearMonth {
   const asOfMonth = monthOfDate(ctx.asOf);
-  const prev = addMonths(asOfMonth, -1);
-  return monthStatus(prev, ctx) === "final" ? prev : addMonths(asOfMonth, -2);
+  let month = addMonths(asOfMonth, -1);
+  // 上限は安全のため 10 年分（nthBusinessDay の繰り越し上限と同じ）
+  for (let guard = 0; guard < 120; guard++) {
+    if (monthStatus(month, ctx) === "final") return month;
+    month = addMonths(month, -1);
+  }
+  return month;
 }
 
 /**
