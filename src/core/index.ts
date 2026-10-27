@@ -61,6 +61,17 @@ export { lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } 
 export { FORECAST_METHODS, forecastAllMethods, forecastContract, type ForecastContext } from "./forecast.js";
 export { buildModel, type BuildModelOptions } from "./model.js";
 export {
+  aggregateMembers,
+  buildMemberMonths,
+  memberBaseMonth,
+  memberMonthlySeries,
+  memberRateHistory,
+  memberRecordsOf,
+  utilizationOf,
+  type MemberRateSegment,
+  type MemberScope,
+} from "./members.js";
+export {
   UNASSIGNED_TEAM_ID,
   UNASSIGNED_TEAM_LABEL,
   aggregate,

@@ -10,6 +10,7 @@ import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider
 import { forecastAllMethods, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, teamTreeAt, type MasterIndex } from "./masters.js";
+import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
 
@@ -129,6 +130,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     warnings,
     unmapped: mapping.unmapped,
     excludedHours: mapping.excludedHours,
+    // メンバー別の計画と実績（§18.1）
+    memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth),
   };
 }
 
