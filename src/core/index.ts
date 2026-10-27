@@ -3,6 +3,7 @@
  */
 export * from "./types.js";
 export { normalizeName } from "./normalize.js";
+export { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey, groupByCustomer, type CustomerGroup } from "./customers.js";
 export {
   addMonths,
   businessDaysInMonth,

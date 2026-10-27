@@ -44,3 +44,15 @@
 
 - 原価の種類: `CostProvider { costType, compute(contractId, month) }` を `buildModel(dataset, { extraProviders })` で追加できる。`config.costTypes` に ID を足せば `costs` のキーに現れる。
 - 性能: 作業ログは `(契約ID, 月)` で索引化（`indexWorklogs`）、マスタは `(キー → effectiveFrom 昇順)` で二分探索。5 万件 × 100 契約で 0.5 秒程度（`tests/unit/perf.test.ts`）。
+
+## 顧客別（SPEC §17）決定事項
+
+実装は `src/core/customers.ts`（`customerKey` / `groupByCustomer`）。
+
+| 箇所 | 曖昧点 | 決定 |
+|---|---|---|
+| キー | `normalizeName` の結果が `__none__` など予約キーと衝突 | 正規化結果が `__` で始まるときは `_` を 1 つ足す（単射。足したキーは `___` 始まりで予約キー `__none__` と別）。通常の顧客名は正規化結果そのまま |
+| 顧客名なし | 空・空白・法人格だけ | キー `__none__`、表示名「顧客名なし」。並びは末尾 |
+| 表示名 | 同じキーの契約の表記ゆれ | 契約ID昇順（文字コード順。`C10` は `C2` の前）で最初の契約の `customerName` をそのまま |
+| 順序 | 入力順への依存 | グループはキー順（コード単位）・契約IDは昇順。入力の並び・重複契約IDに依らず決定的 |
+| 合計 | 顧客の合計と全体 | 全契約がちょうど 1 顧客に属するので、顧客ごとの `aggregate` / `forecastTotals` の合計は全体と一致（プロパティ・結合テストで確認） |
