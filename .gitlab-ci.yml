@@ -1,0 +1,154 @@
+# 予実ナビ — GitLab CI/CD
+#
+# パイプライン:
+#   validate → test → build → pages
+#   - validate : データ検証（scripts/validate-data.ts）。error があれば止める
+#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）
+#   - build    : Observable Framework で dist/ を生成
+#   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
+#   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直して
+#                      data/worklogs/ をコミット＆プッシュする（その push が通常パイプラインを起動し、
+#                      validate → … → pages まで流れる）
+#
+# 必要な CI/CD 変数（Settings > CI/CD > Variables、Masked 推奨）:
+#   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
+#   GIT_PUSH_TOKEN      data/worklogs を書き戻すための Project Access Token（role: Developer、scope: write_repository）
+#   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
+#   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する
+#
+# 注意:
+#   - Pages のジョブ名は必ず `pages`、成果物は `public/` にする（GitLab の仕様）
+#   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は image: を書き換える
+
+image: node:22
+
+stages:
+  - validate
+  - test
+  - build
+  - pages
+
+variables:
+  # npm のキャッシュをプロジェクト内に置いて cache: で共有する
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  # Playwright のブラウザもキャッシュ対象
+  PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+  GIT_DEPTH: "20"
+
+# node_modules と npm キャッシュを lock ファイル単位で共有する
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+    - .npm/
+    - .cache/ms-playwright/
+
+default:
+  before_script:
+    # 社内ミラーがあれば NPM_CONFIG_REGISTRY を変数で渡すだけで切り替わる（npm が自動で読む）
+    - if [ -n "$NPM_CONFIG_REGISTRY" ]; then echo "npm registry: $NPM_CONFIG_REGISTRY"; fi
+    - npm ci --prefer-offline --no-audit --no-fund
+
+# スケジュール実行以外（push / MR / 手動）で動く共通条件
+.normal-rules: &normal-rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# --------------------------------------------------------------------------
+# validate: データの整合性チェック（契約ID重複・期間逆転・未知のチーム等で止める）
+# --------------------------------------------------------------------------
+validate:
+  stage: validate
+  <<: *normal-rules
+  script:
+    - npm run validate
+
+# --------------------------------------------------------------------------
+# test: 型チェックとテスト
+# --------------------------------------------------------------------------
+test:
+  stage: test
+  <<: *normal-rules
+  script:
+    - npm run typecheck
+    # JUnit 形式のレポートも出して GitLab のテスト結果タブに表示する
+    - npx vitest run --reporter=default --reporter=junit --outputFile=test-results/junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: test-results/junit.xml
+    expire_in: 1 week
+
+# --------------------------------------------------------------------------
+# build: 静的サイトを dist/ に生成
+# --------------------------------------------------------------------------
+build:
+  stage: build
+  <<: *normal-rules
+  script:
+    - npm run build
+    # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
+    - |
+      if [ "$PLAYWRIGHT_E2E" = "1" ] && [ -f tests/e2e/playwright.config.ts ]; then
+        npx playwright install --with-deps chromium
+        npm run test:e2e
+      else
+        echo "E2E はスキップ（PLAYWRIGHT_E2E 未設定または tests/e2e/playwright.config.ts が無い）"
+      fi
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+# --------------------------------------------------------------------------
+# pages: 既定ブランチの dist/ を public/ として公開
+# --------------------------------------------------------------------------
+pages:
+  stage: pages
+  needs: ["build"]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - rm -rf public
+    - mv dist public
+  artifacts:
+    paths:
+      - public/
+  # 公開先は https://<group>.pages.example/<project>/（サブパス配信。observablehq.config.js 側で相対パスを使う）
+
+# --------------------------------------------------------------------------
+# fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、リポジトリに書き戻す
+#   Settings > CI/CD > Schedules で cron を登録する（対象ブランチ = 既定ブランチ）
+# --------------------------------------------------------------------------
+fetch-worklogs:
+  stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    - test -n "$WORKLOG_API_TOKEN" || { echo "WORKLOG_API_TOKEN が未設定です"; exit 1; }
+    - test -n "$GIT_PUSH_TOKEN" || { echo "GIT_PUSH_TOKEN が未設定です"; exit 1; }
+    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    # 直近 refetchMonths か月を取り直して data/worklogs/ を更新
+    - npm run fetch
+    # 取り直した結果で検証が通ることを確認してから書き戻す
+    - npm run validate
+    - git config user.name "yojitsu-navi-bot"
+    - git config user.email "yojitsu-navi-bot@example.local"
+    - git add data/worklogs
+    - |
+      if git diff --cached --quiet; then
+        echo "作業実績に変更はありません"
+      else
+        git commit -m "chore(data): 作業実績を更新 ($(date -u +%Y-%m-%dT%H:%MZ)) [skip schedule]"
+        # トークンは URL に埋め込むがログには出ない（set -x しない）。push が通常パイプラインを起動し、build → pages まで進む
+        git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
+      fi

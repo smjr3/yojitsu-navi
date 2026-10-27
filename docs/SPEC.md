@@ -21,7 +21,7 @@
 - 契約の月数 = 開始月と終了月を**両方含む**月数。`2026-04`〜`2027-03` は 12。
 - 月途中開始・終了も均等割り（日割りしない）。
 - `startMonth > endMonth` の契約は `CONTRACT_INVALID` 警告を出し、計算から除外する。
-- `totalAmount < 0` または数値でない場合も `CONTRACT_INVALID`。0 は有効（予算0）。
+- `totalAmount < 0`、数値でない、整数でない場合も `CONTRACT_INVALID`。0 は有効（予算0）。
 - 契約IDの重複は `DUPLICATE_CONTRACT_ID`。最初の行だけ採用。
 
 ## 3. 月次予算
