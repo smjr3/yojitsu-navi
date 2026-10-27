@@ -43,6 +43,23 @@ export interface Config {
   labels: { customer: string; project: string; contract: string; team: string; member: string };
   worklogSource: WorklogSourceConfig;
   costTypes: CostTypeDef[];
+  /** マスタ編集画面の保存方式（SPEC §19.2）。省略時は download */
+  masterEdit?: MasterEditConfig;
+}
+
+/** マスタ編集の保存方式（SPEC §19.2） */
+export interface MasterEditConfig {
+  /** gitlab = API でコミット／MR、download = CSV をダウンロードして GitLab 画面でアップロード */
+  mode: "gitlab" | "download";
+  gitlab: {
+    /** 例 https://gitlab.example.local/api/v4。空なら download に落とす */
+    apiBaseUrl: string;
+    /** 数値ID または "group/project"。空なら download に落とす */
+    projectId: string;
+    targetBranch: string;
+    /** mr = 新しいブランチにコミットして MR を作成、direct = targetBranch へ直接コミット */
+    commitMode: "mr" | "direct";
+  };
 }
 
 export interface WorklogSourceConfig {

@@ -34,5 +34,14 @@
   },
   "costTypes": [
     { "id": "labor", "label": "工数原価" }
-  ]
+  ],
+  "masterEdit": {
+    "mode": "download",
+    "gitlab": {
+      "apiBaseUrl": "",
+      "projectId": "",
+      "targetBranch": "main",
+      "commitMode": "mr"
+    }
+  }
 }
