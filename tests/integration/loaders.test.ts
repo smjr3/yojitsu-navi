@@ -16,7 +16,7 @@ const HASH = "e".repeat(64);
 const ENV = { ...process.env, YOJITSU_AS_OF: "2026-10-27", YOJITSU_INPUT_HASH: HASH };
 const MEMO = join(ROOT, "src", ".observablehq", "cache", ".yojitsu", `worklogs-${HASH.slice(0, 16)}`);
 
-const run = (file: string, args: string[] = []) => spawnSync(TSX, [join(ROOT, file), ...args], { cwd: ROOT, env: ENV, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
+const run = (file: string, args: string[] = []) => spawnSync(file.endsWith(".js") ? process.execPath : TSX, [join(ROOT, file), ...args], { cwd: ROOT, env: ENV, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
 
 afterAll(() => rmSync(MEMO, { recursive: true, force: true }));
 
@@ -30,7 +30,7 @@ describe("データローダ（別プロセス）", () => {
 
   it("作業ログ明細: 1 回目で全契約分を作り置きし、2 回目はそれを読む（同じ内容）", () => {
     rmSync(MEMO, { recursive: true, force: true });
-    const file = "src/data/worklogs/[contractId].json.ts";
+    const file = "src/data/worklogs/[contractId].json.js";
     const first = run(file, ["--contractId=C001"]);
     expect(first.status, first.stderr).toBe(0);
     expect(existsSync(join(MEMO, ".complete"))).toBe(true);
@@ -52,7 +52,7 @@ describe("データローダ（別プロセス）", () => {
   }, 180_000);
 
   it("引数が無いと非 0 で終わり、標準出力は空", () => {
-    const r = run("src/data/worklogs/[contractId].json.ts");
+    const r = run("src/data/worklogs/[contractId].json.js");
     expect(r.status).not.toBe(0);
     expect(r.stdout).toBe("");
   }, 60_000);

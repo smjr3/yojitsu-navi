@@ -178,8 +178,10 @@ test.describe("L1 単価なしは赤にしない", () => {
 });
 
 test.describe("L2 / L3 顧客詳細", () => {
-  test("担当チーム行 → 契約一覧: 顧客キーで厳密に絞り、件数が行の契約数と一致する（全顧客・全行）", async ({ page }) => {
-    for (const g of groups) {
+  test("担当チーム行 → 契約一覧: 顧客キーで厳密に絞り、件数が行の契約数と一致する（担当チームの多い顧客から 8 社・全行）", async ({ page }) => {
+    // 全顧客を回すと 5 倍のデータで数分かかるため、担当チームが多い（＝行の多い）顧客から選ぶ
+    const sample = [...groups].sort((a, b) => b.contractIds.length - a.contractIds.length || a.key.localeCompare(b.key)).slice(0, 8);
+    for (const g of sample) {
       await gotoPage(page, `/customer?key=${encodeURIComponent(g.key)}&unit=yen`);
       const teams = tableByCaption(page, "担当チーム別");
       if ((await teams.count()) === 0) continue;

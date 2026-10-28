@@ -9,7 +9,7 @@ src/
   data/
     _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)）
     model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（540 KB / ダミーデータ）
-    worklogs/[contractId].json.ts 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
+    worklogs/[contractId].json.js 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
   components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む）
     format.js      金額・割合・時間・月・日時の書式。単位 "m"（百万円）| "k"（千円）| "yen" を core の MoneyUnit に変換
@@ -82,7 +82,7 @@ src/
 ## データの流れ
 
 1. `npm run build` → `src/data/model.json.ts` が `data/` を読み `buildModel()`。`asOf` は `YOJITSU_AS_OF`（CI で固定したい場合）か今日（JST）。
-2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.ts` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
+2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.js` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
 3. 画面は `breakdown.js` の `fetchWorklogs(id)` で必要なときだけ取得する。ビルド済みサイトでは `/data/worklogs/<id>.json`、`npm run dev` では `/_file/data/worklogs/<id>.json` で配信されるので順に試す（プレビューでは最初の 404 がコンソールに出るが動作に影響なし）。契約 ID はパスに入れる前に `encodeURIComponent` する（`dynamicPaths` 側も同じ。ローダは `decodeURIComponent` で元に戻す）ので、`/` や空白を含む ID でも列挙から漏れない。Excel のファイル名も `safeFileName()` で `\ / : * ? " < > |` を `_` に置換する。
 4. 生成物の大きさ（ダミーデータ）: `model.json` 540 KB、`dataset-issues.json` 6 KB、作業ログ明細は契約ごとに 1 KB〜650 KB（合計約 4.3 MB、`dist/` 全体 6.3 MB）。
 

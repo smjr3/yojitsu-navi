@@ -120,9 +120,10 @@ test.describe("顧客一覧 /customers", () => {
     await go(page, "/customers");
     const table = tableByCaption(page, "顧客一覧");
     const search = page.locator("#yn-f-text");
+    // 「青葉」は青葉物流と医療法人社団 青葉会の両方に部分一致する
     await search.fill("青葉");
-    await expect.poll(async () => (await rowKeys(table)).length).toBe(1);
-    expect(await rowKeys(table)).toEqual([customerKey("青葉物流")]);
+    await expect.poll(async () => (await rowKeys(table)).length).toBe(2);
+    expect((await rowKeys(table)).sort()).toEqual([customerKey("青葉物流"), customerKey("医療法人社団 青葉会")].sort());
     // 法人格つき・全角英数でも同じ（normalizeName）
     await search.fill("株式会社青葉物流");
     await expect.poll(async () => (await rowKeys(table)).length).toBe(1);

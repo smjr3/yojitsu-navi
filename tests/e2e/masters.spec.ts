@@ -275,9 +275,9 @@ async function staleDraftWithConflict(page: Page): Promise<void> {
   await addRate(page, "部長", "14000", "2026-11");
   await page.evaluate((k) => {
     const draft = JSON.parse(localStorage.getItem(k)!);
-    // 下書きを作ったときの元データでは課長が 9900 だった（= その後、他の人が 10000 に変えた）。コミットも古い
+    // 下書きを作ったときの元データでは課長が 9877 だった（= その後、他の人が 10000 に変えた）。コミットも古い
     draft.files.rates.baseCommitId = "0".repeat(40);
-    draft.files.rates.baseText = draft.files.rates.baseText.replace("課長,10000,", "課長,9900,");
+    draft.files.rates.baseText = draft.files.rates.baseText.replace("課長,10000,", "課長,9877,");
     localStorage.setItem(k, JSON.stringify(draft));
     sessionStorage.setItem("__e2e_keep_draft__", "1");
   }, DRAFT_KEY);
@@ -303,7 +303,7 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   const conflict = page.locator("fieldset.yn-me-conflict");
   await expect(conflict).toHaveCount(1);
   await expect(conflict.locator("legend")).toContainText("課長: あなたも他の人も、この行を変更しました");
-  await expect(conflict).toContainText("下書きを作ったときの行: 課長 ・ 9900 ・ 2025-04");
+  await expect(conflict).toContainText("下書きを作ったときの行: 課長 ・ 9877 ・ 2025-04");
   await expect(conflict.getByRole("radio", { name: /自分の下書きを残す: 時間単価（円）: 10500/ })).toBeVisible();
   await expect(conflict.getByRole("radio", { name: /最新のデータを残す: 時間単価（円）: 10000/ })).toBeVisible();
   // 選ばずに復元 → 止めて案内し、最初の未選択の行へフォーカス
@@ -324,11 +324,11 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   await expect(diff).toContainText("時間単価（円）: 10000 → 10500");
   await expect(diff).toContainText("藤井 隆");
   await expect(diff).toContainText("部長 ・ 14000 ・ 2026-11");
-  await expect(diff).not.toContainText("9900");
+  await expect(diff).not.toContainText("9877");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
   expect(text).toBe(expectedRates(true));
-  expect(text).not.toContain("9900");
+  expect(text).not.toContain("9877");
   // 元データのコミットを示し、GitLab 側が新しければアップロードしないよう案内
   await expect(page.locator(".yn-me-steps")).toContainText("アップロードせずに");
   if (PAYLOAD.files.rates.lastCommitId) await expect(page.locator('[data-base-commit="rates"]')).toContainText(PAYLOAD.files.rates.lastCommitId.slice(0, 8));
@@ -572,7 +572,7 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
 
   const t = page.locator("table.yn-me-table");
   await expect(t.locator("caption")).toHaveCount(1);
-  await expect(t.locator("thead th[scope=col]")).toHaveCount(10);
+  await expect(t.locator("thead th[scope=col]")).toHaveCount(11); // 在籍区分（status）列を含む
   await expect(t.locator("tbody tr.yn-me-row").first().locator("th[scope=row]")).toHaveCount(1);
   // 行の操作ボタンは「何の行か」を名前に含む
   await expect(t.locator("tbody tr.yn-me-row").first().getByRole("button", { name: /M001 の行を修正/ })).toBeVisible();
