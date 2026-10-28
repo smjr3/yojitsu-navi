@@ -2,6 +2,7 @@
  * 金額・割合・時間の表示（SPEC §12）— ja-JP ロケール、null/NaN/Infinity は "—"
  */
 import type { MoneyUnit } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 export const EMPTY_VALUE = "—";
 
@@ -24,9 +25,9 @@ export function roundToUnit(yen: number, unit: MoneyUnit = "yen"): number {
 /** 円の整数を "1,234,567円"、"1,235千円"（Math.round(yen/1000)）、"1.2百万円"（小数1桁）で表示 */
 export function formatYen(yen: number | null | undefined, unit: MoneyUnit = "yen"): string {
   if (!isDisplayable(yen)) return EMPTY_VALUE;
-  if (unit === "millionYen") return `${fractionFormat(1).format(roundToUnit(yen, unit))}百万円`;
-  if (unit === "thousandYen") return `${intFormat.format(roundToUnit(yen, unit))}千円`;
-  return `${intFormat.format(roundToUnit(yen, unit))}円`;
+  if (unit === "millionYen") return fmt(T.numbers.millionYen, { value: fractionFormat(1).format(roundToUnit(yen, unit)) });
+  if (unit === "thousandYen") return fmt(T.numbers.thousandYen, { value: intFormat.format(roundToUnit(yen, unit)) });
+  return fmt(T.numbers.yen, { value: intFormat.format(roundToUnit(yen, unit)) });
 }
 
 /** 割合（1.034 → "103.4%"）。既定は小数 1 桁 */
@@ -44,5 +45,5 @@ export function formatHours(hours: number | null | undefined): string {
 /** 人月（1.234 → "1.23人月"）。小数 2 桁 */
 export function formatPersonMonths(personMonths: number | null | undefined, digits = 2): string {
   if (!isDisplayable(personMonths)) return EMPTY_VALUE;
-  return `${fractionFormat(digits).format(personMonths)}人月`;
+  return fmt(T.numbers.personMonths, { value: fractionFormat(digits).format(personMonths) });
 }

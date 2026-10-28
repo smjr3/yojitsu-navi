@@ -4,6 +4,7 @@
 import { isValidISODate, monthOfDate } from "./calendar.js";
 import { normalizeName } from "./normalize.js";
 import type { Contract, ISODate, MappingRule, UnmappedWorklogGroup, Warning, Worklog, YearMonth } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 export type UnmappedReason = UnmappedWorklogGroup["reason"];
 
@@ -58,7 +59,7 @@ function buildRuleIndex(
       target.hasUnknownContract = true;
       warnings.push({
         code: "MAPPING_UNKNOWN_CONTRACT",
-        message: `マッピング ${i + 1} 行目（${rule.worklogCustomerName} / ${rule.worklogProjectName}）の契約ID ${rule.contractId} は存在しません`,
+        message: fmt(T.calcWarnings.mappingUnknownContract, { row: i + 1, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId }),
         ref: { row: i + 1, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
       });
       return;
@@ -189,7 +190,7 @@ export function mapWorklogs(
   if (excludedCount > 0) {
     warnings.push({
       code: "EXCLUDED_NO_CUSTOMER",
-      message: `顧客名が空の作業実績 ${excludedCount} 件（${excludedHours} 時間）を集計から除外しました`,
+      message: fmt(T.calcWarnings.excludedNoCustomer, { count: excludedCount, hours: excludedHours }),
       hours: excludedHours,
       count: excludedCount,
     });
@@ -198,7 +199,7 @@ export function mapWorklogs(
     const ids = [...acc.contractIds].sort();
     warnings.push({
       code: "MAPPING_AMBIGUOUS",
-      message: `「${acc.customerName} / ${acc.projectName}」の作業実績 ${acc.count} 件（${acc.hours} 時間）は複数の契約（${ids.join(", ")}）に該当するため、契約ID昇順で最初の ${acc.chosen} に紐付けました`,
+      message: fmt(T.calcWarnings.mappingAmbiguous, { customer: acc.customerName, project: acc.projectName, count: acc.count, hours: acc.hours, candidates: ids.join(", "), chosen: acc.chosen }),
       ref: { customerName: acc.customerName, projectName: acc.projectName, contractId: acc.chosen, candidates: ids.join(",") },
       hours: acc.hours,
       count: acc.count,
@@ -208,7 +209,7 @@ export function mapWorklogs(
   for (const g of unmapped) {
     warnings.push({
       code: "UNMAPPED_WORKLOG",
-      message: `「${g.customerName} / ${g.projectName}」の作業実績 ${g.count} 件（${g.hours} 時間、${g.firstDate}〜${g.lastDate}）が契約に紐付いていません（${unmappedReasonLabel(g.reason)}）`,
+      message: fmt(T.calcWarnings.unmappedWorklog, { customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: unmappedReasonLabel(g.reason) }),
       ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason },
       hours: g.hours,
       count: g.count,
@@ -222,10 +223,10 @@ export function mapWorklogs(
 export function unmappedReasonLabel(reason: UnmappedReason): string {
   switch (reason) {
     case "NO_RULE":
-      return "マッピングルールなし";
+      return T.calcWarnings.reasonNoRule;
     case "OUT_OF_PERIOD":
-      return "契約期間外";
+      return T.calcWarnings.reasonOutOfPeriod;
     case "UNKNOWN_CONTRACT":
-      return "存在しない契約ID";
+      return T.calcWarnings.reasonUnknownContract;
   }
 }
