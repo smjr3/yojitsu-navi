@@ -13,7 +13,8 @@
  *
  * 環境変数: WORKLOG_API_TOKEN（http アダプタ）、WORKLOG_ADAPTER（アダプタ名の上書き）
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { writeFilesAtomic } from "./lib/atomic.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Worklog, YearMonth } from "../src/core/types.js";
@@ -111,17 +112,20 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
   const dir = worklogDir(opts.rootDir, config);
   mkdirSync(dir, { recursive: true });
   const rowsByMonth: Record<YearMonth, number> = {};
+  const outputs: Array<{ path: string; data: string }> = [];
   for (const ym of months) {
     const list = sortWorklogs(byMonth.get(ym) ?? []);
-    writeFileSync(join(dir, `${ym}.csv`), formatWorklogCsv(list));
+    outputs.push({ path: join(dir, `${ym}.csv`), data: formatWorklogCsv(list) });
     rowsByMonth[ym] = list.length;
-    log(`[fetch] ${ym}.csv を書き込み (${list.length} 行)`);
   }
 
   const fetchedAt = now().toISOString();
   const prev = readWorklogMeta(dir);
   const meta = { ...prev, fetchedAt, adapter: adapter.name, refetchedMonths: months };
-  writeFileSync(join(dir, "_meta.json"), JSON.stringify(meta, null, 2) + "\n");
+  outputs.push({ path: join(dir, "_meta.json"), data: JSON.stringify(meta, null, 2) + "\n" });
+  // 全月を書けたときだけまとめて差し替える（途中で失敗しても、一部の月だけ新しい・空のファイルが残る状態にしない）
+  writeFilesAtomic(outputs);
+  for (const ym of months) log(`[fetch] ${ym}.csv を書き込み (${rowsByMonth[ym]} 行)`);
   return { months, rowsByMonth, adapter: adapter.name, fetchedAt };
 }
 

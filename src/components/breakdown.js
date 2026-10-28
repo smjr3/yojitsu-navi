@@ -151,7 +151,8 @@ export function fetchWorklogs(contractId) {
     const p = (async () => {
       let lastStatus = 0;
       for (const url of candidates) {
-        const res = await fetch(url);
+        // 再公開のたびに中身が変わるがファイル名は同じなので、ブラウザのキャッシュを使う前に必ずサーバーに確認する（変わっていなければ 304）
+        const res = await fetch(url, { cache: "no-cache" });
         if (res.ok) return res.json();
         lastStatus = res.status;
         if (res.status !== 404) break;

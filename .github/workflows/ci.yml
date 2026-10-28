@@ -5,10 +5,32 @@
 
 name: CI
 
+# 説明文（*.md）・docs/・スクリーンショットだけの変更では動かさない（Actions の分数を使わない）。
+# ただし src/ の *.md は画面そのもの（Observable Framework のページ）なので必ず動かす。
+# GitHub の paths-ignore は「除外の中の例外」を書けないため、paths に「全部 → 除外 → 例外」の順で書いている（後の行が優先）。
+# push と pull_request の一覧は同じにしておく。迷うファイルは動かす側に倒す（除外に足すのは、テスト・ビルド・画面に一切影響しないものだけ）。
 on:
   push:
     branches: ["**"]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!.gitlab-ci.yml"
+      - "!.claude/**"
+      - "!LICENSE"
+      - "!.gitignore"
+      - "src/**"
   pull_request:
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!.gitlab-ci.yml"
+      - "!.claude/**"
+      - "!LICENSE"
+      - "!.gitignore"
+      - "src/**"
 
 concurrency:
   group: ci-${{ github.ref }}

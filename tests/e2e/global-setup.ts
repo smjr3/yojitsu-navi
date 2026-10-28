@@ -3,7 +3,7 @@
  * E2E_SKIP_BUILD=1 なら既存の dist/ をそのまま使う（ローカルで繰り返すとき用）。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AS_OF, ROOT_DIR } from "./constants.js";
 
@@ -15,9 +15,7 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
   if (skip) console.log("[e2e] E2E_SKIP_BUILD=1 ですが dist/index.html が無いのでビルドします");
-  // データローダのキャッシュが残っていると、別の計算基準日で作った model.json を再利用してしまう
-  // （CI で「ビルド」ステップの後に E2E を走らせると asOf が今日になる）ので必ず消す
-  rmSync(join(ROOT_DIR, "src", ".observablehq", "cache"), { recursive: true, force: true });
+  // 別の計算基準日・別のデータで作ったローダのキャッシュは、npm run build（scripts/build.ts）が入力の指紋を見て自動で捨てる
   console.log(`[e2e] YOJITSU_AS_OF=${AS_OF} npm run build`);
   const started = Date.now();
   execFileSync("npm", ["run", "build", "--silent"], {
