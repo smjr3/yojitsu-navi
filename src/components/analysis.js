@@ -3,6 +3,7 @@
  *
  * 計算そのものはコアに任せ、ここでは「どの契約を・どの期間で」を決めるだけ。
  */
+import { T } from "../i18n/index.js";
 import {
   UNASSIGNED_TEAM_ID,
   UNASSIGNED_TEAM_LABEL,
@@ -50,7 +51,7 @@ export function treeAt(model, month) {
 /** チーム名（未設定・不明も含む） */
 export function teamName(model, teamId, tree = model.teamTree) {
   if (teamId === UNASSIGNED_TEAM_ID) return UNASSIGNED_TEAM_LABEL;
-  if (teamId === "" || teamId === null || teamId === undefined) return "全体";
+  if (teamId === "" || teamId === null || teamId === undefined) return T.common.all;
   const node = tree[teamId] ?? model.teamTree[teamId];
   if (node) return node.name;
   const rec = model.teams.find((t) => t.teamId === teamId);
@@ -72,7 +73,7 @@ export function scopeFor(model, state) {
   const treeMonth = treeMonthFor(model, period);
   const { tree } = treeAt(model, treeMonth);
   let contractIds;
-  let label = "全体";
+  let label = T.common.all;
   let teamMissing = false;
   if (state.team) {
     contractIds = contractsForTeam(model, state.team, tree).map((c) => c.contractId);

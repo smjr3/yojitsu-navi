@@ -9,6 +9,7 @@ import { isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./cal
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -31,22 +32,22 @@ function validateContracts(dataset: Dataset, push: IssueSink): void {
   dataset.contracts.forEach((c, i) => {
     const file = "contracts.csv";
     const row = rowOf(i);
-    if (c.contractId === "") push({ severity: "error", code: "CONTRACT_ID_EMPTY", message: `${file} ${row} 行目: 契約IDが空です`, file, row });
+    if (c.contractId === "") push({ severity: "error", code: "CONTRACT_ID_EMPTY", message: fmt(T.checks.contractIdEmpty, { file, row }), file, row });
     if (seen.has(c.contractId)) {
-      push({ severity: "error", code: "DUPLICATE_CONTRACT_ID", message: `${file} ${row} 行目: 契約ID ${c.contractId} が重複しています`, file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "DUPLICATE_CONTRACT_ID", message: fmt(T.checks.duplicateContractId, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
     }
     seen.add(c.contractId);
-    if (!isValidYearMonth(c.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: start_month の形式が不正です: ${c.startMonth}`, file, row, ref: { contractId: c.contractId } });
-    if (!isValidYearMonth(c.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: end_month の形式が不正です: ${c.endMonth}`, file, row, ref: { contractId: c.contractId } });
+    if (!isValidYearMonth(c.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.contractStartMonthInvalid, { file, row, value: c.startMonth }), file, row, ref: { contractId: c.contractId } });
+    if (!isValidYearMonth(c.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.contractEndMonthInvalid, { file, row, value: c.endMonth }), file, row, ref: { contractId: c.contractId } });
     if (isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && c.startMonth > c.endMonth) {
-      push({ severity: "error", code: "CONTRACT_PERIOD_INVERTED", message: `${file} ${row} 行目: 契約 ${c.contractId} の開始月 ${c.startMonth} が終了月 ${c.endMonth} より後です`, file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_PERIOD_INVERTED", message: fmt(T.checks.contractPeriodInverted, { file, row, contractId: c.contractId, from: c.startMonth, to: c.endMonth }), file, row, ref: { contractId: c.contractId } });
     }
     if (typeof c.totalAmount !== "number" || !Number.isFinite(c.totalAmount)) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が数値ではありません`, file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotNumber, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
     } else if (c.totalAmount < 0) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が負です: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNegative, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
     } else if (!Number.isInteger(c.totalAmount)) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount は円の整数で入力してください: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotInteger, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
     }
   });
 }
@@ -56,7 +57,7 @@ function validateMappings(dataset: Dataset, contractIds: ReadonlySet<string>, pu
     const file = "mapping.csv";
     const row = rowOf(i);
     if (!contractIds.has(m.contractId)) {
-      push({ severity: "error", code: "MAPPING_UNKNOWN_CONTRACT", message: `${file} ${row} 行目: 契約ID ${m.contractId} は contracts.csv に存在しません`, file, row, ref: { contractId: m.contractId } });
+      push({ severity: "error", code: "MAPPING_UNKNOWN_CONTRACT", message: fmt(T.checks.mappingUnknownContract, { file, row, contractId: m.contractId }), file, row, ref: { contractId: m.contractId } });
     }
   });
 }
@@ -66,14 +67,14 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   const monthlyTotal = new Map<string, { memberId: string; month: YearMonth; total: number; rows: number[] }>();
   dataset.assignments.forEach((a, i) => {
     const row = rowOf(i);
-    if (!memberIds.has(a.memberId)) push({ severity: "error", code: "ASSIGNMENT_UNKNOWN_MEMBER", message: `${file} ${row} 行目: メンバーID ${a.memberId} は members.csv に存在しません`, file, row, ref: { memberId: a.memberId } });
-    if (!contractIds.has(a.contractId)) push({ severity: "error", code: "ASSIGNMENT_UNKNOWN_CONTRACT", message: `${file} ${row} 行目: 契約ID ${a.contractId} は contracts.csv に存在しません`, file, row, ref: { contractId: a.contractId } });
+    if (!memberIds.has(a.memberId)) push({ severity: "error", code: "ASSIGNMENT_UNKNOWN_MEMBER", message: fmt(T.checks.assignmentUnknownMember, { file, row, memberId: a.memberId }), file, row, ref: { memberId: a.memberId } });
+    if (!contractIds.has(a.contractId)) push({ severity: "error", code: "ASSIGNMENT_UNKNOWN_CONTRACT", message: fmt(T.checks.assignmentUnknownContract, { file, row, contractId: a.contractId }), file, row, ref: { contractId: a.contractId } });
     const monthsOk = isValidYearMonth(a.startMonth) && isValidYearMonth(a.endMonth);
-    if (!isValidYearMonth(a.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: start_month の形式が不正です: ${a.startMonth}`, file, row });
-    if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: end_month の形式が不正です: ${a.endMonth}`, file, row });
-    if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: `${file} ${row} 行目: 開始月 ${a.startMonth} が終了月 ${a.endMonth} より後です`, file, row });
+    if (!isValidYearMonth(a.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentStartMonthInvalid, { file, row, value: a.startMonth }), file, row });
+    if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentEndMonthInvalid, { file, row, value: a.endMonth }), file, row });
+    if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: fmt(T.checks.assignmentPeriodInverted, { file, row, from: a.startMonth, to: a.endMonth }), file, row });
     if (!Number.isFinite(a.allocation) || a.allocation < 0 || a.allocation > 1) {
-      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: `${file} ${row} 行目: allocation は 0〜1 で指定してください: ${String(a.allocation)}`, file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
+      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: fmt(T.checks.allocationOutOfRange, { file, row, value: String(a.allocation) }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
       return;
     }
     if (!monthsOk) return;
@@ -89,7 +90,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   for (const acc of monthlyTotal.values()) {
     // 浮動小数の誤差（0.3+0.7 など）を許容
     if (acc.total > 1 + 1e-9) {
-      push({ severity: "error", code: "ALLOCATION_OVER_1", message: `${file}: メンバー ${acc.memberId} の ${acc.month} の allocation 合計が 1.0 を超えています（${acc.total}、行 ${acc.rows.join(", ")}）`, file, row: acc.rows[0] as number, ref: { memberId: acc.memberId, month: acc.month, total: acc.total } });
+      push({ severity: "error", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: acc.memberId, month: acc.month, total: acc.total, rows: acc.rows.join(", ") }), file, row: acc.rows[0] as number, ref: { memberId: acc.memberId, month: acc.month, total: acc.total } });
     }
   }
 }
@@ -98,10 +99,10 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: Iss
   const file = "masters/teams.csv";
   dataset.teams.forEach((t, i) => {
     const row = rowOf(i);
-    if (t.teamId === "") push({ severity: "error", code: "TEAM_ID_EMPTY", message: `${file} ${row} 行目: team_id が空です`, file, row });
-    if (!isValidYearMonth(t.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: effective_from の形式が不正です: ${t.effectiveFrom}`, file, row });
+    if (t.teamId === "") push({ severity: "error", code: "TEAM_ID_EMPTY", message: fmt(T.checks.teamIdEmpty, { file, row }), file, row });
+    if (!isValidYearMonth(t.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.teamEffectiveFromInvalid, { file, row, value: t.effectiveFrom }), file, row });
     if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
-      push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: `${file} ${row} 行目: 親チーム ${t.parentTeamId} は存在しません`, file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
+      push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: fmt(T.checks.teamUnknownParent, { file, row, parentTeamId: t.parentTeamId }), file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
     }
   });
   // 循環: effective_from の各時点の組織で検出する
@@ -121,14 +122,14 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
   const file = "masters/members.csv";
   dataset.members.forEach((m, i) => {
     const row = rowOf(i);
-    if (m.memberId === "") push({ severity: "error", code: "MEMBER_ID_EMPTY", message: `${file} ${row} 行目: member_id が空です`, file, row });
+    if (m.memberId === "") push({ severity: "error", code: "MEMBER_ID_EMPTY", message: fmt(T.checks.memberIdEmpty, { file, row }), file, row });
     if (m.kind !== "employee" && m.kind !== "partner") {
-      push({ severity: "error", code: "MEMBER_KIND_INVALID", message: `${file} ${row} 行目: メンバー ${m.memberId} の区分は employee か partner で指定してください: ${String(m.kind)}`, file, row, ref: { memberId: m.memberId } });
+      push({ severity: "error", code: "MEMBER_KIND_INVALID", message: fmt(T.checks.memberKindInvalid, { file, row, memberId: m.memberId, value: String(m.kind) }), file, row, ref: { memberId: m.memberId } });
     }
     if (m.teamId !== null && m.teamId !== "" && !teamIds.has(m.teamId)) {
-      push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: `${file} ${row} 行目: メンバー ${m.memberId} のチーム ${m.teamId} は存在しません`, file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
+      push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: m.memberId, teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
     }
-    if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: effective_from の形式が不正です: ${m.effectiveFrom}`, file, row });
+    if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
   });
 }
 
@@ -136,13 +137,13 @@ function validateRates(dataset: Dataset, push: IssueSink): void {
   const file = "masters/rates.csv";
   dataset.rates.forEach((r, i) => {
     const row = rowOf(i);
-    if (r.key === "") push({ severity: "error", code: "RATE_KEY_EMPTY", message: `${file} ${row} 行目: key が空です`, file, row });
+    if (r.key === "") push({ severity: "error", code: "RATE_KEY_EMPTY", message: fmt(T.checks.rateKeyEmpty, { file, row }), file, row });
     if (typeof r.hourlyRate !== "number" || !Number.isFinite(r.hourlyRate)) {
-      push({ severity: "error", code: "RATE_INVALID", message: `${file} ${row} 行目: ${r.key} の hourly_rate が数値ではありません`, file, row, ref: { key: r.key } });
+      push({ severity: "error", code: "RATE_INVALID", message: fmt(T.checks.rateNotNumber, { file, row, key: r.key }), file, row, ref: { key: r.key } });
     } else if (r.hourlyRate < 0) {
-      push({ severity: "error", code: "RATE_INVALID", message: `${file} ${row} 行目: ${r.key} の hourly_rate が負です: ${r.hourlyRate}`, file, row, ref: { key: r.key } });
+      push({ severity: "error", code: "RATE_INVALID", message: fmt(T.checks.rateNegative, { file, row, key: r.key, value: r.hourlyRate }), file, row, ref: { key: r.key } });
     }
-    if (!isValidYearMonth(r.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: effective_from の形式が不正です: ${r.effectiveFrom}`, file, row });
+    if (!isValidYearMonth(r.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.rateEffectiveFromInvalid, { file, row, value: r.effectiveFrom }), file, row });
   });
 }
 
@@ -150,7 +151,7 @@ function validateHolidays(dataset: Dataset, push: IssueSink): void {
   const file = "holidays.csv";
   dataset.holidays.forEach((h, i) => {
     const row = rowOf(i);
-    if (!isValidISODate(h.date)) push({ severity: "error", code: "INVALID_DATE", message: `${file} ${row} 行目: date の形式が不正です: ${h.date}`, file, row });
+    if (!isValidISODate(h.date)) push({ severity: "error", code: "INVALID_DATE", message: fmt(T.checks.holidayDateInvalid, { file, row, value: h.date }), file, row });
   });
 }
 
@@ -163,17 +164,17 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     if (!isValidISODate(w.date)) invalidDates++;
     if (!Number.isFinite(w.hours) || w.hours <= 0) invalidHours++;
   }
-  if (invalidDates > 0) push({ severity: "warning", code: "WORKLOG_INVALID_DATE", message: `${file}: 日付が不正な作業実績 ${invalidDates} 件を無視します`, file, ref: { count: invalidDates } });
-  if (invalidHours > 0) push({ severity: "warning", code: "WORKLOG_INVALID_HOURS", message: `${file}: hours が 0 以下か数値でない作業実績 ${invalidHours} 件を無視します`, file, ref: { count: invalidHours } });
+  if (invalidDates > 0) push({ severity: "warning", code: "WORKLOG_INVALID_DATE", message: fmt(T.checks.worklogInvalidDate, { file, count: invalidDates }), file, ref: { count: invalidDates } });
+  if (invalidHours > 0) push({ severity: "warning", code: "WORKLOG_INVALID_HOURS", message: fmt(T.checks.worklogInvalidHours, { file, count: invalidHours }), file, ref: { count: invalidHours } });
 
   // 紐付けは妥当な契約のみを対象にする（重複・不正契約はエラーで別途報告済み）
   const validContracts = dataset.contracts.filter((c, i, all) => contractInvalidReason(c) === null && all.findIndex((x) => x.contractId === c.contractId) === i);
   const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, validContracts);
   for (const g of mapping.unmapped) {
-    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: `${file}: 「${g.customerName} / ${g.projectName}」の作業実績 ${g.count} 件（${g.hours} 時間、${g.firstDate}〜${g.lastDate}）が契約に紐付いていません（${g.reason}）`, file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
+    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
   }
   if (mapping.excludedHours > 0) {
-    push({ severity: "warning", code: "EXCLUDED_NO_CUSTOMER", message: `${file}: 顧客名が空の作業実績 ${mapping.excludedHours} 時間を除外します`, file, ref: { hours: mapping.excludedHours } });
+    push({ severity: "warning", code: "EXCLUDED_NO_CUSTOMER", message: fmt(T.checks.excludedNoCustomer, { file, hours: mapping.excludedHours }), file, ref: { hours: mapping.excludedHours } });
   }
 
   // 単価なし・未知メンバー（紐付いた実績のみ対象。メンバーID・月で集約）
@@ -194,10 +195,10 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     else missing.set(key, { memberId: a.worklog.memberId, month, hours: a.worklog.hours });
   }
   for (const [memberId, hours] of unknown) {
-    push({ severity: "warning", code: "UNKNOWN_MEMBER", message: `${file}: メンバー ${memberId} は members.csv に存在しません（${hours} 時間）`, file, ref: { memberId, hours } });
+    push({ severity: "warning", code: "UNKNOWN_MEMBER", message: fmt(T.checks.unknownMember, { file, memberId, hours }), file, ref: { memberId, hours } });
   }
   for (const m of missing.values()) {
-    push({ severity: "warning", code: "RATE_MISSING", message: `${file}: ${m.month} のメンバー ${m.memberId} の時間単価がありません（${m.hours} 時間）`, file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
+    push({ severity: "warning", code: "RATE_MISSING", message: fmt(T.checks.rateMissing, { file, month: m.month, memberId: m.memberId, hours: m.hours }), file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
   }
 }
 
