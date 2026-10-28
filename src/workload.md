@@ -21,7 +21,7 @@ import { statTile, kpiRow } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { customerHref } from "./components/customers.js";
 import { formatHours, formatPercent, monthJa, periodJa } from "./components/format.js";
-import { pm, workHoursChart, workHoursLegend, workSeriesTable, workTaskSection, workTaskSpec } from "./components/work.js";
+import { pm, workGroupChart, workHoursChart, workHoursLegend, workSeriesTable, workTaskSection, workTaskSpec } from "./components/work.js";
 ```
 
 ```js
@@ -185,6 +185,13 @@ if (vm) {
   const groups = aggregateWork(model, vm.rows, { period, axis, tree: vm.scope.tree, unassignedLabel: axis === "customer" ? T.numbers.noCustomerName : T.members.noTeam });
   const label = AXES.find((a) => a.id === axis)?.label ?? "";
   display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) })));
+  // 分布のグラフ（チームは末端の組織だけ。上位は配下の合計で二重になるため）
+  const chartGroups = axis === "team" ? groups.filter((g) => !g.hasChildren) : groups;
+  display(html`<figure class="yn-card yn-chart-card">
+    ${workHoursLegend(dark)}
+    ${resize((width) => workGroupChart({ groups: chartGroups, config: cfg, dark, width, ariaLabel: fmt(T.work.distAriaAxis, { axis: label }) }))}
+    ${chartGroups.length > 20 ? html`<p class="yn-note">${fmt(T.work.distTrimmed, { n: 20, total: chartGroups.length })}</p>` : null}
+  </figure>`);
   const pmCol = (key, labelText, get, extra = {}) => ({
     key,
     label: labelText,

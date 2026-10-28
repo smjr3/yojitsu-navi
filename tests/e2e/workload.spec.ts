@@ -47,6 +47,12 @@ test.describe("工数 /workload", () => {
     const table = tableByCaption(page, "所属チームごとの工数");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(groups.length);
+    // 分布のグラフ: 末端の組織だけを並べる（上位は配下の合計で二重になるため）
+    const chart = page.locator('[aria-label="所属チームごとの工数の分布（契約内と契約外の人月の横積み上げ棒）"]');
+    await expect(chart).toBeVisible();
+    const leaves = groups.filter((g) => !g.hasChildren).map((g) => g.label);
+    for (const name of leaves) await expect(chart.locator("text", { hasText: name }).first()).toBeAttached();
+    await expect(chart.locator("text", { hasText: "ソリューション事業本部" })).toHaveCount(0);
     for (const g of groups) {
       const row = table.locator(`tbody tr[data-key="${g.key}"]`);
       expect(await cellText(row, col(h, "契約内"))).toBe(pmText(g.totals.contractHours));

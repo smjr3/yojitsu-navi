@@ -192,3 +192,60 @@ export function workSeriesTable({ series, config, exportName }) {
   ];
   return dataTable({ columns, rows: series.map((p) => ({ ...p, key: p.month })), unit: "yen", caption: T.work.seriesCaption, exportName, sort: { key: "month", dir: "asc" } });
 }
+
+/**
+ * 工数の分布（グループごとに契約内・契約外の人月を横に積み上げ）。groups は core の aggregateWork() の行。
+ * チーム軸は末端の組織だけ（上位は配下の合計なので並べると二重になる）。行が多いときは上位 maxRows 件。
+ */
+export function workGroupChart({ groups, config, dark = false, width = 640, maxRows = 20, ariaLabel }) {
+  const c = workColors(dark);
+  const std = config.standardHoursPerMonth;
+  const shown = groups.slice(0, maxRows);
+  if (shown.length === 0) return html`<div class="yn-chart-empty">${T.work.empty}</div>`;
+  const data = [];
+  for (const g of shown) {
+    data.push({ label: g.label, kind: "contract", pm: personMonths(g.totals.contractHours, std), g });
+    data.push({ label: g.label, kind: "outside", pm: personMonths(g.totals.outsideHours, std), g });
+  }
+  const longest = Math.max(...shown.map((g) => [...g.label].length));
+  const marginLeft = Math.min(Math.max(64, longest * 12 + 8), Math.round(width * 0.4));
+  const plot = Plot.plot({
+    width,
+    height: shown.length * 28 + 48,
+    marginLeft,
+    marginRight: 24,
+    marginTop: 24,
+    marginBottom: 24,
+    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / 12) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / 12) - 1).join("")}…` : s) },
+    x: { grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
+    marks: [
+      Plot.gridX({ stroke: c.grid, strokeOpacity: 1 }),
+      Plot.ruleX([0], { stroke: c.axis }),
+      Plot.barX(data, Plot.stackX({ y: "label", x: "pm", fill: "kind", order: ["contract", "outside"], insetTop: 4, insetBottom: 4 })),
+      Plot.tip(
+        shown,
+        Plot.pointerY({
+          y: "label",
+          x: (g) => personMonths(g.totals.totalHours, std),
+          anchor: "left",
+          dx: 6,
+          fill: c.surface,
+          stroke: c.axis,
+          fontSize: 12,
+          channels: {
+            [T.work.contract]: (g) => pm(g.totals.contractHours, config),
+            [T.work.outside]: (g) => pm(g.totals.outsideHours, config),
+            [T.work.colOutsideShare]: (g) => formatPercent(g.totals.outsideShare),
+            [T.work.colMembers]: (g) => fmt(T.work.peopleValue, { n: g.totals.memberCount }),
+          },
+          format: { x: false, y: false },
+        }),
+      ),
+    ],
+  });
+  plot.setAttribute("role", "img");
+  plot.setAttribute("aria-label", ariaLabel ?? T.work.distAria);
+  return plot;
+}
