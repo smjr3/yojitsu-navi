@@ -270,6 +270,9 @@ export default {
     teamUnknownLeader: "{file} {row} 行目: リーダー {leaderMemberId} は members.csv に存在しません",
     memberIdEmpty: "{file} {row} 行目: member_id が空です",
     memberKindInvalid: "{file} {row} 行目: メンバー {memberId} の区分は employee か partner で指定してください: {value}",
+    memberStatusInvalid: "{file} {row} 行目: メンバー {memberId} の在籍状態（status）は空（在籍）か「退職」で指定してください: {value}",
+    assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} に退職していますが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を退職の前月にしてください",
+    worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は退職済みですが、退職月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
@@ -932,6 +935,10 @@ export default {
     colKind: "区分",
     kindPartner: "パートナー",
     kindEmployee: "社員",
+    // 退職（§35）
+    chipLeft: "退職",
+    chipLeftTitle: "{month} に退職（この月から在籍していません）",
+    leftLastTeam: "退職（最後の所属: {team}）",
     varianceSub: "（計画−実績）",
     varianceExport: "差額（計画−実績）（円）",
     caption: "メンバー別の計画と実績",
@@ -1097,6 +1104,7 @@ export default {
     colSection: "課",
     colTeamId: "所属チーム",
     colEffectiveFrom: "適用開始月",
+    colStatus: "在籍",
     rates: "単価",
     colRateKey: "役職名 または メンバー",
     // アサインのメンバー欄（ID ではなく名前で選ぶ。§31）
@@ -1290,6 +1298,9 @@ export default {
     removedChip: "− 削除",
     undoDelete: "削除を取り消す",
     invalidValue: "（不正な値）",
+    statusActive: "在籍",
+    statusLeft: "退職",
+    statusHint: "「退職」の行の適用開始月から在籍しません（退職した月を入れます）",
     noneOption: "（なし）",
     choose: "選んでください",
     impact1: "過去の計算結果が変わります（影響:",
@@ -1310,6 +1321,7 @@ export default {
     validationOk: "編集後のデータは CI と同じ検証（データ検証）を通ります。",
     validationTitle: "検証",
     filesWithErrors: "エラーのあるファイル:",
+    filesWithRowWarnings: "行に警告のあるファイル:",
     worklogWarningsNote: "作業実績に関する警告（未紐付け・単価なし）はここでは調べません。保存後のビルドで「データ確認」画面に出ます。",
     diffChanged: "・ 変更",
     diffRemoved: "・ 削除",
@@ -1367,6 +1379,9 @@ export default {
 
   // ── 稼働計画（画面と、マスタ編集の「稼働計画」タブ） ─────────────────
   plan: {
+    // 退職（§35）
+    afterLeftChip: "退職後の計画 {n}か月",
+    afterLeftTitle: "退職した月以降にもアサインが残っています。終了月を退職の前月にしてください",
     lead: "リーダーが、組織のメンバー一人ひとりの稼働計画（どの案件に月何人月）を入れる画面です。人月でも時間でも入力でき、保存は人月に揃えます。中身はマスタ編集の「アサイン」と同じデータで、保存できるのはリーダー層（GitLab の Developer 以上）だけです。",
     tabLabel: "稼働計画",
     tabFile: "人 × 月の一覧",

@@ -191,10 +191,11 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
   await input.click();
   await input.fill("クラウド");
   const list = page.locator("#yn-me-f-member_id-listbox");
-  // クラウド運用チームの人だけ（所属で引ける）。ID は出さない
+  // 所属に「クラウド」を含む人だけ（所属で引ける。5 倍データでは公共クラウド運用チームなども当たる）。ID は出さない
   const options = list.locator('[role="option"]');
   await expect(options.first()).toBeVisible();
-  for (const t of await options.allTextContents()) expect(t).toContain("クラウド運用チーム");
+  for (const t of await options.allTextContents()) expect(t).toContain("クラウド");
+  expect((await options.allTextContents()).some((t) => t.includes("クラウド運用チーム"))).toBe(true);
   await expect(list).not.toContainText("M02");
   // ↓ で移動して Enter（森 大翔まで）
   const names = (await options.allTextContents()).map((t) => t.split("クラウド")[0]!.trim());

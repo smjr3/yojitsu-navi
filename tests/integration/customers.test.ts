@@ -44,11 +44,14 @@ describe("顧客別（ダミーデータ）", () => {
     }
   });
 
-  it("更新契約は同じ顧客に束なる（青葉物流 = C001 + C002）", () => {
+  it("更新契約は同じ顧客に束なる（青葉物流 = 倉庫管理の C001 + C002 ＋ 別チームの輸配送管理の契約）", () => {
     const groups = groupByCustomer(model.contracts.map((r) => r.contract));
     const aoba = groups.find((g) => g.key === customerKey("青葉物流"));
     expect(aoba?.label).toBe("青葉物流");
-    expect(aoba?.contractIds).toEqual(["C001", "C002"]);
+    const byProject = (p: string) => model.contracts.filter((r) => r.contract.customerName === "青葉物流" && r.contract.projectName === p).map((r) => r.contract.contractId);
+    expect(byProject("倉庫管理システム保守")).toEqual(["C001", "C002"]);
+    expect(byProject("輸配送管理システム保守").length).toBeGreaterThan(0);
+    expect(aoba?.contractIds).toEqual([...byProject("倉庫管理システム保守"), ...byProject("輸配送管理システム保守")].sort());
   });
 
   it("チームで絞ると、顧客の契約はそのチームの契約だけになり、合計はチームの合計に一致", () => {

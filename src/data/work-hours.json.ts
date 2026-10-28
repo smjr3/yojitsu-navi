@@ -3,7 +3,9 @@
  * 行数が多いので辞書＋配列に詰めて配る（画面側は decodeWorkRows で WorkRow[] に戻す）。
  */
 import { encodeWorkRows } from "../core/index.js";
-import { buildModelFromData } from "./_shared.js";
+import { buildModelFromData, buildStamp, emitJson } from "./_shared.js";
 
-const model = buildModelFromData();
-process.stdout.write(JSON.stringify({ asOf: model.meta.asOf, ...encodeWorkRows(model.workRows) }));
+emitJson(() => {
+  const model = buildModelFromData();
+  return { asOf: model.meta.asOf, ...encodeWorkRows(model.workRows), _build: buildStamp() };
+});

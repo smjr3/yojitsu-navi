@@ -109,6 +109,7 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 4. メンバーでない人（またはシークレットウィンドウ）で開き、GitLab のログイン画面または 404 になることを確認する。
 
 ローカルで同じビルドを試すときは `npm ci && npm run build` で `dist/` ができます。
+`pages` ジョブは公開前に `.gz` を並べるので、GitLab Pages は大きな JSON（数 MB）を gzip で配信します（ブラウザの開発者ツールで `content-encoding: gzip` を確認できます）。
 
 ## 困ったとき
 

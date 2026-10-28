@@ -20,7 +20,9 @@ export function placeNear(el, anchor, { width = 320, gap = 6, margin = 8 } = {})
   const h = el.offsetHeight;
   const below = r.bottom + gap;
   const above = r.top - gap - h;
-  el.style.top = `${below + h <= vh - margin ? below : above >= margin ? above : Math.max(margin, vh - margin - h)}px`;
+  const top = below + h <= vh - margin ? below : above >= margin ? above : vh - margin - h;
+  // 画面の高さが変わってセルが画面外に出たとき（下にも上にも入らないとき）も、必ず画面内に収める
+  el.style.top = `${Math.max(margin, Math.min(top, vh - margin - h))}px`;
 }
 
 export function planCellTooltip() {

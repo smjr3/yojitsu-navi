@@ -3,7 +3,7 @@
  *
  * 静的サーバは URL をデコードしてからファイルを探すため、encodeURIComponent した名前（%E5… や %2F）は 404 になる。
  * 英数字・_・- だけの ID はそのまま、それ以外（日本語・空白・記号）は "~" ＋ UTF-8 の 16 進にする。
- * observablehq.config.js（dynamicPaths）、ローダ（src/data/worklogs/[contractId].json.ts）、画面（breakdown.js）で共通に使う。
+ * observablehq.config.js（dynamicPaths）、ローダ（src/data/worklogs/[contractId].json.js）、画面（breakdown.js）で共通に使う。
  */
 const SAFE = /^[A-Za-z0-9_-]+$/;
 

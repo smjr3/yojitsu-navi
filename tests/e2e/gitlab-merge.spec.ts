@@ -17,9 +17,14 @@ const BADGE_LABEL = "マージ待ち {n} 件";
 
 async function patchMasters(page: Page, masterEdit: unknown): Promise<void> {
   await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
-    const res = await route.fetch();
-    const json = await res.json();
-    await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit }), headers: { ...res.headers(), "content-type": "application/json" } });
+    try {
+      const res = await route.fetch();
+      const json = await res.json();
+      await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit }), headers: { ...res.headers(), "content-type": "application/json" } });
+    } catch (e) {
+      // 読み込み中に別のページへ移ると、前のページの要求は破棄される（応答は使われない）。それ以外は失敗にする
+      if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
+    }
   });
 }
 

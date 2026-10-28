@@ -207,9 +207,9 @@ describe("L7 ページングは既存クエリ文字列を保つ", () => {
   });
 });
 
-describe("L8 README に dateFormat: ISO8601 の推奨", () => {
+describe("L8 運用の文書（docs/OPERATIONS.md）に dateFormat: ISO8601 の推奨", () => {
   it("UTC 表記の時刻付き日付の注意がある", () => {
-    const readme = readFileSync(join(__dirname, "../../README.md"), "utf8");
+    const readme = readFileSync(join(__dirname, "../../docs/OPERATIONS.md"), "utf8");
     expect(readme).toMatch(/dateFormat[^\n]{0,60}ISO8601[^\n]*推奨|推奨[^\n]*dateFormat[^\n]{0,60}ISO8601/);
     expect(readme).toMatch(/UTC/);
   });

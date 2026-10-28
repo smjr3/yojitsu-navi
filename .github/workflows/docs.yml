@@ -1,0 +1,39 @@
+# 文書だけの変更で動く軽い検査（ci.yml は文書だけの変更では動かないため）
+# README・docs のリンク切れ、存在しない画像、README から参照されていない古いスクリーンショット、存在しない npm run を見つける
+# （tests/unit/docs-links.test.ts。CONTRIBUTING.md「ドキュメントは同じ変更の中で直す」）
+
+name: Docs
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - "package.json"
+      - "tests/unit/docs-links.test.ts"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - "package.json"
+      - "tests/unit/docs-links.test.ts"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存インストール
+        run: npm ci --no-audit --no-fund
+      - name: 文書のリンク・画像の検査
+        run: npx vitest run tests/unit/docs-links.test.ts

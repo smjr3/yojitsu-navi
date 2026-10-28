@@ -8,7 +8,7 @@
  */
 import { monthRange } from "./calendar.js";
 import { roundYen } from "./cost.js";
-import { createEffectiveIndex, createMasterIndex, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
+import { createEffectiveIndex, createMasterIndex, isLeftRecord, leftMonthOf, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { monthStatusFromMeta } from "./status.js";
 import type {
   Assignment,
@@ -232,6 +232,7 @@ export function aggregateMembers(model: Pick<Model, "meta" | "members" | "member
             teamId: null,
             title: null,
             kind: null,
+            leftFrom: null,
             plannedHours: 0,
             plannedCost: 0,
             actualHours: 0,
@@ -290,6 +291,7 @@ export function aggregateMembers(model: Pick<Model, "meta" | "members" | "member
     t.teamId = rec ? (rec.teamId ? rec.teamId : null) : last.teamId;
     t.title = rec ? (rec.title ? rec.title : null) : last.title;
     t.kind = rec ? (rec.kind as MemberKind) : last.kind;
+    t.leftFrom = isLeftRecord(rec) ? leftMonthOf(memberRecordsOf(model, memberId).filter((r) => r.effectiveFrom <= baseMonth)) : null;
     if (teamSet) {
       const inTeam = t.teamId !== null ? teamSet.has(t.teamId) : scope.includeNoTeam === true;
       if (!inTeam) continue;

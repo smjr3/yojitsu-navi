@@ -46,7 +46,7 @@ Markdown で自由に書き換えられます（見出しは `##`、表は `|` �
 | 書き方 | 置き換わる値 |
 |---|---|
 | `{contract}` `{customer}` `{project}` `{team}` `{member}` | 呼び名（`config.json` の `labels`。既定は 契約・顧客・案件・チーム・メンバー） |
-| `{costTypes}` | 原価の種類の一覧 |
+| `{costTypes}` | 実績の種類の一覧 |
 | `{threshold}` | 消化率で赤にする閾値（例: 100%） |
 | `{fy}` `{fyStartMonth}` `{fyEndYear}` `{fyEndMonth}` | 年度・年度の開始月・終了年・終了月 |
 | `{asOf}` `{asOfMonth}` `{lastFinalMonth}` | 計算基準日・基準月・確定済みの最終月 |

@@ -9,7 +9,7 @@
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id` （案件名が空 = その顧客の全工数） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation` |
 | `data/masters/teams.csv` | `team_id, name, parent_team_id, effective_from, level, leader_member_id` （level = 種別「課」「チーム」「班」など自由入力・省略可、leader_member_id = リーダーのメンバーID・省略可。SPEC §21・§22） |
-| `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from` （kind = employee / partner） |
+| `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from, status` （kind = employee / partner。status = 空（在籍）/ `退職`（その月から退職）、列ごと省略可。SPEC §35） |
 | `data/masters/rates.csv` | `key, hourly_rate, effective_from` （key = 役職名 または member_id） |
 | `data/holidays.csv` | `date, name` |
 | `data/task-types.csv` | `task, category, note` （作業種別の分類表。category = 契約内 / 契約外。ファイルが無ければすべて契約内。SPEC §30） |
@@ -20,7 +20,7 @@
 
 ## 取り込み元の設定（config.json の `worklogSource.http` と `memberSource`）
 
-コードを変えずに本番 API の列名・形式へ合わせるための設定。手順は README「本番 API への合わせ方」。トークンは環境変数だけ（`WORKLOG_API_TOKEN`、メンバーは `MEMBER_API_TOKEN`）。
+コードを変えずに本番 API の列名・形式へ合わせるための設定。手順は [OPERATIONS.md](OPERATIONS.md)「本番 API への合わせ方」。トークンは環境変数だけ（`WORKLOG_API_TOKEN`、メンバーは `MEMBER_API_TOKEN`）。
 
 ### `worklogSource.http`
 

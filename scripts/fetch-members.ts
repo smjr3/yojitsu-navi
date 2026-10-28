@@ -11,7 +11,8 @@
  *
  * 環境変数: MEMBER_API_TOKEN（http アダプタ）、MEMBER_ADAPTER（アダプタ名の上書き）
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { writeFileAtomic } from "./lib/atomic.js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { csvParse } from "d3-dsv";
@@ -79,7 +80,7 @@ export async function fetchMembers(opts: FetchMembersOptions, env: NodeJS.Proces
   let written = false;
   if (dirty && !dryRun) {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, formatMembersCsv(merge.rows, headers));
+    writeFileAtomic(path, formatMembersCsv(merge.rows, headers));
     written = true;
   }
   const result: FetchMembersResult = {

@@ -7,9 +7,9 @@ Observable Framework 1.13 で作った画面側の構成と決定事項。計算
 ```
 src/
   data/
-    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)）
-    model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（540 KB / ダミーデータ）
-    worklogs/[contractId].json.ts 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
+    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)。出力は emitJson で検査。docs/DATA_LOADERS.md）
+    model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（約 3.1 MB / 5 倍のダミーデータ）
+    worklogs/[contractId].json.js 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
   components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む）
     format.js      金額・割合・時間・月・日時の書式。単位 "m"（百万円）| "k"（千円）| "yen" を core の MoneyUnit に変換
@@ -43,7 +43,7 @@ src/
 |---|---|---|
 | `/` 全体サマリー | 会社全体（or 選んだチーム）は今どうか | KPI 5 枚（年度予算・実績・残予算＋残予算率・消化率・着地見込みの差＋超過見込み件数）→ 月次推移 → 超過見込み契約 → チーム別 |
 | `/teams` チーム一覧 | どの組織が悪いか | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ |
-| `/team?id=` チーム詳細（サイドバーには出さない） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 案件一覧 → メンバー別実績 → 組織の変遷 |
+| `/team?id=` チーム詳細（タブには出さない。「チーム」タブが選択状態） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 案件一覧 → メンバー別実績 → 組織の変遷 |
 | `/contracts` 案件一覧 | どの契約が悪いか | 並べ替え可能な一覧 ＋ 絞り込み（超過見込み／消化率超過／速報含む／期間外も表示／検索）＋ 合計行 |
 | `/contract?id=` 案件詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 3 方式の着地比較 → 作業ログ（遅延読み込み） |
 | `/rules` 計算ルール | 数値はどう計算されているか | SPEC を人向けに。config.json の値を `${...}` で差し込む |
@@ -83,7 +83,7 @@ src/
 ## データの流れ
 
 1. `npm run build` → `src/data/model.json.ts` が `data/` を読み `buildModel()`。`asOf` は `YOJITSU_AS_OF`（CI で固定したい場合）か今日（JST）。
-2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.ts` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
+2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.js` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
 3. 画面は `breakdown.js` の `fetchWorklogs(id)` で必要なときだけ取得する。ビルド済みサイトでは `/data/worklogs/<id>.json`、`npm run dev` では `/_file/data/worklogs/<id>.json` で配信されるので順に試す（プレビューでは最初の 404 がコンソールに出るが動作に影響なし）。契約 ID はパスに入れる前に `encodeURIComponent` する（`dynamicPaths` 側も同じ。ローダは `decodeURIComponent` で元に戻す）ので、`/` や空白を含む ID でも列挙から漏れない。Excel のファイル名も `safeFileName()` で `\ / : * ? " < > |` を `_` に置換する。
 4. 生成物の大きさ（ダミーデータ）: `model.json` 540 KB、`dataset-issues.json` 6 KB、作業ログ明細は契約ごとに 1 KB〜650 KB（合計約 4.3 MB、`dist/` 全体 6.3 MB）。
 
@@ -101,6 +101,9 @@ spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMon
 合計行（`summary`）は行用の `breakdown(row)` を使わず、`summaryBreakdown(col)` が spec を返す列だけ根拠ボタンになる（案件一覧は表示中の契約 ID を母集団に `aggregate()` / `forecastTotals()` で合計し、同じ ID 集合で根拠を開く。案件詳細の月表の合計行は KPI と同じ `Totals` を表示し、根拠ボタンは付けない）。
 Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は **表示単位に関係なく常に円の整数**（列名「…（円）」、1 行目に「単位: 円」の注記、2 行目が見出し）。千円表示は画面だけの都合で、行ごとに丸めた値を出力して合計がずれることを避ける。割合は % の数値、月は `YYYY-MM`。画面に合計行（tfoot）がある表は、最終行に同じ合計を出す。
 幅の工夫（1280px で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。案件一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（案件数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
+
+長い名前（5 倍のダミーデータで確認）: 名前列は最大 300px で省略し全文は `title`。「顧客 / 案件」の 2 段表示（`.yn-cell-2line`）は 1200px 以上で最大 320px まで広げる。作業種別名（`.yn-task-name`）は 260px で折り返す。1280px で一覧・顧客詳細・チーム一覧が横スクロールにならないことを `tests/e2e/scale-data.spec.ts` で確かめている。
+
 状態チップ（`rowStatus()`）は配列で、契約は「超過見込み」「消化率超過」、チーム行は「超過見込み N件」（配下の超過見込み案件数）「消化率超過」。既定の並びは `statusSortValue()`（赤を先頭、その中は消化率の高い順）。
 案件詳細の月表は、予定（future）の月に選択方式の見込み額（`forecastMonthlyCost`）を斜体＋「見込」チップで表示し、残予算・残予算率もそれに基づく（実績の無い月に 100% を出さない）。年度外の未来月（着地見込みの対象外）は状態を「年度外」とし、実績・残予算・残予算率は「—」（根拠ボタン無し）。月次推移の表とグラフも同じ扱い（グラフは予算棒をさらに薄くし、下に注記）。合計行の実績・残予算は実績月のみ。
 チーム行の「案件数」は期間内の契約、「着地差」は年度に掛かる契約が母集団で別物。見出しの 2 行目で「（期間内）」「（年度内）」と示し、着地差セルの 2 行目に年度内の件数を併記する（Excel には「案件数（年度内）」列）。
@@ -127,7 +130,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 2. 最初の `js` セルで `htl` / components / core を import。`const model = await loadJson(FileAttachment("./data/model.json"), {skeleton: "page-skeleton"})`、`const store = model ? createStore(model) : null`、`state = Generators.observe(...)`（既存ページからコピー）。
 3. `pageHeader({...})` → `mountFilterBar(store, model, {show: [...]})` → 本文。セルは `if (vm) {...}` で囲み、`display()` で描く。
 4. `observablehq.config.js` の `pages` に追加し、上部タブに出すなら `NAV`、右上の補助リンクなら `TOOLS` にも追加する（詳細画面は親タブの `match` にパスを足すとそのタブが選択状態になる。案件詳細がその例）。
-5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` を使う）。
+5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` の `emitJson` で出力し `_build: buildStamp()` を付ける。[DATA_LOADERS.md](DATA_LOADERS.md)）。
 
 ## 検証の仕方
 
@@ -164,7 +167,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 ## 顧客別（SPEC §17）決定事項
 
-- `/customers`（サイドバー: チーム一覧の次）と `/customer?key=`（サイドバーには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・案件数・予算・実績・残予算・残予算率・消化率・着地差・状態）。
+- `/customers`（上部タブ: チームの次）と `/customer?key=`（タブには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・契約数・予算・実績・残予算・残予算率・消化率・着地差・状態）。
 - URL の `key` は `encodeURIComponent`（`customerHref`）。読むのは `URLSearchParams.get`。日本語・記号・空白・`/ # ? % + &` を含む顧客名で往復できる（E2E は model.json を書き換えて確認）。見つからない key・key なしは空状態。
 - 一覧: 選んだチーム（配下含む）の契約だけで顧客を集計。期間内に契約が無い顧客は既定で非表示（「期間外の顧客も表示」で出す）。検索は `normalizeName` で両辺を正規化した部分一致（URL の `q` で復元）。合計行は表示中の顧客の全契約を母集団にした `aggregate()` / `forecastTotals()`。着地差は年度に掛かる契約が 0 件の顧客だけ「—」。状態チップはチーム行と同じ（赤字 N件・予算超過）。
 - 詳細: KPI 5 枚（全体サマリーと同じ。前年同期比も同じ規則）→ 月次推移 → この顧客の案件（期間外は既定で非表示、切替あり）→ 担当チーム別（契約の `teamId` ごと。配下はまとめない。行クリックは `/contracts?team=&q=<顧客名>`）。顧客詳細はチームフィルタを持たない（期間・方式・単位のみ）。
@@ -218,8 +221,8 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 | ページ | 問い | 構成 |
 |---|---|---|
-| `/members` メンバー別（サイドバーに出す） | 誰が計画どおりに動いているか | KPI 4 枚（計画額・実績・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
-| `/member?id=` メンバー詳細（サイドバーに出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・部署、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
+| `/members` メンバー別（上部タブ） | 誰が計画どおりに動いているか | KPI 4 枚（計画額・実績・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
+| `/member?id=` メンバー詳細（タブには出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・部署、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
 
 ### データの流れ
 

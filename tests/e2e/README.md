@@ -10,7 +10,7 @@ npm run test:e2e                      # = playwright test -c tests/e2e/playwrigh
 
 ## 流れ
 
-1. `global-setup.ts` が `YOJITSU_AS_OF=2026-10-27 npm run build` を 1 回実行（`E2E_SKIP_BUILD=1` で省略。dist が無ければ結局ビルドする）
+1. `global-setup.ts` が `YOJITSU_AS_OF=2026-10-27 npm run build` を 1 回実行（`E2E_SKIP_BUILD=1` で省略。dist が無ければ結局ビルドする）。入力が変わっていればキャッシュは `npm run build` が捨てる（docs/DATA_LOADERS.md）
 2. `webServer` が `node tests/e2e/serve.mjs dist 4173` を起動（cleanUrls: `/teams` → `teams.html`、無いものは 404、`/__health` は常に 200）
 3. 各 spec が `http://127.0.0.1:4173` を開いて検証
 
@@ -36,12 +36,20 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 
 | ファイル | 内容 |
 |---|---|
-| `smoke.spec.ts` | 全ページ（`/`, `/teams`, `/contracts`, `/contract?id=C008`, `/contract?id=NOPE`, `/rules`, `/data-check`）がエラー 0・失敗リクエスト 0 で開き、h1 と 計算基準日 2026-10-27 がある |
-| `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。既定単位（百万円）の検証、百万円→千円→円の往復、0.0百万円の丸め、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
-| `breakdown.spec.ts` | 内訳パネル: 実績（契約ごとの合計 = 表示値）、作業ログの遅延読み込み、予算の月割り（C005: 3,166,666 / 最終月 3,166,674）、消化率、着地見込みの算術、Esc・フォーカス復帰・フォーカストラップ |
-| `navigation.spec.ts` | チーム → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
-| `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role / aria-labelledby、img / svg の代替、状態チップの文字、390px 幅で横スクロール無し、ダークモード、印刷メディア |
-| `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・console.error 0・`NaN/undefined/null/Infinity/[object Object]` 非表示・`—円` 非表示・h1 あり・ダイアログが Esc で閉じる、を確認。失敗時は操作履歴をメッセージと添付に出す |
+| `smoke.spec.ts` | 全ページがエラー 0・失敗リクエスト 0 で開き、h1 と計算基準日 2026-10-27 がある |
+| `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
+| `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
+| `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |
+| `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・工数の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
+| `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
+| `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
+| `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄） |
+| `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
+| `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
+| `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
+| `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
+| `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |
+| `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・`NaN` 等の非表示・h1 あり・ダイアログが Esc で閉じる、を確認。候補の判定はページ内で 1 回にまとめている（5 倍データでボタンが数千あるため） |
 
 ## 失敗したとき
 

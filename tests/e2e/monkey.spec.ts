@@ -110,12 +110,14 @@ for (const path of PAGES) {
         const vp = page.viewportSize();
         if (vp) await page.mouse.move(vp.width - 4, vp.height - 4).catch(() => {});
         const dialogOpen = (await page.locator("dialog[open]").count()) > 0;
-        const scope = dialogOpen ? page.locator("dialog[open]") : page.locator("body");
-        const handles = await scope.locator(CANDIDATES).elementHandles();
-        const ok: ElementHandle[] = [];
-        for (const h of handles) {
-          const info = await h
-            .evaluate((el, origin) => {
+        // 5 倍のデータでは候補が数百〜数千になるため、判定はページ内で 1 回にまとめ（要素ごとの往復をしない）、
+        // 候補に印を付けてから取り出す。順序は従来どおり文書順
+        await page.evaluate(
+          ({ selector, dialogOpen, origin }) => {
+            for (const el of document.querySelectorAll("[data-monkey-cand]")) el.removeAttribute("data-monkey-cand");
+            const root = dialogOpen ? document.querySelector("dialog[open]") : document.body;
+            if (!root) return;
+            const judge = (el: Element) => {
               const e = el as HTMLElement;
               const r = e.getBoundingClientRect();
               const style = getComputedStyle(e);
@@ -153,11 +155,15 @@ for (const path of PAGES) {
                 if (/^(mailto|tel|javascript):/.test(href)) skip = true;
               }
               return { visible, disabled, skip };
-            }, origin)
-            .catch(() => null);
-          if (info && info.visible && !info.disabled && !info.skip) ok.push(h);
-        }
-        return ok;
+            };
+            for (const el of root.querySelectorAll(selector)) {
+              const info = judge(el);
+              if (info.visible && !info.disabled && !info.skip) el.setAttribute("data-monkey-cand", "");
+            }
+          },
+          { selector: CANDIDATES, dialogOpen, origin },
+        ).catch(() => {});
+        return page.locator("[data-monkey-cand]").elementHandles();
       };
 
       const isDetached = (e: unknown) => /not attached|detached|Execution context|Target closed|navigation/i.test(String((e as Error)?.message ?? e));
@@ -206,6 +212,8 @@ for (const path of PAGES) {
                   } else await h.click({ timeout: 5000 });
                 } catch (e) {
                   if (isDetached(e)) log("  → detached during click, skipped");
+                  // 開いた候補リストなどの下に隠れた要素（利用者が押すと上の要素に当たる）。押せないのが正しい
+                  else if (/intercepts pointer events/.test((e as Error).message)) log("  → covered by another element, skipped");
                   else throw new Error(`クリックできない要素: ${desc}\n${(e as Error).message}`);
                 }
               }
@@ -235,9 +243,8 @@ for (const path of PAGES) {
             log(`${step} resize ${w}×${hgt}`);
             await page.setViewportSize({ width: w, height: hgt });
           } else if (roll < 0.9) {
-            const cands = await candidates();
-            const selects = [];
-            for (const h of cands) if ((await h.evaluate((el) => (el as Element).tagName.toLowerCase()).catch(() => "")) === "select") selects.push(h);
+            await candidates();
+            const selects = await page.locator("select[data-monkey-cand]").elementHandles();
             if (selects.length) {
               const h = pick(selects);
               const count = await h.evaluate((el) => (el as HTMLSelectElement).options.length).catch(() => 0);
