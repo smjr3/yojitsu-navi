@@ -71,15 +71,15 @@ if (model && !group) {
   display(
     pageHeader({
       model,
-      title: "顧客詳細",
-      breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "顧客別", href: store.href("./customers") }, { label: "（顧客が見つかりません）" }],
+      title: T.customer.pageTitle,
+      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.customers, href: store.href("./customers") }, { label: T.customer.notFoundCrumb }],
     }),
   );
   display(
     emptyState({
-      title: customerKey ? `顧客「${customerKey}」は見つかりません` : "顧客が指定されていません",
-      text: customerKey ? "顧客名が変わったか、データから無くなった可能性があります。顧客別の一覧から選び直してください。" : "顧客別の一覧から顧客を選んでください。",
-      actions: [{ label: "顧客別へ戻る", href: store.href("./customers") }],
+      title: customerKey ? fmt(T.customer.notFoundTitle, { customer: customerKey }) : T.customer.noKeyTitle,
+      text: customerKey ? T.customer.notFoundText : T.customer.noKeyText,
+      actions: [{ label: T.customer.back, href: store.href("./customers") }],
     }),
   );
 }
@@ -91,8 +91,8 @@ if (vm) {
     pageHeader({
       model,
       title: group.label,
-      lead: `この顧客の ${vm.scope.contractIds.length} 件の契約を合算した予実です。数値をクリックすると計算根拠が開きます。`,
-      breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "顧客別", href: store.href("./customers") }, { label: group.label }],
+      lead: fmt(T.customer.lead, { n: vm.scope.contractIds.length }),
+      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.customers, href: store.href("./customers") }, { label: group.label }],
       includesPreliminary: vm.totals.includesPreliminary,
     }),
   );
@@ -109,7 +109,7 @@ if (vm) {
   display(
     vm.scope.teamId
       ? note(
-          `${vm.scope.teamLabel}（配下含む）の契約だけで集計しています（この顧客の全 ${group.contractIds.length} 件のうち ${vm.scope.contractIds.length} 件）。顧客全体を見るには、チームを「全体」に戻してください。`,
+          fmt(T.customer.teamFiltered, { team: vm.scope.teamLabel, total: group.contractIds.length, n: vm.scope.contractIds.length }),
           vm.scope.contractIds.length === 0 ? "warn" : "info",
         )
       : html`<div></div>`,
@@ -185,11 +185,11 @@ if (vm) {
 
 ```js
 if (vm) {
-  display(sectionTitle("月次推移", `${periodJa(vm.scope.period)} の予算・原価・粗利。${monthJa(model.meta.asOfMonth)} 以降は着地見込み（${METHOD_LABELS[vm.method]}）です。`));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(html`<figure class="yn-card yn-chart-card">
     ${monthlyLegend(dark)}
     ${resize((width) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, asOfMonth: model.meta.asOfMonth }))}
-    <details class="yn-details"><summary>表で見る</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>
+    <details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>
   </figure>`);
 }
 ```
@@ -199,7 +199,7 @@ if (vm) {
 const outsideToggle = (() => {
   if (!model || !group) return null;
   const input = html`<input type="checkbox" id="yn-f-showOutside" checked=${listFilter.showOutside}>`;
-  const form = html`<form class="yn-chip-filters" role="group" aria-label="契約の絞り込み"><label class="yn-toggle-chip" for="yn-f-showOutside" title="選択した期間に 1 か月も掛からない契約も表示">${input}<span>期間外の契約も表示</span></label></form>`;
+  const form = html`<form class="yn-chip-filters" role="group" aria-label=${T.contracts.filterLabel}><label class="yn-toggle-chip" for="yn-f-showOutside" title=${T.contracts.chipOutsideTitle}>${input}<span>${T.contracts.chipOutside}</span></label></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
   input.addEventListener("change", () => {
     listFilter.showOutside = input.checked;
@@ -227,20 +227,20 @@ if (vm) {
   const hidden = all.length - all.filter((r) => r.inPeriod).length;
   display(
     sectionTitle(
-      "この顧客の契約",
-      `${periodJa(scope.period)} ・ 着地: ${METHOD_LABELS[vm.method]}（${fiscalYearLabel(model.meta.fiscalYear)}）。クリックで契約詳細へ。${hidden > 0 && !f.showOutside ? `選択期間に掛からない契約 ${hidden}件は非表示（「期間外の契約も表示」で表示）。` : ""}`,
+      T.customer.contractsTitle,
+      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: METHOD_LABELS[vm.method], fy: fiscalYearLabel(model.meta.fiscalYear), hidden: hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : "" }),
     ),
   );
   if (outsideToggle && hidden > 0) display(outsideToggle);
   if (rows.length === 0) {
-    display(emptyState({ title: "選択期間に掛かる契約がありません", text: "期間を変えるか、「期間外の契約も表示」を選んでください。", icon: "○" }));
+    display(emptyState({ title: T.customer.noContractsTitle, text: T.customer.noContractsText, icon: "○" }));
   } else {
     display(
       dataTable({
         columns: contractListColumns({ model, store, period: scope.period, unit }),
         rows,
         unit,
-        caption: "顧客の契約一覧",
+        caption: T.customer.contractsCaption,
         exportName: `customer_contracts_${scope.period.from}_${scope.period.to}`,
         sort: { key: "status", dir: "asc" },
         rowHref: (r) => store.href("./contract", {}, { id: r.contractId }),
@@ -264,22 +264,22 @@ if (vm) {
   const rows = [...byTeam.entries()]
     .map(([tid, ids]) => ({ ...idsRow(model, ids, scope.period, method, { name: tid === UNASSIGNED_TEAM_ID ? UNASSIGNED_TEAM_LABEL : teamName(model, tid, tree), teamId: tid }), key: tid }))
     .filter((r) => r.contractCount > 0 || r.fyContractCount > 0);
-  display(sectionTitle("担当チーム別", `${group.label} の契約を、契約に登録された主担当チームごとに集計（${monthJa(treeMonthFor(model, scope.period))} 時点の組織名）。契約数は期間内の契約、着地粗利は年度に掛かる契約（件数を併記）が母集団です。行をクリックすると、この顧客のこのチームの契約一覧（契約一覧を顧客とチームで絞った表示）に移動します。`));
+  display(sectionTitle(T.customer.byTeamTitle, fmt(T.customer.byTeamHint, { customer: group.label, month: monthJa(treeMonthFor(model, scope.period)) })));
   if (rows.length === 0) {
-    display(emptyState({ title: "選択期間に掛かる契約がありません", text: "期間を変えてください。", icon: "○" }));
+    display(emptyState({ title: T.customer.noContractsTitle, text: T.customer.changePeriod, icon: "○" }));
   } else {
     const columns = [
-      { key: "name", label: "チーム", type: "text" },
+      { key: "name", label: T.columns.team, type: "text" },
       ...teamCountColumns(),
       ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }).map(withForecastCount),
-      { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
+      { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
     ];
     display(
       dataTable({
         columns,
         rows,
         unit,
-        caption: "担当チーム別",
+        caption: T.customer.byTeamTitle,
         exportName: `customer_teams_${scope.period.from}_${scope.period.to}`,
         sort: { key: "status", dir: "asc" },
         rowHref: (r) => store.href("./contracts", { team: r.teamId }, { customer: group.key, direct: 1 }),

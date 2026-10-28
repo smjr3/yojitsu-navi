@@ -82,9 +82,9 @@ const vm = (() => {
 
 ```js
 if (model && vm) {
-  const title = vm.exists ? html`${vm.isUnassigned ? "" : html`<span class="yn-title-id">${vm.teamId}</span> `}${vm.name}` : "チーム詳細";
-  const crumbs = [{ label: "全体サマリー", href: store.href("./") }, { label: "チーム一覧", href: store.href("./teams") }];
-  if (!vm.exists) crumbs.push({ label: teamId || "（チームID未指定）" });
+  const title = vm.exists ? html`${vm.isUnassigned ? "" : html`<span class="yn-title-id">${vm.teamId}</span> `}${vm.name}` : T.team.pageTitle;
+  const crumbs = [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.teams, href: store.href("./teams") }];
+  if (!vm.exists) crumbs.push({ label: teamId || T.team.noIdCrumb });
   else if (vm.isUnassigned) crumbs.push({ label: vm.name });
   else for (const n of vm.path) crumbs.push({ label: n.name, href: store.href("./team", {}, { id: n.teamId }) });
   display(
@@ -93,12 +93,12 @@ if (model && vm) {
       title,
       lead: vm.exists
         ? vm.isUnassigned
-          ? "主担当チームが未設定（または組織に無いチーム）の契約をまとめた集計です。まず契約一覧で担当チームを確認してください。"
-          : `${vm.name}（配下のチームを含む）の予実です。数値をクリックすると計算根拠が開きます。`
+          ? T.team.unassignedLead
+          : fmt(T.team.lead, { team: vm.name })
         : null,
       breadcrumbs: crumbs,
       includesPreliminary: vm.exists ? vm.totals.includesPreliminary : false,
-      extra: vm.exists ? html`<a class="yn-btn yn-btn-sm" id="yn-team-contracts-link" href=${store.href("./contracts", { team: vm.teamId })}>このチームの契約一覧へ</a>` : null,
+      extra: vm.exists ? html`<a class="yn-btn yn-btn-sm" id="yn-team-contracts-link" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.toContracts}</a>` : null,
     }),
   );
 }
@@ -106,7 +106,7 @@ if (model && vm) {
 
 ```js
 if (model && !teamId) {
-  display(emptyState({ title: "チームIDが指定されていません", text: "チーム一覧からチームを選んでください。", actions: [{ label: "チーム一覧へ", href: store.href("./teams") }] }));
+  display(emptyState({ title: T.team.noIdTitle, text: T.team.noIdText, actions: [{ label: T.index.toTeams, href: store.href("./teams") }] }));
 }
 ```
 
@@ -118,11 +118,11 @@ if (store && teamId) mountFilterBar(store, model, { show: ["period", "method", "
 if (vm && !vm.exists && teamId) {
   display(
     emptyState({
-      title: "このチームは選択期間の組織にありません",
+      title: T.team.notInPeriodTitle,
       text: vm.knownInHistory
-        ? `「${teamId}」は組織の履歴にありますが、${monthJa(vm.treeMonth)} 時点の組織にはありません（期間の終了月か基準月より後に発効するチーム、または廃止されたチームです）。期間を変えるか、チーム一覧から選び直してください。`
-        : `「${teamId}」というチームIDは組織の履歴にありません。チームIDが変わったか、URL が誤っている可能性があります。`,
-      actions: [{ label: "チーム一覧へ", href: store.href("./teams") }],
+        ? fmt(T.team.notInPeriodText, { teamId, month: monthJa(vm.treeMonth) })
+        : fmt(T.team.unknownText, { teamId }),
+      actions: [{ label: T.index.toTeams, href: store.href("./teams") }],
     }),
   );
 }
@@ -130,18 +130,18 @@ if (vm && !vm.exists && teamId) {
 
 ```js
 if (vm?.exists) {
-  display(sectionTitle("このチームの予実", `${periodJa(vm.period)} ・ ${vm.name}${vm.isUnassigned ? "" : "（配下のチームを含む）"} ・ ${monthJa(vm.treeMonth)} 時点の組織で集計。前年同期は経過月の累計を12か月前と比べます。`));
+  display(sectionTitle(T.team.summaryTitle, fmt(T.team.summaryHint, { period: periodJa(vm.period), team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, month: monthJa(vm.treeMonth) })));
   display(summaryKpis({ model, store, scope: vm.scope, totals: vm.totals, forecast: vm.forecast, compare: vm.compare, fy: vm.fy, unit: vm.unit }));
 }
 ```
 
 ```js
 if (vm?.exists) {
-  display(sectionTitle("月次推移", `${periodJa(vm.period)} の予算・原価・粗利。${monthJa(model.meta.asOfMonth)} 以降は着地見込み（${METHOD_LABELS[vm.method]}）です。`));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(html`<figure class="yn-card yn-chart-card">
     ${monthlyLegend(dark)}
     ${resize((width) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, asOfMonth: model.meta.asOfMonth }))}
-    <details class="yn-details"><summary>表で見る</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>
+    <details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>
   </figure>`);
 }
 ```
@@ -152,12 +152,12 @@ if (vm?.exists && vm.node && vm.node.children.length > 0) {
   const { period, unit, method, tree } = vm;
   const rows = vm.node.children.map((id) => ({ ...teamRow(model, id, tree[id].name, 0, period, method, tree), key: id }));
   const detailHref = (id) => store.href("./contract", {}, { id });
-  display(sectionTitle("配下のチーム", `${vm.name} の直下のチームごとの予実（上位の行は、さらにその配下の合計）。行をクリックするとそのチームの詳細へ。契約数は期間内、着地粗利は ${fiscalYearLabel(model.meta.fiscalYear)} に掛かる契約（件数を併記）が母集団です。`));
+  display(sectionTitle(T.team.childrenTitle, fmt(T.team.childrenHint, { team: vm.name, fy: fiscalYearLabel(model.meta.fiscalYear) })));
   const columns = [
-    { key: "name", label: "チーム", type: "text" },
+    { key: "name", label: T.columns.team, type: "text" },
     ...teamCountColumns(),
     ...standardColumns({
-      forecastLabel: "着地粗利",
+      forecastLabel: T.columns.forecastGrossProfit,
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period, unit }),
         cost: (r) => bd.costAggregateSpec({ model, contractIds: r.contractIds, period, unit, detailHref }),
@@ -167,9 +167,9 @@ if (vm?.exists && vm.node && vm.node.children.length > 0) {
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref }),
       },
     }).map(withForecastCount),
-    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
+    { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
-  display(dataTable({ columns, rows, unit, caption: "配下のチーム", exportName: `team_${vm.teamId}_children_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
+  display(dataTable({ columns, rows, unit, caption: T.team.childrenTitle, exportName: `team_${vm.teamId}_children_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
 }
 ```
 
@@ -182,23 +182,23 @@ if (vm?.exists) {
   const outside = all.length - rows.length;
   display(
     sectionTitle(
-      "契約一覧",
-      `${vm.name}${vm.isUnassigned ? "" : "（配下のチームを含む）"} の契約。着地: ${METHOD_LABELS[method]}（${model.meta.fiscalYear}年度）。既定の並び: 赤字見込み・予算超過の契約を先頭に、消化率の高い順。${outside > 0 ? `選択期間に掛からない契約 ${outside}件は表示していません。` : ""}クリックで契約詳細へ。`,
-      html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: vm.teamId })}>契約一覧で絞り込む</a>`,
+      T.app.pages.contracts,
+      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: METHOD_LABELS[method], fy: model.meta.fiscalYear, hidden: outside > 0 ? fmt(T.team.hiddenOutside, { n: outside }) : "" }),
+      html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.filterContracts}</a>`,
     ),
   );
   if (rows.length === 0) {
-    display(emptyState({ title: "期間内の契約がありません", text: `${vm.name} には、選択した期間（${periodJa(period)}）に掛かる契約がありません。期間を広げてください。`, icon: "○" }));
+    display(emptyState({ title: T.team.noContractsTitle, text: fmt(T.team.noContractsText, { team: vm.name, period: periodJa(period) }), icon: "○" }));
   } else {
     const detailHref = (id) => store.href("./contract", {}, { id });
     const sub = (r) => `${r.contractId} ${r.customerName} / ${r.projectName}`;
     const columns = [
-      { key: "name", label: "契約", type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
-      { key: "contractId", label: "契約ID", type: "text", exportOnly: true },
-      { key: "customerName", label: "顧客", type: "text", exportOnly: true },
-      { key: "projectName", label: "案件", type: "text", exportOnly: true },
-      { key: "teamName", label: "チーム", type: "text", exportOnly: true },
-      { key: "period", label: "契約期間", type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
+      { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+      { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
+      { key: "customerName", label: T.customers.colCustomer, type: "text", exportOnly: true },
+      { key: "projectName", label: T.contracts.colProject, type: "text", exportOnly: true },
+      { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
+      { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
       ...standardColumns({
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period, unit }),
@@ -209,9 +209,9 @@ if (vm?.exists) {
           forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
         },
       }),
-      { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
+      { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
     ];
-    display(dataTable({ columns, rows, unit, caption: "チームの契約一覧", exportName: `team_${vm.teamId}_contracts_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => detailHref(r.contractId) }));
+    display(dataTable({ columns, rows, unit, caption: T.team.contractsCaption, exportName: `team_${vm.teamId}_contracts_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => detailHref(r.contractId) }));
   }
 }
 ```
@@ -228,27 +228,27 @@ if (vm?.exists) {
     teams: r.teamIds.map((id) => tree[id]?.name ?? model.teams.find((t) => t.teamId === id)?.name ?? id).join("、") || "—",
     isSupport: r.outsideHours > 0,
   }));
-  display(sectionTitle("メンバー別の原価", `${periodJa(period)} に、${vm.name} の期間内の契約${inCount > 0 ? `（${inCount}件）` : ""}へ作業を付けた人ごとの時間と原価（作業実績ベース）。所属チームが別の人も含みます${vm.isUnassigned ? "" : "。所属が配下のチームの外の作業がある人には「応援」を付けています"}。`));
+  display(sectionTitle(T.team.membersTitle, fmt(T.team.membersHint, { period: periodJa(period), team: vm.name, count: inCount > 0 ? fmt(T.team.countParen, { n: inCount }) : "", support: vm.isUnassigned ? "" : T.team.supportNote })));
   if (rows.length === 0) {
-    display(emptyState({ title: "作業実績がありません", text: "この期間に、このチームの契約へ紐付いた作業ログはありません。", icon: "○" }));
+    display(emptyState({ title: T.team.noWorkTitle, text: T.team.noWorkText, icon: "○" }));
   } else {
     const detailHref = (id) => store.href("./contract", {}, { id });
     const columns = [
       {
         key: "memberName",
-        label: "メンバー",
+        label: T.breakdown.colMember,
         type: "text",
-        render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", "単価なし", "この期間に時間単価が見つからない月があります（0円で計算）")}` : ""}${r.isSupport ? html` ${statusChip("neutral", "応援", "所属が、このチームと配下のチームの外にある作業を含みます")}` : ""}`,
+        render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${r.isSupport ? html` ${statusChip("neutral", T.team.support, T.team.supportTitle)}` : ""}`,
         sortValue: (r) => r.memberName,
       },
-      { key: "teams", label: "所属（当時）", type: "text", hideOnPhone: true },
-      { key: "hours", label: "時間", type: "hours", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
-      { key: "amount", label: "原価", type: "moneyYen", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
-      { key: "share", label: "構成比", type: "percent" },
-      { key: "contractCount", label: "契約数", type: "int", hideOnPhone: true, get: (r) => r.contractIds.length },
-      { key: "monthCount", label: "作業月数", type: "int", hideOnPhone: true, hideNarrow: true },
+      { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
+      { key: "hours", label: T.columns.hours, type: "hours", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
+      { key: "amount", label: T.columns.cost, type: "moneyYen", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
+      { key: "share", label: T.team.colShare, type: "percent" },
+      { key: "contractCount", label: T.columns.contractCount, type: "int", hideOnPhone: true, get: (r) => r.contractIds.length },
+      { key: "monthCount", label: T.team.colWorkMonths, type: "int", hideOnPhone: true, hideNarrow: true },
     ];
-    display(dataTable({ columns, rows, unit, caption: "メンバー別の原価", exportName: `team_${vm.teamId}_members_${period.from}_${period.to}`, sort: { key: "amount", dir: "desc" } }));
+    display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `team_${vm.teamId}_members_${period.from}_${period.to}`, sort: { key: "amount", dir: "desc" } }));
   }
 }
 ```
@@ -259,20 +259,20 @@ if (vm?.exists && !vm.isUnassigned) {
   const changes = teamOrgChanges(model.teams, vm.teamId, vm.period);
   if (changes.length > 0) {
     const rows = changes.map((c) => ({ ...c, key: `${c.month}-${c.teamId}-${c.kind}`, kindLabel: ORG_CHANGE_LABELS[c.kind], text: orgChangeText(c) }));
-    display(sectionTitle("組織の変遷", `${periodJa(vm.period)} に、${vm.name} の名前・上位チーム・直下のチームが変わった記録。契約は ${monthJa(vm.treeMonth)} 時点の組織で集計しています。`));
+    display(sectionTitle(T.team.orgTitle, fmt(T.team.orgHint, { period: periodJa(vm.period), team: vm.name, month: monthJa(vm.treeMonth) })));
     const columns = [
-      { key: "month", label: "発効月", type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month },
-      { key: "kindLabel", label: "種別", type: "text" },
+      { key: "month", label: T.team.colEffective, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month },
+      { key: "kindLabel", label: T.team.colKind, type: "text" },
       {
         key: "teamName",
-        label: "対象チーム",
+        label: T.team.colTarget,
         type: "text",
         get: (r) => r.name,
         render: (r) => (vm.tree[r.teamId] && r.teamId !== vm.teamId ? html`<a href=${store.href("./team", {}, { id: r.teamId })}>${r.name}</a>` : r.name),
       },
-      { key: "text", label: "内容", type: "text", sortable: false },
+      { key: "text", label: T.team.colDetail, type: "text", sortable: false },
     ];
-    display(dataTable({ columns, rows, unit: vm.unit, caption: "組織の変遷", exportName: `team_${vm.teamId}_history_${vm.period.from}_${vm.period.to}`, sort: { key: "month", dir: "asc" } }));
+    display(dataTable({ columns, rows, unit: vm.unit, caption: T.team.orgTitle, exportName: `team_${vm.teamId}_history_${vm.period.from}_${vm.period.to}`, sort: { key: "month", dir: "asc" } }));
   }
 }
 ```
