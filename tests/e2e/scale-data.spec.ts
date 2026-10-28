@@ -69,3 +69,16 @@ for (const path of ["/contracts", "/customers", "/workload", "/members", "/teams
     expect(over).toBeLessThanOrEqual(1);
   });
 }
+
+for (const path of ["/teams", "/contracts", "/customer?key=" + encodeURIComponent("青葉物流"), "/members"]) {
+  test(`1280px: 長い組織名・作業種別名でも ${path} の表が横スクロールにならない`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoPage(page, path);
+    const over = await page.evaluate(() =>
+      [...document.querySelectorAll(".yn-table-scroll")]
+        .filter((e) => e.scrollWidth - e.clientWidth > 1)
+        .map((e) => e.querySelector("caption")?.textContent ?? "?"),
+    );
+    expect(over).toEqual([]);
+  });
+}

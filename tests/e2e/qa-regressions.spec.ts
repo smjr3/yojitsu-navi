@@ -115,3 +115,22 @@ test("稼働計画のセルの編集欄を開いたまま狭い画面に変え�
   await pop.locator("#yn-plan-pop-new").click();
   await expect(pop.locator("#yn-plan-pop-new")).toBeFocused();
 });
+
+test("稼働計画のセルの編集欄を開いたまま画面の高さを縮めても、ボタンが画面内に残る（モンキーテストで発見）", async ({ page }) => {
+  await page.setViewportSize({ width: 828, height: 985 });
+  await gotoPage(page, "/plan?team=T111");
+  const btn = page.locator('[data-fk="plan:cell:M010:2027-01"]');
+  await btn.scrollIntoViewIfNeeded();
+  // セルが画面の下の方にある状態で開く
+  await page.evaluate(() => window.scrollBy(0, -200));
+  await btn.click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await expect(pop).toBeVisible();
+  for (const height of [626, 480, 985]) {
+    await page.setViewportSize({ width: 828, height });
+    const box = (await pop.boundingBox())!;
+    expect(box.y, `${height}px`).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, `${height}px`).toBeLessThanOrEqual(height + 1);
+  }
+  await expect(pop.getByRole("button", { name: "反映" })).toBeInViewport();
+});

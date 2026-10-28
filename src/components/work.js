@@ -76,7 +76,7 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
       key: "task",
       label: T.work.colTask,
       type: "text",
-      render: (r) => html`<span>${taskLabel(r)}${r.unclassified ? html` <span class="yn-chip yn-chip-neutral" title=${T.work.unclassifiedTitle}>${T.work.unclassified}</span>` : null}${r.category === "outside" ? html` <span class="yn-chip yn-chip-neutral only-phone">${T.work.outside}</span>` : null}</span>`,
+      render: (r) => html`<span><span class="yn-task-name" title=${taskLabel(r)}>${taskLabel(r)}</span>${r.unclassified ? html` <span class="yn-chip yn-chip-neutral" title=${T.work.unclassifiedTitle}>${T.work.unclassified}</span>` : null}${r.category === "outside" ? html` <span class="yn-chip yn-chip-neutral only-phone">${T.work.outside}</span>` : null}</span>`,
       sortValue: (r) => r.task,
       exportValue: (r) => taskLabel(r),
     },
