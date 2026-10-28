@@ -2,7 +2,7 @@
   "name": "yojitsu-navi",
   "version": "0.1.0",
   "private": true,
-  "description": "保守契約の予実（粗利）管理ダッシュボード",
+  "description": "保守契約の予実（予算と実績）管理ダッシュボード",
   "type": "module",
   "scripts": {
     "predev": "node scripts/seed-npm-cache.mjs",
@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "screenshots": "node scripts/screenshots.mjs",
     "check": "npm run typecheck && npm run validate && npm run test"
   },
   "dependencies": {

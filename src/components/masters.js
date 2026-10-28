@@ -219,6 +219,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     open: new Set(initialMember ? [initialMember] : []),
     /** 変更の履歴を開いている「メンバー|対象」 */
     hist: new Set(),
+    /** 名前・所属・案件での絞り込み（数百人の組織で人を探す） */
+    q: "",
   };
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
@@ -1047,7 +1049,31 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       return html`<td class=${`num yn-me-plan-cell${over ? " is-over" : v > 0 ? " is-set" : ""}`}>${btn}</td>`;
     };
 
-    const body = view.rows.flatMap((r) => {
+    // 名前・所属・案件で絞り込む（空白区切りの語をすべて含む）
+    const terms = plan.q.normalize("NFKC").toLowerCase().split(/\s+/).filter(Boolean);
+    const rowsShown = terms.length
+      ? view.rows.filter((r) => {
+          const projectsText = memberPeriodRows("assignments", r.memberId).map((x) => contractText(x.contractId)).join(" ");
+          const text = `${r.name ?? ""} ${r.teamId ? (tNames.get(r.teamId) ?? "") : ""} ${r.memberId} ${projectsText}`.normalize("NFKC").toLowerCase();
+          return terms.every((t) => text.includes(t));
+        })
+      : view.rows;
+    const search = html`<input type="search" class="yn-input yn-me-search" id="yn-me-plan-q" placeholder=${T.planEdit.searchPlaceholder} aria-label=${T.planEdit.searchAria} value=${plan.q}>`;
+    let searchTimer = null;
+    search.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        plan.q = search.value;
+        renderPanel();
+        const el = root.querySelector("#yn-me-plan-q");
+        if (el) {
+          el.focus();
+          el.setSelectionRange?.(el.value.length, el.value.length);
+        }
+      }, 150);
+    });
+
+    const body = rowsShown.flatMap((r) => {
       const open = plan.open.has(r.memberId);
       const detailId = `yn-me-plan-d-${r.memberId}`;
       const aRows = memberPeriodRows("assignments", r.memberId);
@@ -1154,6 +1180,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         </span>
         <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${!editable} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
       </div>
+      <div class="yn-me-toolbar yn-me-plan-filter">
+        ${search}
+        <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(rowsShown.length), total: integer(view.rows.length), unit: T.ledger.unit.members })}</span>
+      </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria} onkeydown=${gridKeys}>
         <table class="yn-table yn-table-compact yn-me-table yn-me-plan-table">
@@ -1164,10 +1194,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
             <th scope="col" class="num">${T.plan.colFyTotal}<span class="yn-th-sub">${T.plan.unitPersonMonth}</span></th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
-          <tbody>${body.length ? body : html`<tr class="yn-table-empty"><td colspan=${months.length + 3}>${T.plan.noMembers}</td></tr>`}</tbody>
-          ${view.rows.length
+          <tbody>${body.length ? body : html`<tr class="yn-table-empty"><td colspan=${months.length + 3}>${view.rows.length ? T.planEdit.noMatch : T.plan.noMembers}</td></tr>`}</tbody>
+          ${rowsShown.length
             ? html`<tfoot>
-                <tr><th scope="row">${fmt(T.plan.total, { n: integer(view.rows.length) })}</th>${totals.map((v) => html`<td class="num">${pm(v)}</td>`)}<td class="num">${pm(totals.reduce((a, b) => a + b, 0))}</td><td></td></tr>
+                <tr><th scope="row">${fmt(T.plan.total, { n: integer(rowsShown.length) })}</th>${totals.map((v) => html`<td class="num">${pm(v)}</td>`)}<td class="num">${pm(totals.reduce((a, b) => a + b, 0))}</td><td></td></tr>
                 <tr class="yn-me-plan-foot-sub"><th scope="row">${T.planEdit.footOutside}</th>${outsideTotals.map((v) => html`<td class="num">${v > 0 ? pm(v) : html`<span class="yn-muted">—</span>`}</td>`)}<td class="num">${pm(outsideTotals.reduce((a, b) => a + b, 0))}</td><td></td></tr>
               </tfoot>`
             : null}

@@ -140,6 +140,14 @@ for (const path of PAGES) {
               const backdropActive = !!backdrop && bs!.display !== "none" && bs!.visibility !== "hidden" && bs!.pointerEvents !== "none" && backdrop.getBoundingClientRect().width > 0;
               if (backdropActive && !sidebar && e !== backdrop) skip = true;
               if (!backdropActive && e === backdrop) skip = true;
+              // 開いている候補の一覧（§31.2）に隠れた要素は、利用者も押せない（一覧を閉じてから押す）ので候補にしない
+              const openList = document.querySelector('[role="listbox"]:not([hidden])');
+              if (openList && !openList.contains(e) && visible) {
+                const lr = openList.getBoundingClientRect();
+                const cx = r.left + r.width / 2;
+                const cy = r.top + r.height / 2;
+                if (lr.width > 0 && cx >= lr.left && cx <= lr.right && cy >= lr.top && cy <= lr.bottom) skip = true;
+              }
               if (tag === "a") {
                 const href = (e as HTMLAnchorElement).href;
                 if (!href.startsWith(origin)) skip = true;

@@ -41,6 +41,18 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `breakdown.spec.ts` | 内訳パネル: 実績（契約ごとの合計 = 表示値）、作業ログの遅延読み込み、予算の月割り（C005: 3,166,666 / 最終月 3,166,674）、消化率、着地見込みの算術、Esc・フォーカス復帰・フォーカストラップ |
 | `navigation.spec.ts` | チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role / aria-labelledby、img / svg の代替、状態チップの文字、390px 幅で横スクロール無し、ダークモード、印刷メディア |
+| `customers.spec.ts` | 顧客別（`/customers`・`/customer?key=`）: core との突合、内訳パネル、検索・チーム絞り込み、遷移、Excel、記号を含む顧客名の URL 往復、ダーク・狭幅 |
+| `members.spec.ts` | メンバー別（`/members`・`/member?id=`）: core との突合、計画・実績の内訳、遷移、Excel、ダーク・390px |
+| `team-detail.spec.ts` | チーム詳細（`/team?id=`）: core との突合、配下チーム、契約一覧、メンバー別実績、組織の変遷、Excel |
+| `workload.spec.ts` | 工数（`/workload`）: 軸ごとの表・作業種別の表が core と一致、契約外は契約の実績に入らない、Excel、ダーク・390px |
+| `detail-view.spec.ts` | 閲覧画面のレビュー指摘（単位・単価なしの色・絞り込みの引き継ぎ等）の回帰 |
+| `ui-controls.spec.ts` | テーマ切替・期間の「今月」とカレンダー指定・見出し横の「?」。各画面幅・ライト/ダークではみ出さない |
+| `qa-regressions.spec.ts` | 実操作 QA で見つかった不具合の再発防止（URL の不正値、狭い幅のタブ、並べ替えの保持など） |
+| `masters.spec.ts` | マスタ編集（台帳: 1 対象 1 行・変更の履歴・＋ 変更）。追加・修正・削除の確認と影響月、検証エラーで保存不可、差分、ダウンロードの中身、下書きの復元と当て直し、gitlab モード（API を `page.route` でモック）、取り込みモード、a11y・ダーク・390px |
+| `gitlab-merge.spec.ts` | GitLab へのマージ方式: デモで CSV 編集 → MR → マージ待ち一覧・ヘッダーの件数 → マージ／取り下げ、can_merge の出し分け、設定画面、はみ出し |
+| `plan.spec.ts` | 稼働計画: 組織の月合計が core（`planView`）＋契約外予定と一致、時間で入力して人月で保存、1.0 超、組織の種別とリーダー |
+| `plan-cells.spec.ts` | 稼働計画のセル: 内訳の吹き出し、その場の修正（この月だけ／以降）、案件で選ぶ追加、過去月の確認、キーボード、候補の入力欄、ID を出さない表示 |
+| `plan-history.spec.ts` | 稼働計画の持ち方（SPEC §32）: 人 → 案件・契約外予定の行、「＋ 変更」（期間を分ける・0 で外す・過去は確認）、変更の履歴からの修正・削除、契約外予定の CSV、旧 URL の転送と画面の行き来（下書きを聞かずに続き）、台帳の「＋ 変更」、人の絞り込み、各幅のはみ出し |
 | `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・console.error 0・`NaN/undefined/null/Infinity/[object Object]` 非表示・`—円` 非表示・h1 あり・ダイアログが Esc で閉じる、を確認。失敗時は操作履歴をメッセージと添付に出す |
 
 ## 失敗したとき

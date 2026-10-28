@@ -267,3 +267,26 @@ for (const [w, theme] of [[1280, "light"], [768, "dark"], [390, "dark"]] as cons
     await expect(dialog(page).getByRole("button", { name: "反映" })).toBeInViewport();
   });
 }
+
+test("名前・所属・案件で人を絞り込める（数百人の組織で探す）。合計は絞り込んだ人の分", async ({ page }) => {
+  await gotoPage(page, "/plan");
+  const rows = page.locator("tr.yn-me-plan-row");
+  const all = await rows.count();
+  expect(all).toBeGreaterThan(5);
+  const q = page.getByRole("searchbox", { name: /稼働計画の人を/ });
+  await q.fill("小林");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("小林 玲奈");
+  await expect(page.locator(".yn-me-plan-filter .yn-table-count")).toContainText(`1 / ${all} 人`);
+  await expect(page.locator("tfoot")).toContainText("合計（1人）");
+  // 入力中もフォーカスは検索欄のまま
+  await expect(q).toBeFocused();
+  // 案件名・所属でも引ける（空白区切りはすべて含む）
+  await q.fill("インフラ 倉庫管理");
+  await expect(rows.first()).toContainText("インフラ保守チーム");
+  await q.fill("該当なしの語");
+  await expect(rows).toHaveCount(0);
+  await expect(page.locator(".yn-me-plan .yn-table-empty")).toContainText("条件に合う人がいません");
+  await q.fill("");
+  await expect(rows).toHaveCount(all);
+});

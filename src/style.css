@@ -2527,6 +2527,13 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-toolbar .yn-select {
   max-width: min(100%, 420px);
 }
+.yn-me-plan-filter {
+  align-items: center;
+  margin-top: -4px;
+}
+.yn-me-plan-filter .yn-me-search {
+  max-width: 280px;
+}
 .yn-me-plan-fy {
   display: inline-flex;
   align-items: center;
