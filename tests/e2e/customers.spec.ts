@@ -197,12 +197,14 @@ test.describe("顧客一覧 /customers", () => {
     }
   });
 
-  test("サイドバーに『顧客別』があり、チーム一覧の次に並ぶ", async ({ page }) => {
+  test("上部タブに『顧客』があり、チームの次に並び、一覧・詳細の両方で選択状態になる", async ({ page }) => {
     await go(page, "/customers");
-    const items = await page.locator("#observablehq-sidebar a").allTextContents();
-    const names = items.map((x) => x.trim()).filter(Boolean);
-    expect(names.indexOf("顧客別")).toBe(names.indexOf("チーム一覧") + 1);
-    expect(names).not.toContain("顧客詳細");
+    const tabs = page.locator(".yn-tabs a");
+    const names = (await tabs.allTextContents()).map((x) => x.trim()).filter(Boolean);
+    expect(names.indexOf("顧客")).toBe(names.indexOf("チーム") + 1);
+    await expect(tabs.filter({ hasText: "顧客" })).toHaveAttribute("aria-current", "page");
+    await go(page, `/customer?key=${encodeURIComponent(listed()[0]!.key)}`);
+    await expect(page.locator(".yn-tabs a").filter({ hasText: "顧客" })).toHaveAttribute("aria-current", "page");
   });
 });
 

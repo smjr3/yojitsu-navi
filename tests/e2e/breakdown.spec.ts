@@ -11,7 +11,7 @@ const model = getModel();
 const FY = fiscalPeriod(model);
 
 test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致する", async ({ page }) => {
-  await gotoPage(page, inYen("/"));
+  await gotoPage(page, "/");
   const kpi = kpiValue(page, 1);
   const shown = (await kpi.textContent())!.trim();
   // KPI は画面の既定単位（百万円）の表示、dialog の金額は単位に関係なく常に円
@@ -100,7 +100,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
 });
 
 test("予算の月割り: 総額 ÷ 月数 = 基本額、端数は最終月に加算（C005: 38,000,000 → 3,166,666 / 3,166,674）", async ({ page }) => {
-  await gotoPage(page, inYen("/contract?id=C005"));
+  await gotoPage(page, "/contract?id=C005");
   const r = contractResult("C005", model);
   const table = tableByCaption(page, "月ごとの予実");
   const h = await headerIndex(table);
@@ -160,7 +160,7 @@ test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する",
 });
 
 test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残り月 の算術が通る（C008・直近実績）", async ({ page }) => {
-  await gotoPage(page, inYen("/contract?id=C008"));
+  await gotoPage(page, "/contract?id=C008");
   const r = contractResult("C008", model);
   const f = r.forecasts.recent3;
   const b = f.breakdown;

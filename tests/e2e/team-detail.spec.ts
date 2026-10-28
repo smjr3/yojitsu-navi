@@ -224,8 +224,8 @@ test("遷移: チーム一覧の行・全体サマリーのチーム別の行か
   await sum.locator(`tbody tr[data-key="${key}"] .yn-row-link`).click();
   await expect(page).toHaveURL(/\/team\?/);
   expect(query(page).get("id")).toBe(key);
-  // サイドバーには出ない
-  await expect(page.locator("#observablehq-sidebar").getByRole("link", { name: "チーム詳細" })).toHaveCount(0);
+  // チーム詳細は独立したタブを持たず、上部の「チーム」タブが選択状態になる
+  await expect(page.locator(".yn-tabs a").filter({ hasText: "チーム" })).toHaveAttribute("aria-current", "page");
 });
 
 test("キーボード: フィルタ・並べ替え・行リンク・数値ボタンに Tab で到達できる", async ({ page }) => {

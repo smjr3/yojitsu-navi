@@ -92,10 +92,11 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("初期表示: サイドバーの最後に「マスタ編集」、4 つのタブ、説明文、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのタブ、説明文、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
-  const links = page.locator("#observablehq-sidebar a");
+  const links = page.locator(".yn-tools a");
   await expect(links.last()).toHaveText("マスタ編集");
+  await expect(links.last()).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /チーム/, /アサイン/]);
   await expect(page.getByRole("heading", { name: /何を編集すると何が変わるか/ })).toBeVisible();
   await expect(page.locator(".yn-me-intro")).toContainText("原価 = 作業時間 × 単価");

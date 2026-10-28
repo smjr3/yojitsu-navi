@@ -79,7 +79,7 @@ test.describe("全体サマリー", () => {
     const q = query(page);
     expect(q.get("from")).toBe(FY.from);
     expect(q.get("to")).toBe(FY.to);
-    expect(q.get("unit")).toBe(DEFAULT_UNIT);
+    expect(q.get("unit")).toBe("yen");
     expect(q.get("method")).toBe("recent3");
   });
 
