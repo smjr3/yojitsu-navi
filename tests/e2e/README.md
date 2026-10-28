@@ -37,7 +37,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | ファイル | 内容 |
 |---|---|
 | `smoke.spec.ts` | 全ページ（`/`, `/teams`, `/contracts`, `/contract?id=C008`, `/contract?id=NOPE`, `/rules`, `/data-check`）がエラー 0・失敗リクエスト 0 で開き、h1 と 計算基準日 2026-10-27 がある |
-| `numbers.spec.ts` | KPI・チーム行・契約行・契約詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。千円、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
+| `numbers.spec.ts` | KPI・チーム行・契約行・契約詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。既定単位（百万円）の検証、百万円→千円→円の往復、0.0百万円の丸め、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
 | `breakdown.spec.ts` | 内訳パネル: 原価（契約ごとの合計 = 表示値）、作業ログの遅延読み込み、予算の月割り（C005: 3,166,666 / 最終月 3,166,674）、消化率、着地見込みの算術、Esc・フォーカス復帰・フォーカストラップ |
 | `navigation.spec.ts` | チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role / aria-labelledby、img / svg の代替、状態チップの文字、390px 幅で横スクロール無し、ダークモード、印刷メディア |
@@ -52,5 +52,6 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 ## 設計メモ
 
 - セレクタは `docs/UI_NOTES.md` のもの（`.yn-kpi .yn-kpi-value`、`.yn-seg-btn[data-preset|data-unit]`、`#yn-filter-from/to/team`、`input[name=yn-method]`、`dialog.yn-dialog[open]`、`table tbody tr[data-key]`、`.yn-row-link`、`.yn-tree-toggle`、`.yn-table-toolbar .yn-export`、`#yn-f-*`、`.yn-forecast-card.is-selected`）。表の列は**見出しの文字**（予算・原価・粗利…）で引くので列の追加・並び替えに強い
+- 単位: 画面の既定は百万円（`DEFAULT_UNIT` は config から導出）。厳密に突き合わせるテストは URL に `unit=yen` を付けて円で比べ、既定単位の画面は `yen(v, DEFAULT_UNIT)` で比べる。計算根拠 dialog と Excel の金額は常に円（`yen(v, "yen")`）
 - `helpers/app.ts` の `test` は auto フィクスチャで console.error / pageerror / 失敗リクエストを集め、テスト終了時に 0 件を要求する
 - `helpers/core.ts` が `src/core` と `scripts/lib/load.ts` を直接 import する（Playwright の TS ローダが `.js` 拡張子の import を `.ts` に解決する）

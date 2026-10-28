@@ -9,6 +9,8 @@ const model = buildModelFromData();
 const lean = {
   ...model,
   contracts: model.contracts.map(stripWorklogs),
+  // メンバー別（§18）は data/member-months.json で別に配る（メンバー別の画面だけが読む）
+  memberMonths: [],
   /** 作業ログ明細の取得先（契約IDごと）。画面側は相対パスで fetch する */
   worklogDetailPath: "data/worklogs/{contractId}.json",
 };

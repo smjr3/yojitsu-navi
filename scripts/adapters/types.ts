@@ -5,6 +5,7 @@
  * ファイルへの書き出しや _meta.json の更新は scripts/fetch-worklogs.ts が行う。
  */
 import type { Config, Worklog, YearMonth } from "../../src/core/types.js";
+import type { FetchReport } from "./http-source.js";
 
 export interface FetchOptions {
   /** 取得開始月（含む） */
@@ -18,6 +19,8 @@ export interface FetchOptions {
   rootDir?: string;
   /** 進捗ログの出力先（既定: console.error）。トークン等の秘密は絶対に出さないこと */
   log?: (message: string) => void;
+  /** 列の対応表などの診断情報の受け取り先（--dry-run 用。http アダプタだけが呼ぶ） */
+  report?: (r: FetchReport) => void;
 }
 
 export interface WorklogAdapter {

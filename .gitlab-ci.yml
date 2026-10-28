@@ -12,6 +12,8 @@
 #
 # 必要な CI/CD 変数（Settings > CI/CD > Variables、Masked 推奨）:
 #   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
+#   MEMBER_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-members（所属・役職の取り込み）も動く。既定は無効
+#   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
 #   GIT_PUSH_TOKEN      data/worklogs を書き戻すための Project Access Token（role: Developer、scope: write_repository）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する
@@ -90,6 +92,10 @@ test:
 build:
   stage: build
   <<: *normal-rules
+  variables:
+    # マスタ編集（src/data/masters.json.ts）が各 CSV の最終コミット ID を履歴から取るため、浅いクローンにしない
+    # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
+    GIT_DEPTH: "0"
   script:
     - npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
@@ -129,6 +135,7 @@ pages:
 # --------------------------------------------------------------------------
 fetch-worklogs:
   stage: validate
+  resource_group: data-writeback
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   variables:
@@ -150,5 +157,36 @@ fetch-worklogs:
       else
         git commit -m "chore(data): 作業実績を更新 ($(date -u +%Y-%m-%dT%H:%MZ)) [skip schedule]"
         # トークンは URL に埋め込むがログには出ない（set -x しない）。push が通常パイプラインを起動し、build → pages まで進む
+        git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
+      fi
+
+# --------------------------------------------------------------------------
+# fetch-members: 所属・役職を人事データから取り込み、data/masters/members.csv に書き戻す
+#   既定は無効。スケジュール実行 かつ CI/CD 変数 MEMBER_FETCH_ENABLED=1 のときだけ動く。
+#   config.json の memberSource.adapter が none のままなら何もしない（変更なし）。
+#   変わった人だけ実行月の行が追加される（冪等）。fetch-worklogs と同時に書き戻さないよう resource_group を共有する
+# --------------------------------------------------------------------------
+fetch-members:
+  stage: validate
+  resource_group: data-writeback
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $MEMBER_FETCH_ENABLED == "1"
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    - test -n "$GIT_PUSH_TOKEN" || { echo "GIT_PUSH_TOKEN が未設定です"; exit 1; }
+    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
+    - npm run fetch:members
+    - npm run validate
+    - git config user.name "yojitsu-navi-bot"
+    - git config user.email "yojitsu-navi-bot@example.local"
+    - git add data/masters/members.csv
+    - |
+      if git diff --cached --quiet; then
+        echo "メンバーに変更はありません"
+      else
+        git commit -m "chore(data): メンバーの所属・役職を更新 ($(date -u +%Y-%m-%dT%H:%MZ)) [skip schedule]"
+        # fetch-worklogs が先に書き戻していても取り込めるよう、data は衝突しないので rebase してから push する
+        git pull --rebase "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "${CI_COMMIT_BRANCH}"
         git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
       fi

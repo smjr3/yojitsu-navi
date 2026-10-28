@@ -3,6 +3,7 @@
  */
 export * from "./types.js";
 export { normalizeName } from "./normalize.js";
+export { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey, groupByCustomer, type CustomerGroup } from "./customers.js";
 export {
   addMonths,
   businessDaysInMonth,
@@ -61,6 +62,17 @@ export { lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } 
 export { FORECAST_METHODS, forecastAllMethods, forecastContract, type ForecastContext } from "./forecast.js";
 export { buildModel, type BuildModelOptions } from "./model.js";
 export {
+  aggregateMembers,
+  buildMemberMonths,
+  memberBaseMonth,
+  memberMonthlySeries,
+  memberRateHistory,
+  memberRecordsOf,
+  utilizationOf,
+  type MemberRateSegment,
+  type MemberScope,
+} from "./members.js";
+export {
   UNASSIGNED_TEAM_ID,
   UNASSIGNED_TEAM_LABEL,
   aggregate,
@@ -72,4 +84,13 @@ export {
 } from "./aggregate.js";
 export { parseCsvTable, parseCsvText, parseDataset, parseNumberCell, type CsvTable, type DatasetFiles, type ParsedDataset } from "./csv.js";
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
-export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen } from "./money.js";
+export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";
+export {
+  teamMemberCosts,
+  teamOrgChanges,
+  teamPath,
+  type TeamMemberCost,
+  type TeamOrgChange,
+  type TeamOrgChangeKind,
+  type TeamOrgChangeRelation,
+} from "./team-detail.js";

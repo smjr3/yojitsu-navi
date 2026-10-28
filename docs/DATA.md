@@ -16,3 +16,37 @@
 | `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }` |
 
 `config.json` の項目は `src/core/types.ts` の `Config` を参照。
+
+## 取り込み元の設定（config.json の `worklogSource.http` と `memberSource`）
+
+コードを変えずに本番 API の列名・形式へ合わせるための設定。手順は README「本番 API への合わせ方」。トークンは環境変数だけ（`WORKLOG_API_TOKEN`、メンバーは `MEMBER_API_TOKEN`）。
+
+### `worklogSource.http`
+
+| 項目 | 意味 | 既定 |
+|---|---|---|
+| `url` | 取得 URL。`{from}` `{to}`（`YYYY-MM`）、`{fromDate}` `{toDate}`（`YYYY-MM-DD`、月初・月末）を置換 | 必須 |
+| `authHeader` / `authScheme` | トークンを載せるヘッダ名 / 値の接頭辞 | `Authorization` / `Bearer`（他のヘッダ名なら接頭辞なし） |
+| `method` | `GET` / `POST` | `GET` |
+| `dataPath` | JSON 応答で配列が入っているキー（`data.items`） | 応答全体が配列 |
+| `columns.<項目>` | 取得元の列名。`member.id` で入れ子、`["a","b"]` で複数候補（最初に値があるもの）。項目: `date, memberId, memberName, customerName, projectName, task, hours` | 必須 |
+| `dateFormat` | `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601`（JST に変換） / `epochMillis` | 自動判定 |
+| `hoursUnit` | `hours` / `minutes` / `seconds` | `hours` |
+| `pagination` | `{type:"none"}` / `{type:"page", pageParam, sizeParam, size, startPage}` / `{type:"offset", offsetParam, limitParam, limit}` / `{type:"link"}` / `{type:"cursor", cursorPath, cursorParam}`。どれも `maxPages`（既定 1000）を付けられる | `none` |
+| `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | なし |
+| `filters` | 取り込まない行の条件 `[{ "column": "state", "notEquals": "cancelled" }]`（`equals` / `notEquals` / `in`。すべてに合う行だけ取り込む） | なし |
+| `encoding` | CSV 応答の文字コード `auto` / `utf-8` / `shift_jis` | `auto` |
+| `refetchMonths` | 直近何か月を取り直すか | 3 |
+
+### `memberSource`（所属・役職の取り込み）
+
+| 項目 | 意味 |
+|---|---|
+| `adapter` | `none`（既定。members.csv は手入力）/ `csv`（人事の CSV を置く）/ `http` |
+| `csv.path`, `csv.encoding` | `adapter: "csv"` の CSV のパス（リポジトリ相対）と文字コード |
+| `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ） |
+| `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, department, section` は省略可（省略した項目は取り込まず現在の値を引き継ぐ）。入れ子・複数候補は上と同じ |
+| `kindMap` | 区分値の読み替え。例 `{ "正社員": "employee", "委託": "partner" }` |
+| `filters` | 取り込まない行の条件（退職者の除外など）。csv・http 共通 |
+
+`npm run fetch:members` で `data/masters/members.csv` を更新する。`team_id` は取り込まない。変化した人だけ `effective_from = 実行月` の行を追加（`team_id` は引き継ぎ）、取り込み元に無い人は削除しない。何度流しても同じ結果。

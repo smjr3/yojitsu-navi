@@ -27,12 +27,15 @@ function contractIds() {
  */
 const NAV = [
   { name: "全体", path: "/", match: ["/", "/index"] },
-  { name: "チーム", path: "/teams" },
+  { name: "チーム", path: "/teams", match: ["/teams", "/team"] },
+  { name: "顧客", path: "/customers", match: ["/customers", "/customer"] },
   { name: "契約", path: "/contracts", match: ["/contracts", "/contract"] },
+  { name: "メンバー", path: "/members", match: ["/members", "/member"] },
 ];
 const TOOLS = [
   { name: "データ確認", path: "/data-check" },
   { name: "計算ルール", path: "/rules" },
+  { name: "マスタ編集", path: "/masters" },
 ];
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -58,9 +61,12 @@ export default {
   pages: [
     { name: "全体サマリー", path: "/" },
     { name: "チーム一覧", path: "/teams" },
+    { name: "顧客別", path: "/customers" },
     { name: "契約一覧", path: "/contracts" },
+    { name: "メンバー別", path: "/members" },
     { name: "計算ルール", path: "/rules" },
     { name: "データ確認", path: "/data-check" },
+    { name: "マスタ編集", path: "/masters" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
   // ID はパスとして安全な形に encodeURIComponent する（ローダ側で decodeURIComponent）。画面の fetchWorklogs も同じ符号化で取得する

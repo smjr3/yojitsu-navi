@@ -32,7 +32,28 @@
       }
     }
   },
+  "memberSource": {
+    "adapter": "none",
+    "csv": { "path": "data/hr/members.csv" },
+    "columns": {
+      "memberId": "member_id",
+      "name": "name",
+      "kind": "kind",
+      "title": "title",
+      "department": "department",
+      "section": "section"
+    }
+  },
   "costTypes": [
     { "id": "labor", "label": "工数原価" }
-  ]
+  ],
+  "masterEdit": {
+    "mode": "download",
+    "gitlab": {
+      "apiBaseUrl": "",
+      "projectId": "",
+      "targetBranch": "main",
+      "commitMode": "mr"
+    }
+  }
 }

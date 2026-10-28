@@ -28,10 +28,12 @@ import { AS_OF, ROOT_DIR } from "../constants.js";
 export { UNASSIGNED_TEAM_ID, aggregate, forecastTotals, formatPercent, formatYen };
 export type { ContractResult, ForecastMethod, Model, Period, Totals };
 
-export type Unit = "m" | "k" | "yen";
-const CORE_UNITS = { m: "millionYen", k: "thousandYen", yen: "yen" } as const;
-/** 画面の既定単位（config.json の currency.defaultUnit） */
-export const DEFAULT_UNIT: Unit = (Object.keys(CORE_UNITS) as Unit[]).find((u) => CORE_UNITS[u] === JSON.parse(readFileSync(join(ROOT_DIR, "config.json"), "utf-8")).currency.defaultUnit) ?? "yen";
+/** 画面の単位 ID: "m"（百万円）| "k"（千円）| "yen"（円）。src/components/format.js の UNITS と同じ */
+export type Unit = "yen" | "k" | "m";
+
+const UNIT_BY_CORE = { millionYen: "m", thousandYen: "k", yen: "yen" } as const;
+const CORE_BY_UNIT = { m: "millionYen", k: "thousandYen", yen: "yen" } as const;
+export const UNIT_LABEL: Record<Unit, string> = { m: "百万円", k: "千円", yen: "円" };
 
 let cached: Model | null = null;
 
@@ -67,9 +69,18 @@ export function presetPeriod(id: "fy" | "prevFy" | "recent3" | "recent12", model
   }
 }
 
-/** 画面と同じ金額書式（unit: "m" | "k" | "yen"。省略時は画面の既定単位） */
-export function yen(value: number | null | undefined, unit: Unit = DEFAULT_UNIT): string {
-  return formatYen(value, CORE_UNITS[unit]);
+/**
+ * 画面の既定の表示単位。config.json の currency.defaultUnit から導く（将来の既定変更に追従する）。
+ * 数値を厳密に突き合わせるテストは、これに頼らず URL に unit=yen を明示すること。
+ */
+export const DEFAULT_UNIT: Unit = UNIT_BY_CORE[getModel().config.currency?.defaultUnit as keyof typeof UNIT_BY_CORE] ?? "m";
+
+/**
+ * 画面と同じ金額書式。unit 省略 = 円（計算根拠パネル（dialog）・Excel の金額は常に円）。
+ * 画面の表（既定単位）と比べるときは yen(v, DEFAULT_UNIT) のように単位を明示する。
+ */
+export function yen(value: number | null | undefined, unit: Unit = "yen"): string {
+  return formatYen(value, CORE_BY_UNIT[unit]);
 }
 
 /** 期間の終了月時点の組織木（analysis.treeAt と同じ） */

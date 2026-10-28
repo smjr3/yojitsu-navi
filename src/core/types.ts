@@ -42,25 +42,97 @@ export interface Config {
   currency: { code: string; defaultUnit: MoneyUnit };
   labels: { customer: string; project: string; contract: string; team: string; member: string };
   worklogSource: WorklogSourceConfig;
+  /** 所属・役職の取り込み元（省略 = none: 手入力） */
+  memberSource?: MemberSourceConfig;
   costTypes: CostTypeDef[];
+  /** マスタ編集画面の保存方式（SPEC §19.2）。省略時は download */
+  masterEdit?: MasterEditConfig;
+}
+
+/** マスタ編集の保存方式（SPEC §19.2） */
+export interface MasterEditConfig {
+  /** gitlab = API でコミット／MR、download = CSV をダウンロードして GitLab 画面でアップロード */
+  mode: "gitlab" | "download";
+  gitlab: {
+    /** 例 https://gitlab.example.local/api/v4。空なら download に落とす */
+    apiBaseUrl: string;
+    /** 数値ID または "group/project"。空なら download に落とす */
+    projectId: string;
+    targetBranch: string;
+    /** mr = 新しいブランチにコミットして MR を作成、direct = targetBranch へ直接コミット */
+    commitMode: "mr" | "direct";
+  };
+}
+
+/** 取得元の列指定。ドット区切りで入れ子（"member.id"）、配列なら複数候補（最初に値があるもの） */
+export type ColumnSpec = string | string[];
+
+export type DateFormat = "YYYY-MM-DD" | "YYYY/MM/DD" | "YYYYMMDD" | "ISO8601" | "epochMillis";
+
+export type PaginationConfig =
+  | { type: "none" }
+  | { type: "page"; pageParam: string; sizeParam: string; size: number; startPage?: number; maxPages?: number }
+  | { type: "offset"; offsetParam: string; limitParam: string; limit: number; maxPages?: number }
+  | { type: "link"; maxPages?: number }
+  | { type: "cursor"; cursorPath: string; cursorParam: string; maxPages?: number };
+
+/** 取り込まない行の条件。equals / notEquals / in のどれか1つを書く */
+export interface SourceFilter {
+  column: string;
+  equals?: string | number | boolean;
+  notEquals?: string | number | boolean;
+  in?: Array<string | number | boolean>;
+}
+
+/** http 取得元の共通設定（作業実績・メンバーで共有） */
+export interface HttpSourceOptions {
+  url: string;
+  authHeader: string;
+  /** 任意: JSON応答で配列がネストしている場合のパス（例 "data.items"） */
+  dataPath?: string;
+  /** 任意: 認証ヘッダの値の接頭辞（例 "Bearer"） */
+  authScheme?: string;
+  /** 任意: HTTPメソッド（既定 GET） */
+  method?: string;
+  /** 任意: ページング（既定 none） */
+  pagination?: PaginationConfig;
+  /** 任意: 追加のクエリ文字列（固定値）。{from} {to} {fromDate} {toDate} を置換 */
+  query?: string;
+  /** 任意: 取り込まない行の条件（すべてに合う行だけ取り込む） */
+  filters?: SourceFilter[];
+  /** 任意: CSV 応答の文字コード（既定 auto） */
+  encoding?: "auto" | "utf-8" | "shift_jis";
 }
 
 export interface WorklogSourceConfig {
   adapter: "csv" | "http" | "dummy";
   csv: { path: string };
-  http: {
-    url: string;
-    authHeader: string;
+  http: HttpSourceOptions & {
     refetchMonths: number;
-    /** 任意: JSON応答で配列がネストしている場合のパス（例 "data.items"） */
-    dataPath?: string;
-    /** 任意: 認証ヘッダの値の接頭辞（例 "Bearer"） */
-    authScheme?: string;
-    /** 任意: HTTPメソッド（既定 GET） */
-    method?: string;
-    /** 取得元の列名 → 予実ナビの項目名 */
-    columns: Record<keyof Worklog, string>;
+    /** 取得元の列名 → 予実ナビの項目名（配列は複数候補） */
+    columns: Record<keyof Worklog, ColumnSpec>;
+    /** 任意: 日付の形式（既定: 自動判定） */
+    dateFormat?: DateFormat;
+    /** 任意: 作業時間の単位（既定 hours） */
+    hoursUnit?: "hours" | "minutes" | "seconds";
   };
+}
+
+/** 所属・役職の取り込み項目（team_id は取り込まない） */
+export type MemberImportField = "memberId" | "name" | "kind" | "title" | "department" | "section";
+
+/** 所属・役職の取り込み元（人事系）。adapter が none の間は手入力 */
+export interface MemberSourceConfig {
+  adapter: "csv" | "http" | "none";
+  /** csv: 人事の CSV を置く運用 */
+  csv?: { path: string; encoding?: "auto" | "utf-8" | "shift_jis" };
+  http?: HttpSourceOptions;
+  /** 取得元の列名。memberId と name は必須、他は省略可（省略した項目は取り込まず、現在の値を引き継ぐ） */
+  columns?: Partial<Record<MemberImportField, ColumnSpec>>;
+  /** 任意: 区分の値の読み替え（例 {"正社員":"employee","委託":"partner"}） */
+  kindMap?: Record<string, MemberKind>;
+  /** 任意: 取り込まない行の条件（csv / http 共通。退職者の除外など） */
+  filters?: SourceFilter[];
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +401,141 @@ export interface Model {
   unmapped: UnmappedWorklogGroup[];
   /** 顧客なし等で除外した工数の合計 */
   excludedHours: number;
+  /**
+   * メンバー×月の計画と実績（§18.1）。memberId 昇順 → month 昇順。
+   * 画面用の model.json では空にし、data/member-months.json で別に配る（メンバー別の画面だけが読む）
+   */
+  memberMonths: MemberMonth[];
+}
+
+// ---------------------------------------------------------------------------
+// メンバー別（SPEC §18）
+// ---------------------------------------------------------------------------
+
+/** メンバー x・月 m・契約 c の計画と実績（MemberMonth.byContract の 1 行） */
+export interface MemberContractMonth {
+  contractId: string;
+  /** その月に掛かるアサインの配分の合計（契約期間外の月・除外された契約は 0） */
+  allocation: number;
+  /** 掛かったアサインの件数。0 = アサインなし（この行の実績は unplanned に入る） */
+  assignmentCount: number;
+  /** allocation × standardHoursPerMonth */
+  plannedHours: number;
+  /** round(plannedHours × hourlyRate)。行（x, c, m）ごとに丸める */
+  plannedCost: number;
+  /** 契約 c・月 m の CostLine のうち memberId = x の時間 */
+  actualHours: number;
+  /** 同 CostLine の金額 */
+  actualCost: number;
+}
+
+/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 基準時間 × 単価、実績 = 工数原価） */
+export interface MemberMonth {
+  memberId: string;
+  month: YearMonth;
+  /** 当月のメンバーマスタの名前。無ければ作業ログの名前、それも無ければ ID */
+  memberName: string;
+  /** members.csv に（どの月にも）存在しない */
+  memberUnknown: boolean;
+  /** 当月の有効レコードの値（無ければ null） */
+  kind: MemberKind | null;
+  title: string | null;
+  teamId: string | null;
+  /** §6 の単価（当月） */
+  hourlyRate: number;
+  rateSource: { key: string; effectiveFrom: YearMonth } | null;
+  rateMissing: boolean;
+  /** 計算に使った基準時間（config.standardHoursPerMonth） */
+  standardHoursPerMonth: number;
+  plannedHours: number;
+  /** Σ_c plannedCost(x, c, m)（行ごとに丸めた額の合計） */
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  /** アサインの無い契約に付けた工数（actual のうちの内数） */
+  unplannedHours: number;
+  unplannedCost: number;
+  /** plannedCost − actualCost（正 = 計画より原価が少ない） */
+  variance: number;
+  /** 契約別の内訳（contractId 昇順） */
+  byContract: MemberContractMonth[];
+}
+
+/** aggregateMembers の契約別の行（期間内の合計） */
+export interface MemberContractTotals {
+  contractId: string;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
+  /** アサインが掛かった月の数（0 = 期間内にアサインなし） */
+  assignedMonths: number;
+  /** 期間内で計画か実績のある月 */
+  months: YearMonth[];
+}
+
+/** aggregateMembers のメンバー 1 人分（期間内の合計） */
+export interface MemberTotals {
+  memberId: string;
+  memberName: string;
+  memberUnknown: boolean;
+  /** 所属・役職・区分は基準月（期間の終了月。未来は asOf 月）の値。基準月に有効レコードが無ければ期間内の最後の値 */
+  teamId: string | null;
+  title: string | null;
+  kind: MemberKind | null;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  /** actualHours ÷ plannedHours（plannedHours 0 → null） */
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
+  /** 単価が見つからない月を含む */
+  rateMissing: boolean;
+  /** 実績に速報月を含む */
+  includesPreliminary: boolean;
+  /** 期間内で計画か実績のある月（昇順） */
+  months: YearMonth[];
+  byContract: MemberContractTotals[];
+}
+
+export interface MemberAggregate {
+  period: Period;
+  /** 所属チームを決めた月 = min(period.to, asOfMonth) */
+  baseMonth: YearMonth;
+  /** memberId 昇順 */
+  members: MemberTotals[];
+  total: {
+    memberCount: number;
+    plannedHours: number;
+    plannedCost: number;
+    actualHours: number;
+    actualCost: number;
+    variance: number;
+    utilization: number | null;
+    unplannedHours: number;
+    unplannedCost: number;
+  };
+}
+
+/** memberMonthlySeries の 1 点（期間の全月。データの無い月は 0） */
+export interface MemberMonthlyPoint {
+  month: YearMonth;
+  status: MonthStatus;
+  plannedHours: number;
+  plannedCost: number;
+  actualHours: number;
+  actualCost: number;
+  variance: number;
+  utilization: number | null;
+  unplannedHours: number;
+  unplannedCost: number;
 }
 
 // ---------------------------------------------------------------------------

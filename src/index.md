@@ -209,7 +209,7 @@ if (vm) {
     const un = teamRow(model, UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, 0, scope.period, method, tree);
     if (un.contractCount > 0) rows.push({ ...un, key: UNASSIGNED_TEAM_ID });
   }
-  display(sectionTitle("チーム別", `${scope.teamId ? `${scope.teamLabel} の配下チーム` : "事業部ごとの集計"}（${monthJa(scope.treeMonth)} 時点の組織）。契約数は期間内の契約、着地粗利は ${fiscalYearLabel(model.meta.fiscalYear)} に掛かる契約（件数を併記）が母集団です。行をクリックすると契約一覧に絞り込みます。`, html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>チーム一覧へ</a>`));
+  display(sectionTitle("チーム別", `${scope.teamId ? `${scope.teamLabel} の配下チーム` : "事業部ごとの集計"}（${monthJa(scope.treeMonth)} 時点の組織）。契約数は期間内の契約、着地粗利は ${fiscalYearLabel(model.meta.fiscalYear)} に掛かる契約（件数を併記）が母集団です。行をクリックするとそのチームの詳細に移動します。`, html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>チーム一覧へ</a>`));
   if (rows.length === 0) {
     display(emptyState({ title: "配下のチームはありません", text: "このチームは末端のチームです。契約一覧で契約ごとの数値を確認できます。", actions: [{ label: "契約一覧を開く", href: store.href("./contracts") }] }));
   } else {
@@ -229,7 +229,7 @@ if (vm) {
       }).map(withForecastCount),
       { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
-    display(dataTable({ columns, rows, unit, caption: "チーム別の集計", exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contracts", { team: r.teamId }) }));
+    display(dataTable({ columns, rows, unit, caption: "チーム別の集計", exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
   }
 }
 ```

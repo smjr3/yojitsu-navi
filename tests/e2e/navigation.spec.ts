@@ -3,7 +3,7 @@
  */
 import { createRequire } from "node:module";
 import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
-import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen } from "./helpers/core.js";
+import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen, UNIT_LABEL } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
@@ -11,7 +11,7 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
+test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
   await gotoPage(page, "/teams");
   const teams = tableByCaption(page, "チーム一覧");
   const leaf = "T111";
@@ -21,6 +21,10 @@ test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約�
   const link = teams.locator(`tbody tr[data-key="${leaf}"] .yn-row-link`);
   await expect(link).toContainText(tree[leaf]!.name);
   await link.click();
+  // チーム行はチーム詳細へ。契約一覧への絞り込みは詳細内のリンクから
+  await expect(page).toHaveURL(/\/team\?/);
+  expect(query(page).get("id")).toBe(leaf);
+  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe(leaf);
   await expect(page.locator("h1")).toHaveText("契約一覧");
@@ -50,7 +54,7 @@ test("チーム一覧 → 末端チーム → 契約一覧（team=）→ 契約�
   await expect(crumbs.nth(1).locator("a")).toHaveAttribute("href", new RegExp(`team=${leaf}`));
   await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(firstKey);
   // 主担当チームのリンクと「同じチームの契約一覧」
-  await expect(page.locator(".yn-facts a").first()).toHaveText(tree[r.contract.teamId!]!.name);
+  await expect(page.locator(".yn-facts > div").filter({ hasText: "主担当" }).locator("a")).toHaveText(tree[r.contract.teamId!]!.name);
   const same = page.getByRole("link", { name: "同じチームの契約一覧" });
   await expect(same).toBeVisible();
   await same.click();
@@ -80,8 +84,11 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   for (const id of descendants) await expect(table.locator(`tbody tr[data-key="${id}"]`)).toHaveCount(1);
-  // 中間の課（S21）→ 契約一覧
+  // 中間の課（S21）→ チーム詳細 → 契約一覧
   await table.locator('tbody tr[data-key="S21"] .yn-row-link').click();
+  await expect(page).toHaveURL(/\/team\?/);
+  expect(query(page).get("id")).toBe("S21");
+  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("S21");
   const ids = teamContractIds("S21", FY, model)!;
@@ -224,7 +231,7 @@ test("絞り込み: 赤字見込み / 消化率超過 / 速報含む / 期間外
 });
 
 test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表と一致する", async ({ page }) => {
-  // 表の値を円の精度で控えるため単位は円で開く（Excel は単位に関係なく常に円）
+  // 表を円で出して（URL に unit=yen）、Excel の円の整数と厳密に比べる。表示単位が変わっても Excel は円（下で確認）
   await gotoPage(page, "/contracts?unit=yen");
   const table = tableByCaption(page, "契約一覧");
   const h = await headerIndex(table);
@@ -282,23 +289,32 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     const cust = contractResult(s.id, model).contract.customerName;
     expect(r[ci("顧客")]).toBe(cust);
   }
-  // 千円表示にしても Excel の金額は円の整数（注記のとおり）
-  await page.locator(".yn-seg-btn[data-unit=k]").click();
-  await expect(cell(dataRows(tableByCaption(page, "契約一覧")).first(), col(h, "予算"))).toContainText("千円");
-  const dl2 = page.waitForEvent("download");
-  await page.locator(".yn-table-block").filter({ has: tableByCaption(page, "契約一覧") }).locator(".yn-export").click();
-  const d2 = await dl2;
-  const wb2 = XLSX.readFile((await d2.path())!);
-  const aoa2 = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb2.Sheets[wb2.SheetNames[0]!]!, { header: 1, defval: null });
-  const headerRow2 = aoa2.findIndex((r) => r.some((c) => c === "契約ID"));
-  const header2 = aoa2[headerRow2]!.map((x) => String(x ?? ""));
-  const budgetCol2 = header2.findIndex((x) => x.startsWith("予算（"));
-  expect(budgetCol2).toBeGreaterThanOrEqual(0);
-  const first = aoa2[headerRow2 + 1]!;
-  const id = String(first[header2.indexOf("契約ID")]);
-  const budgetYen = contractRowExpected(contractResult(id, model), FY, "recent3", model).totals.budget;
-  if (header2[budgetCol2] === "予算（円）") expect(first[budgetCol2]).toBe(budgetYen);
-  else if (header2[budgetCol2] === "予算（千円）") expect(first[budgetCol2]).toBe(Math.round(budgetYen / 1000));
-  else throw new Error(`予算列の単位が不明: ${header2[budgetCol2]}`);
-  expect(String(yen(budgetYen))).toContain("円");
+  // 表示単位が 百万円（既定）・千円 でも Excel の金額は円の整数（見出しも「（円）」のまま）
+  const bodyYen = body.map((r) => ({ id: String(r[ci("契約ID")]), budget: r[ci("予算（円）")], cost: r[ci("原価（円）")] }));
+  for (const unit of ["m", "k"] as const) {
+    await page.locator(`.yn-seg-btn[data-unit=${unit}]`).click();
+    await expect(page.locator(`.yn-seg-btn[data-unit=${unit}]`)).toHaveAttribute("aria-pressed", "true");
+    const first = dataRows(tableByCaption(page, "契約一覧")).first();
+    await expect(cell(first, col(h, "予算"))).toContainText(UNIT_LABEL[unit]);
+    const dl2 = page.waitForEvent("download");
+    await page.locator(".yn-table-block").filter({ has: tableByCaption(page, "契約一覧") }).locator(".yn-export").click();
+    const d2 = await dl2;
+    const wb2 = XLSX.readFile((await d2.path())!);
+    const aoa2 = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb2.Sheets[wb2.SheetNames[0]!]!, { header: 1, defval: null });
+    const headerRow2 = aoa2.findIndex((r) => r.some((c) => c === "契約ID"));
+    const header2 = aoa2[headerRow2]!.map((x) => String(x ?? ""));
+    expect(header2, `表示単位 ${unit} でも見出しは円`).toContain("予算（円）");
+    expect(header2.some((x) => /（(百万円|千円)）/.test(x)), `表示単位 ${unit} の見出しが混ざらない`).toBe(false);
+    const rows2 = aoa2.slice(headerRow2 + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+    expect(rows2.length).toBe(bodyYen.length);
+    for (let i = 0; i < rows2.length; i++) {
+      const id = String(rows2[i]![header2.indexOf("契約ID")]);
+      const e = contractRowExpected(contractResult(id, model), FY, "recent3", model);
+      expect(rows2[i]![header2.indexOf("予算（円）")], `${unit}: ${id} 予算（円）`).toBe(e.totals.budget);
+      expect(rows2[i]![header2.indexOf("原価（円）")], `${unit}: ${id} 原価（円）`).toBe(e.totals.cost);
+    }
+    // 表示は選択単位（core の値を同じ書式で丸めたもの）
+    const e0 = contractRowExpected(contractResult((await first.getAttribute("data-key"))!, model), FY, "recent3", model);
+    expect(await cellText(first, col(h, "予算"))).toBe(yen(e0.totals.budget, unit));
+  }
 });

@@ -1,9 +1,9 @@
 /**
  * 表示用の書式（計算コア money.ts のラッパ ＋ 単位切替 ＋ 日付・月・ラベル）
  *
- * 画面側の単位は "m"（百万円）| "k"（千円）| "yen"。計算コアの MoneyUnit（"millionYen" | "thousandYen" | "yen"）へ変換する。
+ * 画面側の単位は "m"（百万円・既定）| "k"（千円）| "yen"。計算コアの MoneyUnit へ変換する。
  */
-import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen } from "../core/index.js";
+import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../core/index.js";
 
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths };
 
@@ -17,9 +17,9 @@ export function toCoreUnit(unit) {
   return UNITS.find((u) => u.id === unit)?.coreUnit ?? "yen";
 }
 
-/** コアの MoneyUnit → 画面の単位 ID */
+/** config の MoneyUnit → 画面の単位 ID */
 export function fromCoreUnit(coreUnit) {
-  return UNITS.find((u) => u.coreUnit === coreUnit)?.id ?? "yen";
+  return UNITS.find((u) => u.coreUnit === coreUnit)?.id ?? "m";
 }
 
 /** 金額（円の整数）を選択中の単位で表示 */
@@ -34,8 +34,18 @@ export function money(yen, unit = "yen") {
 export function moneySigned(yen, unit = "yen") {
   if (typeof yen !== "number" || !Number.isFinite(yen)) return EMPTY_VALUE;
   const s = money(yen, unit);
-  if (s === money(0, unit) || s === `-${money(0, unit)}`) return `±${money(0, unit)}`;
+  if (roundToUnit(yen, toCoreUnit(unit)) === 0) return `±${money(0, unit)}`;
   return yen < 0 ? s : `+${s}`;
+}
+
+/**
+ * 差額（計画 − 実績）に添える文。判定は表示と同じ丸め後の値で行う（SPEC §12:
+ * 「±0.0百万円」なのに「計画より原価が少ない」と出さない）。
+ */
+export function varianceNote(yen, unit = "yen") {
+  if (typeof yen !== "number" || !Number.isFinite(yen)) return "";
+  const r = roundToUnit(yen, toCoreUnit(unit));
+  return r > 0 ? "計画より原価が少ない" : r < 0 ? "計画より原価が多い" : "計画どおり";
 }
 
 /** 割合の差（ポイント）。0.012 → "+1.2pt"。マイナスは formatPercent と同じ記号 */

@@ -21,6 +21,18 @@ export function grossMarginOf(budget, cost) {
   return budget !== 0 ? (budget - cost) / budget : null;
 }
 
+/**
+ * メンバー別をチームで絞るときの対象メンバーID（上位チームは配下を含む。UNASSIGNED は所属が空か木に無い人）。
+ * members は「期間全体」で集計した人の一覧にすること（経過月だけで作ると、未来月にだけアサインのある人が抜ける）。
+ * team が空なら null（絞らない）。
+ */
+export function memberIdsInTeam(members, team, tree) {
+  if (!team) return null;
+  if (team === UNASSIGNED_TEAM_ID) return members.filter((m) => !m.teamId || !tree[m.teamId]).map((m) => m.memberId);
+  const ids = new Set(tree[team]?.descendantIds ?? []);
+  return members.filter((m) => m.teamId && ids.has(m.teamId)).map((m) => m.memberId);
+}
+
 /** 組織の基準月: 期間終了月、ただし未来の組織は使わない（min(period.to, asOfMonth)） */
 export function treeMonthFor(model, period) {
   return period.to < model.meta.asOfMonth ? period.to : model.meta.asOfMonth;

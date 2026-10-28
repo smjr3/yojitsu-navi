@@ -7,7 +7,7 @@
 import { test as base, expect, type ElementHandle, type Page } from "@playwright/test";
 import { watchErrors, assertNoErrors, waitForPage } from "./helpers/app.js";
 
-const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/data-check"];
+const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/customers", "/customer?key=%E9%9D%92%E8%91%89%E7%89%A9%E6%B5%81", "/customer?key=nope", "/rules", "/data-check", "/team?id=S21", "/team?id=NOPE", "/members", "/member?id=M011", "/member?id=M099", "/member?id=NOPE", "/masters"];
 const seedsEnv = (process.env.MONKEY_SEEDS ?? "1,2,3").trim();
 const SEEDS = /^\d+$/.test(seedsEnv) && !seedsEnv.includes(",") ? Array.from({ length: Number(seedsEnv) }, (_, i) => i + 1) : seedsEnv.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
 const ACTIONS = Number(process.env.MONKEY_ACTIONS ?? 150);
@@ -77,7 +77,7 @@ for (const path of PAGES) {
               const m = text.match(/.{0,40}(\bNaN\b|\bundefined\b|\bnull\b|\bInfinity\b|\[object Object\]).{0,40}/);
               return m ? m[0] : null;
             })(),
-            emptyYen: /—\s*(千円|円)/.test(text) ? text.match(/.{0,40}—\s*(千円|円).{0,20}/)?.[0] ?? "—円" : null,
+            emptyYen: /—\s*(百万円|千円|円)/.test(text) ? text.match(/.{0,40}—\s*(百万円|千円|円).{0,20}/)?.[0] ?? "—円" : null,
             dialogs: document.querySelectorAll("dialog[open]").length,
           };
         });

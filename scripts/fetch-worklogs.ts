@@ -2,6 +2,7 @@
  * 作業実績の取得: 直近 N か月分を取り直して data/worklogs/YYYY-MM.csv を書き換える
  *
  *   npm run fetch                       # config.worklogSource.adapter で取得
+ *   npm run fetch -- --dry-run --sample=5   # ファイルを書かず、列の対応表と変換結果の先頭 N 行を表示（本番での初回設定用）
  *   npx tsx scripts/fetch-worklogs.ts --months 3 --asOf 2026-10-27 --adapter http
  *
  * - 取り直す月数は config.worklogSource.http.refetchMonths（既定 3）。
@@ -17,6 +18,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Worklog, YearMonth } from "../src/core/types.js";
 import { selectAdapter } from "./adapters/index.js";
+import type { FetchReport } from "./adapters/http-source.js";
+import { formatMappingTable } from "./lib/dry-run.js";
 import { formatWorklogCsv, sortWorklogs } from "./lib/csv.js";
 import { loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
 
@@ -28,6 +31,10 @@ interface CliOptions {
   asOf?: string;
   /** アダプタ名の上書き */
   adapter?: string;
+  /** ファイルを書かず、対応表と先頭 N 行を表示するための結果を返す */
+  dryRun?: boolean;
+  /** dry-run で表示する行数（既定 5） */
+  sample?: number;
 }
 
 function pad2(n: number): string {
@@ -59,6 +66,7 @@ export interface FetchResult {
   rowsByMonth: Record<YearMonth, number>;
   adapter: string;
   fetchedAt: string;
+  dryRun?: { total: number; sample: Worklog[]; report?: FetchReport };
 }
 
 export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = process.env, now: () => Date = () => new Date()): Promise<FetchResult> {
@@ -73,14 +81,31 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
 
   const log = (m: string) => console.error(m);
   log(`[fetch] アダプタ=${adapter.name} 対象月=${from}〜${to}`);
-  const rows = await adapter.fetch({ from, to, config, env, rootDir: opts.rootDir, log });
+  let report: FetchReport | undefined;
+  const rows = await adapter.fetch({ from, to, config, env, rootDir: opts.rootDir, log, report: (r) => (report = r) });
+
+  if (opts.dryRun) {
+    const sample = sortWorklogs(rows).slice(0, Math.max(0, opts.sample ?? 5));
+    const dry: NonNullable<FetchResult["dryRun"]> = { total: rows.length, sample };
+    if (report) dry.report = report;
+    const rowsByMonth: Record<YearMonth, number> = {};
+    for (const ym of months) rowsByMonth[ym] = rows.filter((w) => w.date.slice(0, 7) === ym).length;
+    return { months, rowsByMonth, adapter: adapter.name, fetchedAt: now().toISOString(), dryRun: dry };
+  }
 
   // 月ごとに振り分け（期間外は捨てる。対象月でデータが 0 件でも空ファイルを書く＝取り消しを反映）
   const byMonth = new Map<YearMonth, Worklog[]>(months.map((m) => [m, []]));
+  let outOfRange = 0;
   for (const w of rows) {
     const ym = w.date.slice(0, 7);
     const list = byMonth.get(ym);
     if (list) list.push(w);
+    else outOfRange++;
+  }
+  if (outOfRange > 0) log(`[fetch] 対象月（${from}〜${to}）以外の ${outOfRange} 行を除きました`);
+  // 取得行があるのに全て対象月外なら、日付の読み違いの可能性が高い。既存の月ファイルを空で上書きしない
+  if (rows.length > 0 && outOfRange === rows.length) {
+    throw new Error(`取得した ${rows.length} 行がすべて対象月（${from}〜${to}）の外でした。日付の形式を確認してください。月ファイルは書き換えていません`);
   }
 
   const dir = worklogDir(opts.rootDir, config);
@@ -100,10 +125,21 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
   return { months, rowsByMonth, adapter: adapter.name, fetchedAt };
 }
 
+/** --dry-run の表示 */
+export function formatDryRun(r: FetchResult): string[] {
+  const d = r.dryRun;
+  if (!d) return [];
+  const out = [`[dry-run] ファイルは書き込みません（adapter=${r.adapter}、対象月 ${r.months.join(", ")}）`, ""];
+  if (d.report) out.push(...formatMappingTable(d.report), "");
+  out.push(`変換後 ${d.total} 行（月別: ${r.months.map((m) => `${m}=${r.rowsByMonth[m] ?? 0}`).join(", ")}）。先頭 ${d.sample.length} 行:`);
+  for (const w of d.sample) out.push(`  ${w.date}\t${w.memberId}\t${w.memberName}\t${w.customerName}\t${w.projectName}\t${w.task}\t${w.hours}`);
+  return out;
+}
+
 export function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = { rootDir: process.cwd() };
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     const v = argv[i + 1];
     if (a === "--months" && v !== undefined) {
       opts.months = Number(v);
@@ -115,6 +151,12 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (a === "--adapter" && v !== undefined) {
       opts.adapter = v;
       i++;
+    } else if (a === "--dry-run") {
+      opts.dryRun = true;
+    } else if (a.startsWith("--sample=")) {
+      const n = Number(a.slice("--sample=".length));
+      if (!Number.isInteger(n) || n < 0) throw new Error(`--sample は 0 以上の整数で指定してください: ${a}`);
+      opts.sample = n;
     } else if (a === "--root" && v !== undefined) {
       opts.rootDir = v;
       i++;
@@ -127,6 +169,10 @@ const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) =
 if (isMain) {
   fetchWorklogs(parseArgs(process.argv.slice(2)))
     .then((r) => {
+      if (r.dryRun) {
+        console.log(formatDryRun(r).join("\n"));
+        return;
+      }
       console.log(`作業実績を更新しました: ${r.months.join(", ")} (adapter=${r.adapter}, fetchedAt=${r.fetchedAt})`);
     })
     .catch((e: unknown) => {
