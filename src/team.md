@@ -15,7 +15,7 @@ import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, teamMember
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns, withForecastCount } from "./components/table.js";
@@ -110,7 +110,7 @@ if (model && !teamId) {
 ```
 
 ```js
-if (store && teamId) display(filterBar(store, model, { show: ["period", "method", "unit"] }));
+if (store && teamId) mountFilterBar(store, model, { show: ["period", "method", "unit"] });
 ```
 
 ```js

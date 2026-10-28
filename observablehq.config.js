@@ -20,6 +20,40 @@ function contractIds() {
   }
 }
 
+/**
+ * 上部ナビゲーション（左サイドバーは使わない）。
+ * NAV = 画面の切り替えタブ、TOOLS = 右上の補助・管理リンク。match はタブを選択状態にするパス（詳細画面など）。
+ * 新しい画面はここに足す。href は "/" 始まりで書けば Framework がページごとの相対パスに書き換える。
+ */
+const NAV = [
+  { name: "全体", path: "/", match: ["/", "/index"] },
+  { name: "チーム", path: "/teams", match: ["/teams", "/team"] },
+  { name: "顧客", path: "/customers", match: ["/customers", "/customer"] },
+  { name: "契約", path: "/contracts", match: ["/contracts", "/contract"] },
+  { name: "メンバー", path: "/members", match: ["/members", "/member"] },
+];
+const TOOLS = [
+  { name: "データ確認", path: "/data-check" },
+  { name: "計算ルール", path: "/rules" },
+  { name: "マスタ編集", path: "/masters" },
+];
+
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/** 共通ヘッダ: ロゴ・タブ・右上リンク ＋ フィルタバーの差し込み口（mountFilterBar が使う） */
+function header({ path }) {
+  const isOn = (item) => (item.match ?? [item.path]).includes(path);
+  const link = (item, cls) =>
+    `<a class="${cls}" href="${item.path}"${isOn(item) ? ' aria-current="page"' : ""}>${escapeHtml(item.name)}</a>`;
+  return `<div class="yn-topbar">
+  <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>予実ナビ</a>
+  <nav class="yn-tabs" aria-label="画面">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
+  <div id="yn-unit-slot" class="yn-unit-slot"></div>
+  <nav class="yn-tools" aria-label="補助">${TOOLS.map((i) => link(i, "yn-tool")).join("")}</nav>
+</div>
+<div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
+}
+
 export default {
   title: "予実ナビ",
   root: "src",
@@ -40,7 +74,8 @@ export default {
   head: '<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">',
   toc: false,
   pager: false,
-  sidebar: true,
+  sidebar: false,
+  header,
   search: false,
   footer: "予実ナビ — 保守契約の予実（粗利）管理",
   // 社内GitLab Pages はサブパス配信のことが多いので相対パスにする

@@ -96,19 +96,34 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   expect(new Set(await rowKeys(tableByCaption(page, "契約一覧")))).toEqual(new Set(expected));
 });
 
-test("サイドバーのナビゲーションで全ページに行ける", async ({ page }) => {
+test("上部タブと右上のリンクで全ページに行ける（現在のページは aria-current）", async ({ page }) => {
   await gotoPage(page, "/");
-  const nav = page.locator("#observablehq-sidebar");
+  const header = page.locator("#observablehq-header");
+  await expect(page.locator("#observablehq-sidebar")).toHaveCount(0);
   for (const [name, h1] of [
-    ["チーム一覧", "チーム一覧"],
-    ["契約一覧", "契約一覧"],
+    ["チーム", "チーム一覧"],
+    ["契約", "契約一覧"],
     ["計算ルール", "計算ルール"],
     ["データ確認", "データ確認"],
-    ["全体サマリー", "全体サマリー"],
+    ["全体", "全体サマリー"],
   ] as const) {
-    await nav.getByRole("link", { name, exact: true }).click();
+    const link = header.getByRole("link", { name, exact: true });
+    await link.click();
     await expect(page.locator("h1")).toHaveText(h1);
+    await expect(header.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
   }
+  // 契約詳細では「契約」タブが選択状態
+  await gotoPage(page, "/contract?id=C008");
+  await expect(header.getByRole("link", { name: "契約", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
+test("フィルタはヘッダの固定バーにあり、スクロールしても画面上端に残る", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const bar = page.locator("#yn-filterbar-slot .yn-filters");
+  await expect(bar).toBeVisible();
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(async () => (await bar.boundingBox())?.y ?? -1).toBeLessThan(120);
+  await expect(page.locator("#yn-filter-from")).toBeInViewport();
 });
 
 test("見出しクリックで並べ替え: aria-sort が切り替わり、数値順（辞書順ではない）に並ぶ", async ({ page }) => {

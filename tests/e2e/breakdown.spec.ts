@@ -4,11 +4,14 @@
 import { test, expect, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, headerIndex, col, cell, cellText, parseNumber } from "./helpers/app.js";
 import { DEFAULT_UNIT, contractResult, contractsInPeriod, fiscalPeriod, formatPercent, getModel, totalsFor, yen } from "./helpers/core.js";
 
+/** 内訳の算術は円の精度で照合するので、表示単位を円にして開く（既定は百万円） */
+const inYen = (path: string) => `${path}${path.includes("?") ? "&" : "?"}unit=yen`;
+
 const model = getModel();
 const FY = fiscalPeriod(model);
 
 test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致する", async ({ page }) => {
-  await gotoPage(page, "/");
+  await gotoPage(page, inYen("/"));
   const kpi = kpiValue(page, 1);
   const shown = (await kpi.textContent())!.trim();
   // KPI は画面の既定単位（百万円）の表示、dialog の金額は単位に関係なく常に円
@@ -45,7 +48,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
   page.on("response", (res) => {
     if (/\/data\/worklogs\//.test(res.url())) worklogUrls.push(`${res.status()} ${res.url()}`);
   });
-  await gotoPage(page, "/contract?id=C008");
+  await gotoPage(page, inYen("/contract?id=C008"));
   const r = contractResult("C008", model);
   const month = "2026-10";
   const cm = r.months.find((m) => m.month === month)!;
@@ -58,7 +61,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
   await expect(d.locator("#yn-dialog-title")).toContainText("原価の計算根拠");
   await expect(d.locator("#yn-dialog-title")).toContainText("2026年10月");
   expect(await dialogRow(page, "原価行の数")).toBe(String(cm.costLines.length));
-  expect(await dialogRow(page, "2026年10月 の原価")).toBe(yen(cm.cost));
+  expect(await dialogRow(page, "2026年10月 の原価")).toBe(yen(cm.cost, "yen"));
   // メンバーごとの原価行の金額合計 = 月の原価
   const lines = d.locator(".yn-bd-section").first().locator("table tbody tr");
   await expect(lines).toHaveCount(cm.costLines.length);
@@ -85,7 +88,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
   await expect(foot).toContainText(`${entries.length} 件`);
   const wh = await headerIndex(wl);
   const total = entries.reduce((s, w) => s + w.amount, 0);
-  expect(await cellText(foot, col(wh, "金額"))).toBe(yen(total));
+  expect(await cellText(foot, col(wh, "金額"))).toBe(yen(total, "yen"));
   expect(total, "作業ログの金額合計 = 月の原価").toBe(cm.cost);
   // 行の金額の合計も一致
   const rows = wl.locator("tbody tr");
@@ -97,7 +100,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
 });
 
 test("予算の月割り: 総額 ÷ 月数 = 基本額、端数は最終月に加算（C005: 38,000,000 → 3,166,666 / 3,166,674）", async ({ page }) => {
-  await gotoPage(page, "/contract?id=C005");
+  await gotoPage(page, inYen("/contract?id=C005"));
   const r = contractResult("C005", model);
   const table = tableByCaption(page, "月ごとの予実");
   const h = await headerIndex(table);
@@ -131,7 +134,7 @@ test("予算の月割り: 総額 ÷ 月数 = 基本額、端数は最終月に�
 });
 
 test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する", async ({ page }) => {
-  await gotoPage(page, "/");
+  await gotoPage(page, inYen("/"));
   const kpi = kpiValue(page, 3);
   const shown = (await kpi.textContent())!.trim();
   await kpi.click();
@@ -144,8 +147,8 @@ test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する",
   expect(await dialogRow(page, "経過月")).toBe(`${b.elapsedMonths.length}か月`);
   const cost = await dialogRow(page, "累計原価（経過月）");
   const budget = await dialogRow(page, "累計予算（経過月）");
-  expect(cost).toBe(yen(b.cumulativeCost));
-  expect(budget).toBe(yen(b.cumulativeBudget));
+  expect(cost).toBe(yen(b.cumulativeCost, "yen"));
+  expect(budget).toBe(yen(b.cumulativeBudget, "yen"));
   const rate = await dialogRow(page, "消化率");
   expect(rate).toBe(shown);
   expect(rate).toBe(formatPercent(t.burnRate));
@@ -157,7 +160,7 @@ test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する",
 });
 
 test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残り月 の算術が通る（C008・直近実績）", async ({ page }) => {
-  await gotoPage(page, "/contract?id=C008");
+  await gotoPage(page, inYen("/contract?id=C008"));
   const r = contractResult("C008", model);
   const f = r.forecasts.recent3;
   const b = f.breakdown;
@@ -200,7 +203,7 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
 });
 
 test("Esc で閉じ、フォーカスは開いたボタンに戻り、開いている間はフォーカスが閉じ込められる", async ({ page }) => {
-  await gotoPage(page, "/");
+  await gotoPage(page, inYen("/"));
   const kpi = kpiValue(page, 1);
   await kpi.focus();
   await page.keyboard.press("Enter");

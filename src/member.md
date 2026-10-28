@@ -15,7 +15,7 @@ import { aggregateMembers, memberMonthlySeries, memberRecordsOf, memberBaseMonth
 import { createStore } from "./components/state.js";
 import { teamName, treeAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 // KPI 4 枚（計画原価・実績原価・差額・稼働率）。1024px でも 4 枚が 1 行（狭いと 2×2）に並ぶようにクラスを足す
 const memberKpiRow = (tiles) => {
@@ -142,7 +142,7 @@ if (vm) {
 ```
 
 ```js
-if (store && exists) display(filterBar(store, model, { show: ["period", "unit"] }));
+if (store && exists) mountFilterBar(store, model, { show: ["period", "unit"] });
 ```
 
 ```js

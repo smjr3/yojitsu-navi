@@ -15,7 +15,7 @@ import { createStore } from "./components/state.js";
 import { scopeFor } from "./components/analysis.js";
 import { customerGroups, customerHref, idsRow, groupBreakdowns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns, withForecastCount } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
@@ -76,7 +76,7 @@ if (model) {
 ```
 
 ```js
-if (store) display(filterBar(store, model));
+if (store) mountFilterBar(store, model);
 ```
 
 ```js

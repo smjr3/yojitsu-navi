@@ -16,7 +16,7 @@ import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns, withForecastCount } from "./components/table.js";
@@ -99,7 +99,7 @@ if (vm) {
 ```
 
 ```js
-if (store && group) display(filterBar(store, model, { show: ["period", "team", "method", "unit"] }));
+if (store && group) mountFilterBar(store, model, { show: ["period", "team", "method", "unit"] });
 ```
 
 ```js

@@ -59,8 +59,8 @@ export function periodPresets(model) {
   const prevFy = fiscalYearMonths(fy - 1, start);
   const recent = (n) => [addMonths(meta.asOfMonth, -(n - 1)), meta.asOfMonth];
   return [
-    { id: "fy", label: `今年度（FY${fy}）`, period: clip(thisFy) },
-    { id: "prevFy", label: `前年度（FY${fy - 1}）`, period: clip(prevFy) },
+    { id: "fy", label: `今年度（FY${fy}）`, short: "今年度", period: clip(thisFy) },
+    { id: "prevFy", label: `前年度（FY${fy - 1}）`, short: "前年度", period: clip(prevFy) },
     { id: "recent3", label: "直近3か月", period: clip(recent(3)) },
     { id: "recent12", label: "直近12か月", period: clip(recent(12)) },
   ];

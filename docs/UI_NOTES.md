@@ -20,10 +20,20 @@ src/
     breakdown.js   計算根拠パネル（<dialog>）と各 spec の組み立て、作業ログ明細の遅延取得
     table.js       一覧表（並べ替え・固定ヘッダ・右寄せ・状態チップ・行クリック・Excel 出力・木構造）
     charts.js      Observable Plot のグラフ（月次推移）、凡例、表の双子、消化率メーター
-    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）
+    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
   style.css        デザイントークン（ライト／ダーク）とスタイル
 ```
+
+## ナビゲーション（上部ヘッダ）
+
+左サイドバーは使わない（`sidebar: false`）。`observablehq.config.js` の `header()` が全ページ共通のヘッダを出す。
+
+- 1 段目: ロゴ ＋ **画面タブ**（`NAV`: 全体・チーム・契約。現在のページは `aria-current="page"`）＋ 右上に **表示単位**（`#yn-unit-slot`）と **補助リンク**（`TOOLS`: データ確認・計算ルール）
+- 2 段目: **固定フィルタバー**（`#yn-filterbar-slot`）。ページが `mountFilterBar()` を呼んだときだけ表示。期間（月＋プリセット）・チーム・着地見込みを 1 行に並べ、ヘッダごと `position: sticky` で上端に残る。フィルタの無いページ（計算ルール・データ確認）では出ない
+- href は `/teams` のように `/` 始まりで書けば Framework がページごとの相対パスに書き換える（GitLab Pages のサブパス配信でも動く）
+- スマホ（720px 未満）はタブを 2 段目に回して横スクロール、フィルタも 1 行で横スクロール
+- 1 段だけのパンくずはタブと重複するので `pageHeader` は 2 段以上のときだけ出す
 
 ## ページの構成（一画面一問）
 
@@ -88,7 +98,7 @@ spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMon
 `<th scope="col">` にソートボタンと `aria-sort`、先頭列は `<th scope="row">`。行クリックは `rowHref` のリンク（キーボードはリンクで到達）＋行全体のクリック。並べ替え・木の開閉で thead/tbody を描き直したあとは `data-key` で同じボタンにフォーカスを戻す（キーボード操作が途切れない）。
 合計行（`summary`）は行用の `breakdown(row)` を使わず、`summaryBreakdown(col)` が spec を返す列だけ根拠ボタンになる（契約一覧は表示中の契約 ID を母集団に `aggregate()` / `forecastTotals()` で合計し、同じ ID 集合で根拠を開く。契約詳細の月表の合計行は KPI と同じ `Totals` を表示し、根拠ボタンは付けない）。
 Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は **表示単位に関係なく常に円の整数**（列名「…（円）」、1 行目に「単位: 円」の注記、2 行目が見出し）。千円表示は画面だけの都合で、行ごとに丸めた値を出力して合計がずれることを避ける。割合は % の数値、月は `YYYY-MM`。
-幅の工夫（1280px・サイドバー開で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。契約一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（契約数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
+幅の工夫（1280px で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。契約一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（契約数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
 状態チップ（`rowStatus()`）は配列で、契約は「赤字見込み」「予算超過」、チーム行は「赤字 N件」（配下の赤字見込み契約数）「予算超過」。既定の並びは `statusSortValue()`（赤を先頭、その中は消化率の高い順）。
 契約詳細の月表は、予定（future）の月に選択方式の見込み原価（`forecastMonthlyCost`）を斜体＋「見込」チップで表示し、粗利・粗利率もそれに基づく（実績の無い月に 100% を出さない）。年度外の未来月（着地見込みの対象外）は状態を「年度外」とし、原価・粗利・粗利率は「—」（根拠ボタン無し）。月次推移の表とグラフも同じ扱い（グラフは予算棒をさらに薄くし、下に注記）。合計行の原価・粗利は実績月のみ。
 チーム行の「契約数」は期間内の契約、「着地粗利」は年度に掛かる契約が母集団で別物。見出しの 2 行目で「（期間内）」「（年度内）」と示し、着地粗利セルの 2 行目に年度内の件数を併記する（Excel には「契約数（年度内）」列）。
@@ -105,14 +115,14 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、原
 - フォント: `system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans JP"…`（Web フォント無し）。数値列・KPI は `tabular-nums`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。
-- `@media print` でサイドバー・フィルタ・ボタンを隠し、表の固定ヘッダを解除。
+- `@media print` で上部ヘッダ・フィルタ・ボタンを隠し、表の固定ヘッダを解除。
 
 ## ページを追加するには
 
 1. `src/<name>.md` を作り、先頭に front matter（`title`）と読み込み中スケルトン（`<div id="page-skeleton" class="yn-skeleton">`）を置く。
 2. 最初の `js` セルで `htl` / components / core を import。`const model = await loadJson(FileAttachment("./data/model.json"), {skeleton: "page-skeleton"})`、`const store = model ? createStore(model) : null`、`state = Generators.observe(...)`（既存ページからコピー）。
-3. `pageHeader({...})` → `filterBar(store, model, {show: [...]})` → 本文。セルは `if (vm) {...}` で囲み、`display()` で描く。
-4. サイドバーに出すなら `observablehq.config.js` の `pages` に追加（出さないページもビルドされる。契約詳細がその例）。
+3. `pageHeader({...})` → `mountFilterBar(store, model, {show: [...]})` → 本文。セルは `if (vm) {...}` で囲み、`display()` で描く。
+4. `observablehq.config.js` の `pages` に追加し、上部タブに出すなら `NAV`、右上の補助リンクなら `TOOLS` にも追加する（詳細画面は親タブの `match` にパスを足すとそのタブが選択状態になる。契約詳細がその例）。
 5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` を使う）。
 
 ## 検証の仕方

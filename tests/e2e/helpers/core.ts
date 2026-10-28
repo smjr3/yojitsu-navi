@@ -20,6 +20,8 @@ import {
   type TeamNode,
   type Totals,
 } from "../../../src/core/index.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadDataset } from "../../../scripts/lib/load.js";
 import { AS_OF, ROOT_DIR } from "../constants.js";
 

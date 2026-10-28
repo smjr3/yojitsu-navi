@@ -153,8 +153,254 @@ body {
 #observablehq-main ol {
   max-width: none;
 }
-#observablehq-sidebar {
-  font-family: var(--sans-serif);
+/* ---------------------------------------------------------------------------
+ * 上部ヘッダ（タブ ＋ 補助リンク ＋ 固定フィルタバー）。左サイドバーは使わない
+ * Framework の既定（position: fixed・固定高さ）を上書きし、ページ上端に貼り付く sticky にする
+ * ------------------------------------------------------------------------- */
+#observablehq-header {
+  position: sticky;
+  top: 0;
+  left: auto;
+  right: auto;
+  z-index: 10;
+  display: block;
+  height: auto;
+  margin: -16px -16px 16px;
+  padding: 0;
+  background: var(--yn-card);
+  border-bottom: 1px solid var(--yn-hairline);
+  font: 14px/1.5 var(--sans-serif);
+}
+#observablehq-header ~ #observablehq-main {
+  margin-top: 0;
+}
+:root:has(#observablehq-header) {
+  scroll-padding-top: 140px;
+}
+@media (min-width: 640px) {
+  #observablehq-header {
+    margin: -24px -32px 24px;
+  }
+}
+.yn-topbar {
+  display: flex;
+  align-items: stretch;
+  gap: 8px 24px;
+  min-height: 52px;
+  padding: 0 16px;
+}
+@media (min-width: 640px) {
+  .yn-topbar {
+    padding: 0 32px;
+  }
+}
+.yn-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--yn-link) !important;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.yn-brand-mark {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--yn-link);
+}
+.yn-brand-mark::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 3px;
+  height: 7px;
+  background: var(--yn-card);
+  box-shadow: 4px -3px 0 var(--yn-card), 8px -6px 0 var(--yn-card);
+}
+.yn-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.yn-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--yn-text-2) !important;
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.yn-tab:hover {
+  color: var(--yn-text-1) !important;
+  background: var(--yn-wash);
+}
+.yn-tab[aria-current="page"] {
+  color: var(--yn-text-1) !important;
+  font-weight: 700;
+  border-bottom-color: var(--yn-link);
+}
+.yn-unit-slot {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+.yn-unit-slot:empty {
+  display: none;
+}
+.yn-unit-slot .yn-filter-unit {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.yn-unit-slot .yn-seg-btn {
+  min-height: 28px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.yn-unit-slot .yn-seg-btn[aria-pressed="true"]::before {
+  content: "";
+}
+.yn-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.yn-unit-slot:empty + .yn-tools {
+  margin-left: auto;
+}
+.yn-tool {
+  padding: 4px 10px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  color: var(--yn-text-2) !important;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.yn-tool:hover {
+  background: var(--yn-wash);
+}
+.yn-tool[aria-current="page"] {
+  background: var(--yn-accent-bg);
+  border-color: var(--yn-focus);
+  color: var(--yn-text-1) !important;
+  font-weight: 600;
+}
+/* スマホ: タブを 2 段目に回して横スクロール */
+@media (max-width: 719px) {
+  .yn-topbar {
+    flex-wrap: wrap;
+    padding-top: 8px;
+  }
+  .yn-tabs {
+    order: 3;
+    flex-basis: 100%;
+    min-height: 40px;
+    margin: 0 -8px;
+  }
+  .yn-tool {
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+}
+.yn-filterbar-slot:not(.is-filled) {
+  display: none;
+}
+.yn-filterbar-slot {
+  border-top: 1px solid var(--yn-hairline);
+}
+.yn-filterbar-slot .yn-filters {
+  position: relative; /* visually-hidden など絶対配置の子をバーの中に閉じ込める */
+  margin: 0;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  align-items: center;
+  gap: 8px 20px;
+}
+@media (min-width: 640px) {
+  .yn-filterbar-slot .yn-filters {
+    padding: 8px 32px;
+  }
+}
+.yn-filterbar-slot .yn-filter,
+.yn-filterbar-slot .yn-filter-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.yn-filterbar-slot .yn-filter legend {
+  float: left;
+  width: auto;
+  margin: 0 6px 0 0;
+}
+.yn-filterbar-slot .yn-filter-period {
+  display: block;
+}
+.yn-filterbar-slot .yn-filter-period .yn-filter-row {
+  flex-wrap: wrap;
+}
+.yn-filterbar-slot #yn-filter-team {
+  max-width: 240px;
+}
+.yn-filterbar-slot .yn-select {
+  min-height: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.yn-filterbar-slot .yn-radio-group {
+  gap: 0;
+  flex-wrap: nowrap;
+}
+.yn-filterbar-slot .yn-radio {
+  position: relative; /* 隠した input の基準（ヘッダの外にはみ出して横スクロールを生まない） */
+  min-height: 30px;
+  padding: 0 10px;
+  border-right: 1px solid var(--yn-hairline-strong);
+}
+.yn-filterbar-slot .yn-radio:last-child {
+  border-right: 0;
+}
+.yn-filterbar-slot .yn-radio input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.yn-filterbar-slot .yn-radio:has(input:checked) {
+  background: var(--yn-accent-bg);
+  color: var(--yn-link) !important;
+  font-weight: 700 !important;
+}
+.yn-filterbar-slot .yn-radio:has(input:focus-visible) {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: -2px;
+}
+/* スマホ: フィルタは 1 行で横スクロール（縦に積んで画面を占有しない） */
+@media (max-width: 719px) {
+  .yn-filterbar-slot .yn-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .yn-filterbar-slot .yn-filter-period .yn-filter-row {
+    flex-wrap: nowrap;
+  }
+  .yn-filterbar-slot .yn-filter {
+    flex: none;
+  }
 }
 #observablehq-footer {
   margin-top: 64px;
@@ -1447,9 +1693,7 @@ th[aria-sort="descending"] .yn-sort-icon {
     --theme-background-a: #fff;
     --yn-card: #fff;
   }
-  #observablehq-sidebar,
-  #observablehq-sidebar-toggle,
-  #observablehq-sidebar-backdrop,
+  #observablehq-header,
   .yn-filters,
   .yn-chip-filters,
   .yn-table-toolbar .yn-export,
@@ -2074,4 +2318,29 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-member-history {
   margin: 0 0 16px;
+}
+
+/* 固定フィルタバー内のセグメント（期間プリセット・単位）を詰める */
+.yn-filterbar-slot .yn-seg {
+  flex-wrap: nowrap;
+}
+.yn-filterbar-slot .yn-seg-btn {
+  min-height: 30px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.yn-filterbar-slot .yn-seg-btn[aria-pressed="true"]::before {
+  content: "";
+}
+.yn-filterbar-slot .yn-filter-unit {
+  margin-left: auto;
+}
+@media (max-width: 719px) {
+  .yn-unit-slot .yn-filter-label {
+    display: none;
+  }
+  .yn-unit-slot .yn-seg-btn {
+    padding: 2px 6px;
+    font-size: 12px;
+  }
 }
