@@ -18,3 +18,17 @@ export const T = ja;
 export function fmt(template, params = {}) {
   return String(template).replace(/\{(\w+)\}/g, (whole, key) => (Object.prototype.hasOwnProperty.call(params, key) ? String(params[key]) : whole));
 }
+
+/**
+ * <strong> などの HTML タグを含む文言を画面用の要素にする（文言ファイルの中だけで使う。差し込む値はエスケープする）。
+ * @param {string} template
+ * @param {Record<string, unknown>} [params]
+ * @returns {DocumentFragment}
+ */
+export function rich(template, params = {}) {
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const escaped = Object.fromEntries(Object.entries(params).map(([k, v]) => [k, esc(v)]));
+  const t = document.createElement("template");
+  t.innerHTML = fmt(template, escaped);
+  return t.content;
+}
