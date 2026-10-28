@@ -162,7 +162,7 @@ test("スマホ幅（390）・ダーク: 編集欄は画面下のシートで、
   expect(hscroll).toBe(false);
 });
 
-test("アサインの追加: 案件を選び、期間が契約の切り替わりをまたぐと 2 行に分けて保存", async ({ page }) => {
+test("アサインの追加: 案件を選び、期間が案件の切り替わりをまたぐと 2 行に分けて保存", async ({ page }) => {
   await gotoPage(page, "/masters?view=assignments");
   await page.getByRole("button", { name: /アサインを追加/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
@@ -212,7 +212,7 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
   await expect(d.locator('input[name="member_id"]')).toHaveValue("M022");
 });
 
-test("ID を前面に出さない: メンバー一覧・契約一覧・契約詳細・メンバー詳細", async ({ page }) => {
+test("ID を前面に出さない: メンバー一覧・案件一覧・案件詳細・メンバー詳細", async ({ page }) => {
   await gotoPage(page, "/members");
   await expect(page.locator("table.yn-table tbody")).toContainText("小林 玲奈");
   await expect(page.locator("table.yn-table tbody")).not.toContainText("M011");

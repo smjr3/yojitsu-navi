@@ -37,9 +37,9 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | ファイル | 内容 |
 |---|---|
 | `smoke.spec.ts` | 全ページ（`/`, `/teams`, `/contracts`, `/contract?id=C008`, `/contract?id=NOPE`, `/rules`, `/data-check`）がエラー 0・失敗リクエスト 0 で開き、h1 と 計算基準日 2026-10-27 がある |
-| `numbers.spec.ts` | KPI・チーム行・契約行・契約詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。既定単位（百万円）の検証、百万円→千円→円の往復、0.0百万円の丸め、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
+| `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。既定単位（百万円）の検証、百万円→千円→円の往復、0.0百万円の丸め、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
 | `breakdown.spec.ts` | 内訳パネル: 実績（契約ごとの合計 = 表示値）、作業ログの遅延読み込み、予算の月割り（C005: 3,166,666 / 最終月 3,166,674）、消化率、着地見込みの算術、Esc・フォーカス復帰・フォーカストラップ |
-| `navigation.spec.ts` | チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
+| `navigation.spec.ts` | チーム → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role / aria-labelledby、img / svg の代替、状態チップの文字、390px 幅で横スクロール無し、ダークモード、印刷メディア |
 | `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・console.error 0・`NaN/undefined/null/Infinity/[object Object]` 非表示・`—円` 非表示・h1 あり・ダイアログが Esc で閉じる、を確認。失敗時は操作履歴をメッセージと添付に出す |
 

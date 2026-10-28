@@ -1,5 +1,5 @@
 /**
- * 数値の突合: 画面の KPI・一覧の行・契約詳細の月行が、計算コア（aggregate / forecastTotals / ContractMonth）と一致する
+ * 数値の突合: 画面の KPI・一覧の行・案件詳細の月行が、計算コア（aggregate / forecastTotals / ContractMonth）と一致する
  */
 import { test, expect, gotoPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cellText, query } from "./helpers/app.js";
 import {
@@ -70,8 +70,8 @@ test.describe("全体サマリー", () => {
     await gotoPage(page, "/?unit=yen");
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
     const { totals, fc } = await expectKpis(page, FY, "", "recent3", "yen");
-    // 補足: 契約数、残予算率、赤字件数
-    await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の契約`);
+    // 補足: 案件数、残予算率、赤字件数
+    await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
     await expect(page.locator(".yn-kpi").nth(2)).toContainText(formatPercent(totals.grossMargin));
     const deficit = fc.deficitContractIds.length;
     await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toHaveText(deficit > 0 ? new RegExp(`超過見込み ${deficit}件`) : /超過見込みなし/);
@@ -99,7 +99,7 @@ test.describe("全体サマリー", () => {
     }
   });
 
-  for (const preset of ["prevFy", "thisMonth", "recent3", "recent12", "fy"] as const) {
+  for (const preset of ["prevFy", "thisMonth", "lastMonth", "recent3", "recent12", "fy"] as const) {
     test(`期間プリセット ${preset} で KPI が core の値になる`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
       const period = presetPeriod(preset, model);
@@ -169,7 +169,7 @@ test.describe("全体サマリー", () => {
       const { totals } = await expectKpis(page, FY, teamId, "recent3", "yen");
       const ids = teamContractIds(teamId, FY, model)!;
       expect(totals.contractCount).toBeLessThanOrEqual(ids.length);
-      await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の契約`);
+      await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
       expect(query(page).get("team")).toBe(teamId);
       // 「チーム別」セクションは選んだチームの配下だけになる
       const tree = treeAt(FY.to, model);
@@ -241,7 +241,7 @@ test.describe("全体サマリー", () => {
     const ids = teamContractIds("HQ", period, model);
     await expect(hqRow.locator("th, td").nth(col(h, "予算"))).toHaveText(yen(totalsFor(period, ids, model).budget, "k"));
     void hq;
-    // 契約一覧にも引き継がれる
+    // 案件一覧にも引き継がれる
     await gotoPage(page, "/contracts");
     expect(query(page).get("unit")).toBe("k");
     // 新しいコンテキスト相当: localStorage を消すと既定に戻る
@@ -285,7 +285,7 @@ test.describe("チーム一覧", () => {
       expect(await cellText(row, col(h, "実績")), `${label} 実績`).toBe(yen(t.cost, unit));
       expect(await cellText(row, col(h, "残予算")), `${label} 残予算`).toBe(yen(t.grossProfit, unit));
       expect(await cellText(row, col(h, "残予算率")), `${label} 残予算率`).toBe(formatPercent(t.grossMargin));
-      expect(await cellText(row, col(h, "契約数")), `${label} 契約数`).toBe(String(t.contractCount));
+      expect(await cellText(row, col(h, "案件数")), `${label} 案件数`).toBe(String(t.contractCount));
       expect(await cellText(row, col(h, "着地差")), `${label} 着地差`).toContain(yen(f.forecastGrossProfit, unit));
       const burn = await cellText(row, col(h, "消化率"));
       expect(burn.replace(/[▲\s]/g, ""), `${label} 消化率`).toBe(formatPercent(t.burnRate));
@@ -296,11 +296,11 @@ test.describe("チーム一覧", () => {
   }
 });
 
-test.describe("契約一覧", () => {
+test.describe("案件一覧", () => {
   for (const unit of uniq<Unit>(["yen", DEFAULT_UNIT])) {
-  test(`期間内の契約がすべて並び、各行が core の aggregate / forecast と一致（${UNIT_LABEL[unit]}）`, async ({ page }) => {
+  test(`期間内の案件がすべて並び、各行が core の aggregate / forecast と一致（${UNIT_LABEL[unit]}）`, async ({ page }) => {
     await gotoPage(page, `/contracts?unit=${unit}`);
-    const table = tableByCaption(page, "契約一覧");
+    const table = tableByCaption(page, "案件一覧");
     await expect(table).toBeVisible();
     const h = await headerIndex(table);
     const rows = dataRows(table);
@@ -348,7 +348,7 @@ test.describe("契約一覧", () => {
 
   test("千円でも各行が一致", async ({ page }) => {
     await gotoPage(page, "/contracts?unit=k");
-    const table = tableByCaption(page, "契約一覧");
+    const table = tableByCaption(page, "案件一覧");
     const h = await headerIndex(table);
     for (const r of contractsInPeriod(FY, undefined, model)) {
       const id = r.contract.contractId;
@@ -360,7 +360,7 @@ test.describe("契約一覧", () => {
   });
 });
 
-test.describe("契約詳細", () => {
+test.describe("案件詳細", () => {
   for (const unit of uniq<Unit>(["yen", DEFAULT_UNIT])) {
   test(`C008: KPI と月ごとの予実が core の ContractMonth と一致（${UNIT_LABEL[unit]}）`, async ({ page }) => {
     await gotoPage(page, `/contract?id=C008&unit=${unit}`);
@@ -433,7 +433,7 @@ test.describe("契約詳細", () => {
   });
   }
 
-  test("期間を契約期間外にすると契約の全期間にフォールバックする（C003）", async ({ page }) => {
+  test("期間を契約期間外にすると案件の全期間にフォールバックする（C003）", async ({ page }) => {
     // C003 は 2025-10〜2026-09。FY2026 の既定期間と重なるが、2027-01〜2027-03 にすると重ならない
     await gotoPage(page, "/contract?id=C003&from=2027-01&to=2027-03&unit=yen");
     await expect(page.locator(".yn-note-warn")).toContainText("重なりません");

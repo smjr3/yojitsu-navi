@@ -1,5 +1,5 @@
 /**
- * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、契約一覧（列順）、メンバー別実績、組織の変遷、空状態、遷移、Excel、a11y
+ * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、案件一覧（列順）、メンバー別実績、組織の変遷、空状態、遷移、Excel、a11y
  */
 import { createRequire } from "node:module";
 import { test, expect, useDarkTheme, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
@@ -38,7 +38,7 @@ test("T111: パンくず・見出し・KPI 5 枚が core の集計と一致す�
   await expect(kpiValue(page, 2)).toHaveText(yen(totals.grossProfit));
   await expect(kpiValue(page, 3)).toHaveText(formatPercent(totals.burnRate));
   await expect(kpiValue(page, 4)).toHaveText(yen(fc.forecastGrossProfit));
-  await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の契約`);
+  await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
   // 末端チームなので「配下のチーム」は出ない
   await expect(page.getByRole("heading", { name: "配下のチーム" })).toHaveCount(0);
   // KPI の根拠: 予算の内訳の合計が KPI と一致
@@ -80,19 +80,19 @@ test("配下のチーム: 直下の子だけが並び、数値は core と一致
   await expect(page.locator("h1")).toContainText(tree.S22!.name);
 });
 
-test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。行クリックで契約詳細、絞り込みリンクで契約一覧", async ({ page }) => {
+test("案件一覧: 期間内の案件だけ。列順は案件一覧と同じ。行クリックで案件詳細、絞り込みリンクで案件一覧", async ({ page }) => {
   await gotoPage(page, "/team?id=S21&unit=yen");
-  const table = tableByCaption(page, "チームの契約一覧");
+  const table = tableByCaption(page, "チームの案件一覧");
   const ids = teamContractIds("S21", FY, model)!;
   const expected = contractsInPeriod(FY, ids, model);
   expect(new Set(await rowKeys(table))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
   const h = await headerIndex(table);
-  const order = ["契約", "予算", "実績", "残予算", "残予算率", "消化率", "着地差", "状態"].map((l) => col(h, l));
+  const order = ["案件", "予算", "実績", "残予算", "残予算率", "消化率", "着地差", "状態"].map((l) => col(h, l));
   expect(order).toEqual([...order].sort((a, b) => a - b));
-  // 契約一覧ページの列順と同じ
+  // 案件一覧ページの列順と同じ
   const labelsHere = [...h.keys()];
   await gotoPage(page, "/contracts");
-  const labelsThere = [...(await headerIndex(tableByCaption(page, "契約一覧"))).keys()];
+  const labelsThere = [...(await headerIndex(tableByCaption(page, "案件一覧"))).keys()];
   expect(labelsHere).toEqual(labelsThere);
   await gotoPage(page, "/team?id=S21&unit=yen");
   for (const r of expected) {
@@ -114,19 +114,19 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
   const header = aoa[hr]!.map((x) => String(x ?? ""));
   const body = aoa.slice(hr + 1).filter((r) => r.some((c) => c !== null && c !== ""));
   expect(body.map((r) => r[header.indexOf("契約ID")]).sort()).toEqual(expected.map((r) => r.contract.contractId).sort());
-  // 行クリック → 契約詳細
+  // 行クリック → 案件詳細
   const first = expected[0]!.contract.contractId;
   await cell(table.locator(`tbody tr[data-key="${first}"]`), col(h, "残予算率")).click({ position: { x: 2, y: 2 } });
   await expect(page).toHaveURL(/\/contract\?/);
   expect(query(page).get("id")).toBe(first);
   await page.goBack();
   await expect(page.locator("h1")).toHaveText("第3課");
-  // 契約一覧へ絞り込み
-  await page.getByRole("link", { name: "契約一覧で絞り込む" }).click();
+  // 案件一覧へ絞り込み
+  await page.getByRole("link", { name: "案件一覧で絞り込む" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("S21");
   await expect(page.locator("#yn-filter-team")).toHaveValue("S21");
-  expect(new Set(await rowKeys(tableByCaption(page, "契約一覧")))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
+  expect(new Set(await rowKeys(tableByCaption(page, "案件一覧")))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
 });
 
 test("メンバー別実績: 作業実績軸（所属が別でも含む）。core と一致し、合計は KPI の実績、根拠ボタンで実績行", async ({ page }) => {
@@ -208,13 +208,13 @@ test("存在しない ID は空状態（チーム一覧へのリンク）。ID �
   await expect(page.getByText("このチームは選択期間の組織にありません")).toBeVisible();
 });
 
-test("遷移: チーム一覧の行・全体サマリーのチーム別の行からチーム詳細へ。詳細内のリンクで契約一覧へ", async ({ page }) => {
+test("遷移: チーム一覧の行・全体サマリーのチーム別の行からチーム詳細へ。詳細内のリンクで案件一覧へ", async ({ page }) => {
   await gotoPage(page, "/teams");
   await tableByCaption(page, "チーム一覧").locator('tbody tr[data-key="T111"] .yn-row-link').click();
   await expect(page).toHaveURL(/\/team\?/);
   expect(query(page).get("id")).toBe("T111");
   await waitForPage(page);
-  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
+  await page.getByRole("link", { name: "このチームの案件一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("T111");
   await waitForPage(page);
@@ -283,11 +283,11 @@ test.describe("ダーク・1024px", () => {
 
 test.describe("1024px 幅", () => {
   test.use({ viewport: { width: 1024, height: 800 } });
-  test("契約一覧の標準列が収まる（ページの横スクロールなし）", async ({ page }) => {
+  test("案件一覧の標準列が収まる（ページの横スクロールなし）", async ({ page }) => {
     await gotoPage(page, "/team?id=S21&unit=yen");
     await page.waitForLoadState("networkidle");
     const { sw, cw } = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, cw: document.scrollingElement!.clientWidth }));
     expect(sw).toBeLessThanOrEqual(cw + 1);
-    await expect(tableByCaption(page, "チームの契約一覧").locator("thead th").nth(1)).toBeVisible();
+    await expect(tableByCaption(page, "チームの案件一覧").locator("thead th").nth(1)).toBeVisible();
   });
 });
