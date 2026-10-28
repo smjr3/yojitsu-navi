@@ -8,7 +8,7 @@ import { test, expect, useDarkTheme, gotoPage } from "./helpers/app.js";
 const zoomDialog = (page: Page) => page.locator("dialog.yn-chart-zoom[open]");
 
 /** グラフのある画面（拡大ボタンが 1 つ以上ある） */
-const PAGES = ["/", "/team?id=S21", "/contract?id=C002", "/customer?key=%E9%9D%92%E8%91%89%E7%89%A9%E6%B5%81", "/member?id=M011"];
+const PAGES = ["/", "/team?id=S21", "/contract?id=C002", "/customer?key=%E9%9D%92%E8%91%89%E7%89%A9%E6%B5%81", "/member?id=M011", "/workload"];
 
 async function openZoom(page: Page) {
   const btn = page.locator(".yn-chart-zoom-btn").first();
@@ -58,6 +58,22 @@ test.describe("グラフの拡大表示", () => {
       await expect(page.locator(".yn-chart-zoom-btn").first()).toBeFocused();
     });
   }
+
+  test("工数タブ: 分布グラフは画面では上位 20 件、拡大すると全件を出す", async ({ page }) => {
+    await gotoPage(page, "/workload?axis=member");
+    const card = page.locator(".yn-chart-card").nth(1);
+    await expect(card.locator(".yn-chart-plot svg").first()).toBeVisible();
+    const yTicks = (root: import("@playwright/test").Locator) => root.locator("svg [aria-label='y-axis tick label'] text").count();
+    const inline = await yTicks(card.locator(".yn-chart-plot"));
+    expect(inline).toBeLessThanOrEqual(20);
+    const trimmed = (await card.locator(".yn-note").count()) > 0;
+    await card.locator(".yn-chart-zoom-btn").click();
+    await expect(zoomDialog(page).locator(".yn-chart-zoom-plot svg").first()).toBeVisible();
+    const zoomed = await yTicks(zoomDialog(page).locator(".yn-chart-zoom-plot"));
+    if (trimmed) expect(zoomed).toBeGreaterThan(inline);
+    else expect(zoomed).toBe(inline);
+    expect((await zoomGeometry(page)).hScroll).toBeLessThanOrEqual(1);
+  });
 
   test("× ボタンと背景のクリックでも閉じる", async ({ page }) => {
     await gotoPage(page, "/");

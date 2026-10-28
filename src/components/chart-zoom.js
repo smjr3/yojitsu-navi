@@ -73,7 +73,7 @@ function ensureZoomDialog() {
 }
 
 /** 拡大表示を開く。draw はダイアログの幅・高さで呼ばれる */
-export function openChartZoom({ title, subtitle = null, legend = null, draw }, opener = null) {
+export function openChartZoom({ title, subtitle = null, legend = null, draw, rotateHint = true }, opener = null) {
   const dialog = ensureZoomDialog();
   zoomOpener = opener ?? document.activeElement;
   dialog.querySelector("#yn-chart-zoom-title").textContent = title ?? T.charts.zoomTitle;
@@ -85,6 +85,8 @@ export function openChartZoom({ title, subtitle = null, legend = null, draw }, o
   subEl.hidden = sub === "";
   const legendHost = dialog.querySelector(".yn-chart-zoom-legend");
   legendHost.replaceChildren(...(legend ? [typeof legend === "function" ? legend() : legend.cloneNode(true)] : []));
+  // 「横向きにすると見やすい」は月が横に並ぶグラフだけ（横棒の一覧には出さない）
+  dialog.querySelector(".yn-chart-zoom-rotate").hidden = !rotateHint;
   const plotHost = dialog.querySelector(".yn-chart-zoom-plot");
   plotHost.replaceChildren();
   zoomSizer?.disconnect();
@@ -100,9 +102,9 @@ export function closeChartZoom() {
 }
 
 /** 拡大ボタン単体（独自の枠を持つグラフ向け） */
-export function chartZoomButton({ title, subtitle = null, legend = null, draw }) {
+export function chartZoomButton({ title, subtitle = null, legend = null, draw, rotateHint = true }) {
   const btn = html`<button type="button" class="yn-btn yn-btn-sm yn-chart-zoom-btn" aria-haspopup="dialog" aria-label=${`${T.charts.zoom}: ${title ?? ""}`.trim()} title=${T.charts.zoomTip}><span aria-hidden="true">⤢</span><span class="yn-chart-zoom-label">${T.charts.zoom}</span></button>`;
-  btn.addEventListener("click", () => openChartZoom({ title, subtitle, legend, draw }, btn));
+  btn.addEventListener("click", () => openChartZoom({ title, subtitle, legend, draw, rotateHint }, btn));
   return btn;
 }
 
@@ -110,12 +112,12 @@ export function chartZoomButton({ title, subtitle = null, legend = null, draw })
  * グラフの枠。凡例の右に拡大ボタンを置き、本体は幅に合わせて描き直す。
  * after には枠内でグラフの下に置くもの（表の折りたたみなど）を渡す。
  */
-export function chartFigure({ title, subtitle = null, legend = null, draw, after = null, className = "" }) {
+export function chartFigure({ title, subtitle = null, legend = null, draw, after = null, className = "", rotateHint = true }) {
   const plot = html`<div class="yn-chart-plot"></div>`;
   const fig = html`<figure class=${`yn-card yn-chart-card ${className}`.trim()}>
     <div class="yn-chart-head">
       <div class="yn-chart-head-legend">${legend}</div>
-      ${chartZoomButton({ title, subtitle, legend, draw })}
+      ${chartZoomButton({ title, subtitle, legend, draw, rotateHint })}
     </div>
     ${plot}
     ${after}

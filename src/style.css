@@ -3381,3 +3381,6 @@ html:has(dialog.yn-dialog[open]) {
     padding: 8px 12px;
   }
 }
+.yn-chart-zoom-rotate[hidden] {
+  display: none !important;
+}
