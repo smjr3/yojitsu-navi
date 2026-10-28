@@ -11,6 +11,7 @@ title: 顧客詳細
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
@@ -122,20 +123,20 @@ if (vm) {
   const asOfMonth = model.meta.asOfMonth;
   const subtitle = `${group.label} ・ ${periodJa(scope.period)}`;
   // 前年同期比: 全体サマリーと同じ規則（経過月の累計を 12 か月前の同じ月と比べる）。タイルの値（期間全体）とは母集団が違うので文で明示する
-  const spanLabel = (p) => (p.from === p.to ? monthJa(p.from) : p.from.slice(0, 4) === p.to.slice(0, 4) ? `${monthJa(p.from)}〜${Number(p.to.slice(5, 7))}月` : `${monthJa(p.from)}〜${monthJa(p.to)}`);
+  const spanLabel = (p) => monthSpanJa([p.from, p.to]);
   const cmp = (key, { good = null, points = false } = {}) => {
-    if (!compare) return { text: "前年同期の比較データなし", direction: null, good: null };
+    if (!compare) return { text: T.kpi.noCompare, direction: null, good: null };
     const a = compare.now[key];
     const b = compare.before[key];
-    if (a === null || b === null || a === undefined || b === undefined) return { text: "前年同期の比較データなし", direction: null, good: null };
+    if (a === null || b === null || a === undefined || b === undefined) return { text: T.kpi.noCompare, direction: null, good: null };
     const d = a - b;
     const dir = d > 0 ? "up" : d < 0 ? "down" : "flat";
-    const text = `${points ? pointsSigned(d) : moneySigned(d, unit)} ・ ${spanLabel(compare.current)}の累計を前年同期（${spanLabel(compare.prior)}）と比較${compare.partial ? "。前年はデータのある月のみ" : ""}`;
+    const text = fmt(T.kpi.compareText, { diff: points ? pointsSigned(d) : moneySigned(d, unit), current: spanLabel(compare.current), prior: spanLabel(compare.prior), partial: compare.partial ? T.kpi.comparePartial : "" });
     return { text, direction: dir, good: good === null ? null : good(d) };
   };
   const elapsedLabel = (months) =>
-    months.length === 0 ? "経過月なし" : `${monthSpanJa(months)}の${months.length}か月${months[months.length - 1] > model.meta.lastFinalMonth ? "（速報含む）" : ""}`;
-  const budgetLabel = vm.fy ? `年度予算（${fiscalYearLabel(vm.fy)}）` : "期間の予算";
+    months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });
+  const budgetLabel = vm.fy ? fmt(T.kpi.budgetFy, { fy: fiscalYearLabel(vm.fy) }) : T.kpi.budgetPeriod;
   const deficitCount = forecast.deficitContractIds.length;
   const detailHref = (id) => store.href("./contract", {}, { id });
   display(
@@ -143,37 +144,37 @@ if (vm) {
       statTile({
         label: budgetLabel,
         value: money(totals.budget, unit),
-        sub: `${totals.contractCount}件の契約`,
+        sub: fmt(T.kpi.contractCount, { n: totals.contractCount }),
         compare: cmp("budget"),
-        breakdown: () => bd.budgetAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, label: "予算" }),
+        breakdown: () => bd.budgetAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, label: T.kpi.budgetBreakdownLabel }),
       }),
       statTile({
-        label: "原価（工数原価）",
+        label: T.kpi.cost,
         value: money(totals.cost, unit),
-        sub: `原価率 ${formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin)} ・ ${integer(Math.round(totals.hours))}h`,
+        sub: fmt(T.kpi.costSub, { costRatio: formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin), hours: integer(Math.round(totals.hours)) }),
         compare: cmp("cost", { good: (d) => d <= 0 }),
         breakdown: () => bd.costAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, detailHref }),
       }),
       statTile({
-        label: "粗利",
+        label: T.kpi.grossProfit,
         value: money(totals.grossProfit, unit),
-        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
+        sub: html`${T.kpi.marginPrefix} ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: T.kpi.marginAria })}`,
         compare: cmp("grossProfit", { good: (d) => d >= 0 }),
-        status: totals.grossProfit < 0 ? { kind: "danger", text: "赤字" } : null,
+        status: totals.grossProfit < 0 ? { kind: "danger", text: T.kpi.deficit } : null,
         breakdown: () => bd.grossProfitSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }),
       }),
       statTile({
-        label: "消化率（経過月の累計）",
+        label: T.kpi.burnRate,
         value: formatPercent(totals.burnRate),
-        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${elapsedLabel(totals.burnRateBreakdown.elapsedMonths)} ・ 基準 ${formatPercent(model.config.burnRateDangerThreshold, 0)}</span>`,
-        status: totals.isOverBudget ? { kind: "danger", text: "予算超過" } : totals.burnRate === null ? { kind: "neutral", text: "経過月なし" } : { kind: "ok", text: "範囲内" },
+        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${fmt(T.kpi.burnSub, { elapsed: elapsedLabel(totals.burnRateBreakdown.elapsedMonths), threshold: formatPercent(model.config.burnRateDangerThreshold, 0) })}</span>`,
+        status: totals.isOverBudget ? { kind: "danger", text: T.kpi.overBudget } : totals.burnRate === null ? { kind: "neutral", text: T.kpi.noElapsed } : { kind: "ok", text: T.kpi.withinRange },
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth, subtitle }),
       }),
       statTile({
-        label: `着地見込み粗利（${fiscalYearLabel(forecast.fiscalYear)}・${METHOD_LABELS[forecast.method]}）`,
+        label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
         value: money(forecast.forecastGrossProfit, unit),
-        sub: `年度予算 ${money(forecast.fyBudget, unit)} − 着地原価 ${money(forecast.forecastCost, unit)}`,
-        status: deficitCount > 0 ? { kind: "danger", text: `赤字見込み ${deficitCount}件` } : { kind: "ok", text: "赤字見込みなし" },
+        sub: fmt(T.kpi.forecastSub, { budget: money(forecast.fyBudget, unit), cost: money(forecast.forecastCost, unit) }),
+        status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
         breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref }),
         emphasis: true,
       }),

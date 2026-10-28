@@ -10,6 +10,7 @@ title: 契約一覧
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { UNASSIGNED_TEAM_ID } from "./core/index.js";
 import { customerGroups } from "./components/customers.js";

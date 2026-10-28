@@ -11,6 +11,7 @@ title: 契約詳細
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { aggregate, FORECAST_METHODS } from "./core/index.js";
 import { customerKey } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
@@ -118,7 +119,7 @@ if (vm) {
   const { contract: c, totals, unit, period } = vm;
   const f = result.forecasts[vm.method];
   const elapsedLabel = (months) =>
-    months.length === 0 ? "経過月なし" : `${monthSpanJa(months)}の${months.length}か月${months[months.length - 1] > model.meta.lastFinalMonth ? "（速報含む）" : ""}`;
+    months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });
   const subtitle = `${c.contractId} ${c.customerName} / ${c.projectName} ・ ${periodJa(period)}`;
   const inFY = f.breakdown.contractMonthsInFY.length > 0;
   display(
@@ -126,17 +127,17 @@ if (vm) {
       statTile({ label: `予算（${periodJa(period)}）`, value: money(totals.budget, unit), sub: `${totals.contractCount ? period.from === c.startMonth && period.to === c.endMonth ? "契約の全期間" : "期間内の月の合計" : ""}`, breakdown: () => bd.budgetAggregateSpec({ model, contractIds: [c.contractId], period, unit }) }),
       statTile({ label: "原価", value: money(totals.cost, unit), sub: `${formatHours(totals.hours)} ・ ${totals.personMonthsStandard.toFixed(2)}人月（標準）`, breakdown: () => bd.costAggregateSpec({ model, contractIds: [c.contractId], period, unit }) }),
       statTile({
-        label: "粗利",
+        label: T.kpi.grossProfit,
         value: money(totals.grossProfit, unit),
-        sub: html`粗利率 ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: "粗利率の計算根拠を表示" })}`,
-        status: totals.grossProfit < 0 ? { kind: "danger", text: "赤字" } : null,
+        sub: html`${T.kpi.marginPrefix} ${bd.numberButton(formatPercent(totals.grossMargin), () => bd.marginSpec({ totals, unit, subtitle }), { className: "yn-num-inline", ariaLabel: T.kpi.marginAria })}`,
+        status: totals.grossProfit < 0 ? { kind: "danger", text: T.kpi.deficit } : null,
         breakdown: () => bd.grossProfitSpec({ budget: totals.budget, cost: totals.cost, unit, subtitle }),
       }),
       statTile({
-        label: "消化率（経過月の累計）",
+        label: T.kpi.burnRate,
         value: formatPercent(totals.burnRate),
-        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${elapsedLabel(totals.burnRateBreakdown.elapsedMonths)} ・ 基準 ${formatPercent(model.config.burnRateDangerThreshold, 0)}</span>`,
-        status: totals.isOverBudget ? { kind: "danger", text: "予算超過" } : totals.burnRate === null ? { kind: "neutral", text: "経過月なし" } : { kind: "ok", text: "範囲内" },
+        sub: html`${burnMeter(totals.burnRate, model.config.burnRateDangerThreshold)}<span>${fmt(T.kpi.burnSub, { elapsed: elapsedLabel(totals.burnRateBreakdown.elapsedMonths), threshold: formatPercent(model.config.burnRateDangerThreshold, 0) })}</span>`,
+        status: totals.isOverBudget ? { kind: "danger", text: T.kpi.overBudget } : totals.burnRate === null ? { kind: "neutral", text: T.kpi.noElapsed } : { kind: "ok", text: T.kpi.withinRange },
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle }),
       }),
       statTile({

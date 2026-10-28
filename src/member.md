@@ -11,6 +11,7 @@ title: メンバー詳細
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { aggregateMembers, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { teamName, treeAt } from "./components/analysis.js";

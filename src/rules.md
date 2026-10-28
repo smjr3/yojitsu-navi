@@ -4,6 +4,7 @@ title: 計算ルール
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { pageHeader, loadJson } from "./components/layout.js";
 import { money, formatPercent, monthJa, METHOD_LABELS } from "./components/format.js";
 ```

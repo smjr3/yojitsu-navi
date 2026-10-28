@@ -11,6 +11,7 @@ title: チーム詳細
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, teamMemberCosts, teamOrgChanges, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor } from "./components/analysis.js";

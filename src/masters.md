@@ -10,6 +10,7 @@ title: マスタ編集
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { pageHeader, loadJson, errorState } from "./components/layout.js";
 import { mastersEditor } from "./components/masters.js";
 import { effectiveSaveMode } from "./core/gitlab.js";

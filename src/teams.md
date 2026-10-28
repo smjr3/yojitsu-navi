@@ -10,6 +10,7 @@ title: チーム一覧
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, aggregate } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, flattenTree, teamRow } from "./components/analysis.js";

@@ -11,6 +11,7 @@ title: メンバー別
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";

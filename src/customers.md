@@ -10,6 +10,7 @@ title: 顧客別
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor } from "./components/analysis.js";

@@ -11,6 +11,7 @@ title: データ確認
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
