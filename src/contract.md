@@ -22,7 +22,7 @@ import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, METHOD_DESCRIPTIONS, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
+import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, methodDescription, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -265,7 +265,7 @@ if (vm) {
     btn.addEventListener("click", () => store.set({ method: m }));
     return html`<article class=${`yn-card yn-forecast-card${selected ? " is-selected" : ""}${f.isDeficit && inFY ? " is-danger" : ""}`} aria-current=${selected ? "true" : null}>
       <h3 class="yn-forecast-title">${METHOD_LABELS[m]}</h3>
-      <p class="yn-forecast-desc">${METHOD_DESCRIPTIONS[m].replace("N", String(model.config.forecastRecentMonths))}</p>
+      <p class="yn-forecast-desc">${methodDescription(m, model.config.forecastRecentMonths)}</p>
       <div class="yn-forecast-value">${inFY ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config }), { className: "yn-kpi-value", ariaLabel: `${METHOD_LABELS[m]} の着地見込み粗利の計算根拠` }) : html`<span class="yn-kpi-value">—</span>`}
         ${inFY ? statusChip(f.isDeficit ? "danger" : "ok", f.isDeficit ? "赤字見込み" : "黒字見込み") : statusChip("neutral", "年度対象外")}</div>
       <dl class="yn-forecast-facts">

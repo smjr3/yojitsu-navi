@@ -11,6 +11,7 @@
  *   method   recent3 | all | assignment
  */
 import { UNITS, fromCoreUnit } from "./format.js";
+import { T, fmt } from "../i18n/index.js";
 import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fiscalYearOf } from "../core/index.js";
 
 export const STATE_KEYS = ["from", "to", "team", "unit", "method"];
@@ -59,10 +60,10 @@ export function periodPresets(model) {
   const prevFy = fiscalYearMonths(fy - 1, start);
   const recent = (n) => [addMonths(meta.asOfMonth, -(n - 1)), meta.asOfMonth];
   return [
-    { id: "fy", label: `今年度（FY${fy}）`, short: "今年度", period: clip(thisFy) },
-    { id: "prevFy", label: `前年度（FY${fy - 1}）`, short: "前年度", period: clip(prevFy) },
-    { id: "recent3", label: "直近3か月", period: clip(recent(3)) },
-    { id: "recent12", label: "直近12か月", period: clip(recent(12)) },
+    { id: "fy", label: fmt(T.filters.presets.fy, { fy }), short: T.filters.presets.fyShort, period: clip(thisFy) },
+    { id: "prevFy", label: fmt(T.filters.presets.prevFy, { fy: fy - 1 }), short: T.filters.presets.prevFyShort, period: clip(prevFy) },
+    { id: "recent3", label: T.filters.presets.recent3, period: clip(recent(3)) },
+    { id: "recent12", label: T.filters.presets.recent12, period: clip(recent(12)) },
   ];
 }
 
