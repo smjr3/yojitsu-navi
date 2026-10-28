@@ -42,8 +42,11 @@ function naiveRate(memberId: string, month: YearMonth): number {
 }
 
 /** 顧客名の正規表現で作業ログを拾い、月ごとの原価を素朴に再計算する（メンバーごとに round(Σhours × 単価)） */
+const OUTSIDE_TASKS = new Set(["提案", "運用設計", "見積"]);
+
 function naiveMonthlyCost(customer: RegExp, month: YearMonth): { cost: number; hours: number; rows: number } {
-  const rows = ds.worklogs.filter((w) => customer.test(w.customerName) && isValidISODate(w.date) && w.date.startsWith(month) && Number.isFinite(w.hours) && w.hours > 0);
+  // 契約外の作業種別（task-types.csv で「契約外」。SPEC §30）は契約の実績に入らない
+  const rows = ds.worklogs.filter((w) => customer.test(w.customerName) && isValidISODate(w.date) && w.date.startsWith(month) && Number.isFinite(w.hours) && w.hours > 0 && !OUTSIDE_TASKS.has(w.task));
   const hoursByMember = new Map<string, number>();
   for (const w of rows) hoursByMember.set(w.memberId, (hoursByMember.get(w.memberId) ?? 0) + w.hours);
   let cost = 0;
@@ -68,7 +71,10 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
       UNKNOWN_MEMBER: 1,
       RATE_MISSING: 19,
       MEMBER_RATE_UNDEFINED: 1,
+      TASK_UNCLASSIFIED: 1,
     });
+    // 分類表に無い作業種別は「勉強会」だけ（わざと載せていない）
+    expect(issues.find((i) => i.code === "TASK_UNCLASSIFIED")?.ref?.task).toBe("勉強会");
     expect(issues.find((i) => i.code === "MEMBER_RATE_UNDEFINED")?.ref?.title).toBe("技術顧問");
     expect(issues.find((i) => i.code === "UNKNOWN_MEMBER")?.ref?.memberId).toBe("M099");
     const missing = issues.filter((i) => i.code === "RATE_MISSING");
@@ -77,7 +83,7 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
   });
 
   it("Model の警告も同じ内訳。除外時間は顧客名が空の行の合計と一致", () => {
-    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 3, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 });
+    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 3, UNKNOWN_MEMBER: 1, RATE_MISSING: 19, TASK_UNCLASSIFIED: 1 });
     const expected = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date)).reduce((a, w) => a + w.hours, 0);
     expect(expected).toBeGreaterThan(300); // 「約 330 時間」
     expect(model.excludedHours).toBe(expected);

@@ -10,6 +10,7 @@
  *   data/contracts.csv, data/mapping.csv, data/assignments.csv, data/holidays.csv
  *   data/masters/teams.csv, data/masters/members.csv, data/masters/rates.csv
  *   data/worklogs/YYYY-MM.csv, data/worklogs/_meta.json
+ *   data/task-types.csv（作業種別の分類表。SPEC §30）
  */
 import { mkdirSync, writeFileSync, readdirSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -446,6 +447,41 @@ const TASKS: ReadonlyArray<readonly [string, number]> = [
   ["テスト", 2],
 ];
 
+/**
+ * 作業種別の分類表（SPEC §30.1）。「勉強会」はわざと載せない（未分類の警告 TASK_UNCLASSIFIED の例）。
+ * 「社内会議」は顧客名が空で分類より先に除外されるので載せなくてよい。
+ */
+const TASK_TYPES: Array<{ task: string; category: string; note: string }> = [
+  { task: "定例", category: "契約内", note: "" },
+  { task: "問い合わせ対応", category: "契約内", note: "" },
+  { task: "障害対応", category: "契約内", note: "" },
+  { task: "調査", category: "契約内", note: "" },
+  { task: "リリース作業", category: "契約内", note: "" },
+  { task: "監視・運用", category: "契約内", note: "" },
+  { task: "パッチ適用", category: "契約内", note: "" },
+  { task: "ドキュメント更新", category: "契約内", note: "" },
+  { task: "改修", category: "契約内", note: "保守契約の範囲内の軽微な改修" },
+  { task: "テスト", category: "契約内", note: "" },
+  { task: "データ移行", category: "契約内", note: "" },
+  { task: "導入準備", category: "契約内", note: "" },
+  { task: "提案", category: "契約外", note: "追加案件・更改の提案" },
+  { task: "運用設計", category: "契約外", note: "新規・更改に伴う運用設計" },
+  { task: "見積", category: "契約外", note: "" },
+];
+
+/**
+ * 契約外の作業（提案・運用設計など。SPEC §30）。契約の実績に入らないので、既存の数値を変えないよう
+ * 本体とは別の乱数列で、本体の作業に上乗せする（その人の稼働が増える＝稼働上限の確認に使う）。
+ */
+const OUTSIDE_WORK: Array<{ memberIds: string[]; contractId: string | null; customer?: string; project?: string; tasks: ReadonlyArray<readonly [string, number]>; from: YearMonth; to: YearMonth; p: number; hours: number[] }> = [
+  // 関連契約あり: 青葉物流の更改提案（T111 の主任・メンバー）
+  { memberIds: ["M010", "M011"], contractId: "C002", tasks: [["提案", 3], ["見積", 1]], from: "2026-06", to: "2026-10", p: 0.5, hours: [2, 3, 4] },
+  // 関連契約あり: みなと銀行の運用設計（T121）
+  { memberIds: ["M015", "M017"], contractId: "C004", tasks: [["運用設計", 1]], from: "2026-08", to: "2026-10", p: 0.6, hours: [2, 3, 4] },
+  // 関連契約なし: 新規顧客への提案（紐付けルールなし → 契約外なので未紐付け警告は出ない）
+  { memberIds: ["M019"], contractId: null, customer: "株式会社さくらんぼ交通", project: "運行管理システム提案", tasks: [["提案", 2], ["見積", 1]], from: "2026-08", to: "2026-10", p: 0.5, hours: [2, 3] },
+];
+
 // ---------------------------------------------------------------------------
 // 作業実績の生成
 // ---------------------------------------------------------------------------
@@ -507,6 +543,7 @@ interface Generated {
   mappings: MappingRow[];
   assignments: AssignmentRow[];
   holidays: Array<{ date: string; name: string }>;
+  taskTypes: Array<{ task: string; category: string; note: string }>;
   /** 月ごとの作業実績 */
   worklogsByMonth: Map<YearMonth, Worklog[]>;
 }
@@ -649,6 +686,22 @@ export function generate(opts: GenOptions): Generated {
     }
   }
 
+  // 契約外の作業（別の乱数列。本体の数値を変えない）
+  const rngOutside = new Rng(opts.seed + 7919);
+  for (const date of days) {
+    const month = ymOf(date);
+    for (const o of OUTSIDE_WORK) {
+      if (month < o.from || month > o.to) continue;
+      for (const id of o.memberIds) {
+        const m = memberAt(id, month);
+        if (!m || !rngOutside.chance(o.p)) continue;
+        const c = o.contractId ? CONTRACTS.find((x) => x.contract_id === o.contractId) : undefined;
+        const names = c ? pickNames(rngOutside, c) : { customer: o.customer ?? "", project: o.project ?? "" };
+        push({ date, memberId: m.member_id, memberName: m.name, customerName: names.customer, projectName: names.project, task: rngOutside.weighted(o.tasks), hours: rngOutside.pick(o.hours) });
+      }
+    }
+  }
+
   // 固定のエッジケース行
   // hours = 0 の行（無視される）
   if (opts.asOf >= "2026-05-12") {
@@ -658,7 +711,7 @@ export function generate(opts: GenOptions): Generated {
   // 月内は日付→メンバー→顧客順に並べて安定させる
   for (const [ym, rows] of worklogsByMonth) worklogsByMonth.set(ym, sortWorklogs(rows));
 
-  return { teams: TEAMS, members: MEMBERS, rates: RATES, contracts: CONTRACTS, mappings: MAPPINGS, assignments: ASSIGNMENTS, holidays, worklogsByMonth };
+  return { teams: TEAMS, members: MEMBERS, rates: RATES, contracts: CONTRACTS, mappings: MAPPINGS, assignments: ASSIGNMENTS, holidays, taskTypes: TASK_TYPES, worklogsByMonth };
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +741,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
   writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
+  writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "note"]));
 
   // 既存の月次ファイルを消してから書く（asOf を戻したときに古い月が残らないように）
   const wlDir = join(out, "worklogs");

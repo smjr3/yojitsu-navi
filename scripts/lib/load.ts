@@ -20,6 +20,7 @@ export const DATA_FILES = {
   members: "data/masters/members.csv",
   rates: "data/masters/rates.csv",
   holidays: "data/holidays.csv",
+  taskTypes: "data/task-types.csv",
 } as const;
 
 export interface WorklogMeta {
@@ -88,6 +89,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     members: readOrEmpty(join(rootDir, DATA_FILES.members)),
     rates: readOrEmpty(join(rootDir, DATA_FILES.rates)),
     holidays: readOrEmpty(join(rootDir, DATA_FILES.holidays)),
+    // 省略可（§30.1）。無ければ空 = 分類なし
+    taskTypes: readOrEmpty(join(rootDir, DATA_FILES.taskTypes)),
     worklogs,
     worklogNames: listed.map((f) => f.name),
     skippedWorklogFiles: skippedWorklogFiles(dir),

@@ -6,7 +6,8 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName } from "./normalize.js";
-import type { Assignment, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -139,6 +140,8 @@ export interface DatasetFiles {
   members: string;
   rates: string;
   holidays: string;
+  /** 作業種別の分類表（§30.1）。省略・空 = 分類なし（すべて契約内） */
+  taskTypes?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
   /** worklogs と同じ順のファイル名（警告にファイル名・行番号を出すため。無ければ worklogs[i]） */
@@ -155,6 +158,7 @@ export interface ParsedDataset {
 }
 
 const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
+  taskTypes: ["task", "category"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -295,7 +299,10 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     issues.push({ severity: "warning", code: "WORKLOG_FILE_SKIPPED", message: fmt(T.checks.worklogFileSkipped, { file: f }), file: f });
   }
 
+  const taskTypes = parseTaskTypes(files.taskTypes, issues);
+
   const dataset: Dataset = { config: files.config, contracts, mappings, assignments, teams, members, rates, holidays, worklogs };
+  if (taskTypes.length > 0) dataset.taskTypes = taskTypes;
   if (files.worklogFetchedAt !== undefined) dataset.worklogFetchedAt = files.worklogFetchedAt;
 
   // 列の欠落・引用符の閉じ忘れがあるファイルは、行ごとのエラーが同じ原因で大量に出るだけなので、元のエラーだけを残す
@@ -311,6 +318,41 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
 }
 
 const WORKLOG_EXAMPLES = 5;
+
+/**
+ * task-types.csv（§30.1）。ファイルが無い・空なら分類なし。
+ * 区分が不正・作業種別が空の行は使わない（error）。同じ作業種別（正規化後）の 2 行目以降も使わない（error）。
+ */
+function parseTaskTypes(text: string | undefined, issues: ValidationIssue[]): TaskTypeRule[] {
+  if (text === undefined || text.trim() === "" || text.trim() === "\ufeff") return [];
+  const file = "task-types.csv";
+  const table = parseTable(file, text, REQUIRED_COLUMNS.taskTypes, issues);
+  const out: TaskTypeRule[] = [];
+  const seen = new Map<string, number>();
+  table.rows.forEach((r, i) => {
+    const row = i + 2;
+    const task = r.get("task");
+    const key = normalizeName(task);
+    if (key === "") {
+      issues.push({ severity: "error", code: "TASK_TYPE_EMPTY", message: fmt(T.checks.taskTypeEmpty, { file, row }), file, row });
+      return;
+    }
+    const category = parseTaskCategory(r.get("category"));
+    if (category === null) {
+      issues.push({ severity: "error", code: "TASK_CATEGORY_INVALID", message: fmt(T.checks.taskCategoryInvalid, { file, row, task, value: r.get("category") }), file, row, ref: { task } });
+      return;
+    }
+    const first = seen.get(key);
+    if (first !== undefined) {
+      issues.push({ severity: "error", code: "DUPLICATE_TASK_TYPE", message: fmt(T.checks.duplicateTaskType, { file, row, task, first }), file, row, ref: { task } });
+      return;
+    }
+    seen.set(key, row);
+    const note = r.get("note");
+    out.push(note !== "" ? { task, category, note } : { task, category });
+  });
+  return out;
+}
 
 /** 作業実績の日付: YYYY/MM/DD・YYYY/M/D・YYYY-M-D も受け付けて YYYY-MM-DD に揃える（それ以外はそのまま返し、検証で不正になる） */
 export function normalizeWorklogDate(value: string): string {

@@ -12,6 +12,7 @@
 | `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from` （kind = employee / partner） |
 | `data/masters/rates.csv` | `key, hourly_rate, effective_from` （key = 役職名 または member_id） |
 | `data/holidays.csv` | `date, name` |
+| `data/task-types.csv` | `task, category, note` （作業種別の分類表。category = 契約内 / 契約外。ファイルが無ければすべて契約内。SPEC §30） |
 | `data/worklogs/*.csv` | `date, member_id, member_name, customer_name, project_name, task, hours` （月ごとに `YYYY-MM.csv`。アダプタが生成） |
 | `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }` |
 
