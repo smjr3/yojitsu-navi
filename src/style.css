@@ -3263,12 +3263,16 @@ html:has(dialog.yn-dialog[open]) {
  * 台帳（マスタ編集: 1 対象 1 行＋変更の履歴。SPEC §32）
  * ------------------------------------------------------------------------- */
 .yn-me-ledger .yn-me-group.is-open > th,
-.yn-me-ledger .yn-me-group.is-open > td {
+.yn-me-ledger .yn-me-group.is-open > td,
+#observablehq-main .yn-me-ledger .yn-me-group.is-open > th,
+#observablehq-main .yn-me-ledger .yn-me-group.is-open > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
   border-bottom-color: transparent;
 }
 .yn-me-ledger .yn-me-hist > th,
-.yn-me-ledger .yn-me-hist > td {
+.yn-me-ledger .yn-me-hist > td,
+#observablehq-main .yn-me-ledger .yn-me-hist > th,
+#observablehq-main .yn-me-ledger .yn-me-hist > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
   font-size: 13px;
   padding-top: 4px;
@@ -3278,7 +3282,8 @@ html:has(dialog.yn-dialog[open]) {
   padding-left: 16px;
   white-space: nowrap;
 }
-.yn-me-ledger .yn-me-issue-row > td {
+.yn-me-ledger .yn-me-issue-row > td,
+#observablehq-main .yn-me-ledger .yn-me-issue-row > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
 }
 .yn-me-hist-from {

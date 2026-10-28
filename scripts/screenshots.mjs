@@ -83,6 +83,8 @@ try {
     await page.locator("h1").first().waitFor();
     await page.waitForTimeout(800);
     if (s.prepare) await s.prepare(page);
+    // ホバーの色が写らないよう、マウスを画面の外寄りへ
+    await page.mouse.move((s.width ?? 1280) - 2, (s.height ?? 900) - 2);
     await page.waitForTimeout(300);
     const file = join(OUT, `${s.name}.png`);
     if (s.clip) await page.locator(s.clip).screenshot({ path: file });
