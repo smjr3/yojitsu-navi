@@ -182,3 +182,13 @@ test.describe("見出し横の「?」", () => {
     });
   });
 });
+
+test("開いた「?」の吹き出しが別の「?」に重なっても、その「?」を押せる（設定画面・665×758）", async ({ page }) => {
+  await page.setViewportSize({ width: 665, height: 758 });
+  await gotoPage(page, "/settings");
+  const btns = page.locator(".yn-tip-btn");
+  await btns.nth(0).click();
+  await expect(page.locator(".yn-tip.is-open")).toHaveCount(1);
+  await btns.nth(1).click({ timeout: 3000 });
+  await expect(btns.nth(1)).toHaveAttribute("aria-expanded", "true");
+});

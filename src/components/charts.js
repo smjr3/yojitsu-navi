@@ -94,7 +94,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
         Plot.pointerX({
           x: "i",
           y: yMax,
-          anchor: "bottom",
+          preferredAnchor: "bottom",
           dy: -6,
           fill: c.surface,
           stroke: c.axis,
@@ -197,7 +197,7 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
         Plot.pointerX({
           x: "i",
           y: (d) => Math.max(d.plannedHours, d.actualHours),
-          anchor: "bottom",
+          preferredAnchor: "bottom",
           dy: -6,
           fill: c.surface,
           stroke: c.axis,

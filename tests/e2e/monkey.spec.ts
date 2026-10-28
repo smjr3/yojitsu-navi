@@ -142,6 +142,13 @@ for (const path of PAGES) {
               const backdropActive = !!backdrop && bs!.display !== "none" && bs!.visibility !== "hidden" && bs!.pointerEvents !== "none" && backdrop.getBoundingClientRect().width > 0;
               if (backdropActive && !sidebar && e !== backdrop) skip = true;
               if (!backdropActive && e === backdrop) skip = true;
+              // 開いている候補の一覧（コンボボックスの listbox）の下に隠れた要素は押せない（押すと候補を選ぶ）。
+              // 一覧が重なるのは選択式の入力として普通の動きなので候補から外す（一覧の項目自体は候補に残る）
+              if (r.width > 0 && r.height > 0) {
+                const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                const list = top?.closest("[role=listbox]");
+                if (list && !list.contains(e) && !e.contains(list)) skip = true;
+              }
               if (tag === "a") {
                 const href = (e as HTMLAnchorElement).href;
                 if (!href.startsWith(origin)) skip = true;

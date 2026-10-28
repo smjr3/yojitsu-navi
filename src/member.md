@@ -24,6 +24,7 @@ const memberKpiRow = (tiles) => {
   row.classList.add("yn-kpi-4");
   return row;
 };
+import { chartFigure } from "./components/chart-zoom.js";
 import { memberHoursChart, memberHoursLegend } from "./components/charts.js";
 import { dataTable, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -175,10 +176,12 @@ if (vm) {
   const { unit, member, series } = vm;
   const period = vm.fullPeriod;
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.member.monthlyHint, { period: periodJa(period), asOfMonth: monthJa(model.meta.asOfMonth) })));
-  display(html`<figure class="yn-card yn-chart-card">
-    ${memberHoursLegend(dark)}
-    ${resize((width) => memberHoursChart({ series, dark, width, asOfMonth: model.meta.asOfMonth }))}
-  </figure>`);
+  display(chartFigure({
+    title: T.charts.memberHoursTitle,
+    subtitle: periodJa(period),
+    legend: memberHoursLegend(dark),
+    draw: (width, height) => memberHoursChart({ series, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+  }));
   const contractHref = (id) => store.href("./contract", {}, { id });
   const monthRows = (m) => vm.fullMonths.filter((mm) => mm.month === m);
   const rows = series.map((p) => ({ ...p, key: p.month, isFuture: p.month > model.meta.asOfMonth }));
