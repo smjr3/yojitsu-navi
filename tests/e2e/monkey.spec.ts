@@ -205,6 +205,8 @@ for (const path of PAGES) {
                   } else await h.click({ timeout: 5000 });
                 } catch (e) {
                   if (isDetached(e)) log("  → detached during click, skipped");
+                  // 開いた候補リストなどの下に隠れた要素（利用者が押すと上の要素に当たる）。押せないのが正しい
+                  else if (/intercepts pointer events/.test((e as Error).message)) log("  → covered by another element, skipped");
                   else throw new Error(`クリックできない要素: ${desc}\n${(e as Error).message}`);
                 }
               }

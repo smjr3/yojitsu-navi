@@ -227,7 +227,8 @@ test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外
   await gotoPage(page, "/contracts?f=deficit&q=C0");
   await expect(page.locator("#yn-f-deficit")).toBeChecked();
   await expect(search).toHaveValue("C0");
-  await expectRows(deficit, "URL f=deficit&q=C0");
+  // q=C0 は契約 ID（C001〜C099）に部分一致する。5 倍データの C1xx は外れる
+  await expectRows(deficit.filter((id) => /c0/i.test(id)), "URL f=deficit&q=C0");
 });
 
 test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表と一致する", async ({ page }) => {

@@ -50,8 +50,19 @@ test.describe("工数 /workload", () => {
     // 分布のグラフ: 末端の組織だけを並べる（上位は配下の合計で二重になるため）
     const chart = page.locator('[aria-label="所属チームごとの工数の分布（契約内と契約外の人月の横積み上げ棒）"]');
     await expect(chart).toBeVisible();
-    const leaves = groups.filter((g) => !g.hasChildren).map((g) => g.label);
-    for (const name of leaves) await expect(chart.locator("text", { hasText: name }).first()).toBeAttached();
+    // 末端が 20 を超えるときは合計の多い上位 20 件（長い名前は … で切れるので先頭 6 文字で照合）
+    const leafGroups = groups.filter((g) => !g.hasChildren);
+    const byTotal = [...leafGroups].sort((a, b) => b.totals.contractHours + b.totals.outsideHours - (a.totals.contractHours + a.totals.outsideHours));
+    const shown = byTotal.slice(0, 20).map((g) => g.label);
+    const labels = (await chart.locator("text").allTextContents()).join("\n");
+    for (const name of shown) expect(labels, name).toContain([...name].slice(0, 6).join(""));
+    if (leafGroups.length > 20) {
+      await expect(page.locator(".yn-note", { hasText: "上位 20 件" })).toBeVisible();
+      // 少ない方は出さない（上位 20 件と先頭 6 文字が重ならない名前で確かめる）
+      const head = (n: string) => [...n].slice(0, 6).join("");
+      const hidden = byTotal.slice(20).map((g) => g.label).filter((n) => !shown.some((s) => head(s) === head(n)));
+      for (const name of hidden) expect(labels, name).not.toContain(head(name));
+    }
     await expect(chart.locator("text", { hasText: "ソリューション事業本部" })).toHaveCount(0);
     for (const g of groups) {
       const row = table.locator(`tbody tr[data-key="${g.key}"]`);

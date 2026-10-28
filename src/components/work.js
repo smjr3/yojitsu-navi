@@ -201,7 +201,10 @@ export function workSeriesTable({ series, config, exportName }) {
 export function workGroupChart({ groups, config, dark = false, width = 640, maxRows = 20, ariaLabel }) {
   const c = workColors(dark);
   const std = config.standardHoursPerMonth;
-  const shown = groups.slice(0, maxRows);
+  // 多いときは合計の多い上位 maxRows 件を選び、並びは元の順（チームは組織の木の順）のまま
+  const total = (g) => g.totals.contractHours + g.totals.outsideHours;
+  const keep = groups.length > maxRows ? new Set(groups.map((g, i) => [total(g), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, maxRows).map(([, i]) => i)) : null;
+  const shown = keep ? groups.filter((_, i) => keep.has(i)) : groups;
   if (shown.length === 0) return html`<div class="yn-chart-empty">${T.work.empty}</div>`;
   const data = [];
   for (const g of shown) {
