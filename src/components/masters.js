@@ -334,8 +334,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   function totalChanges() {
     return Object.values(changeCounts()).reduce((a, b) => a + b, 0);
   }
-  function errorCount(fileId) {
-    return Object.values(validation.byRow[fileId]).reduce((s, list) => s + list.filter((i) => i.severity === "error").length, 0);
+  function errorCount(fileId, severity = "error") {
+    return Object.values(validation.byRow[fileId]).reduce((s, list) => s + list.filter((i) => i.severity === severity).length, 0);
   }
 
   function persistDraft() {
@@ -1397,6 +1397,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         ? html`<p class="yn-me-check is-error" role="status"><span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(v.errors)}${T.masters.countSuffix}</span> ${T.masters.cannotSave}${v.warnings ? fmt(T.masters.warningsNotBlocking, { n: integer(v.warnings) }) : ""}</p>`
         : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span> ${T.masters.validationOk}${v.warnings ? fmt(T.masters.warningsNotBlocking2, { n: integer(v.warnings) }) : ""}</p>`;
     const byTab = MASTER_FILE_IDS.filter((id) => errorCount(id) > 0);
+    // 行に付いた警告は下の一覧に出ないため、件数の内訳としてファイルへの移動ボタンを出す
+    const warnTabs = MASTER_FILE_IDS.filter((id) => errorCount(id, "warning") > 0);
+    const gotoTab = (id) => {
+      active = id;
+      renderTabs();
+      renderPanel();
+      focusKey(`tab:${id}`);
+    };
     parts.check.replaceChildren(html`<section class="yn-me-section" aria-labelledby="yn-me-check-title">
       <h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>
       ${status}
@@ -1406,6 +1414,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         renderPanel();
         focusKey(`tab:${id}`);
       }}>${MASTER_FILES[id].label}（${integer(errorCount(id))}${T.masters.countSuffixParen}</button>`)}</p>` : null}
+      ${warnTabs.length ? html`<p class="yn-me-small">${T.masters.filesWithRowWarnings} ${warnTabs.map((id, i) => html`${i > 0 ? "、" : ""}<button type="button" class="yn-btn-link" data-fk=${`gotow:${id}`} onclick=${() => gotoTab(id)}>${MASTER_FILES[id].label}（${integer(errorCount(id, "warning"))}${T.masters.countSuffixParen}</button>`)}</p>` : null}
       ${general.length
         ? html`<ul class="yn-me-issues yn-me-general">${general.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${i.message}</li>`)}</ul>`
         : null}

@@ -147,7 +147,8 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
     marginBottom: 32,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (series[i] ? monthShort(series[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
-    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    // すべて 0 人月だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
+    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
@@ -218,7 +219,7 @@ export function workGroupChart({ groups, config, dark = false, width = 640, maxR
     marginBottom: 24,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / 12) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / 12) - 1).join("")}…` : s) },
-    x: { grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    x: { grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
       Plot.gridX({ stroke: c.grid, strokeOpacity: 1 }),

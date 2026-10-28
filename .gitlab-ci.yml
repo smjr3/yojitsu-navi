@@ -139,6 +139,8 @@ pages:
     - test -f dist/index.html || { echo "dist/index.html がありません（build ジョブの成果物を確認）"; exit 1; }
     - rm -rf public
     - mv dist public
+    # 圧縮版（.gz）を並べておくと GitLab Pages が gzip で配信する（約 3 MB の JSON が数百 KB になり、初回表示が速くなる）
+    - find public -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' -o -name '*.txt' -o -name '*.csv' \) -exec gzip -k -f -9 {} +
   artifacts:
     paths:
       - public/

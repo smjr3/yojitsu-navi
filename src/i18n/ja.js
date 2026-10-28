@@ -1314,6 +1314,7 @@ export default {
     validationOk: "編集後のデータは CI と同じ検証（データ検証）を通ります。",
     validationTitle: "検証",
     filesWithErrors: "エラーのあるファイル:",
+    filesWithRowWarnings: "行に警告のあるファイル:",
     worklogWarningsNote: "作業実績に関する警告（未紐付け・単価なし）はここでは調べません。保存後のビルドで「データ確認」画面に出ます。",
     diffChanged: "・ 変更",
     diffRemoved: "・ 削除",

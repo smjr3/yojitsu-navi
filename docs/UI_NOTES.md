@@ -7,8 +7,8 @@ Observable Framework 1.13 で作った画面側の構成と決定事項。計算
 ```
 src/
   data/
-    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)）
-    model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（540 KB / ダミーデータ）
+    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)。出力は emitJson で検査。docs/DATA_LOADERS.md）
+    model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（約 3.1 MB / 5 倍のダミーデータ）
     worklogs/[contractId].json.js 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
   components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む）
@@ -42,7 +42,7 @@ src/
 |---|---|---|
 | `/` 全体サマリー | 会社全体（or 選んだチーム）は今どうか | KPI 5 枚（年度予算・実績・残予算＋残予算率・消化率・着地見込みの差＋超過見込み件数）→ 月次推移 → 超過見込み契約 → チーム別 |
 | `/teams` チーム一覧 | どの組織が悪いか | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ |
-| `/team?id=` チーム詳細（サイドバーには出さない） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 契約一覧 → メンバー別実績 → 組織の変遷 |
+| `/team?id=` チーム詳細（タブには出さない。「チーム」タブが選択状態） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 契約一覧 → メンバー別実績 → 組織の変遷 |
 | `/contracts` 契約一覧 | どの契約が悪いか | 並べ替え可能な一覧 ＋ 絞り込み（超過見込み／消化率超過／速報含む／期間外も表示／検索）＋ 合計行 |
 | `/contract?id=` 契約詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 3 方式の着地比較 → 作業ログ（遅延読み込み） |
 | `/rules` 計算ルール | 数値はどう計算されているか | SPEC を人向けに。config.json の値を `${...}` で差し込む |
@@ -124,7 +124,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 2. 最初の `js` セルで `htl` / components / core を import。`const model = await loadJson(FileAttachment("./data/model.json"), {skeleton: "page-skeleton"})`、`const store = model ? createStore(model) : null`、`state = Generators.observe(...)`（既存ページからコピー）。
 3. `pageHeader({...})` → `mountFilterBar(store, model, {show: [...]})` → 本文。セルは `if (vm) {...}` で囲み、`display()` で描く。
 4. `observablehq.config.js` の `pages` に追加し、上部タブに出すなら `NAV`、右上の補助リンクなら `TOOLS` にも追加する（詳細画面は親タブの `match` にパスを足すとそのタブが選択状態になる。契約詳細がその例）。
-5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` を使う）。
+5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` の `emitJson` で出力し `_build: buildStamp()` を付ける。[DATA_LOADERS.md](DATA_LOADERS.md)）。
 
 ## 検証の仕方
 
@@ -161,7 +161,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 ## 顧客別（SPEC §17）決定事項
 
-- `/customers`（サイドバー: チーム一覧の次）と `/customer?key=`（サイドバーには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・契約数・予算・実績・残予算・残予算率・消化率・着地差・状態）。
+- `/customers`（上部タブ: チームの次）と `/customer?key=`（タブには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・契約数・予算・実績・残予算・残予算率・消化率・着地差・状態）。
 - URL の `key` は `encodeURIComponent`（`customerHref`）。読むのは `URLSearchParams.get`。日本語・記号・空白・`/ # ? % + &` を含む顧客名で往復できる（E2E は model.json を書き換えて確認）。見つからない key・key なしは空状態。
 - 一覧: 選んだチーム（配下含む）の契約だけで顧客を集計。期間内に契約が無い顧客は既定で非表示（「期間外の顧客も表示」で出す）。検索は `normalizeName` で両辺を正規化した部分一致（URL の `q` で復元）。合計行は表示中の顧客の全契約を母集団にした `aggregate()` / `forecastTotals()`。着地差は年度に掛かる契約が 0 件の顧客だけ「—」。状態チップはチーム行と同じ（赤字 N件・予算超過）。
 - 詳細: KPI 5 枚（全体サマリーと同じ。前年同期比も同じ規則）→ 月次推移 → この顧客の契約（期間外は既定で非表示、切替あり）→ 担当チーム別（契約の `teamId` ごと。配下はまとめない。行クリックは `/contracts?team=&q=<顧客名>`）。顧客詳細はチームフィルタを持たない（期間・方式・単位のみ）。
@@ -215,8 +215,8 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 | ページ | 問い | 構成 |
 |---|---|---|
-| `/members` メンバー別（サイドバーに出す） | 誰が計画どおりに動いているか | KPI 4 枚（計画額・実績・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
-| `/member?id=` メンバー詳細（サイドバーに出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・部署、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
+| `/members` メンバー別（上部タブ） | 誰が計画どおりに動いているか | KPI 4 枚（計画額・実績・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
+| `/member?id=` メンバー詳細（タブには出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・部署、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
 
 ### データの流れ
 

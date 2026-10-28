@@ -109,7 +109,7 @@
 
 ### model.json のサイズ
 
-`memberMonths` はダミーデータで 603 行・契約別 1,920 行、JSON で **486 KB**（model.json 540 KB の 9 割）。全ページが読む model.json に入れると倍近くなるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`、503 KB・gzip 25 KB）でメンバー別の画面だけに配る。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
+`memberMonths` は全ページが読む model.json に入れるとほぼ倍になるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`）でメンバー別の画面だけに配る（5 倍のダミーデータで model.json 約 3.1 MB・member-months.json 約 3.0 MB）。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
 
 ### 性能
 
