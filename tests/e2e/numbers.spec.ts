@@ -18,11 +18,9 @@ import {
   totalsFor,
   treeAt,
   yen,
-  DEFAULT_UNIT,
   type ForecastMethod,
   type Unit,
   type Period,
-  type Unit,
 } from "./helpers/core.js";
 
 const model = getModel();
