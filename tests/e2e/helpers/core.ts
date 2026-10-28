@@ -53,7 +53,7 @@ export function fiscalPeriod(model: Model = getModel()): Period {
 }
 
 /** 期間プリセット（filters.js と同じ定義） */
-export function presetPeriod(id: "fy" | "prevFy" | "recent3" | "recent12", model: Model = getModel()): Period {
+export function presetPeriod(id: "fy" | "prevFy" | "thisMonth" | "recent3" | "recent12", model: Model = getModel()): Period {
   const { meta, config } = model;
   const clamp = (m: string) => (m < meta.minMonth ? meta.minMonth : m > meta.maxMonth ? meta.maxMonth : m);
   const clip = (months: readonly string[]): Period => ({ from: clamp(months[0]!), to: clamp(months[months.length - 1]!) });
@@ -62,6 +62,8 @@ export function presetPeriod(id: "fy" | "prevFy" | "recent3" | "recent12", model
       return clip(fiscalYearMonths(meta.fiscalYear, config.fiscalYearStartMonth));
     case "prevFy":
       return clip(fiscalYearMonths(meta.fiscalYear - 1, config.fiscalYearStartMonth));
+    case "thisMonth":
+      return clip([meta.asOfMonth, meta.asOfMonth]);
     case "recent3":
       return clip([addMonths(meta.asOfMonth, -2), meta.asOfMonth]);
     case "recent12":

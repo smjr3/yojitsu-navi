@@ -142,6 +142,9 @@ export default {
     from: "開始月",
     to: "終了月",
     presetsLabel: "期間のプリセット",
+    // 期間の日付指定。データは月単位なので、選んだ日付はその日が属する月として扱う
+    pickFrom: "開始日をカレンダーで選ぶ（その月から集計）",
+    pickTo: "終了日をカレンダーで選ぶ（その月まで集計）",
     allTeams: "全体（すべてのチーム）",
     pastTeams: "過去の組織にのみ存在するチーム",
     unassignedSuffix: "（主担当チームなし）",
@@ -155,6 +158,7 @@ export default {
       fyShort: "今年度",
       prevFy: "前年度（FY{fy}）",
       prevFyShort: "前年度",
+      thisMonth: "今月",
       recent3: "直近3か月",
       recent12: "直近12か月",
     },
