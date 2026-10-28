@@ -21,6 +21,7 @@ import { statTile, kpiRow } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { customerHref } from "./components/customers.js";
 import { formatHours, formatPercent, monthJa, periodJa } from "./components/format.js";
+import { chartFigure } from "./components/chart-zoom.js";
 import { pm, workGroupChart, workHoursChart, workHoursLegend, workSeriesTable, workTaskSection, workTaskSpec } from "./components/work.js";
 ```
 
@@ -162,11 +163,13 @@ if (vm) {
 ```js
 if (vm) {
   display(sectionTitle(T.work.monthlyTitle, fmt(T.work.monthlyHint, { period: periodJa(vm.period), hours: model.config.standardHoursPerMonth })));
-  display(html`<figure class="yn-card yn-chart-card">
-    ${workHoursLegend(dark)}
-    ${resize((width) => workHoursChart({ series: vm.series, config: model.config, dark, width, asOfMonth: model.meta.asOfMonth }))}
-    <details class="yn-details"><summary>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>
-  </figure>`);
+  display(chartFigure({
+    title: T.work.monthlyTitle,
+    subtitle: periodJa(vm.period),
+    legend: workHoursLegend(dark),
+    draw: (width, height) => workHoursChart({ series: vm.series, config: model.config, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
+  }));
 }
 ```
 
@@ -187,11 +190,16 @@ if (vm) {
   display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) })));
   // 分布のグラフ（チームは末端の組織だけ。上位は配下の合計で二重になるため）
   const chartGroups = axis === "team" ? groups.filter((g) => !g.hasChildren) : groups;
-  display(html`<figure class="yn-card yn-chart-card">
-    ${workHoursLegend(dark)}
-    ${resize((width) => workGroupChart({ groups: chartGroups, config: cfg, dark, width, ariaLabel: fmt(T.work.distAriaAxis, { axis: label }) }))}
-    ${chartGroups.length > 20 ? html`<p class="yn-note">${fmt(T.work.distTrimmed, { n: 20, total: chartGroups.length })}</p>` : null}
-  </figure>`);
+  // 画面内は上位 20 件。拡大表示では全件を出す（行が多ければダイアログ内で縦にスクロール）
+  display(chartFigure({
+    title: fmt(T.work.tableTitle, { axis: label }),
+    subtitle: periodJa(period),
+    legend: workHoursLegend(dark),
+    draw: (width, height) =>
+      workGroupChart({ groups: chartGroups, config: cfg, dark, width, height, maxRows: height === undefined ? 20 : chartGroups.length, ariaLabel: fmt(T.work.distAriaAxis, { axis: label }) }),
+    rotateHint: false,
+    after: chartGroups.length > 20 ? html`<p class="yn-note">${fmt(T.work.distTrimmed, { n: 20, total: chartGroups.length })}</p>` : null,
+  }));
   const pmCol = (key, labelText, get, extra = {}) => ({
     key,
     label: labelText,

@@ -20,6 +20,7 @@ import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, tree
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
+import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -161,10 +162,12 @@ if (vm) {
 ```js
 if (vm) {
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(html`<figure class="yn-card yn-chart-card">
-    ${monthlyLegend(dark)}
-    ${resize((width) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, asOfMonth: model.meta.asOfMonth }))}
-  </figure>`);
+  display(chartFigure({
+    title: T.charts.monthlyTitle,
+    subtitle: periodJa(vm.period),
+    legend: monthlyLegend(dark),
+    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+  }));
 }
 ```
 

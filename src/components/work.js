@@ -160,7 +160,7 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
         Plot.pointerX({
           x: "i",
           y: (d) => personMonths(d.contractHours + d.outsideHours, std),
-          anchor: "bottom",
+          preferredAnchor: "bottom",
           dy: -6,
           fill: c.surface,
           stroke: c.axis,
@@ -197,7 +197,11 @@ export function workSeriesTable({ series, config, exportName }) {
  * 工数の分布（グループごとに契約内・契約外の人月を横に積み上げ）。groups は core の aggregateWork() の行。
  * チーム軸は末端の組織だけ（上位は配下の合計なので並べると二重になる）。行が多いときは上位 maxRows 件。
  */
-export function workGroupChart({ groups, config, dark = false, width = 640, maxRows = 20, ariaLabel }) {
+/**
+ * height を渡すと（拡大表示）、行の高さをその枠に合わせて広げる（28〜40px）。行が多くて収まらないときは 28px で縦に伸び、
+ * 縦にスクロールしても目盛りを読めるように人月の軸を上に置く
+ */
+export function workGroupChart({ groups, config, dark = false, width = 640, height, maxRows = 20, ariaLabel }) {
   const c = workColors(dark);
   const std = config.standardHoursPerMonth;
   const shown = groups.slice(0, maxRows);
@@ -211,14 +215,14 @@ export function workGroupChart({ groups, config, dark = false, width = 640, maxR
   const marginLeft = Math.min(Math.max(64, longest * 12 + 8), Math.round(width * 0.4));
   const plot = Plot.plot({
     width,
-    height: shown.length * 28 + 48,
+    height: shown.length * (height ? Math.min(40, Math.max(28, Math.floor((height - 48) / shown.length))) : 28) + 48,
     marginLeft,
     marginRight: 24,
-    marginTop: 24,
-    marginBottom: 24,
+    marginTop: height ? 32 : 24,
+    marginBottom: height ? 8 : 24,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / 12) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / 12) - 1).join("")}…` : s) },
-    x: { grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    x: { axis: height ? "top" : "bottom", grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
       Plot.gridX({ stroke: c.grid, strokeOpacity: 1 }),
@@ -229,7 +233,7 @@ export function workGroupChart({ groups, config, dark = false, width = 640, maxR
         Plot.pointerY({
           y: "label",
           x: (g) => personMonths(g.totals.totalHours, std),
-          anchor: "left",
+          preferredAnchor: "left",
           dx: 6,
           fill: c.surface,
           stroke: c.axis,
