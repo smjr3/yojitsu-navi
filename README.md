@@ -2,9 +2,8 @@
 
 保守契約の **予実（予算 vs 実績）と残予算** を見るための社内ダッシュボードです。
 契約総額を月割りした「予算」と、作業実績 × 時間単価で求めた「実績（工数 × 単価）」を突き合わせ、
-チーム・顧客・案件・メンバーごとの消化率と年度末の着地見込み（超過／範囲内）を表示します。
+チーム・案件ごとの消化率と年度末の着地見込み（超過／範囲内）を表示します。
 
-- 管理の単位は **案件**（1 案件 = 1 契約）。契約の更新・金額変更は、同じ案件の別の契約の行（別 ID）として持ちます。画面では「案件」と呼び、金額・期間・ID・更新など契約そのものを指すところだけ「契約」と書きます
 - 静的サイト（[Observable Framework](https://observablehq.com/framework/)）。サーバ不要、社内 GitLab Pages に公開
 - データは CSV（`data/`）。Git で履歴管理し、CI で検証してから公開
 - 計算仕様は [docs/SPEC.md](docs/SPEC.md)、データ定義は [docs/DATA.md](docs/DATA.md)
@@ -12,60 +11,37 @@
 
 ## 画面
 
-上部のタブ（全体・チーム・顧客・案件・メンバー・工数）と右上のツール（データ確認・計算ルール・稼働計画・マスタ編集・設定）で移動します。期間・チーム・単位・着地方式はタブの下の表示条件バーで選びます。
-
 | パス | 内容 |
 |---|---|
-| `/` 全体 | 予算／実績／残予算／消化率と月次推移、着地見込み、超過見込みの案件 |
-| `/teams` チーム | 組織階層ごとの集計（上位は配下の合計）。行から `/team` チーム詳細（KPI・案件・メンバー別実績・組織の変遷） |
-| `/customers` 顧客 | 顧客ごとの集計。行から `/customer` 顧客詳細（顧客の案件と担当チーム別の内訳） |
-| `/contracts` 案件 | 案件ごとの予実と消化率。赤 = 消化率 100% 超 or 着地が超過見込み。行から `/contract` 案件詳細（月ごとの予実・メンバー別の実績・3 方式の着地見込み・元の作業ログ） |
-| `/members` メンバー | メンバーごとの計画と実績。行から `/member` メンバー詳細 |
-| `/workload` 工数 | 作業時間を契約内（運用保守）と契約外（提案など）に分け、所属チーム・顧客・メンバーごとに人月で比べる（SPEC §30） |
-| `/data-check` データ確認 | 未紐付けの作業実績、単価なしメンバー、警告の一覧 |
+| `/` 全体サマリー | 年度・期間を選び、予算／実績／残予算／消化率と月次推移、着地見込み |
+| `/teams` チーム一覧 | 組織階層（事業部 > 課 > チーム）ごとの集計。配下の合計を上位に積み上げ |
+| `/contracts` 案件一覧 | 案件ごとの予実と消化率。赤 = 消化率 100% 超 or 着地が超過見込み |
 | `/rules` 計算ルール | 画面の数値がどう計算されているかの説明 |
-| `/plan` 稼働計画 | リーダーが組織のメンバー × 月の計画（アサイン）を入力。人月でも時間でも入力でき、保存は人月（SPEC §23・§31） |
-| `/masters` マスタ編集 | メンバー・単価・組織（種別・リーダー含む）・アサインを画面の表か CSV で編集し、GitLab にマージリクエストとして保存（SPEC §24〜§29） |
-| `/settings` 設定 | GitLab のトークンと表示テーマ（ライト／ダーク） |
+| `/data-check` データ確認 | 未紐付けの作業実績、単価なしメンバー、警告の一覧 |
+| `/plan` 稼働計画 | リーダーが組織のメンバー × 月の計画（アサイン）を入力。人月でも時間でも入力でき、保存は人月（SPEC §23）。保存方式はマスタ編集と同じ |
+| `/masters` マスタ編集 | メンバー・単価・組織（種別・リーダー含む）・アサインの CSV を画面で編集し、GitLab に保存（または CSV をダウンロード）。下の「マスタ編集の設定」 |
 
-- 数値をクリックすると「式 ＋ 実際に使った値」の内訳が開きます。
-- グラフは右上の「拡大」で大きく表示できます（スマホは全画面。SPEC §33）。
+数値をクリックすると「式 ＋ 実際に使った値」の内訳が開きます。グラフは右上の「拡大」で大きく表示できます（スマホは全画面。SPEC §33）。
+
+`/contract?id=C008` 案件詳細（案件一覧・超過見込み一覧の行から遷移）は、月ごとの予実・メンバー別の実績・3 方式の着地見込み・元の作業ログまで辿れます。
 
 ### 画面のスクリーンショット
 
-| 全体 | 全体（グラフの拡大表示） |
+| 全体サマリー | チーム一覧 |
 |---|---|
-| ![全体](docs/screenshots/index.png) | ![グラフの拡大表示](docs/screenshots/chart-zoom.png) |
-
-| チーム | 顧客 |
-|---|---|
-| ![チーム](docs/screenshots/teams.png) | ![顧客](docs/screenshots/customers.png) |
+| ![全体サマリー](docs/screenshots/index.png) | ![チーム一覧](docs/screenshots/teams.png) |
 
 | 案件一覧 | 案件詳細 |
 |---|---|
 | ![案件一覧](docs/screenshots/contracts.png) | ![案件詳細](docs/screenshots/contract.png) |
 
-| メンバー | メンバー詳細 |
+| 計算根拠（内訳パネル） | データ確認 |
 |---|---|
-| ![メンバー](docs/screenshots/members.png) | ![メンバー詳細](docs/screenshots/member.png) |
+| ![計算根拠](docs/screenshots/breakdown.png) | ![データ確認](docs/screenshots/data-check.png) |
 
-| 工数 | 計算根拠（数値をクリック） |
-|---|---|
-| ![工数](docs/screenshots/workload.png) | ![計算根拠](docs/screenshots/breakdown.png) |
-
-| 稼働計画 | マスタ編集 |
-|---|---|
-| ![稼働計画](docs/screenshots/plan.png) | ![マスタ編集](docs/screenshots/masters.png) |
-
-| データ確認 | 計算ルール |
-|---|---|
-| ![データ確認](docs/screenshots/data-check.png) | ![計算ルール](docs/screenshots/rules.png) |
-
-| ダーク表示 | スマートフォン幅 | 横向きスマホでのグラフ拡大 |
+| 計算ルール | ダークモード | スマートフォン幅 |
 |---|---|---|
-| ![ダーク表示](docs/screenshots/index-dark.png) | ![スマートフォン幅](docs/screenshots/index-phone.png) | ![横向きスマホでのグラフ拡大](docs/screenshots/chart-zoom-phone.png) |
-
-スクリーンショットはダミーデータ（`scripts/generate-dummy.ts`）の画面です。画面を変えたら撮り直してください（1280×900、スマホは 390×844）。
+| ![計算ルール](docs/screenshots/rules.png) | ![ダークモード](docs/screenshots/index-dark.png) | ![スマートフォン幅](docs/screenshots/index-phone.png) |
 
 画面の構成・状態管理・ページの追加方法は [docs/UI_NOTES.md](docs/UI_NOTES.md) を参照。
 期間・チーム・単位・着地方式は URL クエリ（`?from=2026-04&to=2027-03&team=T111&unit=k&method=recent3`）に入るので、URL を共有すると同じ表示を再現できます。
@@ -268,17 +244,15 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 
 ## ロードマップ
 
-できていること: 上の「画面」の表にあるすべての画面（全体・チーム・顧客・案件・メンバー・工数の集計と詳細、計算根拠、グラフの拡大、データ確認、計算ルール、稼働計画、マスタ編集の GitLab マージ方式、設定）。
+初回リリース: 全体サマリー・チーム一覧・案件一覧・計算ルール・データ確認（本リポジトリ）。
 
-本番環境でしか確かめられないこと（社内で確認が要るもの）:
+2 回目以降:
 
-- 作業実績 API・人事データの列名（`npm run fetch -- --dry-run` で確認し、`config.json` の列の対応を合わせる。下の「本番 API への合わせ方」）
-- GitLab API でマスタを保存できるか（CORS・保護ブランチ・トークンの権限。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）
-- 作業実績の定期取り込み（CI のスケジュール実行）
-
-今後の候補:
-
-- 実績の種類の追加（外注費など。上の「実績の種類を追加する」）
+- チーム詳細（メンバー別の工数・実績、月次推移）
+- 顧客別の集計
+- メンバー別の稼働状況（配分人月、兼務）
+- 編集画面（契約・マッピング・単価を画面から編集して MR を作る）
+- 作業実績 API からの自動取得の本番適用（http アダプタ）
 - 月ごとの組織差分を反映した過去月集計（現在は期間終了月の組織で表示）
 
 ## リポジトリ構成
@@ -296,9 +270,9 @@ scripts/
   lib/                   Node 用の補助（文字コード判定、CSV、読み込み）
 src/core/                計算コア（純粋関数。画面に依存しない）
 src/*.md                 画面（Observable Framework）
-src/components/          画面の部品（KPI・表・グラフと拡大表示・内訳パネル・フィルタ・状態管理・マスタ編集・GitLab 連携）
+src/components/          画面の部品（KPI・表・グラフ・内訳パネル・フィルタ・状態管理）
 src/i18n/                画面の文言（ja.js）と計算ルール画面の本文（rules.txt）。書き換え方は docs/TEXTS.md
-src/data/                データローダ（model.json / masters.json / member-months.json / work-hours.json / worklogs/[contractId].json / dataset-issues.json）
+src/data/                データローダ（model.json / worklogs/[contractId].json / dataset-issues.json）
 src/style.css            デザイントークンとスタイル（ライト／ダーク）
 tests/                   unit / property / integration / e2e
 ```
