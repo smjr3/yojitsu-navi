@@ -18,6 +18,7 @@ import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRo
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
+import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns, withForecastCount } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -142,11 +143,13 @@ if (vm?.exists) {
 ```js
 if (vm?.exists) {
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(html`<figure class="yn-card yn-chart-card">
-    ${monthlyLegend(dark)}
-    ${resize((width) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, asOfMonth: model.meta.asOfMonth }))}
-    <details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>
-  </figure>`);
+  display(chartFigure({
+    title: T.charts.monthlyTitle,
+    subtitle: periodJa(vm.period),
+    legend: monthlyLegend(dark),
+    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
+  }));
 }
 ```
 
