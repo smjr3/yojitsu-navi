@@ -13,7 +13,7 @@ title: メンバー別
 import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
-import { scopeFor, teamName } from "./components/analysis.js";
+import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
@@ -25,7 +25,7 @@ const memberKpiRow = (tiles) => {
 };
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { EMPTY_VALUE, money, moneySigned, formatHours, formatPercent, monthJa, periodJa } from "./components/format.js";
+import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, monthJa, periodJa } from "./components/format.js";
 ```
 
 ```js
@@ -75,12 +75,9 @@ const vm = (() => {
   const all = aggregateMembers(model, { period });
   // 所属チーム（基準月 = 期間の終了月。未来は基準月）で絞る。上位チームは配下を含む。
   // 「未設定」は所属チームが空か、基準月の組織に無いメンバー
-  let memberIds = null;
-  if (state.team === UNASSIGNED_TEAM_ID) memberIds = all.members.filter((m) => !m.teamId || !scope.tree[m.teamId]).map((m) => m.memberId);
-  else if (state.team) {
-    const ids = new Set(scope.tree[state.team]?.descendantIds ?? []);
-    memberIds = all.members.filter((m) => m.teamId && ids.has(m.teamId)).map((m) => m.memberId);
-  }
+  // 対象の人は「期間全体」で決める（経過月だけで決めると、未来月にだけアサインのある人が期間全体の計画から抜ける）
+  const allFull = period.to === fullPeriod.to ? all : aggregateMembers(model, { period: fullPeriod });
+  const memberIds = memberIdsInTeam(allFull.members, state.team, scope.tree);
   const agg = memberIds ? aggregateMembers(model, { period, memberIds }) : all;
   // 期間全体の計画（未来月を含む）。KPI の補足に出す
   const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembers(model, { period: fullPeriod, memberIds: memberIds ?? undefined });
@@ -131,7 +128,7 @@ if (vm) {
     memberKpiRow([
         statTile({ label: `計画原価（${periodJa(period)}）`, value: money(t.plannedCost, unit), sub: `計画時間 ${formatHours(t.plannedHours)} ・ ${t.memberCount}人${period.to !== fullPeriod.to ? ` ・ 期間全体 ${money(fullAgg.total.plannedCost, unit)}` : ""}`, breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),
         statTile({ label: "実績原価", value: money(t.actualCost, unit), sub: `実績時間 ${formatHours(t.actualHours)}（うちアサイン外 ${formatHours(t.unplannedHours)}）`, breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
-        statTile({ label: "差額（計画 − 実績）", value: moneySigned(t.variance, unit), sub: t.variance > 0 ? "計画より原価が少ない" : t.variance < 0 ? "計画より原価が多い" : "計画どおり", breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
+        statTile({ label: "差額（計画 − 実績）", value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: "稼働率（実績時間 ÷ 計画時間）", value: formatPercent(t.utilization), sub: t.utilization === null ? "計画時間が 0 のため計算できません" : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
   );
@@ -144,7 +141,7 @@ const searchForm = (() => {
   if (!model) return null;
   const form = html`<form class="yn-chip-filters" role="search" aria-label="メンバーの検索"></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
-  const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder="名前・メンバーID・役職で検索" value=${initialQuery} aria-label="名前・メンバーID・役職で検索（全角・半角、大文字・小文字は区別しません）">`;
+  const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder="名前・ID・役職・チームで検索" value=${initialQuery} aria-label="名前・ID・役職・チームで検索（全角・半角、大文字・小文字は区別しません）">`;
   let timer = null;
   input.addEventListener("input", () => {
     // 150ms デバウンス（1 文字ごとに表を作り直さない）
@@ -200,7 +197,7 @@ if (vm) {
       type: "text",
       // 2 行目に ID・所属チーム・役職（列を分けると 1280/1024px に収まらないため。Excel には別列で出す）
       render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}（${r.memberId}）・${r.teamName || "未所属"}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.memberId}</span> ・ ${r.teamName || "未所属"}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
-      sortValue: (r) => r.memberId,
+      sortValue: (r) => r.memberName,
       exportValue: (r) => r.memberName,
     },
     { key: "memberId", label: "メンバーID", type: "text", exportOnly: true },

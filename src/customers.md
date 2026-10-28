@@ -160,7 +160,8 @@ if (vm) {
     grossMargin: sumTotals.grossMargin,
     burnRate: sumTotals.burnRate,
     isOverBudget: sumTotals.isOverBudget,
-    forecastGrossProfit: sumForecast.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
+    // 着地粗利は年度に掛かる契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
+    forecastGrossProfit: rows.reduce((n, r) => n + r.fyContractCount, 0) === 0 ? null : sumForecast.forecastGrossProfit,
     isDeficit: false,
     status: null,
   };

@@ -2,9 +2,10 @@
  * 一覧表: 並べ替え（aria-sort）・固定ヘッダ・右寄せ数値・状態チップ・行クリック・Excel 出力・木構造（チーム一覧）
  *
  * dataTable({
- *   columns: [{ key, label, type: "text"|"money"|"percent"|"hours"|"int"|"status"|"custom",
+ *   columns: [{ key, label, type: "text"|"money"|"moneyYen"（明細: 常に円）|"percent"|"hours"|"int"|"status"|"custom",
  *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
  *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean,
+ *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効）,
@@ -18,7 +19,15 @@ import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact 
 import { numberButton } from "./breakdown.js";
 import { statusChip } from "./kpi.js";
 
-const NUMERIC_TYPES = new Set(["money", "percent", "hours", "int"]);
+const NUMERIC_TYPES = new Set(["money", "moneyYen", "percent", "hours", "int"]);
+
+/**
+ * 明細の金額列は type "moneyYen"（SPEC §12: 選択単位に関係なく常に円。見出しに「（円）」を付ける）。
+ * 集計行・KPI は従来どおり type "money"（選択単位に従う）。
+ */
+function headLabel(col) {
+  return col.type === "moneyYen" ? `${col.label}（円）` : col.label;
+}
 
 function isNumeric(col) {
   return col.align === "num" || NUMERIC_TYPES.has(col.type);
@@ -29,6 +38,8 @@ function defaultRender(col, row, unit) {
   switch (col.type) {
     case "money":
       return money(v, unit);
+    case "moneyYen":
+      return money(v, "yen");
     case "percent":
       return formatPercent(v);
     case "hours":
@@ -49,6 +60,7 @@ function defaultExport(col, row, unit) {
   const v = col.get ? col.get(row) : row[col.key];
   switch (col.type) {
     case "money":
+    case "moneyYen":
       return typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
     case "percent":
       return typeof v === "number" && Number.isFinite(v) ? Math.round(v * 1000) / 10 : null;
@@ -66,6 +78,7 @@ function exportLabel(col, unit) {
   if (col.exportLabel) return col.exportLabel;
   switch (col.type) {
     case "money":
+    case "moneyYen":
       return `${col.label}（円）`;
     case "percent":
       return `${col.label}（%）`;
@@ -198,7 +211,7 @@ export function dataTable({
         const active = sortState && sortState.key === col.key;
         const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`} style=${col.width ? `width:${col.width}` : null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
-          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${col.label}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
+          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${headLabel(col)}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
           btn.addEventListener("click", () => {
             const first = numeric ? "desc" : "asc";
             sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
@@ -208,14 +221,15 @@ export function dataTable({
             focusIn(thead, `th[data-key="${cssEscape(col.key)}"] button`);
           });
           th.append(btn);
-        } else th.append(col.label, col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : "");
+        } else th.append(headLabel(col), col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : "");
         return th;
       })}</tr>`,
     );
   }
 
   function cellNode(col, row, isSummary = false) {
-    const text = col.render ? col.render(row, unit) : defaultRender(col, row, unit);
+    const cellUnit = col.type === "moneyYen" ? "yen" : unit;
+    const text = col.render ? col.render(row, cellUnit) : defaultRender(col, row, unit);
     if (text === EMPTY_VALUE || text === "") return text;
     if (isSummary) {
       // 合計行は行用の breakdown(row) を使わない（契約IDなどを持たないため）。summaryBreakdown(col) があればそれを開く
@@ -289,7 +303,7 @@ export function dataTable({
     const tfoot = html`<tfoot><tr class="yn-summary-row">${visibleCols.map((col, ci) => {
       const numeric = isNumeric(col);
       const has = summary[col.key] !== undefined && summary[col.key] !== null;
-      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? "" : cellNode(col, summary, true);
+      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, summary, true);
       return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`}>${content}</td>`;
     })}</tr></tfoot>`;
     table.append(tfoot);
@@ -358,6 +372,7 @@ export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利
       key: "forecastGrossProfit",
       label: forecastLabel,
       type: "money",
+      summaryDash: true,
       breakdown: breakdowns.forecast,
       render: (row, unit) => {
         if (row.forecastGrossProfit === null || row.forecastGrossProfit === undefined) return EMPTY_VALUE;

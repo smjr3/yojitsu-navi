@@ -200,7 +200,7 @@ if (vm) {
     { key: "grossProfit", label: "粗利", type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => (r.outsideFY ? null : bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` })) },
     { key: "grossMargin", label: "粗利率", type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => (r.outsideFY ? null : bd.marginSpec({ budget: r.budget, cost: r.cost, grossMargin: r.grossMargin, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? "（見込み）" : ""}` })) },
     { key: "hours", label: "時間", type: "hours", hideNarrow: true },
-    { key: "members", label: "作業者数", type: "int", hideOnPhone: true, hideNarrow: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-danger-text" title="単価の無いメンバーを含みます">（単価なし含む）</span>` : integer(r.members)) },
+    { key: "members", label: "作業者数", type: "int", hideOnPhone: true, hideNarrow: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-muted" title="単価の無いメンバーを含みます">（単価なし含む）</span>` : integer(r.members)) },
     { key: "businessDays", label: "営業日", type: "int", hideOnPhone: true, hideNarrow: true },
   ];
   // 合計行は KPI と同じコアの Totals（期間の予算合計、原価・粗利は実績月のみ）。合計行の数値に根拠ボタンは付けない
@@ -238,11 +238,11 @@ if (vm) {
   const rows = [...byMember.values()].map((r) => ({ ...r, teams: [...r.teams].join("、") || "—", rateText: [...r.rates].map((x) => money(x, "yen")).join(" / "), share: vm.totals.cost ? r.amount / vm.totals.cost : null, isOtherTeam: c.teamId && [...r.teams].length && ![...r.teams].includes(model.teamTree[c.teamId]?.name) }));
   display(sectionTitle("メンバー別の原価", `${periodJa(vm.period)} に作業したメンバーごとの時間と原価。契約の主担当チーム以外のメンバー（応援）も含みます。`));
   const columns = [
-    { key: "memberName", label: "メンバー", type: "text", render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("danger", "単価なし", "この期間に時間単価が見つからない月があります（0円で計算）")}` : ""}` },
+    { key: "memberName", label: "メンバー", type: "text", render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", "単価なし", "この期間に時間単価が見つからない月があります（0円で計算）")}` : ""}` },
     { key: "teams", label: "所属（当時）", type: "text", hideOnPhone: true },
     { key: "hours", label: "時間", type: "hours" },
     { key: "rateText", label: "単価", type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true },
-    { key: "amount", label: "原価", type: "money" },
+    { key: "amount", label: "原価", type: "moneyYen" },
     { key: "share", label: "構成比", type: "percent" },
     { key: "months", label: "作業月数", type: "int", hideOnPhone: true },
   ];
@@ -323,8 +323,8 @@ function worklogExplorer(entries, unit, id) {
     { key: "memberName", label: "メンバー", type: "text", render: (r) => `${r.memberName}（${r.memberId}）` },
     { key: "task", label: "作業内容", type: "text" },
     { key: "hours", label: "時間", type: "hours" },
-    { key: "hourlyRate", label: "単価", type: "money", exportLabel: "単価（円）", render: (r) => money(r.hourlyRate, "yen"), exportValue: (r) => r.hourlyRate },
-    { key: "amount", label: "金額", type: "money" },
+    { key: "hourlyRate", label: "単価", type: "moneyYen" },
+    { key: "amount", label: "金額", type: "moneyYen" },
     { key: "status", label: "状態", type: "text", render: (r) => STATUS_LABELS[r.status], hideOnPhone: true },
   ];
   const render = () => {

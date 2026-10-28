@@ -26,7 +26,7 @@ const memberKpiRow = (tiles) => {
 import { memberHoursChart, memberHoursLegend } from "./components/charts.js";
 import { dataTable, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { EMPTY_VALUE, money, moneySigned, formatHours, formatPercent, monthJa, periodJa, periodCompact, STATUS_LABELS } from "./components/format.js";
+import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, monthJa, periodJa, periodCompact, STATUS_LABELS } from "./components/format.js";
 ```
 
 ```js
@@ -155,7 +155,7 @@ if (vm) {
     memberKpiRow([
         statTile({ label: `計画原価（${periodJa(period)}）`, value: money(t.plannedCost, unit), sub: `計画時間 ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberPlanSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
         statTile({ label: "実績原価", value: money(t.actualCost, unit), sub: `実績時間 ${formatHours(t.actualHours)}${t.unplannedHours > 0 ? `（うちアサイン外 ${formatHours(t.unplannedHours)}）` : ""}`, breakdown: () => bd.memberActualSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
-        statTile({ label: "差額（計画 − 実績）", value: moneySigned(t.variance, unit), sub: t.variance > 0 ? "計画より原価が少ない" : t.variance < 0 ? "計画より原価が多い" : "計画どおり", breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
+        statTile({ label: "差額（計画 − 実績）", value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: "稼働率（実績時間 ÷ 計画時間）", value: formatPercent(t.utilization), sub: t.utilization === null ? "計画時間が 0 のため計算できません" : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
   );
@@ -187,9 +187,9 @@ if (vm) {
     { key: "plannedHours", label: "計画時間", type: "hours", breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
     { key: "actualHours", label: "実績時間", type: "hours", render: fut((r) => formatHours(r.actualHours)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
     { key: "utilization", label: "稼働率", type: "percent", render: fut((r) => formatPercent(r.utilization)), breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: monthJa(r.month) }) },
-    { key: "plannedCost", label: "計画原価", type: "money", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
-    { key: "actualCost", label: "実績原価", type: "money", hideOnPhone: true, render: fut((r, u) => money(r.actualCost, u)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
-    { key: "variance", label: "差額", sublabel: "（計画−実績）", type: "money", exportLabel: "差額（計画−実績）（円）", render: fut((r, u) => moneySigned(r.variance, u)), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: monthJa(r.month) }) },
+    { key: "plannedCost", label: "計画原価", type: "moneyYen", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
+    { key: "actualCost", label: "実績原価", type: "moneyYen", hideOnPhone: true, render: fut((r, u) => money(r.actualCost, u)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
+    { key: "variance", label: "差額", sublabel: "（計画−実績）", type: "moneyYen", render: fut((r, u) => moneySigned(r.variance, u)), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: monthJa(r.month) }) },
   ];
   const t = vm.totals;
   const sumLabel = vm.period.to !== period.to ? `合計（経過月 ${periodJa(vm.period)}）` : "合計";
@@ -236,9 +236,9 @@ if (vm) {
     { key: "contractName", label: "顧客 / 案件", type: "text", exportOnly: true, get: (r) => `${r.customerName} / ${r.projectName}` },
     { key: "plannedHours", label: "計画時間", type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
     { key: "actualHours", label: "実績時間", type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "plannedCost", label: "計画原価", type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "actualCost", label: "実績原価", type: "money", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "variance", label: "差額", sublabel: "（計画−実績）", type: "money", exportLabel: "差額（計画−実績）（円）", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${r.contractId} ・ ${periodJa(period)}` }) },
+    { key: "plannedCost", label: "計画原価", type: "moneyYen", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "actualCost", label: "実績原価", type: "moneyYen", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "variance", label: "差額", sublabel: "（計画−実績）", type: "moneyYen", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${r.contractId} ・ ${periodJa(period)}` }) },
     { key: "status", label: "アサイン", type: "status", get: chips, sortable: false, hideNarrow: true },
   ];
   if (rows.length === 0) display(emptyState({ title: "この期間の契約はありません", text: "アサインも作業実績もありません。", icon: "○" }));
@@ -269,7 +269,7 @@ if (vm) {
         columns: [
           { key: "from", label: "期間", type: "text", render: (r) => (r.from === r.to ? monthJa(r.from) : `${monthJa(r.from)}〜${monthJa(r.to)}`), exportValue: (r) => `${r.from}〜${r.to}` },
           { key: "title", label: "役職", type: "text", hideOnPhone: true },
-          { key: "hourlyRate", label: "時間単価", type: "money", exportLabel: "時間単価（円）", render: (r) => (r.rateMissing ? statusChip("neutral", "単価なし（0円）", "rates.csv に該当する単価がありません") : money(r.hourlyRate, "yen")) },
+          { key: "hourlyRate", label: "時間単価", type: "moneyYen", render: (r) => (r.rateMissing ? statusChip("neutral", "単価なし（0円）", "rates.csv に該当する単価がありません") : money(r.hourlyRate, "yen")) },
           { key: "source", label: "単価の出どころ", type: "text", get: (r) => (r.rateMissing ? "—" : r.rateSource?.key === memberId ? `個人単価（${r.rateSource.effectiveFrom}〜）` : `役職「${r.rateSource?.key}」（${r.rateSource?.effectiveFrom}〜）`) },
         ],
         rows: segs.map((s) => ({ ...s, key: s.from })),
