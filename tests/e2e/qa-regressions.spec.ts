@@ -54,7 +54,7 @@ test("契約一覧: 並べ替え・絞り込み・検索が、絞り込み変更
 
 test("契約詳細: ID の前後の空白と大文字小文字の違いを許す", async ({ page }) => {
   await gotoPage(page, "/contract?id=c008%20");
-  await expect(page.locator("h1")).toContainText("C008");
+  await expect(page.locator("h1")).toHaveText("こもれび出版 / 会員サイト保守");
   await expect(page.getByText("見つかりません")).toHaveCount(0);
 });
 
@@ -84,9 +84,12 @@ test("スマホ幅のマスタ編集: 行を追加して表が右へスクロー
   await page.getByRole("tab", { name: /組織/ }).click();
   await page.locator('button[data-fk="add:teams"]').click();
   const dlg = page.locator("dialog[open]");
-  await dlg.locator('[name="team_id"]').fill("QA1");
-  await dlg.locator('[name="name"]').fill("リーダー不明");
-  await dlg.locator('[name="leader_member_id"]').fill("NOPE");
+  // 親組織に自分自身を指す ID を入れてエラーの行を作る（リーダー・親組織は候補から選ぶ欄なので、存在しない値は ID 欄で作る）
+  await dlg.locator('[name="team_id"]').fill("NOPE");
+  await dlg.locator('[name="name"]').fill("自分が親");
+  await dlg.locator('[name="parent_team_id"]').evaluate((el: HTMLSelectElement) => {
+    el.append(new Option("NOPE", "NOPE", true, true));
+  });
   await dlg.locator('[data-role="submit"]').click();
   if (await page.locator("dialog[open] .yn-me-confirm").isVisible().catch(() => false)) await page.locator('dialog[open] [data-role="submit"]').click();
   const ul = page.locator(".yn-me-issue-row .yn-me-issues").first();

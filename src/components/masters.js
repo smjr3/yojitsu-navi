@@ -36,11 +36,16 @@ import {
   planSourcesFromDocs,
   validateEdited,
 } from "../core/masterEdit.js";
-import { allocationFromInput, flattenTeamTree, hoursFromAllocation, memberTeamAt, planView } from "../core/plan.js";
+import { allocationFromInput, contractSegments, editMonthAllocation, flattenTeamTree, hoursFromAllocation, memberTeamAt, mergeAdjacent, planView, projectKey } from "../core/plan.js";
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 import { infoTip } from "./layout.js";
+import { combobox } from "./combobox.js";
+import { planCellEditor, planCellTooltip } from "./plan-cell.js";
+
+/** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
+const PROJECT_FIELD = "__project";
 
 export const TOKEN_STORAGE_KEY = "yojitsu-navi:gitlab-token";
 
@@ -154,7 +159,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   const session = safeStorage("session");
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
-  const contracts = parseCsvTable(data.context.contracts).rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name") })).filter((c) => c.id !== "");
+  const contracts = parseCsvTable(data.context.contracts)
+    .rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name"), startMonth: r.get("start_month"), endMonth: r.get("end_month") }))
+    .filter((c) => c.id !== "");
+  const contractById = new Map(contracts.map((c) => [c.id, c]));
+  // 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§24.3）
+  const projects = new Map();
+  for (const c of contracts) {
+    const key = projectKey(c.customer, c.project);
+    const p = projects.get(key);
+    if (p) p.contracts.push({ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth });
+    else projects.set(key, { key, customer: c.customer, project: c.project, contracts: [{ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth }] });
+  }
+  /** 契約 → 「顧客 / 案件名」（ID は出さない。§24.1） */
+  const contractText = (id) => {
+    const c = contractById.get(id);
+    return c ? `${c.customer} / ${c.project}` : fmt(T.masters.unknownContractValue, { id });
+  };
 
   // ---- 状態 ---------------------------------------------------------------
   // 編集の土台は常にこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。書き換えない
@@ -207,6 +228,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     if (ev.target === dialog) dialog.close();
   });
   let returnFocusKey = null;
+  const tooltip = planCellTooltip();
+  const cellEditor = planCellEditor();
   dialog.addEventListener("close", () => {
     dialog.replaceChildren();
     if (returnFocusKey) focusKey(returnFocusKey);
@@ -220,7 +243,34 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
 
   function teamOptions() {
     const latest = latestByKey(docs.teams, "team_id");
-    return [...latest.entries()].map(([id, v]) => ({ id, label: `${id} ${cellOf(docs.teams, v.row, "name")}` }));
+    return [...latest.entries()].map(([id, v]) => {
+      const level = cellOf(docs.teams, v.row, "level");
+      return { id, label: `${cellOf(docs.teams, v.row, "name") || id}${level ? `（${level}）` : ""}` };
+    });
+  }
+  /** メンバーの候補（名前で選ぶ。補足に所属・役職。ID は一致にだけ使う） */
+  function memberOptions() {
+    const latest = latestByKey(docs.members, "member_id");
+    const tNames = teamNames();
+    return [...latest.entries()].map(([id, v]) => {
+      const get = (c) => cellOf(docs.members, v.row, c);
+      const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
+      const sub = [team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}` };
+    });
+  }
+  function projectOptions() {
+    return [...projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
+  }
+  /** ID の列を画面に出す文字（名前）にする。名前が無いものは ID のまま（§24.1） */
+  function displayValue(fileId, column, value) {
+    if (value === "") return value;
+    if (column === "team_id" && fileId !== "teams") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
+    if (column === "parent_team_id") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
+    if ((fileId === "assignments" && column === "member_id") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
+    if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
+    if (column === "contract_id") return contractText(value);
+    return value;
   }
   function memberNames() {
     const latest = latestByKey(docs.members, "member_id");
@@ -253,17 +303,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     return [...s];
   }
 
-  /** 表示用の補足（チーム名・氏名・契約名） */
+  /** 表示用の補足（時間換算・区分名・契約の期間・個人単価） */
   function cellHint(fileId, column, value) {
     if (value === "") return null;
-    if (column === "team_id" || column === "parent_team_id") return teamNames().get(value) ?? T.masters.unknownTeam;
-    if ((fileId === "assignments" && column === "member_id") || (fileId === "rates" && column === "key")) return memberNames().get(value) ?? null;
-    if (column === "leader_member_id") return memberNames().get(value) ?? T.plan.unknownMember;
     if (column === "allocation" && Number.isFinite(Number(value))) return fmt(T.plan.equalsHours, { hours: hoursFromAllocation(Number(value), std) });
     if (column === "contract_id") {
-      const c = contracts.find((x) => x.id === value);
-      return c ? `${c.customer} / ${c.project}` : T.masters.unknownContract;
+      const c = contractById.get(value);
+      return c ? `${c.startMonth}〜${c.endMonth}` : null;
     }
+    if (fileId === "rates" && column === "key" && memberNames().has(value)) return T.masters.personalRateHint;
     if (column === "kind") return KIND_LABELS[value] ?? null;
     return null;
   }
@@ -317,12 +365,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   function conflictItem(fileId, c) {
     const def = MASTER_FILES[fileId];
     const cols = def.columns.filter((col) => docs[fileId].header.includes(col.name));
-    const keyText = def.keyColumns.map((k) => (c.base[k] ?? "").trim()).join(" / ");
+    const keyText = def.keyColumns.map((k) => displayValue(fileId, k, (c.base[k] ?? "").trim())).join(" / ");
     const shown = cols.filter((col) => c.columns.includes(col.name));
     const values = (rec, deletedText) =>
       rec === null
         ? html`<span class="yn-me-conflict-del">${deletedText}</span>`
-        : html`<span class="yn-me-conflict-vals">${(shown.length ? shown : cols).map((col, i) => html`${i > 0 ? " / " : ""}${col.label}: <strong>${(rec[col.name] ?? "").trim() || T.masters.emptyValue}</strong>`)}</span>`;
+        : html`<span class="yn-me-conflict-vals">${(shown.length ? shown : cols).map((col, i) => html`${i > 0 ? " / " : ""}${col.label}: <strong>${displayValue(fileId, col.name, (rec[col.name] ?? "").trim()) || T.masters.emptyValue}</strong>`)}</span>`;
     const chosen = draftChoices[fileId]?.[c.id] ?? null;
     const name = `yn-me-conflict-${fileId}-${c.id}`;
     const option = (value, label, rec, deletedText) => {
@@ -338,7 +386,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     };
     return html`<fieldset class=${`yn-me-conflict${chosen ? "" : " is-unresolved"}`} data-conflict=${`${fileId}:${c.id}`}>
       <legend><span class="yn-chip yn-chip-neutral">${def.label}</span> ${keyText}: ${CONFLICT_TEXT[c.kind]}</legend>
-      <p class="yn-me-small">${T.masters.conflictBaseRow} ${cols.map((col) => (c.base[col.name] ?? "").trim() || "—").join(" ・ ")}</p>
+      <p class="yn-me-small">${T.masters.conflictBaseRow} ${cols.map((col) => displayValue(fileId, col.name, (c.base[col.name] ?? "").trim()) || "—").join(" ・ ")}</p>
       ${option("mine", T.masters.keepMine, c.mine, T.masters.deleteThisRow)}
       ${option("theirs", T.masters.keepTheirs, c.theirs, T.masters.keepDeleted)}
     </fieldset>`;
@@ -450,6 +498,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   }
 
   // ---- 表 -----------------------------------------------------------------
+  /** 表の検索の対象（セルの値と、ID の列の名前） */
+  function searchText(fileId, doc, r) {
+    const rec = rowRecord(doc, r);
+    return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim()))].join(" ").normalize("NFKC").toLowerCase();
+  }
+
   function renderPanel() {
     if (active === PLAN_VIEW_ID) {
       renderPlanPanel();
@@ -466,7 +520,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     const shown = doc.rows.filter((r) => {
       const st = rowState(doc, r);
       if (f.changedOnly && st === "unchanged" && !(issues[r.id]?.length > 0)) return false;
-      if (q && !r.cells.join(" ").normalize("NFKC").toLowerCase().includes(q)) return false;
+      if (q && !searchText(fileId, doc, r).includes(q)) return false;
       return true;
     });
     const isHistory = def.history === "effective";
@@ -512,11 +566,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const invalid = errs.length > 0;
       const issueId = `yn-me-issue-${fileId}-${r.id}`;
       const rec = rowRecord(doc, r);
-      const keyText = def.keyColumns.map((k) => rec[k] ?? "").join(" / ");
+      const keyText = def.keyColumns.map((k) => displayValue(fileId, k, (rec[k] ?? "").trim())).join(" / ");
       const deletable = !(fileId === "members" && importMode && st !== "added");
       const cells = columns.map((c, i) => {
-        const v = (rec[c.name] ?? "").trim();
-        const hint = cellHint(fileId, c.name, v);
+        const raw = (rec[c.name] ?? "").trim();
+        const v = displayValue(fileId, c.name, raw);
+        const hint = cellHint(fileId, c.name, raw);
         const changedCol = st === "changed" && doc.originals[r.id] && (doc.originals[r.id].cells[doc.header.indexOf(c.name)] ?? "") !== (r.cells[doc.header.indexOf(c.name)] ?? "");
         const content = html`<span class=${changedCol ? "yn-me-val is-changed" : "yn-me-val"}>${v === "" ? html`<span class="yn-muted" aria-label=${T.masters.emptyAria}>—</span>` : v}</span>${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}`;
         const cls = `${c.input === "number" ? "num" : ""}${c.input === "month" ? " yn-me-month" : ""}`;
@@ -572,7 +627,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </div>
       ${removed.length
         ? html`<div class="yn-me-removed"><h3 class="yn-me-subtitle">${T.masters.removedTitle}${integer(removed.length)}${T.masters.countSuffixParen}</h3><ul>${removed.map(
-            (r) => html`<li><span class="yn-chip yn-chip-neutral">${T.masters.removedChip}</span> <span class="yn-me-removed-text">${columns.map((c) => r.before[c.name] ?? "").join(" ・ ")}</span> <button type="button" class="yn-btn yn-btn-sm" data-fk=${`restore:${r.rowId}`} onclick=${() => commit(fileId, restoreRow(docs[fileId], r.rowId), `edit:${r.rowId}`)}>${T.masters.undoDelete}</button></li>`,
+            (r) => html`<li><span class="yn-chip yn-chip-neutral">${T.masters.removedChip}</span> <span class="yn-me-removed-text">${columns.map((c) => displayValue(fileId, c.name, (r.before[c.name] ?? "").trim())).join(" ・ ")}</span> <button type="button" class="yn-btn yn-btn-sm" data-fk=${`restore:${r.rowId}`} onclick=${() => commit(fileId, restoreRow(docs[fileId], r.rowId), `edit:${r.rowId}`)}>${T.masters.undoDelete}</button></li>`,
           )}</ul></div>`
         : null}
     </section>`);
@@ -592,12 +647,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     const doc = docs.assignments;
     const issues = validation.byRow.assignments;
     const unit = plan.teamId ? tree[plan.teamId] : null;
-    const leaderText = (id) => (id ? fmt(T.plan.leaderWithId, { name: names.get(id) ?? T.plan.unknownMember, id }) : T.plan.leaderUnset);
-    const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) ?? n.leaderMemberId }) : ""}`;
-    const contractLabel = (id) => {
-      const c = contracts.find((x) => x.id === id);
-      return c ? `${id} ${c.customer} / ${c.project}` : `${id}${T.masters.unknownContract}`;
-    };
+    const leaderText = (id) => (id ? names.get(id) || fmt(T.masters.unknownMemberValue, { id }) : T.plan.leaderUnset);
+    const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) || T.plan.unknownMember }) : ""}`;
     const fyLabel = fmt(T.plan.fyLabel, { fy: months[0].slice(0, 4), first: monthJa(months[0]), last: monthJa(last) });
     const shiftYear = (d) => {
       plan.months = months.map((m) => addMonths(m, 12 * d));
@@ -607,7 +658,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     const teamSel = html`<select id="yn-me-plan-team" class="yn-select" data-fk="plan:team">
       <option value="" selected=${plan.teamId === null}>${T.plan.allUnits}</option>
       ${flat.map((n) => html`<option value=${n.teamId} selected=${plan.teamId === n.teamId}>${optLabel(n)}</option>`)}
-      ${plan.teamId !== null && !tree[plan.teamId] ? html`<option value=${plan.teamId} selected>${plan.teamId}${T.plan.notInYear}</option>` : null}
+      ${plan.teamId !== null && !tree[plan.teamId] ? html`<option value=${plan.teamId} selected>${tNames.get(plan.teamId) ?? plan.teamId}${T.plan.notInYear}</option>` : null}
     </select>`;
     teamSel.addEventListener("change", () => {
       plan.teamId = teamSel.value || null;
@@ -627,6 +678,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       focusKey(`plan:toggle:${memberId}`);
     };
 
+    const editable = !(locked || pendingDraft);
     const body = view.rows.flatMap((r) => {
       const open = plan.open.has(r.memberId);
       const detailId = `yn-me-plan-d-${r.memberId}`;
@@ -636,16 +688,32 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         return row && rowState(doc, row) !== "unchanged";
       }).length;
       const sum = r.monthly.reduce((a, b) => a + b, 0);
+      const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
+      const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
+      const cells = r.monthly.map((v, i) => {
+        const m = months[i];
+        const btn = html`<button type="button" class="yn-plan-cell-btn" data-fk=${`plan:cell:${r.memberId}:${m}`} aria-label=${fmt(T.plan.cellAria, { name, month: monthJa(m), pm: pm(v) })} aria-haspopup="dialog" aria-disabled=${editable ? null : "true"}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-hidden="true">—</span>`}</button>`;
+        const tip = () => tooltip.show(btn, cellTip(r, m, v));
+        btn.addEventListener("mouseenter", tip);
+        btn.addEventListener("mouseleave", tooltip.hide);
+        btn.addEventListener("focus", tip);
+        btn.addEventListener("blur", tooltip.hide);
+        btn.addEventListener("click", () => {
+          tooltip.hide();
+          if (editable) openCellEditor(r, m, btn);
+        });
+        return html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`}>${btn}</td>`;
+      });
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}`} data-member=${r.memberId}>
-        <th scope="row">
-          <span class="yn-me-plan-name">${r.name || r.memberId}</span> <span class="yn-me-hint">${r.memberId}${r.teamId ? ` ・ ${tNames.get(r.teamId) ?? r.teamId}` : ""}</span>
-          <span class="yn-chip-row">${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(r.overMonths.length) })}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(rowErrors)}</span>` : null}</span>
-        </th>
-        ${r.monthly.map((v, i) => html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`} title=${fmt(T.plan.cellTitle, { month: months[i], pm: pm(v) })}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-label="0">—</span>`}</td>`)}
+        <th scope="row"><div class="yn-me-plan-who">
+          <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(r.overMonths.length) })}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(rowErrors)}</span>` : null}
+        </div></th>
+        ${cells}
         <td class="num">${pm(sum)}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} onclick=${() => toggle(r.memberId)}>${fmt(T.plan.toggle, { n: integer(r.assignments.length) })} ${open ? "▴" : "▾"}</button>
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.addForAria, { name: r.name || r.memberId })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.plan.addShort}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.plan.addShort}</button>
         </div></td>
       </tr>`;
       if (!open) return [main];
@@ -653,14 +721,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         const row = doc.rows.find((x) => x.id === a.rowId);
         const st = row ? rowState(doc, row) : "unchanged";
         const list = issues[a.rowId] ?? [];
+        const label = contractText(a.contractId);
         return html`<li class=${`yn-me-plan-item is-${st}`}>
-          <span class="yn-me-plan-contract">${contractLabel(a.contractId)}</span>
+          <span class="yn-me-plan-contract">${label}</span>
           <span class="yn-me-plan-period">${a.startMonth}〜${a.endMonth}</span>
           <span class="yn-me-plan-alloc">${Number.isFinite(a.allocation) ? fmt(T.plan.allocPerMonth, { pm: pm(a.allocation) }) : T.plan.allocNotNumber}</span>
           ${st !== "unchanged" ? html`<span class=${`yn-chip ${st === "added" ? "yn-chip-ok" : "yn-chip-neutral"}`}>${st === "added" ? "＋" : "✎"} ${STATE_LABELS[st]}</span>` : null}
           <span class="yn-me-row-actions">
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.editAria, { contract: a.contractId })} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>${T.masters.edit}</button>
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.deleteAria, { contract: a.contractId })} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>${T.masters.deleteKind}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${!editable} aria-label=${fmt(T.plan.editAria, { contract: label })} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>${T.masters.edit}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${!editable} aria-label=${fmt(T.plan.deleteAria, { contract: label })} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>${T.masters.deleteKind}</button>
           </span>
           ${list.length ? html`<ul class="yn-me-issues">${list.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${issueText(i)}</li>`)}</ul>` : null}
         </li>`;
@@ -673,6 +742,19 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         </td></tr>`,
       ];
     });
+
+    /** セルの吹き出し: その月の案件ごとの人月・時間と合計・空き */
+    function cellTip(r, m, total) {
+      const active = r.assignments.filter((a) => a.startMonth <= m && m <= a.endMonth);
+      const free = 1 - total;
+      return html`<div class="yn-plan-tip-inner">
+        <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, std) })}</p>
+        ${active.length
+          ? html`<ul class="yn-plan-tip-list">${active.map((a) => html`<li><span>${contractText(a.contractId)}</span><span class="num">${Number.isFinite(a.allocation) ? pm(a.allocation) : "?"}</span></li>`)}</ul>`
+          : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
+        <p class="yn-plan-tip-foot">${free < -1e-9 ? html`<strong>${fmt(T.plan.tipOver, { pm: pm(-free) })}</strong>` : fmt(T.plan.tipFree, { pm: pm(free) })}${editable ? html` ・ ${T.plan.tipAction}` : null}</p>
+      </div>`;
+    }
 
     parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan" role="tabpanel" aria-labelledby=${`yn-me-tab-${PLAN_VIEW_ID}`}>
       <div class="yn-me-panel-head">
@@ -693,7 +775,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${locked || !!pendingDraft} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
-      <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria}>
+      <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria} onkeydown=${gridKeys}>
         <table class="yn-table yn-table-compact yn-me-table yn-me-plan-table">
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
           <thead><tr>
@@ -707,6 +789,181 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         </table>
       </div>
     </section>`);
+  }
+
+  // ---- 稼働計画のセル: その場で修正（§24.4） -----------------------------------
+  /** 表の中の矢印キーで隣のセルへ */
+  function gridKeys(ev) {
+    const btn = ev.target.closest?.(".yn-plan-cell-btn");
+    if (!btn || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)) return;
+    const td = btn.closest("td");
+    const tr = td.closest("tr");
+    let target = null;
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+      target = (ev.key === "ArrowLeft" ? td.previousElementSibling : td.nextElementSibling)?.querySelector(".yn-plan-cell-btn");
+    } else {
+      const idx = [...tr.children].indexOf(td);
+      let row = tr;
+      do row = ev.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+      while (row && !row.classList.contains("yn-me-plan-row"));
+      target = row?.children[idx]?.querySelector(".yn-plan-cell-btn");
+    }
+    if (target) {
+      ev.preventDefault();
+      target.focus();
+    }
+  }
+
+  const SCOPE_KEY = "yojitsu-navi:plan-cell-scope";
+
+  /**
+   * セルの編集欄。その月に掛かる計画ごとの人月と、新しい案件の行。
+   * 反映すると行を月で分けて書き直し、隣り合う同じ配分の行はまとめ直す
+   */
+  function openCellEditor(r, month, anchor) {
+    const fk = `plan:cell:${r.memberId}:${month}`;
+    const fyLast = plan.months[plan.months.length - 1];
+    const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
+    const active = r.assignments.filter((a) => a.startMonth <= month && month <= a.endMonth);
+    let scope = session.get(SCOPE_KEY) === "after" ? "after" : "month";
+    let confirmed = false;
+    const inputs = active.map((a, i) => {
+      const row = docs.assignments.rows.find((x) => x.id === a.rowId);
+      const text = row ? cellOf(docs.assignments, row, "allocation") : "";
+      const input = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id=${`yn-plan-pop-${i}`} value=${text} aria-label=${fmt(T.plan.editRowAria, { project: contractText(a.contractId), month: monthJa(month) })}>`;
+      return { a, input, before: text };
+    });
+    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: projectOptions(), value: "", placeholder: T.masters.projectPlaceholder });
+    const newNum = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id="yn-plan-pop-new" aria-label=${fmt(T.plan.editRowAria, { project: T.plan.editNewRow, month: monthJa(month) })}>`;
+    const msg = html`<p class="yn-me-form-msg" role="alert"></p>`;
+    const note = html`<div class="yn-plan-pop-note"></div>`;
+    const submit = html`<button type="submit" class="yn-btn yn-btn-primary">${T.plan.apply}</button>`;
+    const afterNote = html`<span class="yn-me-small yn-plan-pop-after">${fmt(T.plan.scopeAfterNew, { last: monthJa(fyLast) })}</span>`;
+    const scopeRadios = ["month", "after"].map((v) => {
+      const input = html`<input type="radio" name="yn-plan-scope" value=${v} checked=${scope === v}>`;
+      input.addEventListener("change", () => {
+        scope = v;
+        session.set(SCOPE_KEY, v);
+        reset();
+      });
+      return html`<label class="yn-radio">${input}<span>${v === "month" ? T.plan.scopeMonth : T.plan.scopeAfter}</span></label>`;
+    });
+    const reset = () => {
+      confirmed = false;
+      note.replaceChildren();
+      submit.textContent = T.plan.apply;
+      afterNote.hidden = scope !== "after";
+      cellEditor.refresh();
+    };
+    const form = html`<form class="yn-plan-pop-form" novalidate>
+      <header class="yn-plan-pop-head">
+        <h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>
+        <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => cellEditor.close()}>×</button>
+      </header>
+      <p class="yn-me-small">${T.plan.editLead}</p>
+      ${inputs.length
+        ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
+            const c = contractById.get(a.contractId);
+            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`;
+          })}</ul>`
+        : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
+      <div class="yn-plan-pop-new">
+        <label for="yn-plan-pop-project">${T.plan.editNewRow}</label>
+        <div class="yn-plan-pop-new-row">${proj}<span class="yn-plan-pop-val">${newNum}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></div>
+      </div>
+      <fieldset class="yn-plan-pop-scope"><legend>${T.plan.scopeLabel}</legend><div class="yn-radio-group">${scopeRadios}</div>${afterNote}</fieldset>
+      ${msg}${note}
+      <div class="yn-me-form-foot">
+        <button type="button" class="yn-btn-link yn-plan-pop-full" onclick=${() => {
+          cellEditor.close();
+          openRowDialog({ fileId: "assignments", mode: "add", preset: { member_id: r.memberId, start_month: month, end_month: fyLast }, focus: fk });
+        }}>${T.plan.openFull}</button>
+        <button type="button" class="yn-btn" onclick=${() => cellEditor.close()}>${T.masters.cancel}</button>
+        ${submit}
+      </div>
+    </form>`;
+    afterNote.hidden = scope !== "after";
+    form.addEventListener("input", () => {
+      msg.textContent = "";
+      if (confirmed) reset();
+    });
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const result = buildCellEdit();
+      if (result.error) {
+        msg.textContent = result.error;
+        result.focus?.focus();
+        cellEditor.refresh();
+        return;
+      }
+      if (!result.doc) {
+        cellEditor.close();
+        return;
+      }
+      const impact = impactBetween(docs.assignments, result.doc, range);
+      if (impact.months.length && !confirmed) {
+        confirmed = true;
+        note.replaceChildren(impactNote("assignments", impact, fmt(T.masters.pastNote, { month: monthJa(asOfMonth) })));
+        submit.textContent = fmt(T.plan.applyWithImpact, { n: impact.months.length });
+        cellEditor.refresh();
+        submit.focus();
+        return;
+      }
+      returnFocusKey = null;
+      cellEditor.close();
+      commit("assignments", result.doc, fk);
+    });
+
+    /** 入力から新しいアサインの文書を作る（変更が無ければ doc: null） */
+    function buildCellEdit() {
+      let doc = docs.assignments;
+      const touched = new Set();
+      const num = (text) => allocationFromInput(text, "personMonth", std);
+      const bad = (text) => text.trim() !== "" && !Number.isFinite(parseNumberCell(num(text)));
+      for (const { input } of inputs) if (bad(input.value)) return { error: T.plan.notNumber, focus: input };
+      if (bad(newNum.value)) return { error: T.plan.notNumber, focus: newNum };
+      const pKey = proj.getValue();
+      const newVal = num(newNum.value);
+      const newZero = newVal === "" || Math.abs(parseNumberCell(newVal)) < 1e-9;
+      if (!newZero && !pKey) return { error: T.plan.needProject, focus: proj.input };
+      for (const { a, input, before } of inputs) {
+        const after = num(input.value);
+        const same = after === before || (after !== "" && before !== "" && Math.abs(parseNumberCell(after) - parseNumberCell(before)) < 1e-9);
+        if (same) continue;
+        const row = doc.rows.find((x) => x.id === a.rowId);
+        if (!row) continue;
+        const pieces = editMonthAllocation({ startMonth: a.startMonth, endMonth: a.endMonth, allocation: before }, month, after, scope);
+        if (pieces.length === 0) doc = deleteRow(doc, a.rowId);
+        else {
+          doc = updateRow(doc, a.rowId, { start_month: pieces[0].startMonth, end_month: pieces[0].endMonth, allocation: pieces[0].allocation });
+          for (const p of pieces.slice(1)) doc = addRow(doc, { member_id: r.memberId, contract_id: a.contractId, start_month: p.startMonth, end_month: p.endMonth, allocation: p.allocation }).doc;
+        }
+        touched.add(a.contractId);
+      }
+      if (pKey && !newZero) {
+        const p = projects.get(pKey);
+        const to = scope === "after" ? (fyLast >= month ? fyLast : month) : month;
+        for (const sg of p ? contractSegments(p.contracts, month, to) : []) {
+          doc = addRow(doc, { member_id: r.memberId, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth, allocation: newVal }).doc;
+          touched.add(sg.contractId);
+        }
+      }
+      if (touched.size === 0) return { doc: null };
+      // 同じメンバー・契約で隣り合う同じ配分の行をまとめ直す（元の行を残す）
+      for (const contractId of touched) {
+        const rows = doc.rows
+          .filter((x) => cellOf(doc, x, "member_id") === r.memberId && cellOf(doc, x, "contract_id") === contractId)
+          .map((x) => ({ id: x.id, startMonth: cellOf(doc, x, "start_month"), endMonth: cellOf(doc, x, "end_month"), allocation: cellOf(doc, x, "allocation") }));
+        const { keep, drop } = mergeAdjacent(rows, new Set(rows.filter((x) => doc.originals[x.id]).map((x) => x.id)));
+        for (const [id, period] of keep) doc = updateRow(doc, id, { start_month: period.startMonth, end_month: period.endMonth });
+        for (const id of drop) doc = deleteRow(doc, id);
+      }
+      return { doc };
+    }
+
+    cellEditor.open(anchor, form, { onClose: () => focusKey(fk) });
+    (inputs[0]?.input ?? proj.input).focus();
+    inputs[0]?.input.select();
   }
 
   // ---- 行の追加・修正ダイアログ --------------------------------------------
@@ -727,12 +984,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         ${value !== "" && !opts.some((o) => o.id === value) ? html`<option value=${value} selected>${value}${T.masters.unknownTeam}</option>` : null}
       </select>`;
     }
-    if (col.input === "contract") {
-      return html`<select id=${id} name=${col.name} class="yn-select" required=${req} disabled=${disabled}>
-        <option value="" selected=${value === ""}>${T.masters.choose}</option>
-        ${contracts.map((c) => html`<option value=${c.id} selected=${value === c.id}>${c.id} ${c.customer} / ${c.project}</option>`)}
-        ${value !== "" && !contracts.some((c) => c.id === value) ? html`<option value=${value} selected>${value}${T.masters.unknownContract}</option>` : null}
-      </select>`;
+    if (col.input === "project") {
+      // 案件で選ぶ（値は案件のキー）。ファイルに無い契約を指す既存の行は "c:<ID>" のまま持つ（§24.3）
+      const c = contractById.get(value);
+      const v = value === "" ? "" : c ? projectKey(c.customer, c.project) : `c:${value}`;
+      return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
+    }
+    if (col.input === "member") {
+      return combobox({ id, name: col.name, options: memberOptions(), value, required: req, disabled, placeholder: T.masters.memberPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownMemberValue, { id: x }) });
+    }
+    if (col.input === "rateKey") {
+      // 役職名（新しい役職も入れられる）か、個人単価ならメンバーを名前で選ぶ
+      const titles = titleOptions().map((t) => ({ value: t, label: t, sub: T.members.colTitle }));
+      const people = memberOptions().map((o) => ({ ...o, sub: [T.masters.personalRateHint, o.sub].filter(Boolean).join(" ・ ") }));
+      return combobox({ id, name: col.name, options: [...titles, ...people], value, required: req, disabled, allowCustom: true, describedBy: `${id}-hint` });
     }
     if (col.input === "allocation") {
       // 入力は人月か時間を選べる。保存は人月（§23.2）
@@ -766,16 +1031,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
     }
-    const listId = col.input === "member" || col.input === "rateKey" || col.input === "title" ? `${id}-list` : null;
+    const listId = col.input === "title" ? `${id}-list` : null;
     const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} list=${listId} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
     if (!listId) return input;
-    const names = memberNames();
-    const options =
-      col.input === "member"
-        ? [...names.entries()].map(([k, n]) => ({ v: k, l: n }))
-        : col.input === "title"
-          ? titleOptions().map((t) => ({ v: t, l: T.members.colTitle }))
-          : [...titleOptions().map((t) => ({ v: t, l: T.members.colTitle })), ...[...names.entries()].map(([k, n]) => ({ v: k, l: fmt(T.masters.personalRateOption, { name: n }) }))];
+    const options = titleOptions().map((t) => ({ v: t, l: T.members.colTitle }));
     return html`<span class="yn-me-combo">${input}<datalist id=${listId}>${options.map((o) => html`<option value=${o.v} label=${o.l}></option>`)}</datalist></span>`;
   }
 
@@ -796,9 +1055,29 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     hourly_rate: T.masters.hintRate,
     key: T.masters.hintRateKey,
     member_id: T.masters.hintMember,
+    contract_id: T.masters.hintProject,
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
   };
+
+  /**
+   * フォームの値（アサインの contract_id 欄は案件のキー）を、書き込む行の値の配列にする（§24.3）
+   * 案件の契約へ期間の月ごとに割り当て、契約が切り替わる所で行を分ける。アサイン以外はそのまま 1 行
+   */
+  function resolveProjectRows(fileId, values) {
+    if (fileId !== "assignments") return [values];
+    const v = values.contract_id ?? "";
+    if (v.startsWith("c:")) return [{ ...values, contract_id: v.slice(2) }];
+    const p = projects.get(v);
+    if (!p) return [values];
+    const segs = contractSegments(p.contracts, values.start_month, values.end_month);
+    if (segs.length === 0) {
+      // 月が未入力・逆順など。開始月に最も近い契約を入れておき、期間の誤りは検証で知らせる
+      const latest = p.contracts.reduce((a, b) => (b.startMonth > a.startMonth ? b : a));
+      return [{ ...values, contract_id: latest.contractId }];
+    }
+    return segs.map((sg) => ({ ...values, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth }));
+  }
 
   /**
    * 追加（mode: "add"、template があればその行を写して適用開始月を翌月に）／修正（mode: "edit"）
@@ -836,9 +1115,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         ${columns.map((c) => {
           const disabled = lockImported(c.name);
           return html`<div class="yn-me-field">
-            <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null} <span class="yn-me-colname">${c.name}</span></label>
+            <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
             ${fieldFor(fileId, c, (initial[c.name] ?? "").trim(), disabled)}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${disabled ? T.masters.hrReadonly : (FIELD_HINTS[c.name] ?? "")}</span>
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : (FIELD_HINTS[c.name] ?? "")}</span>
           </div>`;
         })}
       </div>
@@ -867,7 +1146,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     const readValues = () => {
       const values = {};
       for (const c of columns) {
-        const el = form.querySelector(`[name="${c.name}"]`);
+        const el = form.querySelector(`[name="${c.input === "project" ? PROJECT_FIELD : c.name}"]`);
         if (el) values[c.name] = String(el.value ?? "").trim();
       }
       const unitSel = form.querySelector('[name="__allocation_unit"]');
@@ -880,7 +1159,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       confirmBox.replaceChildren();
       form.querySelector(".yn-me-fields").hidden = false;
       submitBtn.textContent = mode === "edit" ? T.masters.confirm : T.masters.add;
-      form.querySelector(`[name="${columns[0].name}"]`)?.focus();
+      form.querySelector(`#yn-me-f-${columns[0].name}`)?.focus();
     };
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
@@ -895,29 +1174,34 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const missing = columns.filter((c) => c.required && !lockImported(c.name) && (values[c.name] ?? "") === "");
       if (missing.length) {
         msg.textContent = fmt(T.masters.required, { fields: missing.map((c) => c.label).join("、") });
-        form.querySelector(`[name="${missing[0].name}"]`)?.focus();
+        form.querySelector(`#yn-me-f-${missing[0].name}`)?.focus();
         return;
       }
       msg.textContent = "";
       const before = docs[fileId];
       let next;
       let focusAfter;
+      // アサインは案件 → 期間の月ごとに契約へ割り当て、切り替わりで行を分ける（§24.3）
+      const pieces = resolveProjectRows(fileId, values);
       if (mode === "edit") {
-        next = updateRow(before, rowId, values);
+        next = updateRow(before, rowId, pieces[0]);
         focusAfter = `edit:${rowId}`;
+        for (const extra of pieces.slice(1)) next = addRow(next, extra).doc;
       } else {
-        const r = addRow(before, values);
+        const r = addRow(before, pieces[0]);
         next = r.doc;
         focusAfter = `edit:${r.rowId}`;
+        for (const extra of pieces.slice(1)) next = addRow(next, extra).doc;
       }
+      Object.assign(values, pieces[0]);
       const impact = impactBetween(before, next, range);
       const changes = mode === "edit" ? columns.filter((c) => (rowRecord(before, row)[c.name] ?? "").trim() !== (values[c.name] ?? "")) : [];
-      if (mode === "edit" && changes.length === 0) {
+      if (mode === "edit" && changes.length === 0 && pieces.length === 1) {
         dialog.close();
         return;
       }
-      // 追加で過去に影響が無ければそのまま適用。修正は常に確認、追加も過去が変わるなら確認
-      if (mode === "add" && impact.months.length === 0) {
+      // 追加で過去に影響が無く、行も分けないならそのまま適用。修正は常に確認、追加も過去が変わるなら確認
+      if (mode === "add" && impact.months.length === 0 && pieces.length === 1) {
         returnFocusKey = focusAfter;
         dialog.close();
         commit(fileId, next, focusAfter);
@@ -929,8 +1213,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       confirmBox.replaceChildren(
         html`<div>
           ${changes.length
-            ? html`<p><strong>${T.masters.willChange}</strong></p><ul class="yn-me-change-list">${changes.map((c) => html`<li>${c.label}: <span class="yn-me-before">${(rowRecord(before, row)[c.name] ?? "").trim() || T.masters.emptyValue}</span> → <span class="yn-me-after">${values[c.name] || T.masters.emptyValue}</span></li>`)}</ul>`
+            ? html`<p><strong>${T.masters.willChange}</strong></p><ul class="yn-me-change-list">${changes.map((c) => html`<li>${c.label}: <span class="yn-me-before">${displayValue(fileId, c.name, (rowRecord(before, row)[c.name] ?? "").trim()) || T.masters.emptyValue}</span> → <span class="yn-me-after">${displayValue(fileId, c.name, values[c.name] ?? "") || T.masters.emptyValue}</span></li>`)}</ul>`
             : html`<p><strong>${T.masters.willAdd}</strong></p>`}
+          ${pieces.length > 1 ? html`<p class="yn-me-split" role="note">${fmt(T.masters.splitNote, { n: pieces.length, list: pieces.map((p) => `${p.start_month}〜${p.end_month}`).join("、") })}</p>` : null}
           ${impact.months.length
             ? impactNote(fileId, impact, fmt(T.masters.pastNote, { month: monthJa(asOfMonth) }))
             : html`<p class="yn-me-impact-none">${T.masters.noImpact1}${monthJa(asOfMonth)} ${T.masters.noImpact2}</p>`}
@@ -951,7 +1236,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     if (!dialog.open) dialog.showModal();
     // 最初の空の入力欄にフォーカス（稼働計画でメンバーを入れて開いたときは配分から）。無ければ最初の欄。
     // 選択欄（select）は Space でリストが開き Esc がダイアログに届かないので、空でも最初には選ばない
-    const fields = [...form.querySelectorAll("input:not([disabled]), select:not([disabled])")];
+    const fields = [...form.querySelectorAll("input:not([disabled]):not([type=hidden]), select:not([disabled])")];
     (fields.find((el) => el.tagName === "INPUT" && el.value === "") ?? fields[0])?.focus();
   }
 
@@ -980,7 +1265,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">
-        <dl class="yn-me-dl">${columns.map((c) => html`<div><dt>${c.label}</dt><dd>${(rec[c.name] ?? "").trim() || "—"}</dd></div>`)}</dl>
+        <dl class="yn-me-dl">${columns.map((c) => html`<div><dt>${c.label}</dt><dd>${displayValue(fileId, c.name, (rec[c.name] ?? "").trim()) || "—"}</dd></div>`)}</dl>
         ${impact.months.length
           ? impactNote(fileId, impact, T.masters.deleteHint)
           : html`<p class="yn-me-impact-none">${T.masters.noImpact}</p>`}
@@ -1028,10 +1313,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
           const def = MASTER_FILES[d.fileId];
           const cols = def.columns.filter((c) => docs[d.fileId].header.includes(c.name));
           const label = (name) => cols.find((c) => c.name === name)?.label ?? name;
-          const line = (rec) => cols.map((c) => (rec[c.name] ?? "").trim() || "—").join(" ・ ");
+          const line = (rec) => cols.map((c) => displayValue(d.fileId, c.name, (rec[c.name] ?? "").trim()) || "—").join(" ・ ");
           const rows = [
             ...d.added.map((a) => ({ kind: T.masters.added, chip: "yn-chip-ok", sign: "＋", key: a.rowId, text: line(a.after), detail: null })),
-            ...d.changed.map((c) => ({ kind: T.masters.changed, chip: "yn-chip-neutral", sign: "✎", key: c.rowId, text: line(c.before), detail: c.columns.map((col) => fmt(T.masters.diffValue, { col: label(col), before: (c.before[col] ?? "").trim() || T.masters.emptyValue, after: (c.after[col] ?? "").trim() || T.masters.emptyValue })).join(" / ") })),
+            ...d.changed.map((c) => ({ kind: T.masters.changed, chip: "yn-chip-neutral", sign: "✎", key: c.rowId, text: line(c.before), detail: c.columns.map((col) => fmt(T.masters.diffValue, { col: label(col), before: displayValue(d.fileId, col, (c.before[col] ?? "").trim()) || T.masters.emptyValue, after: displayValue(d.fileId, col, (c.after[col] ?? "").trim()) || T.masters.emptyValue })).join(" / ") })),
             ...d.removed.map((r) => ({ kind: T.masters.deleteKind, chip: "yn-chip-neutral", sign: "−", key: r.rowId, text: line(r.before), detail: null })),
           ];
           return html`<div class="yn-me-diff-file">
@@ -1301,7 +1586,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     renderSave();
   }
 
-  root.append(parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog);
+  root.append(parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   return root;
 }

@@ -172,15 +172,15 @@ test("過去に影響する追加・修正・削除は確認画面で影響月�
   await expect(row).not.toContainText("変更");
 
   // 削除（確認つき）→ 一覧から取り消し
-  const p002 = ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "P002" });
+  const p002 = ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" });
   await p002.getByRole("button", { name: /行を削除/ }).click();
   await expect(d).toContainText("行を削除しますか");
   await expect(d.locator(".yn-me-impact")).toContainText("過去の計算結果が変わります");
   await d.locator('[data-role="confirm-delete"]').click();
-  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "P002" })).toHaveCount(0);
-  await expect(page.locator(".yn-me-removed")).toContainText("P002");
+  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" })).toHaveCount(0);
+  await expect(page.locator(".yn-me-removed")).toContainText("藤井 隆");
   await page.getByRole("button", { name: "削除を取り消す" }).click();
-  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "P002" })).toHaveCount(1);
+  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" })).toHaveCount(1);
 });
 
 test("必須の未入力はダイアログで止め、検証エラーは行に表示して保存（ダウンロード）を押せない", async ({ page }) => {
@@ -270,7 +270,7 @@ async function staleDraftWithConflict(page: Page): Promise<void> {
   await d.locator("#yn-me-f-hourly_rate").fill("10500");
   await d.locator('[data-role="submit"]').click();
   await d.locator('[data-role="submit"]').click();
-  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "P002" }).getByRole("button", { name: /行を削除/ }).click();
+  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" }).getByRole("button", { name: /行を削除/ }).click();
   await d.locator('[data-role="confirm-delete"]').click();
   await addRate(page, "部長", "14000", "2026-11");
   await page.evaluate((k) => {
@@ -322,7 +322,7 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   // 差分は最新の元データ（課長 10000）に対する自分の変更
   const diff = page.locator(".yn-me-diff-table");
   await expect(diff).toContainText("時間単価（円）: 10000 → 10500");
-  await expect(diff).toContainText("P002");
+  await expect(diff).toContainText("藤井 隆");
   await expect(diff).toContainText("部長 ・ 14000 ・ 2026-11");
   await expect(diff).not.toContainText("9900");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);

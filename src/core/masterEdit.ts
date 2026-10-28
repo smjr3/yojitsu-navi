@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "team" | "member" | "contract" | "rateKey" | "title" | "level" | "allocation";
+  input: "text" | "month" | "number" | "kind" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation";
   required: boolean;
 }
 
@@ -59,7 +59,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     history: "effective",
     keyColumns: ["member_id"],
     columns: [
-      { name: "member_id", label: T.masterFiles.colMemberId, input: "member", required: true },
+      { name: "member_id", label: T.masterFiles.colMemberId, input: "memberKey", required: true },
       { name: "name", label: T.masterFiles.colName, input: "text", required: true },
       { name: "kind", label: T.masterFiles.colKind, input: "kind", required: true },
       { name: "title", label: T.masterFiles.colTitle, input: "title", required: false },
@@ -106,8 +106,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     history: "period",
     keyColumns: ["member_id", "contract_id"],
     columns: [
-      { name: "member_id", label: T.masterFiles.colMemberId, input: "member", required: true },
-      { name: "contract_id", label: T.masterFiles.colContractId, input: "contract", required: true },
+      { name: "member_id", label: T.masterFiles.colMember, input: "member", required: true },
+      { name: "contract_id", label: T.masterFiles.colProject, input: "project", required: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "allocation", label: T.masterFiles.colAllocation, input: "allocation", required: true },

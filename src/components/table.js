@@ -374,10 +374,10 @@ export function dataTable({
   return wrap;
 }
 
-/** 契約名のセル: 1 行目 顧客 / 案件、2 行目 ID・チーム・期間（幅を節約し、title に正式表記） */
+/** 契約名のセル: 1 行目 顧客 / 案件、2 行目 チーム・期間（幅を節約し、title に正式表記。ID は出さない §24.1） */
 export function contractNameCell(r) {
   const full = fmt(T.table.contractTitle, { id: r.contractId, customer: r.customerName, project: r.projectName, team: r.teamName, from: r.startMonth, to: r.endMonth });
-  return html`<span class="yn-cell-2line" title=${full}><span class="yn-cell-main">${r.customerName} / ${r.projectName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.contractId}</span> ・ ${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}</span></span>`;
+  return html`<span class="yn-cell-2line" title=${full}><span class="yn-cell-main">${r.customerName} / ${r.projectName}</span><span class="yn-cell-sub">${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}</span></span>`;
 }
 
 /**

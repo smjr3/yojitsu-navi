@@ -119,7 +119,7 @@ test.describe("メンバー一覧 /members", () => {
     expect(await dialogRow(page, "実績")).toBe(yen(m.actualCost));
     await dialog(page).getByRole("button", { name: "作業ログを読み込む" }).click();
     await expect(dialog(page).locator(".yn-bd-lazy table")).toBeVisible();
-    await expect(dialog(page).locator(".yn-bd-lazy tbody tr").first()).toContainText("M011");
+    await expect(dialog(page).locator(".yn-bd-lazy tbody tr").first()).toContainText("小林 玲奈");
     await page.keyboard.press("Escape");
 
     await cell(row, col(h, "稼働率")).locator("button.yn-num").click();

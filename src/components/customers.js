@@ -68,7 +68,7 @@ export function groupBreakdowns({ model, store, period, unit }) {
 export function contractBreakdowns({ model, store, period, unit }) {
   const detailHref = (id) => store.href("./contract", {}, { id });
   const threshold = model.config.burnRateDangerThreshold;
-  const sub = (r) => `${r.contractId} ${r.customerName} / ${r.projectName}`;
+  const sub = (r) => `${r.customerName} / ${r.projectName}`;
   return {
     budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period, unit }),
     cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period, unit, detailHref }),
