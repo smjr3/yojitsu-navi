@@ -120,7 +120,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   }
 }
 
-function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
+function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "masters/teams.csv";
   dataset.teams.forEach((t, i) => {
     const row = rowOf(i);
@@ -130,6 +130,9 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: Iss
       push({ severity: "error", code: "TEAM_SELF_PARENT", message: fmt(T.checks.teamSelfParent, { file, row, teamId: t.teamId }), file, row, ref: { teamId: t.teamId } });
     } else if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
       push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: fmt(T.checks.teamUnknownParent, { file, row, parentTeamId: t.parentTeamId }), file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
+    }
+    if (t.leaderMemberId != null && t.leaderMemberId !== "" && !memberIds.has(t.leaderMemberId)) {
+      push({ severity: "error", code: "TEAM_UNKNOWN_LEADER", message: fmt(T.checks.teamUnknownLeader, { file, row, leaderMemberId: t.leaderMemberId }), file, row, ref: { teamId: t.teamId, memberId: t.leaderMemberId } });
     }
   });
   pushDuplicates(dataset.teams, (t) => t.teamId, file, "DUPLICATE_TEAM_ROW", "team_id", push);
@@ -280,7 +283,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateContracts(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
-  validateTeams(dataset, teamIds, push);
+  validateTeams(dataset, teamIds, memberIds, push);
   validateMembers(dataset, teamIds, push);
   validateRates(dataset, push);
   validateTitleRates(dataset, push);

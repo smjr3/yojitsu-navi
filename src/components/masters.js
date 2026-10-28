@@ -7,7 +7,7 @@
  *   mastersEditor({ data, asOfMonth, minMonth, storage, fetchImpl, now }) → HTMLElement
  */
 import { html } from "htl";
-import { T, fmt } from "../i18n/index.js";
+import { T, fmt, rich } from "../i18n/index.js";
 import { addMonths, parseCsvTable } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
@@ -33,8 +33,11 @@ import {
   rowState,
   staleDraftFiles,
   updateRow,
+  planSourcesFromDocs,
   validateEdited,
 } from "../core/masterEdit.js";
+import { allocationFromInput, flattenTeamTree, hoursFromAllocation, memberTeamAt, planView } from "../core/plan.js";
+import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 
@@ -63,6 +66,24 @@ export const FILE_HELP = {
     howto: T.masters.assignmentsHowto,
   },
 };
+
+/** 稼働計画タブ（§23。アサインのファイルを、組織 × メンバー × 月で見せる別の見せ方） */
+export const PLAN_VIEW_ID = "plan";
+const VIEW_IDS = [...MASTER_FILE_IDS, PLAN_VIEW_ID];
+const VIEW_LABELS = { plan: { label: T.plan.tabLabel, file: T.plan.tabFile } };
+
+/** 月 m を含む年度の 12 か月 */
+function fiscalMonths(month, startMonth) {
+  const [y, m] = month.split("-").map(Number);
+  const fy = m >= startMonth ? y : y - 1;
+  const first = `${fy}-${String(startMonth).padStart(2, "0")}`;
+  return Array.from({ length: 12 }, (_, i) => addMonths(first, i));
+}
+
+/** 人月の表示（小数 2 桁）。保存・表示は人月に統一（§23.2） */
+function pm(v) {
+  return (Math.round(v * 100) / 100).toFixed(2);
+}
 
 const KIND_LABELS = { employee: T.members.kindEmployee, partner: T.members.kindPartner };
 const STATE_LABELS = { added: T.masters.added, changed: T.masters.changed };
@@ -127,7 +148,7 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (url, init) => window.fetch(url, init), now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, initialView = null, initialTeam = null, initialMember = null, fetchImpl = (url, init) => window.fetch(url, init), now = () => new Date() }) {
   const local = safeStorage("local");
   const session = safeStorage("session");
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
@@ -140,7 +161,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   let docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
   /** 古い土台の下書きを当て直して復元したファイル → { applied, resolved }（表の上に注記する） */
   let rebasedInfo = {};
-  let active = "members";
+  let active = VIEW_IDS.includes(initialView) ? initialView : "members";
+  const std = config.standardHoursPerMonth;
+  // 稼働計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
+  const plan = {
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts).members, initialMember, asOfMonth) : null),
+    months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
+    focusMember: initialMember,
+    open: new Set(initialMember ? [initialMember] : []),
+  };
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   let mode = effectiveSaveMode(data.masterEdit);
   const configuredMode = mode;
@@ -200,6 +229,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     const latest = latestByKey(docs.teams, "team_id");
     return new Map([...latest.entries()].map(([id, v]) => [id, cellOf(docs.teams, v.row, "name")]));
   }
+  /** 組織の種別の候補（いま使われている値。§21） */
+  function levelOptions() {
+    const s = new Set();
+    for (const r of docs.teams.rows) {
+      const v = cellOf(docs.teams, r, "level");
+      if (v) s.add(v);
+    }
+    return [...s];
+  }
   function titleOptions() {
     const s = new Set();
     for (const r of docs.members.rows) {
@@ -219,6 +257,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     if (value === "") return null;
     if (column === "team_id" || column === "parent_team_id") return teamNames().get(value) ?? T.masters.unknownTeam;
     if ((fileId === "assignments" && column === "member_id") || (fileId === "rates" && column === "key")) return memberNames().get(value) ?? null;
+    if (column === "leader_member_id") return memberNames().get(value) ?? T.plan.unknownMember;
+    if (column === "allocation" && Number.isFinite(Number(value))) return fmt(T.plan.equalsHours, { hours: hoursFromAllocation(Number(value), std) });
     if (column === "contract_id") {
       const c = contracts.find((x) => x.id === value);
       return c ? `${c.customer} / ${c.project}` : T.masters.unknownContract;
@@ -252,6 +292,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   /** 文書を差し替え → 検証 → 下書き保存 → 描き直し */
   function commit(fileId, nextDoc, focus) {
     docs = { ...docs, [fileId]: nextDoc };
+    // 稼働計画タブで追加・修正した行は、そのメンバーの計画を開いて見せる
+    if (active === PLAN_VIEW_ID && fileId === "assignments" && focus?.startsWith("edit:")) {
+      const row = nextDoc.rows.find((r) => r.id === focus.slice(5));
+      if (row) plan.open.add(cellOf(nextDoc, row, "member_id"));
+    }
     validation = validateEdited(docs, data.context, config);
     outcome = outcome?.kind === "error" ? outcome : null;
     downloaded = new Set();
@@ -377,25 +422,26 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       if (focus) focusKey(`tab:${id}`);
     };
     const onKey = (ev) => {
-      const i = MASTER_FILE_IDS.indexOf(active);
+      const i = VIEW_IDS.indexOf(active);
       let next = null;
-      if (ev.key === "ArrowRight") next = MASTER_FILE_IDS[(i + 1) % MASTER_FILE_IDS.length];
-      else if (ev.key === "ArrowLeft") next = MASTER_FILE_IDS[(i + MASTER_FILE_IDS.length - 1) % MASTER_FILE_IDS.length];
-      else if (ev.key === "Home") next = MASTER_FILE_IDS[0];
-      else if (ev.key === "End") next = MASTER_FILE_IDS[MASTER_FILE_IDS.length - 1];
+      if (ev.key === "ArrowRight") next = VIEW_IDS[(i + 1) % VIEW_IDS.length];
+      else if (ev.key === "ArrowLeft") next = VIEW_IDS[(i + VIEW_IDS.length - 1) % VIEW_IDS.length];
+      else if (ev.key === "Home") next = VIEW_IDS[0];
+      else if (ev.key === "End") next = VIEW_IDS[VIEW_IDS.length - 1];
       if (next) {
         ev.preventDefault();
         select(next);
       }
     };
     parts.tabs.replaceChildren(html`<div class="yn-me-tabs" role="tablist" aria-label=${T.masters.tabsLabel} onkeydown=${onKey}>
-      ${MASTER_FILE_IDS.map((id) => {
-        const errs = errorCount(id);
+      ${VIEW_IDS.map((id) => {
+        const isPlan = id === PLAN_VIEW_ID;
+        const errs = isPlan ? 0 : errorCount(id);
         const selected = id === active;
-        return html`<button type="button" role="tab" id=${`yn-me-tab-${id}`} class="yn-me-tab" aria-selected=${selected ? "true" : "false"} aria-controls="yn-me-panel" tabindex=${selected ? "0" : "-1"} data-fk=${`tab:${id}`} onclick=${() => select(id)}>
-          <span class="yn-me-tab-label">${MASTER_FILES[id].label}</span>
-          <span class="yn-me-tab-file">${fileName(MASTER_FILES[id].path)}</span>
-          ${counts[id] > 0 ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(counts[id])}</span>` : null}
+        return html`<button type="button" role="tab" id=${`yn-me-tab-${id}`} class=${isPlan ? "yn-me-tab yn-me-tab-plan" : "yn-me-tab"} aria-selected=${selected ? "true" : "false"} aria-controls="yn-me-panel" tabindex=${selected ? "0" : "-1"} data-fk=${`tab:${id}`} onclick=${() => select(id)}>
+          <span class="yn-me-tab-label">${isPlan ? VIEW_LABELS.plan.label : MASTER_FILES[id].label}</span>
+          <span class="yn-me-tab-file">${isPlan ? VIEW_LABELS.plan.file : fileName(MASTER_FILES[id].path)}</span>
+          ${!isPlan && counts[id] > 0 ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(counts[id])}</span>` : null}
           ${errs > 0 ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(errs)}</span>` : null}
         </button>`;
       })}
@@ -404,6 +450,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
 
   // ---- 表 -----------------------------------------------------------------
   function renderPanel() {
+    if (active === PLAN_VIEW_ID) {
+      renderPlanPanel();
+      return;
+    }
     const fileId = active;
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
@@ -526,6 +576,136 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     </section>`);
   }
 
+  // ---- 稼働計画（§23） -------------------------------------------------------
+  function renderPlanPanel() {
+    const src = planSourcesFromDocs(docs, data.context.contracts);
+    const months = plan.months;
+    const last = months[months.length - 1];
+    const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
+    const tree = teamTreeAt({ teams: src.teams }, treeMonth).tree;
+    const flat = flattenTeamTree(tree);
+    const view = planView(src, plan.teamId, months);
+    const names = memberNames();
+    const tNames = teamNames();
+    const doc = docs.assignments;
+    const issues = validation.byRow.assignments;
+    const unit = plan.teamId ? tree[plan.teamId] : null;
+    const leaderText = (id) => (id ? fmt(T.plan.leaderWithId, { name: names.get(id) ?? T.plan.unknownMember, id }) : T.plan.leaderUnset);
+    const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) ?? n.leaderMemberId }) : ""}`;
+    const contractLabel = (id) => {
+      const c = contracts.find((x) => x.id === id);
+      return c ? `${id} ${c.customer} / ${c.project}` : `${id}${T.masters.unknownContract}`;
+    };
+    const fyLabel = fmt(T.plan.fyLabel, { fy: months[0].slice(0, 4), first: monthJa(months[0]), last: monthJa(last) });
+    const shiftYear = (d) => {
+      plan.months = months.map((m) => addMonths(m, 12 * d));
+      renderPanel();
+      focusKey(d < 0 ? "plan:prev" : "plan:next");
+    };
+    const teamSel = html`<select id="yn-me-plan-team" class="yn-select" data-fk="plan:team">
+      <option value="" selected=${plan.teamId === null}>${T.plan.allUnits}</option>
+      ${flat.map((n) => html`<option value=${n.teamId} selected=${plan.teamId === n.teamId}>${optLabel(n)}</option>`)}
+      ${plan.teamId !== null && !tree[plan.teamId] ? html`<option value=${plan.teamId} selected>${plan.teamId}${T.plan.notInYear}</option>` : null}
+    </select>`;
+    teamSel.addEventListener("change", () => {
+      plan.teamId = teamSel.value || null;
+      plan.focusMember = null;
+      renderPanel();
+      focusKey("plan:team");
+    });
+    const defaultStart = () => {
+      const next = addMonths(asOfMonth, 1);
+      return next >= months[0] && next <= last ? next : months[0];
+    };
+    const addFor = (memberId, focus) => openRowDialog({ fileId: "assignments", mode: "add", preset: { ...(memberId ? { member_id: memberId } : {}), start_month: defaultStart(), end_month: last }, focus });
+    const toggle = (memberId) => {
+      if (plan.open.has(memberId)) plan.open.delete(memberId);
+      else plan.open.add(memberId);
+      renderPanel();
+      focusKey(`plan:toggle:${memberId}`);
+    };
+
+    const body = view.rows.flatMap((r) => {
+      const open = plan.open.has(r.memberId);
+      const detailId = `yn-me-plan-d-${r.memberId}`;
+      const rowErrors = r.assignments.reduce((n, a) => n + (issues[a.rowId] ?? []).filter((i) => i.severity === "error").length, 0);
+      const changed = r.assignments.filter((a) => {
+        const row = doc.rows.find((x) => x.id === a.rowId);
+        return row && rowState(doc, row) !== "unchanged";
+      }).length;
+      const sum = r.monthly.reduce((a, b) => a + b, 0);
+      const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}`} data-member=${r.memberId}>
+        <th scope="row">
+          <span class="yn-me-plan-name">${r.name || r.memberId}</span> <span class="yn-me-hint">${r.memberId}${r.teamId ? ` ・ ${tNames.get(r.teamId) ?? r.teamId}` : ""}</span>
+          <span class="yn-chip-row">${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(r.overMonths.length) })}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(rowErrors)}</span>` : null}</span>
+        </th>
+        ${r.monthly.map((v, i) => html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`} title=${fmt(T.plan.cellTitle, { month: months[i], pm: pm(v) })}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-label="0">—</span>`}</td>`)}
+        <td class="num">${pm(sum)}</td>
+        <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} onclick=${() => toggle(r.memberId)}>${fmt(T.plan.toggle, { n: integer(r.assignments.length) })} ${open ? "▴" : "▾"}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${locked} aria-label=${fmt(T.plan.addForAria, { name: r.name || r.memberId })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.plan.addShort}</button>
+        </div></td>
+      </tr>`;
+      if (!open) return [main];
+      const items = r.assignments.map((a) => {
+        const row = doc.rows.find((x) => x.id === a.rowId);
+        const st = row ? rowState(doc, row) : "unchanged";
+        const list = issues[a.rowId] ?? [];
+        return html`<li class=${`yn-me-plan-item is-${st}`}>
+          <span class="yn-me-plan-contract">${contractLabel(a.contractId)}</span>
+          <span class="yn-me-plan-period">${a.startMonth}〜${a.endMonth}</span>
+          <span class="yn-me-plan-alloc">${Number.isFinite(a.allocation) ? fmt(T.plan.allocPerMonth, { pm: pm(a.allocation) }) : T.plan.allocNotNumber}</span>
+          ${st !== "unchanged" ? html`<span class=${`yn-chip ${st === "added" ? "yn-chip-ok" : "yn-chip-neutral"}`}>${st === "added" ? "＋" : "✎"} ${STATE_LABELS[st]}</span>` : null}
+          <span class="yn-me-row-actions">
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${locked} aria-label=${fmt(T.plan.editAria, { contract: a.contractId })} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>${T.masters.edit}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${locked} aria-label=${fmt(T.plan.deleteAria, { contract: a.contractId })} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>${T.masters.deleteKind}</button>
+          </span>
+          ${list.length ? html`<ul class="yn-me-issues">${list.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${issueText(i)}</li>`)}</ul>` : null}
+        </li>`;
+      });
+      return [
+        main,
+        html`<tr class="yn-me-plan-detail" id=${detailId}><td colspan=${months.length + 3}>
+          ${items.length ? html`<ul class="yn-me-plan-items">${items}</ul>` : html`<p class="yn-muted">${T.plan.noItems}</p>`}
+          ${r.overMonths.length ? html`<p class="yn-me-small">${fmt(T.plan.overMonths, { months: r.overMonths.join("、") })}</p>` : null}
+        </td></tr>`,
+      ];
+    });
+
+    parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan" role="tabpanel" aria-labelledby=${`yn-me-tab-${PLAN_VIEW_ID}`}>
+      <div class="yn-me-panel-head">
+        <div>
+          <h2 class="yn-section-title">${T.plan.tabLabel}<span class="yn-me-path"> ${data.files.assignments.path}</span></h2>
+          <p class="yn-me-help">${rich(T.plan.helpWhat)}</p>
+          <p class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</p>
+        </div>
+      </div>
+      <div class="yn-me-toolbar yn-me-plan-toolbar">
+        <label class="yn-me-plan-label" for="yn-me-plan-team">${T.plan.unitLabel}</label>${teamSel}
+        <span class="yn-me-plan-fy">
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:prev" aria-label=${T.plan.prevYear} onclick=${() => shiftYear(-1)}>◀</button>
+          <span aria-live="polite">${fyLabel}</span>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:next" aria-label=${T.plan.nextYear} onclick=${() => shiftYear(1)}>▶</button>
+        </span>
+        <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${locked} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
+      </div>
+      ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
+      <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria}>
+        <table class="yn-table yn-table-compact yn-me-table yn-me-plan-table">
+          <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
+          <thead><tr>
+            <th scope="col">${T.plan.colMember}</th>
+            ${months.map((m) => html`<th scope="col" class="num">${fmt(T.plan.colMonth, { m: Number(m.slice(5)) })}</th>`)}
+            <th scope="col" class="num">${T.plan.colFyTotal}<span class="yn-th-sub">${T.plan.unitPersonMonth}</span></th>
+            <th scope="col">${T.masters.colActions}</th>
+          </tr></thead>
+          <tbody>${body.length ? body : html`<tr class="yn-table-empty"><td colspan=${months.length + 3}>${T.plan.noMembers}</td></tr>`}</tbody>
+          ${view.rows.length ? html`<tfoot><tr><th scope="row">${fmt(T.plan.total, { n: integer(view.rows.length) })}</th>${view.totals.map((v) => html`<td class="num">${pm(v)}</td>`)}<td class="num">${pm(view.totals.reduce((a, b) => a + b, 0))}</td><td></td></tr></tfoot>` : null}
+        </table>
+      </div>
+    </section>`);
+  }
+
   // ---- 行の追加・修正ダイアログ --------------------------------------------
   function fieldFor(fileId, col, value, disabled) {
     const id = `yn-me-f-${col.name}`;
@@ -550,6 +730,35 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
         ${contracts.map((c) => html`<option value=${c.id} selected=${value === c.id}>${c.id} ${c.customer} / ${c.project}</option>`)}
         ${value !== "" && !contracts.some((c) => c.id === value) ? html`<option value=${value} selected>${value}${T.masters.unknownContract}</option>` : null}
       </select>`;
+    }
+    if (col.input === "allocation") {
+      // 入力は人月か時間を選べる。保存は人月（§23.2）
+      const unitSel = html`<select id=${`${id}-unit`} name="__allocation_unit" class="yn-select yn-me-unit" disabled=${disabled}>
+        <option value="personMonth" selected>${T.plan.unitPersonMonth}</option>
+        <option value="hours">${T.plan.unitHours}</option>
+      </select>`;
+      const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode="decimal" aria-describedby=${`${id}-hint ${id}-conv`}>`;
+      const conv = html`<span class="yn-me-conv" id=${`${id}-conv`} aria-live="polite"></span>`;
+      const update = () => {
+        const out = allocationFromInput(input.value, unitSel.value, std);
+        const n = Number(out);
+        conv.textContent = out === "" || !Number.isFinite(n) ? "" : unitSel.value === "hours" ? fmt(T.plan.convFromHours, { hours: input.value.trim(), pm: out, std }) : fmt(T.plan.convFromPm, { pm: out, hours: hoursFromAllocation(n, std) });
+      };
+      let lastUnit = "personMonth";
+      unitSel.addEventListener("change", () => {
+        // 単位を切り替えたら、入っている値を新しい単位に換算して見せる
+        const n = Number(input.value.normalize("NFKC").trim());
+        if (input.value.trim() !== "" && Number.isFinite(n)) input.value = lastUnit === "personMonth" ? String(hoursFromAllocation(n, std)) : allocationFromInput(String(n), "hours", std);
+        lastUnit = unitSel.value;
+        update();
+      });
+      input.addEventListener("input", update);
+      update();
+      return html`<span class="yn-me-alloc">${input}<label class="visually-hidden" for=${`${id}-unit`}>${T.plan.unitSelectLabel}</label>${unitSel}</span>${conv}`;
+    }
+    if (col.input === "level") {
+      const listId = `${id}-list`;
+      return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${levelOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
@@ -578,6 +787,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     start_month: "YYYY-MM",
     end_month: T.masters.hintMonth,
     allocation: T.masters.hintAllocation,
+    level: T.masters.hintLevel,
+    leader_member_id: T.masters.hintLeader,
+    parent_team_id: T.masters.hintParentTeam,
     hourly_rate: T.masters.hintRate,
     key: T.masters.hintRateKey,
     member_id: T.masters.hintMember,
@@ -588,7 +800,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   /**
    * 追加（mode: "add"、template があればその行を写して適用開始月を翌月に）／修正（mode: "edit"）
    */
-  function openRowDialog({ fileId, mode, rowId = null, template = null, focus }) {
+  function openRowDialog({ fileId, mode, rowId = null, template = null, preset = null, focus }) {
     if (locked || pendingDraft) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
@@ -602,6 +814,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       if (def.history === "effective") initial = { ...initial, effective_from: next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
+      if (preset) initial = { ...initial, ...preset };
     }
     const lockImported = (name) => fileId === "members" && importMode && MEMBER_IMPORTED_COLUMNS.includes(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template);
     const title = mode === "edit" ? fmt(T.masters.editTitle, { file: def.label }) : def.history === "effective" ? fmt(T.masters.addNextTitle, { file: def.label }) : T.masters.addAssignmentTitle;
@@ -654,6 +867,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
         const el = form.querySelector(`[name="${c.name}"]`);
         if (el) values[c.name] = String(el.value ?? "").trim();
       }
+      const unitSel = form.querySelector('[name="__allocation_unit"]');
+      if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, std);
       return values;
     };
     const backToForm = () => {
@@ -731,8 +946,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       <div class="yn-dialog-body">${form}</div>
     </div>`);
     if (!dialog.open) dialog.showModal();
-    const first = form.querySelector("input:not([disabled]), select:not([disabled])");
-    first?.focus();
+    // 最初の空の入力欄にフォーカス（稼働計画でメンバーを入れて開いたときは配分から）。無ければ最初の欄。
+    // 選択欄（select）は Space でリストが開き Esc がダイアログに届かないので、空でも最初には選ばない
+    const fields = [...form.querySelectorAll("input:not([disabled]), select:not([disabled])")];
+    (fields.find((el) => el.tagName === "INPUT" && el.value === "") ?? fields[0])?.focus();
   }
 
   function openDeleteDialog(fileId, rowId, focus) {

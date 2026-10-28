@@ -174,7 +174,7 @@ describe("buildModel — 手計算の例", () => {
 
   it("チーム階層", () => {
     expect(model.rootTeamIds).toEqual(["T1"]);
-    expect(model.teamTree.T1).toEqual({ teamId: "T1", name: "T1", parentTeamId: null, depth: 0, children: [], descendantIds: ["T1"] });
+    expect(model.teamTree.T1).toEqual({ teamId: "T1", name: "T1", parentTeamId: null, level: "", leaderMemberId: null, depth: 0, children: [], descendantIds: ["T1"] });
   });
 
   it("決定的（同じ入力から同じ出力）・JSON で往復できる", () => {

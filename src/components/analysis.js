@@ -52,6 +52,19 @@ export function treeAt(model, month) {
   return { tree, rootTeamIds };
 }
 
+/** 月 m 時点のメンバーの氏名（その月に有効な行。無ければ最も早い行、members に無ければ ID）。組織のリーダー表示（§22）用 */
+export function memberNameAt(model, memberId, month) {
+  if (!memberId) return "";
+  let best = null;
+  let first = null;
+  for (const m of model.members) {
+    if (m.memberId !== memberId) continue;
+    if (!first || m.effectiveFrom < first.effectiveFrom) first = m;
+    if (m.effectiveFrom <= month && (!best || m.effectiveFrom >= best.effectiveFrom)) best = m;
+  }
+  return (best ?? first)?.name || memberId;
+}
+
 /** チーム名（未設定・不明も含む） */
 export function teamName(model, teamId, tree = model.teamTree) {
   if (teamId === UNASSIGNED_TEAM_ID) return UNASSIGNED_TEAM_LABEL;

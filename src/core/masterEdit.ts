@@ -9,8 +9,9 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
-import { parseDataset, type DatasetFiles } from "./csv.js";
-import type { Config, YearMonth } from "./types.js";
+import { parseCsvTable, parseDataset, type DatasetFiles } from "./csv.js";
+import type { PlanAssignment, PlanSources } from "./plan.js";
+import type { Config, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -26,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "team" | "member" | "contract" | "rateKey" | "title";
+  input: "text" | "month" | "number" | "kind" | "team" | "member" | "contract" | "rateKey" | "title" | "level" | "allocation";
   required: boolean;
 }
 
@@ -93,6 +94,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "name", label: T.masterFiles.colTeamName, input: "text", required: true },
       { name: "parent_team_id", label: T.masterFiles.colParentTeam, input: "team", required: false },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
+      { name: "level", label: T.masterFiles.colLevel, input: "level", required: false },
+      { name: "leader_member_id", label: T.masterFiles.colLeader, input: "member", required: false },
     ],
   },
   assignments: {
@@ -107,7 +110,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "contract_id", label: T.masterFiles.colContractId, input: "contract", required: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
-      { name: "allocation", label: T.masterFiles.colAllocation, input: "number", required: true },
+      { name: "allocation", label: T.masterFiles.colAllocation, input: "allocation", required: true },
     ],
   },
 };
@@ -611,6 +614,8 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
     team_id: [0, T.masterFiles.effectTeamTree, false],
     parent_team_id: [1, T.masterFiles.effectParent, false],
     name: [2, T.masterFiles.effectTeamName, false],
+    level: [3, T.masterFiles.effectLevel, false],
+    leader_member_id: [4, T.masterFiles.effectLeader, false],
   },
   assignments: {
     allocation: [0, T.masterFiles.effectAllocation, false],
@@ -1085,4 +1090,54 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
     conflicts,
     unresolved: conflicts.filter((c) => choices[c.id] !== "mine" && choices[c.id] !== "theirs").map((c) => c.id),
   };
+}
+
+// ---------------------------------------------------------------------------
+// 稼働計画タブ（§23）の入力: 編集中の文書 → PlanSources
+// ---------------------------------------------------------------------------
+
+/** 編集中（保存前）の組織・メンバー・アサインと、契約の担当組織から稼働計画の計算の入力を作る */
+export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments">, contractsText: string): PlanSources {
+  const teams: TeamRecord[] = docs.teams.rows.map((r) => {
+    const v = rowRecord(docs.teams, r);
+    return {
+      teamId: (v.team_id ?? "").trim(),
+      name: (v.name ?? "").trim(),
+      parentTeamId: (v.parent_team_id ?? "").trim() || null,
+      effectiveFrom: (v.effective_from ?? "").trim(),
+      level: (v.level ?? "").trim(),
+      leaderMemberId: (v.leader_member_id ?? "").trim() || null,
+    };
+  });
+  const members: MemberRecord[] = docs.members.rows.map((r) => {
+    const v = rowRecord(docs.members, r);
+    return {
+      memberId: (v.member_id ?? "").trim(),
+      name: (v.name ?? "").trim(),
+      kind: (v.kind ?? "").trim() as MemberRecord["kind"],
+      title: (v.title ?? "").trim(),
+      department: (v.department ?? "").trim(),
+      section: (v.section ?? "").trim(),
+      teamId: (v.team_id ?? "").trim() || null,
+      effectiveFrom: (v.effective_from ?? "").trim(),
+    };
+  });
+  const assignments: PlanAssignment[] = docs.assignments.rows.map((r) => {
+    const v = rowRecord(docs.assignments, r);
+    const raw = (v.allocation ?? "").trim();
+    return {
+      rowId: r.id,
+      memberId: (v.member_id ?? "").trim(),
+      contractId: (v.contract_id ?? "").trim(),
+      startMonth: (v.start_month ?? "").trim(),
+      endMonth: (v.end_month ?? "").trim(),
+      allocation: raw === "" ? Number.NaN : Number(raw),
+    };
+  });
+  const contractTeams = new Map<string, string | null>();
+  for (const row of parseCsvTable(contractsText).rows) {
+    const id = row.get("contract_id");
+    if (id !== "" && !contractTeams.has(id)) contractTeams.set(id, row.get("team_id") || null);
+  }
+  return { teams, members, assignments, contractTeams };
 }

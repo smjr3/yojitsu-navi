@@ -13,7 +13,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, aggregate } from "./core/index.js";
 import { createStore } from "./components/state.js";
-import { scopeFor, flattenTree, teamRow } from "./components/analysis.js";
+import { scopeFor, flattenTree, teamRow, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, teamCountColumns, withForecastCount } from "./components/table.js";
@@ -45,7 +45,10 @@ const vm = (() => {
   const rootTeamIds = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
   const flat = flattenTree(tree, rootTeamIds);
   const rows = flat.map(({ node, depth, parent, hasChildren }) => ({
-    ...teamRow(model, node.teamId, node.name, depth, scope.period, state.method, tree),
+    ...teamRow(model, node.teamId, node.name, depth, scope.period, state.method, tree, {
+      level: node.level,
+      leader: node.leaderMemberId ? memberNameAt(model, node.leaderMemberId, scope.treeMonth) : "",
+    }),
     key: node.teamId,
     parentKey: parent,
     hasChildren,
@@ -85,6 +88,8 @@ if (vm) {
   }
   const columns = [
     { key: "name", label: T.columns.team, type: "text" },
+    { key: "level", label: T.columns.level, type: "text", hideNarrow: true },
+    { key: "leader", label: T.columns.leader, type: "text", hideNarrow: true },
     ...teamCountColumns(),
     ...standardColumns({
       forecastLabel: T.columns.forecastGrossProfit,

@@ -175,6 +175,10 @@ export interface TeamRecord {
   /** 空 = 最上位 */
   parentTeamId: string | null;
   effectiveFrom: YearMonth;
+  /** 種別（「課」「チーム」「班」など自由入力。空 = なし）。SPEC §21 */
+  level?: string;
+  /** リーダーのメンバーID。null/省略 = 未設定。SPEC §22 */
+  leaderMemberId?: string | null;
 }
 
 export type MemberKind = "employee" | "partner";
@@ -327,6 +331,10 @@ export interface TeamNode {
   teamId: string;
   name: string;
   parentTeamId: string | null;
+  /** 種別（空文字 = なし）。SPEC §21 */
+  level: string;
+  /** リーダーのメンバーID（null = 未設定）。SPEC §22 */
+  leaderMemberId: string | null;
   depth: number;
   children: string[];
   /** 自分と配下すべてのチームID */

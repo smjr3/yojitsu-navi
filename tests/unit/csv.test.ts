@@ -102,7 +102,7 @@ describe("parseDataset", () => {
     expect(dataset.contracts).toEqual([{ contractId: "C1", customerName: "ABC株式会社", projectName: "保守", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 2_400_000, note: "メモ, 改行\nあり" }]);
     expect(dataset.mappings).toEqual([{ worklogCustomerName: "（株）ABC", worklogProjectName: "", contractId: "C1" }]);
     expect(dataset.assignments).toEqual([{ memberId: "M1", contractId: "C1", startMonth: "2026-04", endMonth: "2027-03", allocation: 0.5 }]);
-    expect(dataset.teams).toEqual([{ teamId: "ROOT", name: "全社", parentTeamId: null, effectiveFrom: "2000-01" }, { teamId: "T1", name: "開発", parentTeamId: "ROOT", effectiveFrom: "2000-01" }]);
+    expect(dataset.teams).toEqual([{ teamId: "ROOT", name: "全社", parentTeamId: null, effectiveFrom: "2000-01", level: "", leaderMemberId: null }, { teamId: "T1", name: "開発", parentTeamId: "ROOT", effectiveFrom: "2000-01", level: "", leaderMemberId: null }]);
     expect(dataset.members[0]).toEqual({ memberId: "M1", name: "山田 太郎", kind: "employee", title: "SE", department: "開発部", section: "1課", teamId: "T1", effectiveFrom: "2000-01" });
     expect(dataset.members[1]?.teamId).toBeNull();
     expect(dataset.rates).toEqual([{ key: "SE", hourlyRate: 5000, effectiveFrom: "2000-01" }, { key: "M2", hourlyRate: 4000, effectiveFrom: "2000-01" }]);
