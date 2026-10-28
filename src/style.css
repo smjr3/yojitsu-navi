@@ -1054,6 +1054,9 @@ h3 {
   display: none;
   position: fixed;
   z-index: 30;
+  box-sizing: border-box; /* 幅（layout.js の place）に余白・枠を含める。含めないと狭い画面で右にはみ出す */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 8px 12px;
   background: var(--yn-card);
   color: var(--yn-text-2);
