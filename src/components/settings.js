@@ -1,0 +1,169 @@
+/**
+ * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（テーマ）
+ *
+ *   settingsPanel({ masterEdit, fetchImpl }) → HTMLElement
+ */
+import { html } from "htl";
+import { T, fmt } from "../i18n/index.js";
+import { ACCESS_LEVELS, checkConnection, effectiveSaveMode } from "../core/gitlab.js";
+import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
+import { sectionTitle } from "./layout.js";
+
+export function settingsPanel({ masterEdit, fetchImpl = null }) {
+  const cfg = masterEdit;
+  const demo = cfg.mode === "demo";
+  const usable = effectiveSaveMode(cfg) === "gitlab";
+  const doFetch = fetchImpl ?? gitlabFetch(cfg);
+  const root = html`<div class="yn-settings"></div>`;
+  const gitlabSlot = html`<div></div>`;
+  const displaySlot = html`<div></div>`;
+  /** 接続の確認: null | {busy} | {ok, info} | {error} */
+  let check = null;
+  let notice = "";
+
+  const focus = (sel) => root.querySelector(sel)?.focus();
+
+  function renderTarget() {
+    if (demo) return html`<p class="yn-note yn-note-info" data-role="demo-note">${T.settings.demo}</p>`;
+    if (cfg.mode === "download") return html`<p class="yn-note yn-note-warn">${T.settings.downloadMode}</p>`;
+    if (!usable) return html`<p class="yn-note yn-note-warn" data-role="not-configured">${T.settings.notConfigured}</p>`;
+    return html`<dl class="yn-settings-target" aria-label=${T.settings.target}>
+      <div><dt>${T.settings.targetApi}</dt><dd><code>${cfg.gitlab.apiBaseUrl}</code></dd></div>
+      <div><dt>${T.settings.targetProject}</dt><dd><code>${cfg.gitlab.projectId}</code></dd></div>
+      <div><dt>${T.settings.targetBranch}</dt><dd><code>${cfg.gitlab.targetBranch}</code></dd></div>
+    </dl>`;
+  }
+
+  function renderCheck() {
+    if (!check) return null;
+    if (check.busy) return html`<p class="yn-settings-check is-busy" role="status"><span class="yn-spinner yn-me-spinner" aria-hidden="true"></span> ${T.settings.checking}</p>`;
+    if (check.error) {
+      return html`<div class="yn-me-outcome is-error" role="alert" tabindex="-1" data-role="check-result"><p class="yn-me-outcome-title"><span aria-hidden="true">!</span> ${T.settings.checkFailed}</p><p>${check.error.message}</p>${check.error.detail ? html`<p class="yn-me-small"><code>${check.error.detail}</code></p>` : null}</div>`;
+    }
+    const { user, accessLevel } = check.info;
+    const role = accessLevel !== null ? (ACCESS_LEVELS[accessLevel] ?? String(accessLevel)) : T.settings.roleUnknown;
+    const canMerge = accessLevel !== null && accessLevel >= 40;
+    const canSave = accessLevel === null || accessLevel >= 30;
+    return html`<div class="yn-me-outcome is-ok" role="status" tabindex="-1" data-role="check-result">
+      <p class="yn-me-outcome-title"><span aria-hidden="true">✓</span> ${T.settings.checkOk}</p>
+      <ul>
+        <li>${fmt(T.settings.checkUser, { name: user.name || user.username, username: user.username })}</li>
+        <li>${fmt(T.settings.checkRole, { role })}</li>
+      </ul>
+      <p>${!canSave ? T.settings.cannotSave : canMerge ? T.settings.canMergeYes : T.settings.canMergeNo}</p>
+    </div>`;
+  }
+
+  async function runCheck() {
+    check = { busy: true };
+    renderGitlab();
+    try {
+      check = { info: await checkConnection(doFetch, cfg, getToken()) };
+    } catch (e) {
+      check = { error: { message: e?.message ?? String(e), detail: e?.detail ?? "" } };
+      if (e?.status === 401) clearToken();
+    }
+    renderGitlab();
+    focus('[data-role="check-result"]');
+  }
+
+  function renderToken() {
+    const token = getToken();
+    if (token !== "") {
+      return html`<div class="yn-settings-field">
+        <span class="yn-me-label" id="yn-set-token-label">${T.settings.tokenLabel}</span>
+        <p class="yn-me-token-set" aria-labelledby="yn-set-token-label"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.settings.tokenSet}</span> <span class="yn-me-small">${tokenRemembered() ? T.settings.tokenWhereLocal : T.settings.tokenWhereSession}</span>
+          <button type="button" class="yn-btn yn-btn-sm" data-role="token-clear" onclick=${() => {
+            clearToken();
+            check = null;
+            renderGitlab();
+            focus("#yn-set-token");
+          }}>${T.settings.tokenClear}</button></p>
+      </div>`;
+    }
+    const input = html`<input type="password" id="yn-set-token" class="yn-input" autocomplete="off" spellcheck="false" placeholder=${demo ? "demo" : T.settings.tokenPlaceholder} aria-describedby="yn-set-token-help">`;
+    const remember = html`<input type="checkbox" id="yn-set-remember">`;
+    const save = () => {
+      if (input.value.trim() === "") return input.focus();
+      setToken(input.value, remember.checked);
+      check = null;
+      renderGitlab();
+      // 登録したらすぐに接続を確かめる（もう 1 回押させない）
+      runCheck();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        save();
+      }
+    });
+    return html`<div class="yn-settings-field">
+      <label class="yn-me-label" for="yn-set-token">${T.settings.tokenLabel}</label>
+      <div class="yn-me-inline">${input}<button type="button" class="yn-btn yn-btn-primary" data-role="token-save" onclick=${save}>${T.settings.tokenSave}</button></div>
+      <label class="yn-settings-check-label" for="yn-set-remember">${remember} ${T.settings.remember}</label>
+      <span class="yn-me-field-hint" id="yn-set-token-help">${demo ? T.settings.tokenDemoHelp : T.settings.tokenHelp} ${T.settings.rememberHint}</span>
+    </div>`;
+  }
+
+  function renderDemo() {
+    if (!demo) return null;
+    const role = html`<input type="checkbox" id="yn-set-demo-role" checked=${demoCanMerge()}>`;
+    role.addEventListener("change", () => {
+      setDemoCanMerge(role.checked);
+      check = null;
+      renderGitlab();
+      focus("#yn-set-demo-role");
+    });
+    return html`<div class="yn-settings-field yn-settings-demo">
+      <label class="yn-settings-check-label" for="yn-set-demo-role">${role} ${T.settings.demoRole}</label>
+      <span class="yn-me-field-hint">${T.settings.demoRoleHint}</span>
+      <p><button type="button" class="yn-btn yn-btn-sm" data-role="demo-reset" onclick=${() => {
+        resetDemo();
+        notice = T.settings.demoResetDone;
+        renderGitlab();
+        focus('[data-role="demo-reset"]');
+      }}>${T.settings.demoReset}</button> <span class="yn-me-small" role="status">${notice}</span></p>
+    </div>`;
+  }
+
+  function renderGitlab() {
+    const hasToken = getToken() !== "";
+    gitlabSlot.replaceChildren(html`<section class="yn-settings-section" aria-label=${T.settings.gitlabTitle}>
+      ${sectionTitle(T.settings.gitlabTitle, T.settings.gitlabHint)}
+      ${renderTarget()}
+      ${usable
+        ? html`${renderToken()}
+          <p class="yn-me-actions"><button type="button" class="yn-btn" data-role="check" disabled=${!hasToken || check?.busy} onclick=${runCheck}>${T.settings.check}</button> <a class="yn-settings-link-masters" href="./masters">${T.settings.toMasters}</a></p>
+          ${renderCheck()}
+          ${renderDemo()}`
+        : null}
+    </section>`);
+  }
+
+  function renderDisplay() {
+    const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    const radio = (value, label) => {
+      const input = html`<input type="radio" name="yn-set-theme" value=${value} checked=${current === value}>`;
+      input.addEventListener("change", () => {
+        if (input.checked) window.ynSetTheme?.(value);
+      });
+      return html`<label class="yn-seg-radio">${input}<span>${label}</span></label>`;
+    };
+    displaySlot.replaceChildren(html`<section class="yn-settings-section" aria-label=${T.settings.displayTitle}>
+      ${sectionTitle(T.settings.displayTitle, null)}
+      <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.theme}</legend>${radio("light", T.settings.themeLight)}${radio("dark", T.settings.themeDark)}</fieldset>
+    </section>`);
+  }
+
+  // ヘッダーのボタンで切り替えたら、ラジオも合わせる
+  window.addEventListener("yn-theme", () => {
+    const value = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    for (const r of displaySlot.querySelectorAll('input[name="yn-set-theme"]')) r.checked = r.value === value;
+  });
+
+  renderGitlab();
+  renderDisplay();
+  root.append(gitlabSlot, displaySlot);
+  if (usable && getToken() === "") publishMrCount(null);
+  return root;
+}

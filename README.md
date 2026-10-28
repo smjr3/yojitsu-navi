@@ -196,38 +196,40 @@ npm run fetch:members                           # members.csv を更新
 - 人事 API のときは `adapter: "http"`、環境変数 `MEMBER_API_TOKEN`
 - CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `MEMBER_FETCH_ENABLED=1` を設定します（既定は無効）
 
-## マスタ編集の設定（GitLab のトークン・projectId・CORS が通らない場合の download 運用）
+## マスタ編集の設定（GitLab へのマージ方式）
 
-`/masters` は `data/masters/members.csv`・`rates.csv`・`teams.csv`・`data/assignments.csv` を画面で編集する画面です（SPEC §19）。
-編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。保存方式は `config.json` の `masterEdit` で決めます。
+`/masters` は `data/masters/members.csv`・`rates.csv`・`teams.csv`・`data/assignments.csv` を画面で編集する画面です（SPEC §19・§24〜§26）。
+表で 1 行ずつ直すほか、「CSV で編集」に切り替えてファイルの中身をまとめて書き換える・Excel から貼り付けることもできます。
+編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。
+
+流れ: 画面で編集 → 保存すると GitLab に **ブランチと MR** ができる → リーダーが画面上部の「マージ待ちの変更」で内容を見て **マージ** → CI がビルドし直して反映。
+開いている MR の件数はヘッダーの「マスタ編集」にバッジで出ます。トークンの登録・テーマは右上の歯車（設定画面 `/settings`）にまとめています。
 
 ```jsonc
 "masterEdit": {
-  "mode": "download",              // 既定。"gitlab" にすると API で保存
+  "mode": "gitlab",                // 既定。"download"（CSV をダウンロードしてアップロード）| "demo"（試用。GitLab に接続しない）
   "gitlab": {
-    "apiBaseUrl": "",              // 例 https://gitlab.example.local/api/v4
+    "apiBaseUrl": "",              // 例 https://gitlab.example.local/api/v4（空の間は download で動く）
     "projectId": "",               // 数値ID または "group/yojitsu-navi"
     "targetBranch": "main",
-    "commitMode": "mr"             // "mr"（ブランチ masters/<日時>-<ユーザー> にコミットして MR を作る）| "direct"
+    "commitMode": "mr"             // "mr"（ブランチ masters/<日時>-<ユーザー> にコミットして MR）| "direct"（非推奨）
   }
 }
 ```
 
-**GitLab に直接保存する（gitlab モード）**
-
-1. `mode` を `"gitlab"` にし、`apiBaseUrl` と `projectId` を入れてコミットする（どちらかが空なら自動で download モードになる）。
-2. 保存する人は GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、画面の「GitLab の Personal Access Token」に入れる。
-   トークンはそのタブの `sessionStorage` にだけ置き、タブを閉じると消える（画面に再表示しない・サーバーやリポジトリには保存しない）。
-3. 保存できるのはプロジェクトの Developer 以上（`direct` で保護ブランチに直接コミットするなら、その権限も必要）。閲覧は誰でもできる。
+1. `apiBaseUrl` と `projectId` を入れてコミットする（どちらかが空なら自動で CSV ダウンロードになる）。
+2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面かマスタ編集の保存欄で登録する。
+   既定はそのタブの `sessionStorage` だけ（タブを閉じると消える）。設定画面で「このブラウザに記憶する」を選ぶと `localStorage`。画面に再表示しない・サーバーやリポジトリには保存しない。
+3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（docs/DEPLOY_GITLAB.md「3. メンバーを追加する」）。
+   画面は GitLab が返す `can_merge` を見て、マージできる人にだけ「マージ」ボタンを出す（強制は GitLab 側）。
 4. 競合検出: ビルド時に各ファイルの最終コミット ID を取り、コミットの `last_commit_id` に付ける。編集中に他の人が同じファイルを更新していると GitLab が拒否し、画面に「他の人が先に更新しました」と出る（編集内容は下書きに残る）。
-   このため CI の build ジョブは `GIT_DEPTH: "0"`（浅いクローンにしない）にしている。ID が取れないと画面に「競合を検出できません」と出る。
+   このため CI の build ジョブは `GIT_DEPTH: "0"`（浅いクローンにしない）にしている。マージは表示中の head（`sha`）を付けて行い、見ていない変更が入らないようにする。
 
 **CORS**: Pages（`*.pages.<社内ドメイン>`）と GitLab 本体はオリジンが違うので、ブラウザから API を呼ぶには GitLab 側が CORS を許可している必要がある。
 GitLab の API は Personal Access Token 付きの CORS リクエストを許可するのが既定だが、リバースプロキシや WAF で `OPTIONS` が止められていると「GitLab に接続できませんでした」になる。
-その場合は画面の「CSV ダウンロードに切り替える」で下の download 運用に切り替えられる（編集内容はそのまま）。恒常的に通らないなら `mode` を `"download"` に戻す。
+その場合は画面の「CSV ダウンロードに切り替える」で、変更したファイルをダウンロードして GitLab の画面からアップロードする運用に切り替えられる（編集内容はそのまま）。恒常的に通らないなら `mode` を `"download"` にする。
 
-**download 運用（既定）**: 画面で編集 → 検証と変更内容を確認 → 変更したファイルを「◯◯.csv をダウンロード」→ GitLab で同じパスのファイルを開いて「置換」（Replace）→ 新しいブランチで MR を作成 → マージで CI が反映。
-ダウンロードされる CSV は UTF-8（BOM なし）・LF・元と同じ列順で、変更していない行は元のファイルとバイト単位で同じ（差分は変更した行だけ）。
+**デモ（`mode: "demo"`）**: GitLab に接続せず、ブラウザ内の模擬で保存 → マージ待ち → マージの流れを試せる（試用版用。設定画面で「リーダーとして操作」を切り替えられる）。本番では使わない。
 
 `memberSource.adapter` が `"none"` 以外（人事データから所属・役職を取り込む設定）のときは、メンバーの氏名・区分・役職・部署・課は読み取り専用になり、所属チームと適用開始月だけ編集できる。
 

@@ -1,0 +1,14 @@
+import type { FetchLike } from "../core/gitlab.js";
+import type { MasterEditConfig } from "../core/types.js";
+export const TOKEN_STORAGE_KEY: string;
+export const MR_COUNT_KEY: string;
+export const MR_COUNT_EVENT: string;
+export function getToken(): string;
+export function tokenRemembered(): boolean;
+export function setToken(value: string, remember?: boolean): void;
+export function clearToken(): void;
+export function demoCanMerge(): boolean;
+export function setDemoCanMerge(on: boolean): void;
+export function resetDemo(): void;
+export function gitlabFetch(cfg: MasterEditConfig, baseFiles?: Record<string, { text: string; lastCommitId: string | null }>): FetchLike;
+export function publishMrCount(n: number | null): void;
