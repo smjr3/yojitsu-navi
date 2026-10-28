@@ -604,6 +604,12 @@ export default {
     hoursAxis: "時間（h）",
     legendPlanned: "計画時間（配分 × 基準時間）",
     legendActual: "実績時間（作業実績）",
+    // グラフの拡大表示（全グラフ共通）
+    zoom: "拡大",
+    zoomTip: "グラフを大きく表示します",
+    zoomTitle: "グラフ",
+    zoomClose: "拡大表示を閉じる",
+    zoomRotateHint: "スマホは横向きにすると月ごとの棒が広く見られます。",
   },
 
   // ── 各画面で共通の文 ──────────────────────────────────

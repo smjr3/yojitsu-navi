@@ -2913,3 +2913,118 @@ html:has(dialog.yn-dialog[open]) {
     border-left: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * グラフの拡大表示（全グラフ共通。chart-zoom.js）
+ * ------------------------------------------------------------------------- */
+.yn-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.yn-chart-head-legend {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.yn-chart-zoom-btn {
+  flex: none;
+  margin: -4px 0 4px;
+  color: var(--yn-text-2);
+}
+.yn-chart-zoom-btn span {
+  font-size: 15px;
+  line-height: 1;
+}
+.yn-chart-plot {
+  min-width: 0;
+}
+.yn-dialog.yn-chart-zoom {
+  width: calc(100vw - 32px);
+  max-width: 1600px;
+  height: calc(100vh - 32px);
+  height: calc(100dvh - 32px);
+}
+.yn-chart-zoom .yn-dialog-inner {
+  height: 100%;
+  max-height: none;
+}
+.yn-chart-zoom-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px;
+}
+.yn-chart-zoom-legend .yn-legend {
+  font-size: 13px;
+}
+.yn-chart-zoom-plot {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.yn-chart-zoom-plot svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+.yn-chart-zoom-rotate {
+  display: none;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--yn-text-muted);
+}
+@media (max-width: 640px) {
+  /* 狭い画面は凡例の行を増やさないようにアイコンだけにする（名前は aria-label） */
+  .yn-chart-zoom-btn {
+    width: 36px;
+    min-height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .yn-chart-zoom-btn .yn-chart-zoom-label {
+    display: none;
+  }
+}
+@media (max-width: 640px), (max-height: 500px) {
+  .yn-dialog.yn-chart-zoom {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+  }
+  .yn-chart-zoom-body {
+    padding: 8px 8px 12px;
+  }
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  .yn-chart-zoom-rotate {
+    display: block;
+  }
+}
+@media print {
+  .yn-chart-zoom-btn {
+    display: none !important;
+  }
+}
+.yn-chart-zoom-titles {
+  min-width: 0;
+}
+.yn-chart-zoom-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--yn-text-2);
+  overflow-wrap: anywhere;
+}
+@media (max-height: 500px) {
+  .yn-chart-zoom .yn-dialog-head {
+    padding: 8px 12px;
+  }
+}
