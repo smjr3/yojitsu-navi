@@ -342,7 +342,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     };
     parts.draft.replaceChildren(html`<section class="yn-me-banner" role="region" aria-labelledby="yn-me-draft-title">
       <h2 id="yn-me-draft-title" class="yn-me-banner-title">保存していない編集内容（下書き）があります</h2>
-      <p>${dateTimeJst(d.savedAt)} に自動保存した下書き: ${counts.join("、")}。続きから編集するには「下書きを復元する」を押してください。</p>
+      <p>${dateTimeJst(d.savedAt)} に自動保存した下書き: ${counts.join("、")}。続きから編集するには「下書きを復元する」を押してください。<strong>復元か破棄を選ぶまで、表の編集はできません。</strong></p>
       ${stale.length
         ? html`<div class="yn-me-stale" role="alert">
             <p><strong>元データが更新されています</strong>（${stale.map((id) => fileName(MASTER_FILES[id].path)).join("、")}）。下書きを作ったあとに、他の人がこのファイルを更新しました。復元すると、下書きの変更（追加・変更・削除）を<strong>最新のデータに当て直します</strong>（古いデータを土台にしたまま保存・ダウンロードすることはありません）。</p>
@@ -501,7 +501,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       </div>
       ${notes.map((n) => html`<p class="yn-note yn-note-warn">${n}</p>`)}
       <div class="yn-me-toolbar">
-        <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${locked} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
+        <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${locked || !!pendingDraft} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>変更・エラーの行だけ表示</span></label>
         <span class="yn-table-count" aria-live="polite">${integer(shown.length)} / ${integer(doc.rows.length)} 行</span>
@@ -588,7 +588,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
    * 追加（mode: "add"、template があればその行を写して適用開始月を翌月に）／修正（mode: "edit"）
    */
   function openRowDialog({ fileId, mode, rowId = null, template = null, focus }) {
-    if (locked) return;
+    if (locked || pendingDraft) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
@@ -735,7 +735,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   }
 
   function openDeleteDialog(fileId, rowId, focus) {
-    if (locked) return;
+    if (locked || pendingDraft) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
     const before = docs[fileId];
@@ -842,6 +842,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     return null;
   }
 
+  /** 利用者が入力したコミットメッセージ（再描画で既定文に戻さない）。null なら既定文 */
+  let typedMessage = null;
   function commitMessage() {
     const files = changedFiles();
     return `マスタ更新: ${files.map((id) => fileName(MASTER_FILES[id].path)).join(", ")}`;
@@ -873,6 +875,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     } catch (e) {
       outcome = { kind: "error", error: { kind: e?.kind ?? "other", message: e?.message ?? String(e), detail: e?.detail ?? "", status: e?.status ?? null, partial: e?.partial ?? null } };
       if (outcome.error.kind === "permission" && outcome.error.status === 401) session.remove(TOKEN_STORAGE_KEY);
+      // コミットまでは済んだ（MR だけ失敗）: もう一度保存すると別ブランチに同じ変更が重複するので止める
+      if (outcome.error.partial) {
+        locked = true;
+        local.remove(DRAFT_STORAGE_KEY);
+        draftSavedAt = null;
+      }
     } finally {
       saving = false;
       renderAll();
@@ -900,6 +908,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     rebasedInfo = {};
     locked = false;
     outcome = null;
+    typedMessage = null;
     downloaded = new Set();
     validation = validateEdited(docs, data.context, config);
     persistDraft();
@@ -947,12 +956,18 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       </div>`;
     }
     const e = outcome.error;
-    const titles = { conflict: "他の人が先に更新しました（競合）", permission: "権限がありません", network: "GitLab に接続できませんでした", other: "保存できませんでした" };
+    const titles = e.partial ? { other: "コミットは保存しました（マージリクエストは未作成）", permission: "コミットは保存しました（マージリクエストは未作成）" } : { conflict: "他の人が先に更新しました（競合）", permission: "権限がありません", network: "GitLab に接続できませんでした", other: "保存できませんでした" };
     return html`<div class="yn-me-outcome is-error" role="alert" tabindex="-1" data-fk="save:outcome" data-error-kind=${e.kind}>
       <p class="yn-me-outcome-title"><span aria-hidden="true">!</span> ${titles[e.kind] ?? titles.other}</p>
       <p>${e.message}</p>
-      ${e.detail ? html`<p class="yn-me-small">GitLab の応答: <code>${e.detail}</code></p>` : null}
-      <p class="yn-me-small">編集内容は消えていません（このページと下書きに残っています）。</p>
+      ${e.partial
+        ? html`<ul>
+            <li>ブランチ: <code>${e.partial.branch}</code></li>
+            ${e.partial.commitUrl ? html`<li>コミット: <a href=${e.partial.commitUrl} target="_blank" rel="noopener">開く（GitLab）</a></li>` : null}
+          </ul>
+          <p><button type="button" class="yn-btn" data-fk="save:restart" onclick=${() => resetAll()}>新しく編集を始める（元のデータから）</button></p>`
+        : html`${e.detail ? html`<p class="yn-me-small">GitLab の応答: <code>${e.detail}</code></p>` : null}
+          <p class="yn-me-small">編集内容は消えていません（このページと下書きに残っています）。</p>`}
       ${e.kind === "network" ? html`<p><button type="button" class="yn-btn yn-btn-primary" data-fk="save:to-download" onclick=${() => {
         mode = "download";
         outcome = null;
@@ -984,7 +999,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
           setToken();
         }
       });
-      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${commitMessage()} aria-describedby="yn-me-message-hint">`;
+      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${typedMessage ?? commitMessage()} aria-describedby="yn-me-message-hint">`;
+      msgInput.addEventListener("input", () => {
+        typedMessage = msgInput.value.trim() === "" ? null : msgInput.value;
+      });
       const tokenReason = hasToken ? null : "GitLab のトークンを入力してください。";
       const disabled = saving || !!reason || !!tokenReason;
       body = html`<div class="yn-me-save-body">
@@ -1052,7 +1070,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
 
   function renderAll() {
     root.dataset.mode = mode;
-    root.classList.toggle("is-locked", locked);
+    // 下書きの復元／破棄を選ぶまでは編集させない（選ぶ前の編集は下書きに保存されず、再読み込みで消えるため）
+    root.classList.toggle("is-locked", locked || !!pendingDraft);
     renderDraft();
     renderTabs();
     renderPanel();

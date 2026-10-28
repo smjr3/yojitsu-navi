@@ -172,7 +172,17 @@ export function dataTable({
 }) {
   const visibleCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   const exportCols = columns.filter((c) => !c.hidden && c.export !== false);
-  let sortState = tree ? null : sort ? { ...sort } : null;
+  // 利用者が選んだ並べ替えは、絞り込み・単位の変更で表が作り直されても、詳細から戻っても残す（タブ単位）
+  const sortMemoKey = !tree && caption ? `yojitsu-navi:sort:${location.pathname}:${caption}` : null;
+  const remembered = (() => {
+    try {
+      const v = sortMemoKey ? JSON.parse(sessionStorage.getItem(sortMemoKey) ?? "null") : null;
+      return v && columns.some((c) => c.key === v.key) && (v.dir === "asc" || v.dir === "desc") ? v : null;
+    } catch {
+      return null;
+    }
+  })();
+  let sortState = tree ? null : remembered ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
   let currentRows = rows;
 
@@ -215,6 +225,11 @@ export function dataTable({
           btn.addEventListener("click", () => {
             const first = numeric ? "desc" : "asc";
             sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
+            try {
+              if (sortMemoKey) sessionStorage.setItem(sortMemoKey, JSON.stringify(sortState));
+            } catch {
+              /* プライベートモード等では無視 */
+            }
             renderHead();
             renderBody();
             // 再描画で消えたフォーカスを同じ列のボタンへ戻す（キーボード操作の継続）
@@ -272,6 +287,7 @@ export function dataTable({
         if (href) content = html`<a class="yn-row-link" href=${href}>${content}</a>`;
       }
       cell.append(content);
+      if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });
     if (href) {
@@ -292,7 +308,7 @@ export function dataTable({
     } else {
       tbody.replaceChildren(...currentRows.map(renderRow));
     }
-    if (count) count.textContent = tree ? `${integer(rows.length)} 行` : `${integer(rows.length)} 件`;
+    if (count) count.textContent = tree ? (currentRows.length < rows.length ? `表示 ${integer(currentRows.length)} 行 / 全 ${integer(rows.length)} 行` : `${integer(rows.length)} 行`) : `${integer(rows.length)} 件`;
   }
 
   renderHead();

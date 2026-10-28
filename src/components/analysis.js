@@ -15,6 +15,10 @@ import {
   teamTreeForMonth,
 } from "../core/index.js";
 
+
+/** 木からチームを引く（URL の team=constructor などで Object.prototype のプロパティを拾わない） */
+export const ownNode = (tree, id) => (tree && id != null && Object.hasOwn(tree, id) ? tree[id] : undefined);
+
 /** 粗利率（コアの aggregate() と同じ規則: 予算 0 は null）。Totals が無い場面（月ごと・見込み）だけで使う */
 export function grossMarginOf(budget, cost) {
   if (typeof budget !== "number" || typeof cost !== "number" || !Number.isFinite(budget) || !Number.isFinite(cost)) return null;
@@ -28,8 +32,8 @@ export function grossMarginOf(budget, cost) {
  */
 export function memberIdsInTeam(members, team, tree) {
   if (!team) return null;
-  if (team === UNASSIGNED_TEAM_ID) return members.filter((m) => !m.teamId || !tree[m.teamId]).map((m) => m.memberId);
-  const ids = new Set(tree[team]?.descendantIds ?? []);
+  if (team === UNASSIGNED_TEAM_ID) return members.filter((m) => !m.teamId || !ownNode(tree, m.teamId)).map((m) => m.memberId);
+  const ids = new Set(ownNode(tree, team)?.descendantIds ?? []);
   return members.filter((m) => m.teamId && ids.has(m.teamId)).map((m) => m.memberId);
 }
 
@@ -51,7 +55,7 @@ export function treeAt(model, month) {
 export function teamName(model, teamId, tree = model.teamTree) {
   if (teamId === UNASSIGNED_TEAM_ID) return UNASSIGNED_TEAM_LABEL;
   if (teamId === "" || teamId === null || teamId === undefined) return "全体";
-  const node = tree[teamId] ?? model.teamTree[teamId];
+  const node = ownNode(tree, teamId) ?? ownNode(model.teamTree, teamId);
   if (node) return node.name;
   const rec = model.teams.find((t) => t.teamId === teamId);
   return rec ? rec.name : teamId;
@@ -77,7 +81,7 @@ export function scopeFor(model, state) {
   if (state.team) {
     contractIds = contractsForTeam(model, state.team, tree).map((c) => c.contractId);
     label = teamName(model, state.team, tree);
-    teamMissing = state.team !== UNASSIGNED_TEAM_ID && !tree[state.team];
+    teamMissing = state.team !== UNASSIGNED_TEAM_ID && !ownNode(tree, state.team);
   }
   return { period, contractIds, teamId: state.team, teamLabel: label, tree, treeMonth, teamMissing };
 }

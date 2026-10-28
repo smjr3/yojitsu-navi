@@ -22,7 +22,10 @@ export function statTile({ label, value, sub = null, compare = null, status = nu
         ${compare.direction ? html`<span class="yn-kpi-arrow" aria-hidden="true">${compare.direction === "up" ? "▲" : compare.direction === "down" ? "▼" : "―"}</span>` : null}
         ${compare.text}</span>`
     : null;
-  return html`<article class=${`yn-kpi${emphasis ? " yn-kpi-emphasis" : ""}${status?.kind === "danger" ? " is-danger" : ""}${wrap ? " yn-kpi-wrap" : ""}`} id=${id} aria-label=${label}>
+  // 円表示や巨大な金額で桁が多いと、タイル幅（最小 230px 前後）からはみ出すので文字を小さくする
+  const len = String(value ?? "").length;
+  const sizeCls = len > 16 ? " yn-kpi-xlong" : len > 12 ? " yn-kpi-long" : "";
+  return html`<article class=${`yn-kpi${sizeCls}${emphasis ? " yn-kpi-emphasis" : ""}${status?.kind === "danger" ? " is-danger" : ""}${wrap ? " yn-kpi-wrap" : ""}`} id=${id} aria-label=${label}>
     <div class="yn-kpi-label">${label}</div>
     <div class="yn-kpi-value-row">${valueNode}${statusNode}</div>
     ${sub ? html`<div class="yn-kpi-sub">${sub}</div>` : null}

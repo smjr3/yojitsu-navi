@@ -27,8 +27,13 @@ import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, p
 
 ```js
 const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
-const contractId = new URLSearchParams(location.search).get("id") ?? "";
-const result = model ? model.contracts.find((r) => r.contract.contractId === contractId) ?? null : null;
+// 前後の空白は無視し、完全一致が無ければ大文字・小文字の違いだけの契約を探す（URL を手で打ったとき用）
+const contractId = (new URLSearchParams(location.search).get("id") ?? "").trim();
+const result = model
+  ? model.contracts.find((r) => r.contract.contractId === contractId) ??
+    model.contracts.find((r) => r.contract.contractId.toLowerCase() === contractId.toLowerCase()) ??
+    null
+  : null;
 const store = model ? createStore(model) : null;
 ```
 
@@ -211,7 +216,7 @@ if (vm) {
       rows,
       unit,
       caption: "月ごとの予実",
-      exportName: `contract_${c.contractId}_monthly`,
+      exportName: `contract_${c.contractId}_monthly_${vm.period.from}_${vm.period.to}`,
       sort: { key: "month", dir: "asc" },
       summary: { name: "合計（原価・粗利は実績月のみ）", budget: t.budget, cost: t.cost, grossProfit: t.grossProfit, grossMargin: t.grossMargin, hours: t.hours, members: null, businessDays: null, status: null },
     }),
@@ -241,13 +246,13 @@ if (vm) {
     { key: "memberName", label: "メンバー", type: "text", render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", "単価なし", "この期間に時間単価が見つからない月があります（0円で計算）")}` : ""}` },
     { key: "teams", label: "所属（当時）", type: "text", hideOnPhone: true },
     { key: "hours", label: "時間", type: "hours" },
-    { key: "rateText", label: "単価", type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true },
+    { key: "rateText", label: "単価", type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: "単価（円）", exportValue: (r) => (r.rates.size === 1 ? [...r.rates][0] : [...r.rates].join(" / ")) },
     { key: "amount", label: "原価", type: "moneyYen" },
     { key: "share", label: "構成比", type: "percent" },
     { key: "months", label: "作業月数", type: "int", hideOnPhone: true },
   ];
   if (rows.length === 0) display(emptyState({ title: "作業実績がありません", text: "この期間に紐付いた作業ログはありません。", icon: "○" }));
-  else display(dataTable({ columns, rows, unit, caption: "メンバー別の原価", exportName: `contract_${c.contractId}_members`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
+  else display(dataTable({ columns, rows, unit, caption: "メンバー別の原価", exportName: `contract_${c.contractId}_members_${vm.period.from}_${vm.period.to}`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
 }
 ```
 

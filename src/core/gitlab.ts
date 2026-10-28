@@ -151,7 +151,7 @@ export function classifyHttpError(step: "user" | "commit" | "mr", status: number
   if (status === 403) {
     return new GitLabError("permission", "このプロジェクトに保存する権限がありません。保存できるのは Developer 以上のメンバーです（保護ブランチへの直接コミットは Maintainer が必要なこともあります）。", { status, detail });
   }
-  if (status === 409 || (step === "commit" && status === 400 && CONFLICT_PATTERN.test(detail))) {
+  if (step === "commit" && (status === 409 || (status === 400 && CONFLICT_PATTERN.test(detail)))) {
     return new GitLabError("conflict", "他の人が先に同じファイルを更新しました。あなたの編集内容は下書きに残っています。他の人の更新が CI でビルドされたあとにこのページを再読み込みすると、下書きの変更を最新のデータに当て直して復元できます（同じ行を両方で変えていれば、どちらを残すか選べます）。", { status, detail });
   }
   if (status === 404) {
@@ -257,7 +257,7 @@ export async function saveToGitLab(fetchImpl: FetchLike, req: SaveRequest): Prom
   } catch (e) {
     const err = e as GitLabError;
     // コミットは済んでいるので「ダウンロードに切り替え」は出さない（network → other）
-    throw new GitLabError(err.kind === "permission" ? "permission" : "other", `コミットはブランチ ${branch} に保存しましたが、マージリクエストを作れませんでした。GitLab の画面からこのブランチの MR を作成してください。（${err.message}）`, {
+    throw new GitLabError(err.kind === "permission" ? "permission" : "other", `コミットはブランチ ${branch} に保存しましたが、マージリクエストを作れませんでした。GitLab の画面からこのブランチの MR を作成してください（同じ変更をもう一度保存する必要はありません）。${err.status ? `（HTTP ${err.status}${err.detail ? `: ${err.detail}` : ""}）` : ""}`, {
       status: err.status,
       detail: err.detail,
       partial: { branch, commitUrl },

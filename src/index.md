@@ -196,7 +196,7 @@ if (vm) {
   const { scope, unit, method } = vm;
   const { tree } = scope;
   let targets = [];
-  if (scope.teamId && scope.teamId !== UNASSIGNED_TEAM_ID && tree[scope.teamId]) {
+  if (scope.teamId && scope.teamId !== UNASSIGNED_TEAM_ID && Object.hasOwn(tree, scope.teamId)) {
     targets = tree[scope.teamId].children.map((id) => tree[id]);
   } else if (!scope.teamId) {
     const roots = Object.values(tree).filter((n) => n.parentTeamId === null);

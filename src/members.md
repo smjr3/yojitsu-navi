@@ -148,6 +148,11 @@ const searchForm = (() => {
     clearTimeout(timer);
     timer = setTimeout(() => {
       form.value = input.value;
+      // URL の q に書き戻す（詳細から「戻る」で復元するため）
+      const url = new URL(location.href);
+      if (input.value) url.searchParams.set("q", input.value);
+      else url.searchParams.delete("q");
+      history.replaceState(history.state, "", url);
       form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
     }, 150);
   });

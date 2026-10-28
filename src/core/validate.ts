@@ -73,7 +73,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: end_month の形式が不正です: ${a.endMonth}`, file, row });
     if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: `${file} ${row} 行目: 開始月 ${a.startMonth} が終了月 ${a.endMonth} より後です`, file, row });
     if (!Number.isFinite(a.allocation) || a.allocation < 0 || a.allocation > 1) {
-      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: `${file} ${row} 行目: allocation は 0〜1 で指定してください: ${String(a.allocation)}`, file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
+      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: `${file} ${row} 行目: allocation は 0〜1 で指定してください: ${Number.isFinite(a.allocation) ? String(a.allocation) : "数値ではありません"}`, file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
       return;
     }
     if (!monthsOk) return;

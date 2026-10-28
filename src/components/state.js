@@ -76,7 +76,7 @@ export function sanitize(model, raw) {
   if (out.from > out.to) [out.from, out.to] = [out.to, out.from];
   if (typeof raw.team === "string") {
     const t = raw.team;
-    const known = t === "" || t === UNASSIGNED_TEAM_ID || (model.teamTree && t in model.teamTree) || model.teams.some((r) => r.teamId === t);
+    const known = t === "" || t === UNASSIGNED_TEAM_ID || (model.teamTree && Object.hasOwn(model.teamTree, t)) || model.teams.some((r) => r.teamId === t);
     out.team = known ? t : "";
   }
   if (UNIT_IDS.includes(raw.unit)) out.unit = raw.unit;
