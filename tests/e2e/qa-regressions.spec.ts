@@ -99,3 +99,19 @@ test("スマホ幅のマスタ編集: 行を追加して表が右へスクロー
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
 });
+
+test("稼働計画のセルの編集欄を開いたまま狭い画面に変えても、画面内に収まり操作できる（モンキーテストで発見）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  await page.locator('tr.yn-me-plan-row[data-member="M010"] [data-fk="plan:cell:M010:2027-01"]').click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await expect(pop).toBeVisible();
+  for (const width of [414, 1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    const box = (await pop.boundingBox())!;
+    expect(box.x, `${width}px`).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, `${width}px`).toBeLessThanOrEqual(width + 1);
+    expect(box.y + box.height, `${width}px`).toBeLessThanOrEqual(801);
+  }
+  await pop.locator("#yn-plan-pop-new").click();
+  await expect(pop.locator("#yn-plan-pop-new")).toBeFocused();
+});

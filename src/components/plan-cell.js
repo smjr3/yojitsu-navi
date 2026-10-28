@@ -49,8 +49,18 @@ export function planCellEditor() {
   const el = html`<dialog class="yn-plan-pop" aria-labelledby="yn-plan-pop-title"></dialog>`;
   let anchor = null;
   let onClose = null;
-  const reposition = () => anchor && el.open && !isSheet() && placeNear(el, anchor, { width: 380 });
   const isSheet = () => document.documentElement.clientWidth < 640;
+  // 狭い画面は画面下に寄せたシート（CSS）。広い画面はセルの近く。
+  // 開いたまま画面幅が変わったときも呼ぶ（広い画面で付けた位置が残ると、狭い画面で画面外に出る）
+  const layout = () => {
+    if (!anchor || !el.open) return;
+    if (isSheet()) {
+      el.style.removeProperty("left");
+      el.style.removeProperty("top");
+      el.style.removeProperty("width");
+    } else placeNear(el, anchor, { width: 380 });
+  };
+  const reposition = layout;
   el.addEventListener("click", (ev) => {
     if (ev.target === el) el.close();
   });
@@ -67,12 +77,7 @@ export function planCellEditor() {
     onClose = opts.onClose ?? null;
     el.replaceChildren(content);
     if (!el.open) el.showModal();
-    // 狭い画面は画面下に寄せたシート（CSS）。広い画面はセルの近く
-    if (isSheet()) {
-      el.style.removeProperty("left");
-      el.style.removeProperty("top");
-      el.style.removeProperty("width");
-    } else placeNear(el, a, { width: 380 });
+    layout();
     addEventListener("resize", reposition);
   }
   /** 中身の高さが変わったとき（注記を出したときなど）に置き直す */
