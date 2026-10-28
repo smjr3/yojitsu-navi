@@ -76,6 +76,8 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
 export function memberCostSpec({ model, contractIds, period, unit, member, detailHref = null }) {
   const set = new Set(contractIds);
   const rows = [];
+  const names = new Map(model.contracts.map((r) => [r.contract.contractId, `${r.contract.customerName} / ${r.contract.projectName}`]));
+  const contractName = (id) => names.get(id) ?? id;
   for (const r of model.contracts) {
     if (!set.has(r.contract.contractId)) continue;
     for (const cm of r.months) {
@@ -100,10 +102,10 @@ export function memberCostSpec({ model, contractIds, period, unit, member, detai
       {
         title: T.teamDetail.costLinesMonthContract,
         table: {
-          columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContractId }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colAmount, align: "num" }],
+          columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContract }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colAmount, align: "num" }],
           rows: rows.map(({ month, id, l }) => [
             monthJa(month),
-            detailHref ? html`<a href=${detailHref(id)}>${id}</a>` : id,
+            detailHref ? html`<a href=${detailHref(id)}>${contractName(id)}</a>` : contractName(id),
             formatHours(l.hours),
             l.rateMissing ? T.breakdown.rateMissing : money(l.hourlyRate, "yen"),
             money(l.amount, "yen"),

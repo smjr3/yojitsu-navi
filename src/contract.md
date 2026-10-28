@@ -92,8 +92,8 @@ if (vm) {
   display(
     pageHeader({
       model,
-      title: html`<span class="yn-title-id">${c.contractId}</span> ${c.customerName} / ${c.projectName}`,
-      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.contracts, href: store.href("./contracts") }, { label: c.contractId }],
+      title: `${c.customerName} / ${c.projectName}`,
+      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.contracts, href: store.href("./contracts") }, { label: c.projectName || c.customerName }],
       includesPreliminary: vm.totals.includesPreliminary,
       extra: html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: c.teamId ?? "" })}>${T.contract.sameTeam}</a>`,
     }),
@@ -125,7 +125,7 @@ if (vm) {
   const f = result.forecasts[vm.method];
   const elapsedLabel = (months) =>
     months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });
-  const subtitle = `${c.contractId} ${c.customerName} / ${c.projectName} ・ ${periodJa(period)}`;
+  const subtitle = `${c.customerName} / ${c.projectName} ・ ${periodJa(period)}`;
   const inFY = f.breakdown.contractMonthsInFY.length > 0;
   display(
     kpiRow([
@@ -203,8 +203,8 @@ if (vm) {
     { key: "status", label: T.columns.status, type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: r.outsideFY ? T.contract.outsideFy : STATUS_LABELS[r.status], title: r.outsideFY ? fmt(T.contract.outsideFyTitle, { fy: fiscalYearLabel(model.meta.fiscalYear) }) : null }), sortValue: (r) => r.status },
     { key: "budget", label: T.columns.budget, type: "money", breakdown: (r) => bd.budgetMonthSpec({ contract: c, cm: r.cm, unit }) },
     { key: "cost", label: T.columns.cost, type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.outsideFY ? null : r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, subtitle: fmt(T.contract.forecastMonthSubtitle, { month: monthJa(r.month), remaining: money(forecast.breakdown.remainingCost, unit), n: forecast.breakdown.remainingMonths.length }) }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
-    { key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => (r.outsideFY ? null : bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` })) },
-    { key: "grossMargin", label: T.columns.grossMargin, type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => (r.outsideFY ? null : bd.marginSpec({ budget: r.budget, cost: r.cost, grossMargin: r.grossMargin, unit, subtitle: `${c.contractId} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` })) },
+    { key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => (r.outsideFY ? null : bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.customerName} / ${c.projectName} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` })) },
+    { key: "grossMargin", label: T.columns.grossMargin, type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => (r.outsideFY ? null : bd.marginSpec({ budget: r.budget, cost: r.cost, grossMargin: r.grossMargin, unit, subtitle: `${c.customerName} / ${c.projectName} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` })) },
     { key: "hours", label: T.columns.hours, type: "hours", hideNarrow: true },
     { key: "members", label: T.contract.colMembers, type: "int", hideOnPhone: true, hideNarrow: true, render: (r) => (r.rateMissing ? html`${integer(r.members)} <span class="yn-muted" title=${T.contract.membersRateMissingTitle}>${T.contract.membersRateMissing}</span>` : integer(r.members)) },
     { key: "businessDays", label: T.contract.colBusinessDays, type: "int", hideOnPhone: true, hideNarrow: true },
@@ -244,7 +244,7 @@ if (vm) {
   const rows = [...byMember.values()].map((r) => ({ ...r, teams: [...r.teams].join("、") || "—", rateText: [...r.rates].map((x) => money(x, "yen")).join(" / "), share: vm.totals.cost ? r.amount / vm.totals.cost : null, isOtherTeam: c.teamId && [...r.teams].length && ![...r.teams].includes(model.teamTree[c.teamId]?.name) }));
   display(sectionTitle(T.team.membersTitle, fmt(T.contract.membersHint, { period: periodJa(vm.period) })));
   const columns = [
-    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}` },
+    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}` },
     { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: T.contract.rateExportLabel, exportValue: (r) => (r.rates.size === 1 ? [...r.rates][0] : [...r.rates].join(" / ")) },
@@ -346,12 +346,12 @@ function worklogExplorer(entries, unit, id) {
   const members = [...new Map(entries.map((e) => [e.memberId, e.memberName])).entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const tasks = [...new Set(entries.map((e) => e.task))].sort((a, b) => a.localeCompare(b, "ja"));
   const selMonth = html`<select class="yn-select" id="yn-wl-month" aria-label=${T.charts.colMonth}><option value="">${T.contract.allMonths}</option>${months.map((m) => html`<option value=${m}>${monthJa(m)}</option>`)}</select>`;
-  const selMember = html`<select class="yn-select" id="yn-wl-member" aria-label=${T.breakdown.colMember}><option value="">${T.contract.allMembers}</option>${members.map(([mid, name]) => html`<option value=${mid}>${name}（${mid}）</option>`)}</select>`;
+  const selMember = html`<select class="yn-select" id="yn-wl-member" aria-label=${T.breakdown.colMember}><option value="">${T.contract.allMembers}</option>${members.map(([mid, name]) => html`<option value=${mid}>${name}</option>`)}</select>`;
   const selTask = html`<select class="yn-select" id="yn-wl-task" aria-label=${T.breakdown.colTask}><option value="">${T.contract.allTasks}</option>${tasks.map((t) => html`<option value=${t}>${t}</option>`)}</select>`;
   const tableHolder = html`<div></div>`;
   const columns = [
     { key: "date", label: T.breakdown.colDate, type: "text" },
-    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => `${r.memberName}（${r.memberId}）` },
+    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => r.memberName },
     { key: "task", label: T.breakdown.colTask, type: "text" },
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "hourlyRate", label: T.breakdown.colRate, type: "moneyYen" },

@@ -185,7 +185,7 @@ if (vm) {
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);
-  const sub = (r) => `${r.memberName}（${r.memberId}）`;
+  const sub = (r) => r.memberName;
   const contractHref = (id) => store.href("./contract", {}, { id });
   const chips = (r) => {
     const list = [];
@@ -202,7 +202,7 @@ if (vm) {
       sublabel: T.members.colMemberSub,
       type: "text",
       // 2 行目に ID・所属チーム・役職（列を分けると 1280/1024px に収まらないため。Excel には別列で出す）
-      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}（${r.memberId}）・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.memberId}</span> ・ ${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
+      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
       sortValue: (r) => r.memberName,
       exportValue: (r) => r.memberName,
     },

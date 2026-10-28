@@ -1,7 +1,7 @@
 /**
  * 稼働計画 /plan（SPEC §23）と、組織の種別・リーダーの表示（§21・§22）
  */
-import { test, expect, gotoPage } from "./helpers/app.js";
+import { test, expect, gotoPage, pickCombo } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
 import { addRow, parseMasterDoc, planSourcesFromDocs, serializeMasterDoc } from "../../src/core/masterEdit.js";
@@ -27,7 +27,7 @@ test("稼働計画: 組織（第1課）を指定して開くと、配下のメ�
   await expect(page.getByRole("tab", { name: /稼働計画/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".yn-tools a", { hasText: "稼働計画" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("#yn-me-plan-team")).toHaveValue("S11");
-  await expect(page.locator(".yn-me-plan-unit")).toContainText("リーダー: 田中 さくら（M004）");
+  await expect(page.locator(".yn-me-plan-unit")).toContainText("リーダー: 田中 さくら");
   const expected = planView(planSourcesFromDocs(docs(), PAYLOAD.context.contracts), "S11", FY);
   const rows = page.locator("tr.yn-me-plan-row");
   await expect(rows).toHaveCount(expected.rows.length);
@@ -46,8 +46,10 @@ test("稼働計画: 時間で入力すると人月に直して保存し、表示
   await expect(row).toHaveClass(/is-focus/);
   await row.getByRole("button", { name: /計画を追加/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  await expect(d.locator("#yn-me-f-member_id")).toHaveValue("M011");
-  await d.locator("#yn-me-f-contract_id").selectOption("C001");
+  await expect(d.locator("#yn-me-f-member_id")).toHaveValue("小林 玲奈");
+  await expect(d.locator('input[name="member_id"]')).toHaveValue("M011");
+  // 案件で選ぶ（期間 2026-11〜2027-03 は更新後の契約 C002 に割り当てられる。§31.3）
+  await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-start_month").fill("2026-11");
   await d.locator("#yn-me-f-end_month").fill("2027-03");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
@@ -61,9 +63,9 @@ test("稼働計画: 時間で入力すると人月に直して保存し、表示
   await expect(cells.nth(7)).toHaveText("1.00");
   await expect(page.locator(".yn-me-plan-item.is-added")).toContainText("0.10 人月/月");
   // 保存されるのは人月
-  const expected = addRow(parseMasterDoc("assignments", PAYLOAD.files.assignments.text), { member_id: "M011", contract_id: "C001", start_month: "2026-11", end_month: "2027-03", allocation: "0.1" }).doc;
-  await expect(page.locator(".yn-me-diff-slot")).toContainText(/M011 ・ C001 ・ 2026-11 ・ 2027-03 ・ 0\.1/);
-  expect(serializeMasterDoc(expected).text).toContain("M011,C001,2026-11,2027-03,0.1\n");
+  const expected = addRow(parseMasterDoc("assignments", PAYLOAD.files.assignments.text), { member_id: "M011", contract_id: "C002", start_month: "2026-11", end_month: "2027-03", allocation: "0.1" }).doc;
+  await expect(page.locator(".yn-me-diff-slot")).toContainText(/小林 玲奈 ・ 青葉物流 \/ 倉庫管理システム保守 ・ 2026-11 ・ 2027-03 ・ 0\.1/);
+  expect(serializeMasterDoc(expected).text).toContain("M011,C002,2026-11,2027-03,0.1\n");
 });
 
 test("稼働計画: 単位を切り替えると入っている値を換算して見せる。1.0 人月を超える月は「超過」", async ({ page }) => {
@@ -71,7 +73,7 @@ test("稼働計画: 単位を切り替えると入っている値を換算して
   const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
   await row.getByRole("button", { name: /計画を追加/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  await d.locator("#yn-me-f-contract_id").selectOption("C001");
+  await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-allocation").fill("0.5");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   await expect(d.locator("#yn-me-f-allocation")).toHaveValue("80");
@@ -104,7 +106,7 @@ test("組織の種別とリーダー: チーム一覧の列、チーム詳細の
   await d.locator("#yn-me-f-name").fill("監視班");
   await d.locator("#yn-me-f-parent_team_id").selectOption("T111");
   await d.locator("#yn-me-f-level").fill("班");
-  await d.locator("#yn-me-f-leader_member_id").fill("M011");
+  await pickCombo(d.locator("#yn-me-f-leader_member_id"), "小林");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");

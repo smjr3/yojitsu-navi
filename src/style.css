@@ -335,6 +335,10 @@ body {
 .yn-filterbar-slot .yn-filter-period {
   display: block;
 }
+/* 期間の見出しは左に浮かせているので、隣の選択欄・ボタン（最大 32px）の中央に文字の高さを合わせる */
+.yn-filterbar-slot .yn-filter-period legend {
+  line-height: 32px;
+}
 .yn-filterbar-slot .yn-filter-period .yn-filter-row {
   flex-wrap: wrap;
 }
@@ -2595,6 +2599,347 @@ html:has(dialog.yn-dialog[open]) {
   #observablehq-main .yn-me-plan-detail > td > * {
     max-width: min(calc(100vw - 112px), 960px);
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * 稼働計画: 行を詰める・セルの吹き出しと編集欄（SPEC §31.4）
+ * ------------------------------------------------------------------------- */
+.yn-me-plan-table th,
+.yn-me-plan-table td {
+  vertical-align: middle;
+}
+.yn-me-plan-table tbody th[scope="row"],
+.yn-me-plan-table tbody td {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.yn-me-plan-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(40vw, 300px);
+}
+.yn-me-plan-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-me-plan-team {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--yn-text-muted);
+}
+.yn-me-plan-who .yn-chip {
+  flex: none;
+}
+.yn-me-plan-table .yn-me-row-actions .yn-btn-sm {
+  min-height: 26px;
+  padding: 1px 8px;
+}
+.yn-me-plan-cell {
+  padding: 0 !important;
+}
+.yn-plan-cell-btn {
+  display: block;
+  width: 100%;
+  min-width: 52px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  cursor: pointer;
+}
+.yn-plan-cell-btn:hover {
+  background: var(--yn-accent-bg);
+  box-shadow: inset 0 0 0 1px var(--yn-focus);
+}
+.yn-plan-cell-btn:focus-visible {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: -2px;
+}
+.yn-plan-cell-btn.is-readonly {
+  cursor: default;
+}
+.yn-plan-cell-btn.is-readonly:hover {
+  background: transparent;
+  box-shadow: none;
+}
+
+.yn-plan-tip {
+  position: fixed;
+  z-index: 50;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.yn-plan-tip[hidden] {
+  display: none;
+}
+.yn-plan-tip p {
+  margin: 0;
+}
+.yn-plan-tip-head {
+  font-weight: 700;
+}
+.yn-plan-tip-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+.yn-plan-tip-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.yn-plan-tip-list li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.yn-plan-tip-list .num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.yn-plan-tip-foot {
+  color: var(--yn-text-muted);
+}
+.yn-plan-tip-foot strong {
+  color: var(--yn-warn-text);
+}
+
+.yn-plan-pop {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: 10px;
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+  font-size: 13px;
+}
+.yn-plan-pop::backdrop {
+  background: transparent;
+}
+@media (max-width: 639px) {
+  .yn-plan-pop {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    top: auto;
+    width: auto;
+    max-height: 80vh;
+  }
+}
+.yn-plan-pop-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.yn-plan-pop-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.yn-plan-pop .yn-me-small {
+  margin: 4px 0;
+}
+.yn-plan-pop-rows {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.yn-plan-pop-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.yn-plan-pop-rows label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.yn-plan-pop-project {
+  display: block;
+  font-weight: 600;
+}
+.yn-plan-pop-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.yn-plan-pop .yn-plan-pop-num {
+  flex: none;
+  box-sizing: border-box;
+  width: 5.5em;
+  max-width: none;
+  min-height: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.yn-plan-pop-new {
+  margin: 10px 0 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--yn-hairline);
+}
+.yn-plan-pop-new > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.yn-plan-pop-new-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.yn-plan-pop-new-row .yn-combo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.yn-plan-pop-scope {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+.yn-plan-pop-scope legend {
+  padding: 0;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.yn-plan-pop-scope .yn-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.yn-plan-pop-after {
+  display: block;
+}
+.yn-plan-pop-after[hidden] {
+  display: none;
+}
+.yn-plan-pop .yn-me-form-foot {
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.yn-plan-pop-full {
+  margin-right: auto;
+}
+.yn-plan-pop-note .yn-me-impact {
+  margin: 8px 0 0;
+}
+.yn-me-split {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-accent-bg);
+}
+
+/* ---------------------------------------------------------------------------
+ * 候補から選ぶ入力欄（SPEC §31.2）
+ * ------------------------------------------------------------------------- */
+.yn-combo {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.yn-combo .yn-combo-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-right: 28px;
+}
+.yn-combo-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--yn-text-muted);
+  cursor: pointer;
+}
+.yn-combo-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  min-width: min(100%, 260px);
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+}
+.yn-combo-list[hidden] {
+  display: none;
+}
+.yn-combo-opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.yn-combo-opt.is-active {
+  background: var(--yn-accent-bg);
+  box-shadow: inset 3px 0 0 var(--yn-focus);
+}
+.yn-combo-opt[aria-selected="true"] .yn-combo-label {
+  font-weight: 700;
+}
+.yn-combo-label {
+  overflow-wrap: anywhere;
+}
+.yn-combo-sub {
+  font-size: 11px;
+  color: var(--yn-text-muted);
+  overflow-wrap: anywhere;
+}
+.yn-combo-empty,
+.yn-combo-more {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--yn-text-muted);
+}
+.yn-combo-more {
+  border-top: 1px solid var(--yn-hairline);
+}
+/* 編集欄の中では候補を短めに（画面下のシートからはみ出さない） */
+.yn-plan-pop .yn-combo-list {
+  max-height: 180px;
 }
 
 /* ---------------------------------------------------------------------------
