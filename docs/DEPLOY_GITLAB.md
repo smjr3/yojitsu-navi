@@ -17,14 +17,17 @@ MR やほかのブランチでは `pages` 以外（検証・テスト・ビル�
 ## 1. プロジェクトを作って push する
 
 1. GitLab で「新規プロジェクト → 空のプロジェクト」を作る。表示レベルは **Private**。
-2. 手元のリポジトリから push する。
+2. 履歴を持ち込まずに、今のファイルだけを 1 コミットにして push する（開発元のアカウント名などがコミット履歴に残らないようにするため）。
 
 ```sh
+git checkout --orphan gitlab-main
+git commit -m "予実ナビ 初回"
 git remote add gitlab https://<社内GitLab>/<group>/yojitsu-navi.git
-git push gitlab main
+git push gitlab gitlab-main:main
 ```
 
-GitHub に社内から接続できない場合は、GitHub の「Code → Download ZIP」で取得して展開し、`git init` → `git add .` → `git commit` → 上の push でも構いません（履歴は引き継がれません）。
+ZIP で取得して展開し、`git init` → `git add .` → `git commit` → 上の push でも同じ結果になります。
+2 回目以降の更新も、同じように変更後のファイルを GitLab 側のリポジトリにコミットして push してください。
 既定ブランチが `main` になっていることを Settings > Repository > Branch defaults で確認してください（`pages` は既定ブランチでだけ動きます）。
 
 ## 2. 閲覧制限を設定する
