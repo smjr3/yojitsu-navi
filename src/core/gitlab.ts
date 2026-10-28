@@ -92,7 +92,7 @@ export interface CommitFile {
   content: string;
   /** 編集の土台にしたファイルの最終コミット ID（無ければ競合を検出できない） */
   lastCommitId: string | null;
-  /** リポジトリにまだ無いファイル（省略可のファイルを初めて保存する。§32） */
+  /** リポジトリにまだ無いファイル（省略可のファイルを初めて保存する。§36） */
   create?: boolean;
 }
 

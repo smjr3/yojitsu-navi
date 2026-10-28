@@ -40,7 +40,7 @@ import { baseConfig } from "./fixtures.js";
 const RATES = "key,hourly_rate,effective_from\n本部長,15000,2025-04\n部長,12000,2025-04\n主任,8000,2025-04\n部長,13000,2026-04\n";
 const range = { fromMonth: "2025-04", toMonth: "2026-10" };
 
-/** 契約外予定（§32）の空のファイル */
+/** 契約外予定（§36）の空のファイル */
 const OUTSIDE_EMPTY = "member_id,start_month,end_month,person_months,note\n";
 
 describe("splitCsvRecords", () => {
@@ -517,7 +517,8 @@ describe("rebaseDraftFile（古い下書きを最新の土台に当て直す）"
     expect(r.conflicts[0]!.mine).toMatchObject({ member_id: "E2", team_id: "S11", note: "y" });
     expect(r.conflicts[0]!.columns).toEqual(["team_id"]);
     const m = rebaseDraftFile("members", f, latest, { [r.conflicts[0]!.id]: "mine" });
-    expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x", "E2,佐藤,employee,課長,,,S11,2025-04,y"]);
+    // 末尾は省略可の列 status（§35。どちらの版にも無いので空）
+    expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x,", "E2,佐藤,employee,課長,,,S11,2025-04,y,"]);
   });
 
   it("土台にない行番号は無視する（壊れた下書きでも落ちない）", () => {

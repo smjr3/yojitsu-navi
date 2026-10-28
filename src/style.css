@@ -1362,7 +1362,7 @@ h3 {
 }
 /* 名前列は sticky なので、長い名前で広がると数値列が隠れる。上限を設けて省略し、全文は title で出す */
 .yn-table .yn-primary-cell {
-  max-width: min(40vw, 320px);
+  max-width: min(40vw, 300px);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1401,12 +1401,18 @@ h3 {
   font-size: 12px;
   color: var(--yn-text-muted);
 }
+/* 長い案件名（顧客 / 案件）が多いので、広い画面では名前列を広げて省略を減らす（全文は title） */
 .yn-cell-2line {
   display: inline-flex;
   flex-direction: column;
   line-height: 1.3;
   max-width: 200px;
   vertical-align: middle;
+}
+@media (min-width: 1200px) {
+  .yn-cell-2line {
+    max-width: min(24vw, 320px);
+  }
 }
 .yn-cell-main,
 .yn-cell-sub {
@@ -2557,6 +2563,10 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-warn-text);
   font-weight: 600;
 }
+/* 退職した月以降（§35）。配分が残っていれば is-over / is-set の色の上に斜線で示す */
+.yn-me-plan-cell.is-left {
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--yn-hairline-strong) 6px 7px);
+}
 .yn-me-plan-row.is-focus > th {
   box-shadow: inset 3px 0 0 var(--yn-focus);
 }
@@ -3260,7 +3270,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 
 /* ---------------------------------------------------------------------------
- * 台帳（マスタ編集: 1 対象 1 行＋変更の履歴。SPEC §32）
+ * 台帳（マスタ編集: 1 対象 1 行＋変更の履歴。SPEC §36）
  * ------------------------------------------------------------------------- */
 .yn-me-ledger .yn-me-group.is-open > th,
 .yn-me-ledger .yn-me-group.is-open > td,
@@ -3328,7 +3338,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 
 /* ---------------------------------------------------------------------------
- * 稼働計画: 人の行の下の案件・契約外予定の行と変更の履歴（SPEC §32）
+ * 稼働計画: 人の行の下の案件・契約外予定の行と変更の履歴（SPEC §36）
  * ------------------------------------------------------------------------- */
 .yn-me-plan-row.is-open > th,
 .yn-me-plan-row.is-open > td {
@@ -3607,4 +3617,12 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-chart-zoom-rotate[hidden] {
   display: none !important;
+}
+
+/* 長い作業種別名（「定期メンテナンス作業（…）」など）で表が横に伸びないよう、幅を決めて折り返す */
+.yn-task-name {
+  display: inline-block;
+  max-width: 260px;
+  white-space: normal;
+  vertical-align: middle;
 }

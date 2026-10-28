@@ -8,7 +8,7 @@
  */
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, parseCsvTable, parseNumberCell } from "../core/index.js";
+import { addMonths, memberStatus, parseCsvTable, parseNumberCell } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -85,7 +85,7 @@ export const FILE_HELP = {
 };
 
 /**
- * 画面ごとの見せ方（§32）
+ * 画面ごとの見せ方（§36）
  *  - マスタ編集（台帳）: メンバー・単価・組織。対象ごとに 1 行、行の中に変更の履歴
  *  - 稼働計画: 人 × 案件 × 月の配分（アサイン）と契約外予定。人ごとに 1 行、案件ごとの行と変更の履歴
  * 下書き・検証・変更内容・保存は 2 つの画面で共通（どちらで保存しても、両方の変更が 1 つのマージリクエストになる）
@@ -243,7 +243,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   let draftSavedAt = null;
   /**
    * このタブで（マスタ編集 ⇔ 稼働計画を行き来して）書いた下書きは、土台が変わっていなければ黙って続きから。
-   * 別のタブ・前の日の下書きだけ「復元 / 破棄」を聞く（§32.4）
+   * 別のタブ・前の日の下書きだけ「復元 / 破棄」を聞く（§36.1）
    */
   if (pendingDraft && pendingDraft.savedAt && session.get(DRAFT_SESSION_KEY) === pendingDraft.savedAt && staleDraftFiles(pendingDraft, bases).length === 0) {
     const d = pendingDraft;
@@ -298,9 +298,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     return [...latest.entries()].map(([id, v]) => {
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
-      const sub = [team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
-      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}` };
-    });
+      const left = memberStatus(get("status")).status === "left";
+      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}`, left };
+    })
+      // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
+      .sort((a, b) => Number(a.left) - Number(b.left));
   }
   function projectOptions() {
     return [...projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
@@ -370,8 +373,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   function totalChanges() {
     return Object.values(changeCounts()).reduce((a, b) => a + b, 0);
   }
-  function errorCount(fileId) {
-    return Object.values(validation.byRow[fileId]).reduce((s, list) => s + list.filter((i) => i.severity === "error").length, 0);
+  function errorCount(fileId, severity = "error") {
+    return Object.values(validation.byRow[fileId]).reduce((s, list) => s + list.filter((i) => i.severity === severity).length, 0);
   }
 
   function persistDraft() {
@@ -572,7 +575,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   const ledgerOpen = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, new Set()]));
   const ledgerClosed = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, new Set()]));
 
-  /** 文書の行 → 台帳のまとまり（§32） */
+  /** 文書の行 → 台帳のまとまり（§36） */
   function groupsOf(fileId) {
     const doc = docs[fileId];
     return ledgerGroups(
@@ -899,7 +902,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     </div>`;
   }
 
-  // ---- 稼働計画（§23・§32） ----------------------------------------------------
+  // ---- 稼働計画（§23・§36） ----------------------------------------------------
   /** 契約 → 案件（顧客 × 案件名）。ファイルに無い契約は "c:<ID>" の案件として扱う */
   function projectOfContract(contractId) {
     const c = contractById.get(contractId);
@@ -941,7 +944,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   /**
-   * 対象の期間 [from, to] の人月を value にした文書（§32）。変更が無ければ doc: null。重なりなどで決められなければ error
+   * 対象の期間 [from, to] の人月を value にした文書（§36）。変更が無ければ doc: null。重なりなどで決められなければ error
    */
   function rangeEditDoc(baseDoc, memberId, target, from, to, value) {
     const fileId = targetFile(target);
@@ -1046,7 +1049,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         tooltip.hide();
         openCellEditor(r, m, btn, focusTarget, fk);
       });
-      return html`<td class=${`num yn-me-plan-cell${over ? " is-over" : v > 0 ? " is-set" : ""}`}>${btn}</td>`;
+      // 退職した月より後（§35）
+      const left = r.leftFrom != null && m >= r.leftFrom;
+      return html`<td class=${`num yn-me-plan-cell${over ? " is-over" : v > 0 ? " is-set" : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
     };
 
     // 名前・所属・案件で絞り込む（空白区切りの語をすべて含む）
@@ -1100,7 +1105,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, monthly[i] > 1 + 1e-9))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
@@ -1272,7 +1277,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   /**
-   * 「＋ 変更」: 対象（案件 or 契約外予定）の人月を、ある月から変える（§32）。
+   * 「＋ 変更」: 対象（案件 or 契約外予定）の人月を、ある月から変える（§36）。
    * 期間は「計画の終わりまで」（既定）／「この月だけ」／「終了月を指定」。0 にするとその期間の計画を外す
    */
   function openChangeDialog(r, target, focus) {
@@ -1655,6 +1660,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ${value !== "" && value !== "employee" && value !== "partner" ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
       </select>`;
     }
+    if (col.input === "status") {
+      // 在籍状態（§35）。CSV では空 = 在籍、「退職」= 退職
+      const left = value !== "" && value !== T.masters.statusActive;
+      const known = value === "" || value === T.masters.statusActive || value === T.masters.statusLeft || /^(left|retired)$/i.test(value);
+      return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
+        <option value="" selected=${!left}>${T.masters.statusActive}</option>
+        <option value=${T.masters.statusLeft} selected=${left && known}>${T.masters.statusLeft}</option>
+        ${!known ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
+      </select>`;
+    }
     if (col.input === "team") {
       const opts = teamOptions();
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled}>
@@ -1737,6 +1752,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     contract_id: T.masters.hintProject,
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
+    status: T.masters.statusHint,
   };
 
   /**
@@ -1987,20 +2003,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ? html`<p class="yn-me-check is-error" role="status"><span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(v.errors)}${T.masters.countSuffix}</span> ${T.masters.cannotSave}${v.warnings ? fmt(T.masters.warningsNotBlocking, { n: integer(v.warnings) }) : ""}</p>`
         : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span> ${T.masters.validationOk}${v.warnings ? fmt(T.masters.warningsNotBlocking2, { n: integer(v.warnings) }) : ""}</p>`;
     const byTab = MASTER_FILE_IDS.filter((id) => errorCount(id) > 0);
+    // 行に付いた警告は下の一覧に出ないため、件数の内訳としてファイルへの移動ボタンを出す
+    const warnTabs = MASTER_FILE_IDS.filter((id) => errorCount(id, "warning") > 0);
+    /** ファイルへ移動（他の画面で編集するファイルは、その画面へのリンク） */
+    const fileLink = (id, i, n, kind) => {
+      const text = `${MASTER_FILES[id].label}（${integer(n)}${T.masters.countSuffixParen}`;
+      if (!pageFiles.includes(id)) return html`${i > 0 ? "、" : ""}<a href=${FILE_PAGE[id]} data-fk=${`${kind}:${id}`}>${text}${fmt(T.ledger.onOtherPage, { page: pageName(id) })}</a>`;
+      return html`${i > 0 ? "、" : ""}<button type="button" class="yn-btn-link" data-fk=${`${kind}:${id}`} onclick=${() => {
+        if (VIEW_IDS.includes(id)) active = id;
+        renderTabs();
+        renderPanel();
+        focusKey(VIEW_IDS.length > 1 ? `tab:${id}` : "plan:team");
+      }}>${text}</button>`;
+    };
     parts.check.replaceChildren(html`<section class="yn-me-section" aria-labelledby="yn-me-check-title">
       <h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>
       ${status}
-      ${byTab.length ? html`<p class="yn-me-small">${T.masters.filesWithErrors} ${byTab.map((id, i) => {
-        const text = `${MASTER_FILES[id].label}（${integer(errorCount(id))}${T.masters.countSuffixParen}`;
-        // 他の画面で編集するファイルは、その画面へのリンク
-        if (!pageFiles.includes(id)) return html`${i > 0 ? "、" : ""}<a href=${FILE_PAGE[id]} data-fk=${`goto:${id}`}>${text}${fmt(T.ledger.onOtherPage, { page: pageName(id) })}</a>`;
-        return html`${i > 0 ? "、" : ""}<button type="button" class="yn-btn-link" data-fk=${`goto:${id}`} onclick=${() => {
-          if (VIEW_IDS.includes(id)) active = id;
-          renderTabs();
-          renderPanel();
-          focusKey(VIEW_IDS.length > 1 ? `tab:${id}` : "plan:team");
-        }}>${text}</button>`;
-      })}</p>` : null}
+      ${byTab.length ? html`<p class="yn-me-small">${T.masters.filesWithErrors} ${byTab.map((id, i) => fileLink(id, i, errorCount(id), "goto"))}</p>` : null}
+      ${warnTabs.length ? html`<p class="yn-me-small">${T.masters.filesWithRowWarnings} ${warnTabs.map((id, i) => fileLink(id, i, errorCount(id, "warning"), "gotow"))}</p>` : null}
       ${general.length
         ? html`<ul class="yn-me-issues yn-me-general">${general.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${i.message}</li>`)}</ul>`
         : null}

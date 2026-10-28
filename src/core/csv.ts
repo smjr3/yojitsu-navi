@@ -142,7 +142,7 @@ export interface DatasetFiles {
   holidays: string;
   /** 作業種別の分類表（§30.1）。省略・空 = 分類なし（すべて契約内） */
   taskTypes?: string;
-  /** 契約外予定（§32）。省略・空 = なし */
+  /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
@@ -209,6 +209,14 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   return table;
 }
 
+/** members.csv の status 列（§35）: 空・「在籍」・active = 在籍、「退職」・left・retired = 退職。それ以外はそのまま（検証でエラー） */
+export function memberStatus(raw: string): { status?: string } {
+  const v = raw.normalize("NFKC").trim();
+  if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
+  if (v === "退職" || v.toLowerCase() === "left" || v.toLowerCase() === "retired") return { status: "left" };
+  return { status: v };
+}
+
 /** 各 CSV テキストから Dataset を組み立てる。検証結果（§14）も issues に含める */
 export function parseDataset(files: DatasetFiles): ParsedDataset {
   const issues: ValidationIssue[] = [];
@@ -262,6 +270,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     section: r.get("section"),
     teamId: nullable(r.get("team_id")),
     effectiveFrom: r.get("effective_from"),
+    // 省略可の列（§35）。空・「在籍」は在籍（項目を持たない）
+    ...memberStatus(r.get("status")),
   }));
 
   const rates: RateRecord[] = parseTable("masters/rates.csv", files.rates, REQUIRED_COLUMNS.rates, issues).rows.map((r) => ({
@@ -303,7 +313,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
   }
 
   const taskTypes = parseTaskTypes(files.taskTypes, issues);
-  // 契約外予定（§32）: 省略可。空なら読まない（列の欠落も問わない）
+  // 契約外予定（§36）: 省略可。空なら読まない（列の欠落も問わない）
   const outsidePlans: OutsidePlan[] =
     (files.outsidePlans ?? "").trim() === ""
       ? []

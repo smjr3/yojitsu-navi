@@ -3,7 +3,7 @@
  * - URL の team にプロトタイプのキー（constructor 等）を入れても例外にならず、全体に戻る
  * - 960px 未満でも上部タブがすべて見える（2 段目に回る）
  * - 並べ替えは絞り込み・単位の変更や「戻る」で既定に戻らない。絞り込み・検索は「戻る」で復元される
- * - 契約詳細の ID は前後の空白・大文字小文字の違いを許す
+ * - 案件詳細の ID は前後の空白・大文字小文字の違いを許す
  */
 import { test, expect, gotoPage, kpiValue } from "./helpers/app.js";
 
@@ -32,7 +32,7 @@ for (const width of [768, 900]) {
   });
 }
 
-test("契約一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
+test("案件一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const sortTh = page.locator('th[data-key="grossMargin"]');
   await sortTh.locator("button").click();
@@ -52,7 +52,7 @@ test("契約一覧: 並べ替え・絞り込み・検索が、絞り込み変更
   await expect(page.locator("table tbody tr[data-key]")).toHaveCount(count);
 });
 
-test("契約詳細: ID の前後の空白と大文字小文字の違いを許す", async ({ page }) => {
+test("案件詳細: ID の前後の空白と大文字小文字の違いを許す", async ({ page }) => {
   await gotoPage(page, "/contract?id=c008%20");
   await expect(page.locator("h1")).toHaveText("こもれび出版 / 会員サイト保守");
   await expect(page.getByText("見つかりません")).toHaveCount(0);
@@ -98,4 +98,41 @@ test("スマホ幅のマスタ編集: 行を追加して表が右へスクロー
   const box = (await ul.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
+});
+
+test("稼働計画のセルの編集欄を開いたまま狭い画面に変えても、画面内に収まり操作できる（モンキーテストで発見）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  await page.locator('tr.yn-me-plan-row[data-member="M010"] [data-fk="plan:cell:M010:all:2027-01"]').click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await expect(pop).toBeVisible();
+  for (const width of [414, 1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect.poll(async () => {
+      const box = (await pop.boundingBox())!;
+      return box.x >= 0 && box.x + box.width <= width + 1 && box.y + box.height <= 801;
+    }, { message: `${width}px` }).toBe(true);
+  }
+  await pop.locator("#yn-plan-pop-new").click();
+  await expect(pop.locator("#yn-plan-pop-new")).toBeFocused();
+});
+
+test("稼働計画のセルの編集欄を開いたまま画面の高さを縮めても、ボタンが画面内に残る（モンキーテストで発見）", async ({ page }) => {
+  await page.setViewportSize({ width: 828, height: 985 });
+  await gotoPage(page, "/plan?team=T111");
+  const btn = page.locator('[data-fk="plan:cell:M010:all:2027-01"]');
+  await btn.scrollIntoViewIfNeeded();
+  // セルが画面の下の方にある状態で開く
+  await page.evaluate(() => window.scrollBy(0, -200));
+  await btn.click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await expect(pop).toBeVisible();
+  for (const height of [626, 480, 985]) {
+    await page.setViewportSize({ width: 828, height });
+    // 置き直しは resize イベントの後（次のフレーム）なので、収まるまで待つ
+    await expect.poll(async () => {
+      const box = (await pop.boundingBox())!;
+      return box.y >= 0 && box.y + box.height <= height + 1;
+    }, { message: `${height}px` }).toBe(true);
+  }
+  await expect(pop.getByRole("button", { name: "反映" })).toBeInViewport();
 });

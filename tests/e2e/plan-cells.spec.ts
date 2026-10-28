@@ -1,5 +1,5 @@
 /**
- * 稼働計画のセル（SPEC §31.4・§32: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
+ * 稼働計画のセル（SPEC §31.4・§36: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
  */
 import type { Page } from "@playwright/test";
 import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.js";
@@ -208,10 +208,11 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
   await input.click();
   await input.fill("クラウド");
   const list = page.locator("#yn-me-f-member_id-listbox");
-  // クラウド運用チームの人だけ（所属で引ける）。ID は出さない
+  // 所属に「クラウド」を含む人だけ（所属で引ける。5 倍データでは公共クラウド運用チームなども当たる）。ID は出さない
   const options = list.locator('[role="option"]');
   await expect(options.first()).toBeVisible();
-  for (const t of await options.allTextContents()) expect(t).toContain("クラウド運用チーム");
+  for (const t of await options.allTextContents()) expect(t).toContain("クラウド");
+  expect((await options.allTextContents()).some((t) => t.includes("クラウド運用チーム"))).toBe(true);
   await expect(list).not.toContainText("M02");
   // ↓ で移動して Enter（森 大翔まで）
   const names = (await options.allTextContents()).map((t) => t.split("クラウド")[0]!.trim());
@@ -229,7 +230,7 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
   await expect(d.locator('input[name="member_id"]')).toHaveValue("M022");
 });
 
-test("ID を前面に出さない: メンバー一覧・契約一覧・契約詳細・メンバー詳細", async ({ page }) => {
+test("ID を前面に出さない: メンバー一覧・案件一覧・案件詳細・メンバー詳細", async ({ page }) => {
   await gotoPage(page, "/members");
   await expect(page.locator("table.yn-table tbody")).toContainText("小林 玲奈");
   await expect(page.locator("table.yn-table tbody")).not.toContainText("M011");
@@ -281,4 +282,24 @@ test("下書きの復元待ちのあいだは、セルをクリックしても�
   await expect(page.locator("#yn-plan-tip")).toBeVisible();
   await expect(page.locator("#yn-plan-tip")).not.toContainText("クリックで修正");
   await expect(pop(page)).toHaveCount(0);
+});
+
+test("修正欄を開いたまま画面を狭く・広くしても、画面の中に収まり操作できる", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2027-02").click();
+  const p = pop(page);
+  await expect(p).toBeVisible();
+  const inView = async () => {
+    const r = (await p.boundingBox())!;
+    const vp = page.viewportSize()!;
+    return r.x >= -1 && r.x + r.width <= vp.width + 1;
+  };
+  for (const size of [{ width: 368, height: 944 }, { width: 1024, height: 768 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(inView).toBe(true);
+    await expect(p.locator(".yn-combo-toggle")).toBeInViewport();
+  }
+  await p.locator(".yn-combo-toggle").click();
+  await expect(p.locator("[role=listbox]")).toBeVisible();
 });

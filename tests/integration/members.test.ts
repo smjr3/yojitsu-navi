@@ -144,7 +144,8 @@ describe("メンバー別: ダミーデータ全体", () => {
 
   it("規模: 行数とメンバー数（model.json から外して別ファイルにする理由の記録）", () => {
     const people = new Set(model.memberMonths.map((x) => x.memberId));
-    expect(people.size).toBeGreaterThanOrEqual(25);
-    expect(model.memberMonths.length).toBeLessThan(2000);
+    // 実運用規模のダミーデータ（約 160 人 × 19 か月）。model.json に入れると全ページが重くなるので別ファイル
+    expect(people.size).toBeGreaterThanOrEqual(140);
+    expect(model.memberMonths.length).toBeLessThan(5000);
   });
 });

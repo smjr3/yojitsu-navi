@@ -67,7 +67,7 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
       const h = git(rootDir, ["log", "-1", "--format=%H", "--", path]);
       lastCommitId = h && /^[0-9a-f]{40}$/.test(h) ? h : null;
     }
-    // 省略可のファイル（§32）が無ければ見出しだけの空のファイルを土台にする（保存すると新しく作る）
+    // 省略可のファイル（§36）が無ければ見出しだけの空のファイルを土台にする（保存すると新しく作る）
     const text = !r.exists && MASTER_FILES[id].optional ? emptyMasterText(id) : r.text;
     files[id] = { path, repoPath: `${prefix}${path}`, text, lastCommitId, exists: r.exists, encoding: r.encoding, lineEnding: r.crlf ? "crlf" : "lf" };
   }

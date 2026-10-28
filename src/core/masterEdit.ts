@@ -9,7 +9,7 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
-import { parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
+import { memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
 import type { Config, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation";
+  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation";
   required: boolean;
 }
 
@@ -50,7 +50,7 @@ export interface MasterFileDef {
   keyColumns: string[];
   /** period の値の列（人月。影響月の判定に使う） */
   valueColumn?: string;
-  /** 省略可のファイル（無ければ見出しだけの空のファイルとして扱う。§32） */
+  /** 省略可のファイル（無ければ見出しだけの空のファイルとして扱う。§36） */
   optional?: boolean;
 }
 
@@ -71,6 +71,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
       { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
+      // 在籍状態（§35）。省略可。「退職」の行の effective_from から在籍しない
+      { name: "status", label: T.masterFiles.colStatus, input: "status", required: false },
     ],
   },
   rates: {
@@ -1153,6 +1155,7 @@ export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, 
       section: (v.section ?? "").trim(),
       teamId: (v.team_id ?? "").trim() || null,
       effectiveFrom: (v.effective_from ?? "").trim(),
+      ...memberStatus(v.status ?? ""),
     };
   });
   const assignments: PlanAssignment[] = docs.assignments.rows.map((r) => {

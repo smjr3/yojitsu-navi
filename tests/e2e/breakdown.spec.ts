@@ -10,7 +10,7 @@ const inYen = (path: string) => `${path}${path.includes("?") ? "&" : "?"}unit=ye
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("実績 KPI の内訳: 契約ごとの実績の合計が表示値と一致する", async ({ page }) => {
+test("実績 KPI の内訳: 案件ごとの実績の合計が表示値と一致する", async ({ page }) => {
   await gotoPage(page, "/");
   const kpi = kpiValue(page, 1);
   const shown = (await kpi.textContent())!.trim();
@@ -25,8 +25,8 @@ test("実績 KPI の内訳: 契約ごとの実績の合計が表示値と一致�
   // 強調行 = KPI の値
   const totals = totalsFor(FY, undefined, model);
   expect(await dialogRow(page, "実績合計")).toBe(yen(totals.cost, "yen"));
-  expect(await dialogRow(page, "対象契約")).toBe(`${contractsInPeriod(FY, undefined, model).length}件`);
-  // 契約ごとの内訳表の「実績」列の合計 = 表示値
+  expect(await dialogRow(page, "対象案件")).toBe(`${contractsInPeriod(FY, undefined, model).length}件`);
+  // 案件ごとの内訳表の「実績」列の合計 = 表示値
   const table = d.locator(".yn-bd-section table").first();
   const h = await headerIndex(table);
   const rows = table.locator("tbody tr");

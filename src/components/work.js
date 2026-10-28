@@ -76,7 +76,7 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
       key: "task",
       label: T.work.colTask,
       type: "text",
-      render: (r) => html`<span>${taskLabel(r)}${r.unclassified ? html` <span class="yn-chip yn-chip-neutral" title=${T.work.unclassifiedTitle}>${T.work.unclassified}</span>` : null}${r.category === "outside" ? html` <span class="yn-chip yn-chip-neutral only-phone">${T.work.outside}</span>` : null}</span>`,
+      render: (r) => html`<span><span class="yn-task-name" title=${taskLabel(r)}>${taskLabel(r)}</span>${r.unclassified ? html` <span class="yn-chip yn-chip-neutral" title=${T.work.unclassifiedTitle}>${T.work.unclassified}</span>` : null}${r.category === "outside" ? html` <span class="yn-chip yn-chip-neutral only-phone">${T.work.outside}</span>` : null}</span>`,
       sortValue: (r) => r.task,
       exportValue: (r) => taskLabel(r),
     },
@@ -147,7 +147,8 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
     marginBottom: 32,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (series[i] ? monthShort(series[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
-    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    // すべて 0 人月だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
+    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
@@ -204,7 +205,10 @@ export function workSeriesTable({ series, config, exportName }) {
 export function workGroupChart({ groups, config, dark = false, width = 640, height, maxRows = 20, ariaLabel }) {
   const c = workColors(dark);
   const std = config.standardHoursPerMonth;
-  const shown = groups.slice(0, maxRows);
+  // 多いときは合計の多い上位 maxRows 件を選び、並びは元の順（チームは組織の木の順）のまま
+  const total = (g) => g.totals.contractHours + g.totals.outsideHours;
+  const keep = groups.length > maxRows ? new Set(groups.map((g, i) => [total(g), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, maxRows).map(([, i]) => i)) : null;
+  const shown = keep ? groups.filter((_, i) => keep.has(i)) : groups;
   if (shown.length === 0) return html`<div class="yn-chart-empty">${T.work.empty}</div>`;
   const data = [];
   for (const g of shown) {
@@ -222,7 +226,7 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
     marginBottom: height ? 8 : 24,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / 12) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / 12) - 1).join("")}…` : s) },
-    x: { axis: height ? "top" : "bottom", grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false },
+    x: { axis: height ? "top" : "bottom", grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
       Plot.gridX({ stroke: c.grid, strokeOpacity: 1 }),

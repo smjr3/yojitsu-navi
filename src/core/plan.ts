@@ -7,7 +7,7 @@
  */
 import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
-import { createEffectiveIndex, teamTreeAt } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, teamTreeAt } from "./masters.js";
 import type { MemberRecord, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
 /** 画面で編集中のアサイン 1 行（rowId はマスタ編集の行 id） */
@@ -43,6 +43,10 @@ export interface PlanMemberRow {
   overMonths: YearMonth[];
   /** 期間に掛かるアサイン行（契約ID・開始月の順） */
   assignments: PlanAssignment[];
+  /** 退職した月（§35。期間の最終月までに退職していれば その月、在籍中なら null） */
+  leftFrom: YearMonth | null;
+  /** 退職した月以降に配分が残っている月（§35。アサインの終了し忘れ） */
+  afterLeftMonths: YearMonth[];
 }
 
 export interface PlanView {
@@ -91,9 +95,13 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     seen.add(id);
     ids.push(id);
   };
-  // 所属メンバー（members ファイルの初出順）
+  // 所属メンバー（members ファイルの初出順）。退職した月より後は所属に数えない（§35）
+  const inTeamAt = (id: string, m: YearMonth) => {
+    const rec = memberIdx.at(id, m);
+    return !!rec && !isLeftRecord(rec) && inScope(rec.teamId, m);
+  };
   for (const id of memberIdx.keys()) {
-    if (ms.some((m) => inScope(memberIdx.at(id, m)?.teamId, m))) add(id);
+    if (ms.some((m) => inTeamAt(id, m))) add(id);
   }
   // 応援: 組織の契約に計画がある他組織の人（すべてのときは members に無い人も拾う）
   for (const a of src.assignments) {
@@ -120,7 +128,14 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     const monthly = ms.map((m) => list.reduce((s, a) => (a.startMonth <= m && m <= a.endMonth && Number.isFinite(a.allocation) ? s + a.allocation : s), 0));
     monthly.forEach((v, i) => (totals[i] = (totals[i] as number) + v));
     let last: MemberRecord | null = null;
-    for (const m of ms) last = memberIdx.at(memberId, m) ?? last;
+    let leftFrom: YearMonth | null = null;
+    for (const m of ms) {
+      const rec = memberIdx.at(memberId, m);
+      if (rec && !isLeftRecord(rec)) last = rec;
+      if (isLeftRecord(rec)) leftFrom ??= rec!.effectiveFrom;
+      else if (rec) leftFrom = null; // 復職
+    }
+    if (!last) last = memberIdx.at(memberId, to) ?? null;
     return {
       memberId,
       name: last?.name ?? memberIdx.at(memberId, "9999-12")?.name ?? "",
@@ -129,6 +144,8 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       monthly,
       overMonths: ms.filter((_, i) => (monthly[i] as number) > 1 + EPS),
       assignments: list,
+      leftFrom,
+      afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m))),
     };
   });
   return { months: ms, rows, totals };

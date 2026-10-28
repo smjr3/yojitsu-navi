@@ -172,7 +172,7 @@ export interface Assignment {
   allocation: number;
 }
 
-/** 契約外予定（§30.5・§32）: 人 × 期間 × 人月。作業種別は持たない。契約の計画額・着地見込みには入れない */
+/** 契約外予定（§30.5・§36）: 人 × 期間 × 人月。作業種別は持たない。契約の計画額・着地見込みには入れない */
 export interface OutsidePlan {
   memberId: string;
   startMonth: YearMonth;
@@ -207,6 +207,11 @@ export interface MemberRecord {
   /** 空 = チーム非所属 */
   teamId: string | null;
   effectiveFrom: YearMonth;
+  /**
+   * 在籍状態（任意の列 status。SPEC §35）。"left" = この行の effective_from から退職（在籍しない）。
+   * 省略・空 = 在籍。CSV の「退職」「left」は "left" に、それ以外の値はそのまま入る（validateDataset でエラー）
+   */
+  status?: string;
 }
 
 export interface RateRecord {
@@ -255,7 +260,7 @@ export interface Dataset {
   worklogs: Worklog[];
   /** 作業種別の分類表（§30.1）。省略・空 = すべて契約内 */
   taskTypes?: TaskTypeRule[];
-  /** 契約外予定（§32）。省略・空 = なし */
+  /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: OutsidePlan[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
@@ -553,6 +558,8 @@ export interface MemberTotals {
   teamId: string | null;
   title: string | null;
   kind: MemberKind | null;
+  /** 基準月の時点で退職していれば退職した月（§35）、在籍なら null */
+  leftFrom: YearMonth | null;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;

@@ -160,7 +160,7 @@ export default {
     { name: ja.app.pages.masters, path: "/masters" },
     { name: ja.app.pages.settings, path: "/settings" },
   ],
-  // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
+  // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.js）を dist/data/worklogs/<id>.json に出力する
   // ファイル名は worklogKey(id)（英数字以外の ID は "~"＋16進。ローダ・画面の fetchWorklogs も同じ関数を使う）
   dynamicPaths: contractIds().map((id) => `/data/worklogs/${worklogKey(id)}.json`),
   head,

@@ -7,9 +7,9 @@ import { AS_OF } from "./constants.js";
 const PAGES: Array<{ path: string; h1: string; extra?: string }> = [
   { path: "/", h1: "全体サマリー" },
   { path: "/teams", h1: "チーム一覧" },
-  { path: "/contracts", h1: "契約一覧" },
+  { path: "/contracts", h1: "案件一覧" },
   { path: "/contract?id=C008", h1: "こもれび出版 / 会員サイト保守" },
-  { path: "/contract?id=NOPE", h1: "契約詳細", extra: "契約 NOPE は見つかりません" },
+  { path: "/contract?id=NOPE", h1: "案件詳細", extra: "案件 NOPE は見つかりません" },
   { path: "/rules", h1: "計算ルール" },
   { path: "/data-check", h1: "データ確認" },
 ];

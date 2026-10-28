@@ -18,7 +18,7 @@ import { dateIso, monthJa } from "./components/format.js";
 ```
 
 ```js
-// アサイン・稼働計画は稼働計画の画面で編集する（§32）。以前のリンク（?view=assignments / plan）はそちらへ
+// アサイン・稼働計画は稼働計画の画面で編集する（§36）。以前のリンク（?view=assignments / plan）はそちらへ
 {
   const v = new URLSearchParams(location.search).get("view");
   if (v === "assignments" || v === "plan") {

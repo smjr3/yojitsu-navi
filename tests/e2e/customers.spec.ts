@@ -23,7 +23,7 @@ const model = getModel();
 const FY = fiscalPeriod(model);
 const groups = groupByCustomer(model.contracts.map((r) => r.contract));
 const inFy = (ids: readonly string[]) => aggregate(model, { period: FY, contractIds: ids as string[] });
-/** 一覧に出る顧客（選択期間に契約が 1 件以上） */
+/** 一覧に出る顧客（選択期間に案件が 1 件以上） */
 const listed = (restrict?: readonly string[]) => {
   const set = restrict ? new Set(restrict) : null;
   return groups
@@ -41,7 +41,7 @@ async function expectRow(page: Page, key: string, ids: readonly string[], method
   await expect(row).toHaveCount(1);
   const t = inFy(ids);
   const f = forecastFor(method, ids as string[], model);
-  expect(parseNumber(await cellText(row, col(h, "契約数")))).toBe(t.contractCount);
+  expect(parseNumber(await cellText(row, col(h, "案件数")))).toBe(t.contractCount);
   expect(await cellText(row, col(h, "予算"))).toBe(yen(t.budget));
   expect(await cellText(row, col(h, "実績"))).toBe(yen(t.cost));
   expect(await cellText(row, col(h, "残予算"))).toBe(yen(t.grossProfit));
@@ -57,7 +57,7 @@ async function expectRow(page: Page, key: string, ids: readonly string[], method
 }
 
 test.describe("顧客一覧 /customers", () => {
-  test("行は『期間内に契約のある顧客』で、数値は core の aggregate / forecastTotals と一致", async ({ page }) => {
+  test("行は『期間内に案件のある顧客』で、数値は core の aggregate / forecastTotals と一致", async ({ page }) => {
     await go(page, "/customers");
     await expect(page.locator("h1")).toHaveText("顧客別");
     const table = tableByCaption(page, "顧客一覧");
@@ -65,14 +65,14 @@ test.describe("顧客一覧 /customers", () => {
     expect(expected.length).toBeGreaterThan(5);
     expect(new Set(await rowKeys(table))).toEqual(new Set(expected.map((g) => g.key)));
     for (const g of expected) await expectRow(page, g.key, g.ids);
-    // 表示名: 契約ID昇順で最初の契約の顧客名
+    // 表示名: 契約ID昇順で最初の案件の顧客名
     for (const g of expected) {
       const first = model.contracts.map((r) => r.contract).filter((c) => g.contractIds.includes(c.contractId)).sort((a, b) => (a.contractId < b.contractId ? -1 : 1))[0]!;
       await expect(table.locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(g.key)}]`) })).toContainText(first.customerName);
     }
   });
 
-  test("合計行 = 全顧客の合計 = 全体サマリーの KPI（顧客は契約を重複せず分ける）", async ({ page }) => {
+  test("合計行 = 全顧客の合計 = 全体サマリーの KPI（顧客は案件を重複せず分ける）", async ({ page }) => {
     await go(page, "/customers");
     const table = tableByCaption(page, "顧客一覧");
     const h = await headerIndex(table);
@@ -83,7 +83,7 @@ test.describe("顧客一覧 /customers", () => {
     expect(await cellText(sum, col(h, "予算"))).toBe(yen(all.budget));
     expect(await cellText(sum, col(h, "実績"))).toBe(yen(all.cost));
     expect(await cellText(sum, col(h, "残予算"))).toBe(yen(all.grossProfit));
-    expect(parseNumber(await cellText(sum, col(h, "契約数")))).toBe(all.contractCount);
+    expect(parseNumber(await cellText(sum, col(h, "案件数")))).toBe(all.contractCount);
     // 行の予算の合計も一致
     const rows = dataRows(table);
     let s = 0;
@@ -105,7 +105,7 @@ test.describe("顧客一覧 /customers", () => {
     await cell(row, col(h, "予算")).locator("button").click();
     await expect(dialog(page)).toBeVisible();
     expect(await dialogRow(page, "予算合計")).toBe(yen(inFy(g.ids).budget));
-    expect(await dialogRow(page, "対象契約")).toBe(`${inFy(g.ids).contractCount}件`);
+    expect(await dialogRow(page, "対象案件")).toBe(`${inFy(g.ids).contractCount}件`);
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toHaveCount(0);
     await cell(row, col(h, "実績")).locator("button").click();
@@ -120,9 +120,10 @@ test.describe("顧客一覧 /customers", () => {
     await go(page, "/customers");
     const table = tableByCaption(page, "顧客一覧");
     const search = page.locator("#yn-f-text");
+    // 「青葉」は青葉物流と医療法人社団 青葉会の両方に部分一致する
     await search.fill("青葉");
-    await expect.poll(async () => (await rowKeys(table)).length).toBe(1);
-    expect(await rowKeys(table)).toEqual([customerKey("青葉物流")]);
+    await expect.poll(async () => (await rowKeys(table)).length).toBe(2);
+    expect((await rowKeys(table)).sort()).toEqual([customerKey("青葉物流"), customerKey("医療法人社団 青葉会")].sort());
     // 法人格つき・全角英数でも同じ（normalizeName）
     await search.fill("株式会社青葉物流");
     await expect.poll(async () => (await rowKeys(table)).length).toBe(1);
@@ -138,7 +139,7 @@ test.describe("顧客一覧 /customers", () => {
     expect(await rowKeys(tableByCaption(page, "顧客一覧"))).toEqual([customerKey("みなと銀行")]);
   });
 
-  test("チーム絞り込み: そのチームの契約だけで顧客を集計する", async ({ page }) => {
+  test("チーム絞り込み: そのチームの案件だけで顧客を集計する", async ({ page }) => {
     await go(page, "/customers");
     const teamId = "T211";
     await page.locator("#yn-filter-team").selectOption(teamId);
@@ -153,7 +154,7 @@ test.describe("顧客一覧 /customers", () => {
     const h = await headerIndex(table);
     const sum = table.locator("tfoot tr.yn-summary-row");
     expect(await cellText(sum, col(h, "予算"))).toBe(yen(totalsFor(FY, ids, model).budget));
-    // 全チームの顧客より少ない、または契約数が減っている顧客がある
+    // 全チームの顧客より少ない、または案件数が減っている顧客がある
     const full = listed();
     expect(expected.some((g) => g.ids.length < (full.find((f) => f.key === g.key)?.ids.length ?? 0)) || expected.length < full.length).toBe(true);
   });
@@ -183,7 +184,7 @@ test.describe("顧客一覧 /customers", () => {
     const hr = aoa.findIndex((r) => r.some((c) => c === "顧客"));
     expect(hr).toBeGreaterThanOrEqual(0);
     const header = aoa[hr]!.map((x) => String(x ?? ""));
-    for (const label of ["顧客", "契約数（期間内）", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（年度内）（円）"]) expect(header, label).toContain(label);
+    for (const label of ["顧客", "案件数（期間内）", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（年度内）（円）"]) expect(header, label).toContain(label);
     const rowsAll = aoa.slice(hr + 1).filter((r) => r.some((c) => c !== null && c !== ""));
     expect(String(rowsAll.at(-1)![0]), "最終行は合計行").toMatch(/^合計/);
     const body = rowsAll.slice(0, -1);
@@ -195,7 +196,7 @@ test.describe("顧客一覧 /customers", () => {
       const t = inFy(g!.contractIds);
       expect(r[header.indexOf("予算（円）")]).toBe(t.budget);
       expect(r[header.indexOf("実績（円）")]).toBe(t.cost);
-      expect(r[header.indexOf("契約数（期間内）")]).toBe(t.contractCount);
+      expect(r[header.indexOf("案件数（期間内）")]).toBe(t.contractCount);
     }
   });
 
@@ -211,7 +212,7 @@ test.describe("顧客一覧 /customers", () => {
 });
 
 test.describe("顧客詳細 /customer", () => {
-  test("一覧 → 詳細: key は encodeURIComponent、KPI は core と一致、契約一覧・担当チーム別・パンくず", async ({ page }) => {
+  test("一覧 → 詳細: key は encodeURIComponent、KPI は core と一致、案件一覧・担当チーム別・パンくず", async ({ page }) => {
     await go(page, "/customers");
     const g = listed().find((x) => x.contractIds.length >= 2)!;
     const link = tableByCaption(page, "顧客一覧").locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(g.key)}]`) }).locator(".yn-row-link").first();
@@ -229,27 +230,27 @@ test.describe("顧客詳細 /customer", () => {
     await expect(kpiValue(page, 2)).toHaveText(yen(t.grossProfit));
     await expect(kpiValue(page, 3)).toHaveText(formatPercent(t.burnRate));
     await expect(kpiValue(page, 4)).toHaveText(yen(f.forecastGrossProfit));
-    // 見出しの順: KPI → 月次推移 → 契約 → 担当チーム別 → 作業種別の内訳（工数の明細は後から読む）
+    // 見出しの順: KPI → 月次推移 → 案件 → 担当チーム別 → 作業種別の内訳（工数の明細は後から読む）
     await expect(page.locator("h2.yn-section-title", { hasText: "作業種別の内訳" })).toBeVisible();
     const heads = await page.locator("h2.yn-section-title").allTextContents();
-    expect(heads.map((x) => x.trim())).toEqual(["月次推移", "この顧客の契約", "担当チーム別", "作業種別の内訳"]);
-    // 契約一覧 = その顧客の（期間内の）契約だけ
-    const contracts = tableByCaption(page, "顧客の契約一覧");
+    expect(heads.map((x) => x.trim())).toEqual(["月次推移", "この顧客の案件", "担当チーム別", "作業種別の内訳"]);
+    // 案件一覧 = その顧客の（期間内の）案件だけ
+    const contracts = tableByCaption(page, "顧客の案件一覧");
     const inPeriod = g.contractIds.filter((id) => inFy([id]).contractCount > 0);
     expect(new Set(await rowKeys(contracts))).toEqual(new Set(inPeriod));
-    // 担当チーム別: 契約の teamId ごと。契約数の合計 = 期間内の契約数
+    // 担当チーム別: 案件の teamId ごと。案件数の合計 = 期間内の案件数
     const teams = tableByCaption(page, "担当チーム別");
     const th = await headerIndex(teams);
     const trs = dataRows(teams);
     let n = 0;
     let budget = 0;
     for (let i = 0; i < (await trs.count()); i++) {
-      n += parseNumber(await cellText(trs.nth(i), col(th, "契約数")))!;
+      n += parseNumber(await cellText(trs.nth(i), col(th, "案件数")))!;
       budget += parseNumber(await cellText(trs.nth(i), col(th, "予算")))!;
     }
     expect(n).toBe(t.contractCount);
     expect(budget).toBe(t.budget);
-    // 契約の行クリックで契約詳細へ、顧客名のリンクで戻れる
+    // 案件の行クリックで案件詳細へ、顧客名のリンクで戻れる
     await contracts.locator(`tbody tr[data-key="${inPeriod[0]}"] .yn-row-link`).click();
     await expect(page).toHaveURL(/\/contract\?/);
     await expect(page.locator(".yn-facts a", { hasText: model.contracts.find((r) => r.contract.contractId === inPeriod[0])!.contract.customerName })).toHaveAttribute("href", new RegExp(`customer\\?key=${encodeURIComponent(g.key).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}&`));
@@ -280,15 +281,15 @@ test.describe("顧客詳細 /customer", () => {
     await expect(page.locator(".yn-legend").first()).toBeVisible();
   });
 
-  test("契約が期間に掛からないとき: 非表示の件数と『期間外の契約も表示』", async ({ page }) => {
+  test("案件が期間に掛からないとき: 非表示の件数と『期間外の案件も表示』", async ({ page }) => {
     const g = groups.find((x) => x.contractIds.length >= 2 && x.contractIds.some((id) => inFy([id]).contractCount === 0))!;
-    expect(g, "ダミーデータに期間外の契約を持つ顧客がある").toBeTruthy();
+    expect(g, "ダミーデータに期間外の案件を持つ顧客がある").toBeTruthy();
     await go(page, `/customer?key=${encodeURIComponent(g.key)}`);
-    const contracts = tableByCaption(page, "顧客の契約一覧");
+    const contracts = tableByCaption(page, "顧客の案件一覧");
     const inPeriod = g.contractIds.filter((id) => inFy([id]).contractCount > 0);
     await expect.poll(async () => (await rowKeys(contracts)).length).toBe(inPeriod.length);
     await page.locator("label[for=yn-f-showOutside]").click();
-    await expect.poll(async () => new Set(await rowKeys(tableByCaption(page, "顧客の契約一覧")))).toEqual(new Set(g.contractIds));
+    await expect.poll(async () => new Set(await rowKeys(tableByCaption(page, "顧客の案件一覧")))).toEqual(new Set(g.contractIds));
   });
 
   test("存在しない key・key なしは空状態（エラーにならない）", async ({ page }) => {
@@ -300,11 +301,11 @@ test.describe("顧客詳細 /customer", () => {
     await expect(page.getByText("顧客が指定されていません")).toBeVisible();
   });
 
-  test("Excel 出力（契約一覧・担当チーム別）", async ({ page }) => {
+  test("Excel 出力（案件一覧・担当チーム別）", async ({ page }) => {
     const g = listed().find((x) => x.contractIds.length >= 2)!;
     await go(page, `/customer?key=${encodeURIComponent(g.key)}`);
     for (const [caption, file] of [
-      ["顧客の契約一覧", `customer_contracts_${FY.from}_${FY.to}.xlsx`],
+      ["顧客の案件一覧", `customer_contracts_${FY.from}_${FY.to}.xlsx`],
       ["担当チーム別", `customer_teams_${FY.from}_${FY.to}.xlsx`],
     ] as const) {
       const dl = page.waitForEvent("download");
@@ -349,8 +350,8 @@ test.describe("顧客名に記号・空白・日本語を含む場合の URL 往
     await expect(page).toHaveURL(/\/customer\?/);
     expect(query(page).get("key")).toBe(key);
     await expect(page.locator("h1")).toHaveText(NASTY);
-    // C001 と C002 の 2 契約が同じ顧客
-    const contracts = tableByCaption(page, "顧客の契約一覧");
+    // C001 と C002 の 2 案件が同じ顧客
+    const contracts = tableByCaption(page, "顧客の案件一覧");
     const ids = new Set(await rowKeys(contracts));
     expect(ids.has("C001") || ids.has("C002")).toBe(true);
     // 再読み込み（ブックマーク）でも同じ
@@ -420,7 +421,7 @@ test.describe("画面の作法", () => {
     for (const t of chips) expect(t).toMatch(/超過見込み|予算超過|消化率超過/);
     const dangerText = await page.locator("tbody .yn-danger-text").evaluateAll((els) => els.map((e) => (e.textContent ?? "").replace(/[▲\s]/g, "")));
     for (const t of dangerText) expect(t.length).toBeGreaterThan(0);
-    // 超過見込みの契約を持つ顧客に『赤字 N件』が出る
+    // 超過見込みの案件を持つ顧客に『赤字 N件』が出る
     const deficitCustomers = listed().filter((g) => forecastFor("recent3", g.ids, model).deficitContractIds.length > 0);
     expect(deficitCustomers.length).toBeGreaterThan(0);
     for (const g of deficitCustomers) {

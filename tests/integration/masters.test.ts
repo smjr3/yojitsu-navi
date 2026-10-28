@@ -110,7 +110,7 @@ describe("ダミーデータの 4 ファイルで往復", () => {
       // アサイン: 1 行削除
       const removed = docs.assignments.rows[0]!;
       docs.assignments = deleteRow(docs.assignments, removed.id);
-      // 契約外予定（§32）: 1 行追加（ファイルが無ければ新しく作る）
+      // 契約外予定（§36）: 1 行追加（ファイルが無ければ新しく作る）
       docs.outside = addRow(docs.outside, { member_id: memberId, start_month: "2026-11", end_month: "2027-01", person_months: "0.2", note: "提案, 準備" }).doc;
 
       const v = validateEdited(docs, p.context, loadDataset(dir).dataset.config);
@@ -133,7 +133,7 @@ describe("ダミーデータの 4 ファイルで往復", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("過去月の単価を変えると、影響月の原価だけが変わる（impact の月 = 原価が変わりうる月）", () => {
     const dir = mkdtempSync(join(tmpdir(), "yojitsu-masters-impact-"));

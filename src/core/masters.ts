@@ -103,6 +103,28 @@ export function createMasterIndex(
   };
 }
 
+/** 退職の行か（SPEC §35。members.csv の status 列が「退職」） */
+export function isLeftRecord(m: Pick<MemberRecord, "status"> | null | undefined): boolean {
+  return m?.status === "left";
+}
+
+/** 月 m に在籍しているか（その月の有効レコードがあり、退職の行でない） */
+export function isActiveAt(index: MasterIndex, memberId: string, month: YearMonth): boolean {
+  const rec = memberAt(index, memberId, month);
+  return rec !== null && !isLeftRecord(rec);
+}
+
+/** 退職した月（退職の行の effective_from）。退職していなければ null。復職（退職の後に在籍の行）があれば最後の退職以降に在籍の行が無いときだけ */
+export function leftMonthOf(records: readonly Pick<MemberRecord, "status" | "effectiveFrom">[]): YearMonth | null {
+  const sorted = [...records].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : a.effectiveFrom > b.effectiveFrom ? 1 : 0));
+  const last = sorted[sorted.length - 1];
+  if (!last || !isLeftRecord(last)) return null;
+  // 退職の行が続いていればいちばん早いもの
+  let from = last.effectiveFrom;
+  for (let i = sorted.length - 2; i >= 0 && isLeftRecord(sorted[i]); i--) from = (sorted[i] as MemberRecord).effectiveFrom;
+  return from;
+}
+
 /** 月 m に有効なメンバーレコード */
 export function memberAt(index: MasterIndex, memberId: string, month: YearMonth): MemberRecord | null {
   return index.members.at(memberId, month);

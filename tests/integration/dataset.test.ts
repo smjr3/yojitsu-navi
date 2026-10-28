@@ -61,8 +61,9 @@ describe("loadDataset / validate", () => {
   it("生成データを読み込める（作業実績・メタ情報込み）", () => {
     const { dataset, issues } = loadDataset(root);
     expect(dataset.contracts.length).toBeGreaterThanOrEqual(14);
-    expect(dataset.worklogs.length).toBeGreaterThan(10000);
-    expect(dataset.worklogs.length).toBeLessThan(25000);
+    // 実運用規模（基本シナリオ約 1.8 万行の約 5 倍。docs/DUMMY_DATA.md）
+    expect(dataset.worklogs.length).toBeGreaterThan(80000);
+    expect(dataset.worklogs.length).toBeLessThan(130000);
     expect(dataset.worklogFetchedAt).toBe("2026-10-27T09:00:00+09:00");
     expect(dataset.holidays.some((h) => h.date === "2026-09-22")).toBe(true);
     expect(issues.filter((i) => i.severity === "error")).toEqual([]);

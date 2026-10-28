@@ -11,7 +11,7 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧", async ({ page }) => {
+test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧", async ({ page }) => {
   await gotoPage(page, "/teams");
   const teams = tableByCaption(page, "チーム一覧");
   const leaf = "T111";
@@ -21,15 +21,15 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   const link = teams.locator(`tbody tr[data-key="${leaf}"] .yn-row-link`);
   await expect(link).toContainText(tree[leaf]!.name);
   await link.click();
-  // チーム行はチーム詳細へ。契約一覧への絞り込みは詳細内のリンクから
+  // チーム行はチーム詳細へ。案件一覧への絞り込みは詳細内のリンクから
   await expect(page).toHaveURL(/\/team\?/);
   expect(query(page).get("id")).toBe(leaf);
-  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
+  await page.getByRole("link", { name: "このチームの案件一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe(leaf);
-  await expect(page.locator("h1")).toHaveText("契約一覧");
+  await expect(page.locator("h1")).toHaveText("案件一覧");
   await expect(page.locator("#yn-filter-team")).toHaveValue(leaf);
-  const contracts = tableByCaption(page, "契約一覧");
+  const contracts = tableByCaption(page, "案件一覧");
   const ids = teamContractIds(leaf, FY, model)!;
   const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
   expect(expected.length).toBeGreaterThan(0);
@@ -50,12 +50,12 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   const crumbs = page.locator('nav[aria-label="パンくず"] li');
   await expect(crumbs).toHaveCount(3);
   await expect(crumbs.nth(0).locator("a")).toHaveText("全体サマリー");
-  await expect(crumbs.nth(1).locator("a")).toHaveText("契約一覧");
+  await expect(crumbs.nth(1).locator("a")).toHaveText("案件一覧");
   await expect(crumbs.nth(1).locator("a")).toHaveAttribute("href", new RegExp(`team=${leaf}`));
   await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(r.contract.projectName);
-  // 主担当チームのリンクと「同じチームの契約一覧」
+  // 主担当チームのリンクと「同じチームの案件一覧」
   await expect(page.locator(".yn-facts > div").filter({ hasText: "主担当" }).locator("a")).toHaveText(tree[r.contract.teamId!]!.name);
-  const same = page.getByRole("link", { name: "同じチームの契約一覧" });
+  const same = page.getByRole("link", { name: "同じチームの案件一覧" });
   await expect(same).toBeVisible();
   await same.click();
   await expect(page).toHaveURL(/\/contracts\?/);
@@ -68,7 +68,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   await expect(page.locator("#yn-filter-team")).toHaveValue(r.contract.teamId!);
 });
 
-test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る。中間の課からも契約一覧へ", async ({ page }) => {
+test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る。中間の課からも案件一覧へ", async ({ page }) => {
   await gotoPage(page, "/teams");
   const table = tableByCaption(page, "チーム一覧");
   const tree = treeAt(FY.to, model);
@@ -84,16 +84,16 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   for (const id of descendants) await expect(table.locator(`tbody tr[data-key="${id}"]`)).toHaveCount(1);
-  // 中間の課（S21）→ チーム詳細 → 契約一覧
+  // 中間の課（S21）→ チーム詳細 → 案件一覧
   await table.locator('tbody tr[data-key="S21"] .yn-row-link').click();
   await expect(page).toHaveURL(/\/team\?/);
   expect(query(page).get("id")).toBe("S21");
-  await page.getByRole("link", { name: "このチームの契約一覧へ" }).click();
+  await page.getByRole("link", { name: "このチームの案件一覧へ" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("S21");
   const ids = teamContractIds("S21", FY, model)!;
   const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
-  expect(new Set(await rowKeys(tableByCaption(page, "契約一覧")))).toEqual(new Set(expected));
+  expect(new Set(await rowKeys(tableByCaption(page, "案件一覧")))).toEqual(new Set(expected));
 });
 
 test("上部タブと右上のリンクで全ページに行ける（現在のページは aria-current）", async ({ page }) => {
@@ -102,7 +102,7 @@ test("上部タブと右上のリンクで全ページに行ける（現在の�
   await expect(page.locator("#observablehq-sidebar")).toHaveCount(0);
   for (const [name, h1] of [
     ["チーム", "チーム一覧"],
-    ["契約", "契約一覧"],
+    ["案件", "案件一覧"],
     ["計算ルール", "計算ルール"],
     ["データ確認", "データ確認"],
     ["全体", "全体サマリー"],
@@ -112,9 +112,9 @@ test("上部タブと右上のリンクで全ページに行ける（現在の�
     await expect(page.locator("h1")).toHaveText(h1);
     await expect(header.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
   }
-  // 契約詳細では「契約」タブが選択状態
+  // 案件詳細では「案件」タブが選択状態
   await gotoPage(page, "/contract?id=C008");
-  await expect(header.getByRole("link", { name: "契約", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(header.getByRole("link", { name: "案件", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 test("フィルタはヘッダの固定バーにあり、スクロールしても画面上端に残る", async ({ page }) => {
@@ -128,7 +128,7 @@ test("フィルタはヘッダの固定バーにあり、スクロールして�
 
 test("見出しクリックで並べ替え: aria-sort が切り替わり、数値順（辞書順ではない）に並ぶ", async ({ page }) => {
   await gotoPage(page, "/contracts");
-  const table = tableByCaption(page, "契約一覧");
+  const table = tableByCaption(page, "案件一覧");
   const h = await headerIndex(table);
   const th = table.locator("thead th").nth(col(h, "予算"));
   const btn = th.locator("button.yn-sort");
@@ -168,12 +168,12 @@ test("見出しクリックで並べ替え: aria-sort が切り替わり、数�
 
 test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外も表示 / 検索", async ({ page }) => {
   await gotoPage(page, "/contracts");
-  const table = () => tableByCaption(page, "契約一覧");
+  const table = () => tableByCaption(page, "案件一覧");
   const all = contractsInPeriod(FY, undefined, model);
   const ex = new Map(all.map((r) => [r.contract.contractId, contractRowExpected(r, FY, "recent3", model)]));
   const expectRows = async (ids: string[], label: string) => {
     if (ids.length === 0) {
-      await expect(page.getByText("該当する契約がありません"), label).toBeVisible();
+      await expect(page.getByText("該当する案件がありません"), label).toBeVisible();
       return;
     }
     // 絞り込みは入力イベント → セル再計算で反映されるので、期待の集合になるまで待つ
@@ -206,7 +206,7 @@ test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外
   const search = page.locator("#yn-f-text");
   await search.fill("さくら");
   await expectRows(["C005"], "検索 さくら");
-  // 期間外の契約も表示 → C014 も出る
+  // 期間外の案件も表示 → C014 も出る
   await page.locator("#yn-f-showOutside").check();
   await expectRows(["C005", "C014"], "検索 さくら + 期間外");
   await page.locator("#yn-f-showOutside").uncheck();
@@ -219,7 +219,7 @@ test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外
   await search.fill(teamName);
   await expectRows(contractsInPeriod(FY, teamContractIds("T121", FY, model), model).map((r) => r.contract.contractId), `検索 ${teamName}`);
   // 該当なし
-  await search.fill("存在しない契約 zzz");
+  await search.fill("存在しない案件 zzz");
   await expectRows([], "該当なし");
   await search.fill("");
   await expectRows([...ex.keys()], "検索解除");
@@ -227,13 +227,14 @@ test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外
   await gotoPage(page, "/contracts?f=deficit&q=C0");
   await expect(page.locator("#yn-f-deficit")).toBeChecked();
   await expect(search).toHaveValue("C0");
-  await expectRows(deficit, "URL f=deficit&q=C0");
+  // q=C0 は契約 ID（C001〜C099）に部分一致する。5 倍データの C1xx は外れる
+  await expectRows(deficit.filter((id) => /c0/i.test(id)), "URL f=deficit&q=C0");
 });
 
 test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表と一致する", async ({ page }) => {
   // 表を円で出して（URL に unit=yen）、Excel の円の整数と厳密に比べる。表示単位が変わっても Excel は円（下で確認）
   await gotoPage(page, "/contracts?unit=yen");
-  const table = tableByCaption(page, "契約一覧");
+  const table = tableByCaption(page, "案件一覧");
   const h = await headerIndex(table);
   // 表の現在の並び（既定: 状態 → 消化率）で値を控える
   const rows = dataRows(table);
@@ -300,10 +301,10 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
   for (const unit of ["m", "k"] as const) {
     await page.locator(`.yn-seg-btn[data-unit=${unit}]`).click();
     await expect(page.locator(`.yn-seg-btn[data-unit=${unit}]`)).toHaveAttribute("aria-pressed", "true");
-    const first = dataRows(tableByCaption(page, "契約一覧")).first();
+    const first = dataRows(tableByCaption(page, "案件一覧")).first();
     await expect(cell(first, col(h, "予算"))).toContainText(UNIT_LABEL[unit]);
     const dl2 = page.waitForEvent("download");
-    await page.locator(".yn-table-block").filter({ has: tableByCaption(page, "契約一覧") }).locator(".yn-export").click();
+    await page.locator(".yn-table-block").filter({ has: tableByCaption(page, "案件一覧") }).locator(".yn-export").click();
     const d2 = await dl2;
     const wb2 = XLSX.readFile((await d2.path())!);
     const aoa2 = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb2.Sheets[wb2.SheetNames[0]!]!, { header: 1, defval: null });

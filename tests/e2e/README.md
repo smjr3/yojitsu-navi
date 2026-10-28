@@ -10,7 +10,7 @@ npm run test:e2e                      # = playwright test -c tests/e2e/playwrigh
 
 ## 流れ
 
-1. `global-setup.ts` が `YOJITSU_AS_OF=2026-10-27 npm run build` を 1 回実行（`E2E_SKIP_BUILD=1` で省略。dist が無ければ結局ビルドする）
+1. `global-setup.ts` が `YOJITSU_AS_OF=2026-10-27 npm run build` を 1 回実行（`E2E_SKIP_BUILD=1` で省略。dist が無ければ結局ビルドする）。入力が変わっていればキャッシュは `npm run build` が捨てる（docs/DATA_LOADERS.md）
 2. `webServer` が `node tests/e2e/serve.mjs dist 4173` を起動（cleanUrls: `/teams` → `teams.html`、無いものは 404、`/__health` は常に 200）
 3. 各 spec が `http://127.0.0.1:4173` を開いて検証
 
@@ -36,24 +36,20 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 
 | ファイル | 内容 |
 |---|---|
-| `smoke.spec.ts` | 全ページ（`/`, `/teams`, `/contracts`, `/contract?id=C008`, `/contract?id=NOPE`, `/rules`, `/data-check`）がエラー 0・失敗リクエスト 0 で開き、h1 と 計算基準日 2026-10-27 がある |
-| `numbers.spec.ts` | KPI・チーム行・契約行・契約詳細の月行が core の `aggregate` / `forecastTotals` / `ContractMonth` と一致。既定単位（百万円）の検証、百万円→千円→円の往復、0.0百万円の丸め、期間プリセット、from/to、着地方式、チーム絞り込み、URL ⇄ 状態、localStorage |
-| `breakdown.spec.ts` | 内訳パネル: 実績（契約ごとの合計 = 表示値）、作業ログの遅延読み込み、予算の月割り（C005: 3,166,666 / 最終月 3,166,674）、消化率、着地見込みの算術、Esc・フォーカス復帰・フォーカストラップ |
-| `navigation.spec.ts` | チーム → 契約一覧（team=）→ 契約詳細、パンくず、同じチームの契約一覧、木の折りたたみ、並べ替え（aria-sort・数値順）、絞り込みチップ・検索、Excel 出力（`xlsx` で読み戻して見出し・数値を照合） |
-| `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role / aria-labelledby、img / svg の代替、状態チップの文字、390px 幅で横スクロール無し、ダークモード、印刷メディア |
-| `customers.spec.ts` | 顧客別（`/customers`・`/customer?key=`）: core との突合、内訳パネル、検索・チーム絞り込み、遷移、Excel、記号を含む顧客名の URL 往復、ダーク・狭幅 |
-| `members.spec.ts` | メンバー別（`/members`・`/member?id=`）: core との突合、計画・実績の内訳、遷移、Excel、ダーク・390px |
-| `team-detail.spec.ts` | チーム詳細（`/team?id=`）: core との突合、配下チーム、契約一覧、メンバー別実績、組織の変遷、Excel |
-| `workload.spec.ts` | 工数（`/workload`）: 軸ごとの表・作業種別の表が core と一致、契約外は契約の実績に入らない、Excel、ダーク・390px |
-| `detail-view.spec.ts` | 閲覧画面のレビュー指摘（単位・単価なしの色・絞り込みの引き継ぎ等）の回帰 |
-| `ui-controls.spec.ts` | テーマ切替・期間の「今月」とカレンダー指定・見出し横の「?」。各画面幅・ライト/ダークではみ出さない |
-| `qa-regressions.spec.ts` | 実操作 QA で見つかった不具合の再発防止（URL の不正値、狭い幅のタブ、並べ替えの保持など） |
-| `masters.spec.ts` | マスタ編集（台帳: 1 対象 1 行・変更の履歴・＋ 変更）。追加・修正・削除の確認と影響月、検証エラーで保存不可、差分、ダウンロードの中身、下書きの復元と当て直し、gitlab モード（API を `page.route` でモック）、取り込みモード、a11y・ダーク・390px |
-| `gitlab-merge.spec.ts` | GitLab へのマージ方式: デモで CSV 編集 → MR → マージ待ち一覧・ヘッダーの件数 → マージ／取り下げ、can_merge の出し分け、設定画面、はみ出し |
-| `plan.spec.ts` | 稼働計画: 組織の月合計が core（`planView`）＋契約外予定と一致、時間で入力して人月で保存、1.0 超、組織の種別とリーダー |
-| `plan-cells.spec.ts` | 稼働計画のセル: 内訳の吹き出し、その場の修正（この月だけ／以降）、案件で選ぶ追加、過去月の確認、キーボード、候補の入力欄、ID を出さない表示 |
-| `plan-history.spec.ts` | 稼働計画の持ち方（SPEC §32）: 人 → 案件・契約外予定の行、「＋ 変更」（期間を分ける・0 で外す・過去は確認）、変更の履歴からの修正・削除、契約外予定の CSV、旧 URL の転送と画面の行き来（下書きを聞かずに続き）、台帳の「＋ 変更」、人の絞り込み、各幅のはみ出し |
-| `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・console.error 0・`NaN/undefined/null/Infinity/[object Object]` 非表示・`—円` 非表示・h1 あり・ダイアログが Esc で閉じる、を確認。失敗時は操作履歴をメッセージと添付に出す |
+| `smoke.spec.ts` | 全ページがエラー 0・失敗リクエスト 0 で開き、h1 と計算基準日 2026-10-27 がある |
+| `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
+| `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
+| `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |
+| `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・工数の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
+| `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
+| `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
+| `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄） |
+| `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
+| `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
+| `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
+| `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
+| `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |
+| `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・`NaN` 等の非表示・h1 あり・ダイアログが Esc で閉じる、を確認。候補の判定はページ内で 1 回にまとめている（5 倍データでボタンが数千あるため） |
 
 ## 失敗したとき
 

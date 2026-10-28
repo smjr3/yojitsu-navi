@@ -185,8 +185,11 @@ describe("fetch-members を通しで", () => {
     const cur = memberRows();
     const latest = new Map<string, Record<string, string>>();
     for (const r of cur) latest.set(r.member_id ?? "", r as Record<string, string>);
+    // 人事データには在籍者だけが載る（退職者 status=退職 は載らない。§35）
+    const retired = [...latest.values()].filter((r) => r.status === "退職").length;
+    expect(retired).toBeGreaterThan(0);
     const hr = [...latest.values()]
-      .filter((r) => r.member_id !== "M027")
+      .filter((r) => r.member_id !== "M027" && r.status !== "退職")
       .map((r) => ({
         社員番号: r.member_id,
         氏名: r.name,
@@ -209,7 +212,7 @@ describe("fetch-members を通しで", () => {
     });
     const before = [...readMembers()];
     const r1 = await fetchMembers({ rootDir: root, asOf: AS_OF }, {});
-    expect(r1.merge).toMatchObject({ added: 1, changed: 2, keptNotInSource: 1 });
+    expect(r1.merge).toMatchObject({ added: 1, changed: 2, keptNotInSource: 1 + retired });
     const after = readMembers();
     expect(after.length).toBe(before.length + 3);
     expect([...after].slice(0, before.length)).toEqual(before); // 既存の行は変わらない

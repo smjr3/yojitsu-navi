@@ -1,5 +1,5 @@
 /**
- * 台帳の見せ方（SPEC §32）: 対象ごとのまとまり・期間の変更の並び・期間の置き換え
+ * 台帳の見せ方（SPEC §36）: 対象ごとのまとまり・期間の変更の並び・期間の置き換え
  */
 import { describe, expect, it } from "vitest";
 import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt, type RangeRow } from "../../src/core/ledger.js";

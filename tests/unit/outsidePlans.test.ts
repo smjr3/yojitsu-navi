@@ -1,5 +1,5 @@
 /**
- * 契約外予定（SPEC §30.5・§32）: 読み込み・検証・マスタ編集での扱い・GitLab への新規作成
+ * 契約外予定（SPEC §30.5・§36）: 読み込み・検証・マスタ編集での扱い・GitLab への新規作成
  */
 import { describe, expect, it } from "vitest";
 import { parseDataset, type DatasetFiles } from "../../src/core/csv.js";

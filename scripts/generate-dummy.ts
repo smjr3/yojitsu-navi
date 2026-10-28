@@ -1,7 +1,9 @@
 /**
  * ダミーデータ生成（決定的）
  *
- *   npx tsx scripts/generate-dummy.ts [--seed 42] [--asOf 2026-10-27] [--out data]
+ *   npx tsx scripts/generate-dummy.ts [--seed 42] [--asOf 2026-10-27] [--out data] [--base-only]
+ *
+ * 既定は基本シナリオ ＋ 実運用規模の部分（scripts/dummy-scale.ts）。--base-only で基本シナリオだけ（小さいデータで試すとき）。
  *
  * 同じ seed・asOf なら毎回バイト単位で同じ出力になる（乱数は mulberry32、日時は asOf から導出）。
  * シナリオの説明と「どの行がどのエッジケースを試すか」は docs/DUMMY_DATA.md を参照。
@@ -19,95 +21,16 @@ import { csvFormat } from "d3-dsv";
 import type { Worklog, YearMonth } from "../src/core/types.js";
 import { allHolidays } from "./lib/holidays.js";
 import { formatWorklogCsv, sortWorklogs } from "./lib/csv.js";
+import { eachDay, monthCount, Rng, splitHours, weekday, ymOf } from "./lib/dummy-util.js";
+import { generateScale } from "./dummy-scale.js";
 
-// ---------------------------------------------------------------------------
-// 乱数（決定的）
-// ---------------------------------------------------------------------------
-
-/** mulberry32: 32bit シードの軽量 PRNG */
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-class Rng {
-  private readonly next: () => number;
-  constructor(seed: number) {
-    this.next = mulberry32(seed);
-  }
-  /** [0,1) */
-  float(): number {
-    return this.next();
-  }
-  /** 整数 [min, max] */
-  int(min: number, max: number): number {
-    return min + Math.floor(this.next() * (max - min + 1));
-  }
-  chance(p: number): boolean {
-    return this.next() < p;
-  }
-  pick<T>(arr: readonly T[]): T {
-    const v = arr[Math.floor(this.next() * arr.length)];
-    if (v === undefined) throw new Error("pick: empty array");
-    return v;
-  }
-  /** 重み付き選択 */
-  weighted<T>(items: ReadonlyArray<readonly [T, number]>): T {
-    const total = items.reduce((s, [, w]) => s + w, 0);
-    let r = this.next() * total;
-    for (const [v, w] of items) {
-      r -= w;
-      if (r < 0) return v;
-    }
-    const last = items[items.length - 1];
-    if (!last) throw new Error("weighted: empty");
-    return last[0];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 年月・日付ユーティリティ
-// ---------------------------------------------------------------------------
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function ymOf(date: string): YearMonth {
-  return date.slice(0, 7);
-}
-
-/** from〜to（両端含む）の全日付（YYYY-MM-DD）。UTC で計算 */
-function eachDay(from: string, to: string): string[] {
-  const out: string[] = [];
-  const [fy, fm, fd] = from.split("-").map(Number) as [number, number, number];
-  const [ty, tm, td] = to.split("-").map(Number) as [number, number, number];
-  let t = Date.UTC(fy, fm - 1, fd);
-  const end = Date.UTC(ty, tm - 1, td);
-  while (t <= end) {
-    const d = new Date(t);
-    out.push(`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`);
-    t += 86400000;
-  }
-  return out;
-}
-
-function weekday(date: string): number {
-  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-}
+export { mulberry32 } from "./lib/dummy-util.js";
 
 // ---------------------------------------------------------------------------
 // シナリオ定義（マスタ）
 // ---------------------------------------------------------------------------
 
-interface TeamRow {
+export interface TeamRow {
   team_id: string;
   name: string;
   parent_team_id: string;
@@ -118,7 +41,7 @@ interface TeamRow {
   leader_member_id: string;
 }
 
-interface MemberRow {
+export interface MemberRow {
   member_id: string;
   name: string;
   kind: "employee" | "partner";
@@ -127,15 +50,17 @@ interface MemberRow {
   section: string;
   team_id: string;
   effective_from: YearMonth;
+  /** 在籍状態（空 = 在籍、"退職" = この月から在籍しない。SPEC §35） */
+  status: string;
 }
 
-interface RateRow {
+export interface RateRow {
   key: string;
   hourly_rate: number;
   effective_from: YearMonth;
 }
 
-interface ContractRow {
+export interface ContractRow {
   contract_id: string;
   customer_name: string;
   project_name: string;
@@ -146,18 +71,27 @@ interface ContractRow {
   note: string;
 }
 
-interface MappingRow {
+export interface MappingRow {
   worklog_customer_name: string;
   worklog_project_name: string;
   contract_id: string;
 }
 
-interface AssignmentRow {
+export interface AssignmentRow {
   member_id: string;
   contract_id: string;
   start_month: YearMonth;
   end_month: YearMonth;
   allocation: number;
+}
+
+/** 契約外予定（SPEC §36.4）: 人 × 期間 × 人月 */
+export interface OutsidePlanRow {
+  member_id: string;
+  start_month: YearMonth;
+  end_month: YearMonth;
+  person_months: number;
+  note: string;
 }
 
 /** 組織: 事業本部 > 事業部 > 課 > チーム（末端6チーム。種別・リーダーは組織ごと）。2026-10 にクラウド運用チームが第3課→第4課へ移動 */
@@ -205,7 +139,7 @@ function member(
   deptOverride?: { department: string; section: string },
 ): MemberRow {
   const d = deptOverride ?? DEPT[team_id] ?? { department: "", section: "" };
-  return { member_id, name, kind, title, department: d.department, section: d.section, team_id, effective_from };
+  return { member_id, name, kind, title, department: d.department, section: d.section, team_id, effective_from, status: "" };
 }
 
 const MEMBERS: MemberRow[] = [
@@ -434,6 +368,14 @@ const ASSIGNMENTS: AssignmentRow[] = [
   { member_id: "M007", contract_id: "C011", start_month: "2026-04", end_month: "2027-03", allocation: 0.4 },
 ];
 
+/** 契約外予定: 保守の配分との合計が 1.0 を超える月がある人（M010・M013・M020）と、期間を変えた例（M013） */
+const OUTSIDE_PLANS: OutsidePlanRow[] = [
+  { member_id: "M010", start_month: "2026-11", end_month: "2027-01", person_months: 0.2, note: "次期更改の提案" },
+  { member_id: "M013", start_month: "2026-07", end_month: "2026-09", person_months: 0.1, note: "運用設計の支援" },
+  { member_id: "M013", start_month: "2026-10", end_month: "2027-03", person_months: 0.2, note: "運用設計の支援" },
+  { member_id: "M020", start_month: "2026-12", end_month: "2027-02", person_months: 0.3, note: "新規顧客の提案" },
+];
+
 const TASKS: ReadonlyArray<readonly [string, number]> = [
   ["定例", 3],
   ["問い合わせ対応", 5],
@@ -513,26 +455,11 @@ function teamContracts(teamId: string, month: YearMonth): ContractRow[] {
   return activeContracts(month).filter((c) => teams.includes(c.team_id));
 }
 
-/** 1日の時間を 0.25 刻みで n 個に分ける（各スロット >= 0.25） */
-function splitHours(rng: Rng, total: number, n: number): number[] {
-  const units = Math.round(total * 4);
-  if (n <= 1 || units < n) return [total];
-  const cuts = new Set<number>();
-  while (cuts.size < n - 1) cuts.add(rng.int(1, units - 1));
-  const sorted = [...cuts].sort((a, b) => a - b);
-  const out: number[] = [];
-  let prev = 0;
-  for (const c of sorted) {
-    out.push((c - prev) / 4);
-    prev = c;
-  }
-  out.push((units - prev) / 4);
-  return out;
-}
-
 interface GenOptions {
   seed: number;
   asOf: string;
+  /** "full"（既定）= 基本シナリオ ＋ 実運用規模の部分（scripts/dummy-scale.ts）、"base" = 基本シナリオだけ */
+  scale?: "full" | "base";
 }
 
 interface Generated {
@@ -542,6 +469,7 @@ interface Generated {
   contracts: ContractRow[];
   mappings: MappingRow[];
   assignments: AssignmentRow[];
+  outsidePlans: OutsidePlanRow[];
   holidays: Array<{ date: string; name: string }>;
   taskTypes: Array<{ task: string; category: string; note: string }>;
   /** 月ごとの作業実績 */
@@ -558,12 +486,6 @@ function pickNames(rng: Rng, c: ContractRow): { customer: string; project: strin
 function monthlyMillions(c: ContractRow): number {
   const n = monthCount(c.start_month, c.end_month);
   return c.total_amount / n / 1e6;
-}
-
-function monthCount(from: YearMonth, to: YearMonth): number {
-  const [fy, fm] = from.split("-").map(Number) as [number, number];
-  const [ty, tm] = to.split("-").map(Number) as [number, number];
-  return (ty - fy) * 12 + (tm - fm) + 1;
 }
 
 /** 個別に時間を付ける契約（通常の配分からは外す） */
@@ -708,10 +630,25 @@ export function generate(opts: GenOptions): Generated {
     push({ date: "2026-05-12", memberId: "M014", memberName: "佐々木 美月", customerName: "株式会社ひまわり食品", projectName: "受発注システム保守", task: "問い合わせ対応", hours: 0 });
   }
 
+  // 実運用規模の部分（別の乱数列・別のメンバーと契約。基本シナリオの数値は変わらない）
+  const out = { teams: [...TEAMS], members: [...MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], outsidePlans: [...OUTSIDE_PLANS], taskTypes: [...TASK_TYPES] };
+  if ((opts.scale ?? "full") === "full") {
+    const x = generateScale({ seed: opts.seed, asOf: opts.asOf, days, baseRates: RATES });
+    out.teams.push(...x.teams);
+    out.members.push(...x.members);
+    out.rates.push(...x.rates);
+    out.contracts.push(...x.contracts);
+    out.mappings.push(...x.mappings);
+    out.assignments.push(...x.assignments);
+    out.outsidePlans.push(...x.outsidePlans);
+    out.taskTypes.push(...x.taskTypes);
+    for (const w of x.worklogs) push(w);
+  }
+
   // 月内は日付→メンバー→顧客順に並べて安定させる
   for (const [ym, rows] of worklogsByMonth) worklogsByMonth.set(ym, sortWorklogs(rows));
 
-  return { teams: TEAMS, members: MEMBERS, rates: RATES, contracts: CONTRACTS, mappings: MAPPINGS, assignments: ASSIGNMENTS, holidays, taskTypes: TASK_TYPES, worklogsByMonth };
+  return { ...out, holidays, worklogsByMonth };
 }
 
 // ---------------------------------------------------------------------------
@@ -736,10 +673,11 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
   writeFileSync(join(out, "assignments.csv"), csv(g.assignments, ["member_id", "contract_id", "start_month", "end_month", "allocation"]));
+  writeFileSync(join(out, "outside-plans.csv"), csv(g.outsidePlans, ["member_id", "start_month", "end_month", "person_months", "note"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
-  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from"]));
+  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
   writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "note"]));
 
@@ -788,6 +726,8 @@ export function parseArgs(argv: string[]): WriteOptions {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error(`--asOf は YYYY-MM-DD 形式で指定してください: ${v}`);
       opts.asOf = v;
       i++;
+    } else if (a === "--base-only") {
+      opts.scale = "base";
     } else if (a === "--out" && v !== undefined) {
       opts.outDir = v;
       i++;

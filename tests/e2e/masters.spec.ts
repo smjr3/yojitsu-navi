@@ -1,5 +1,5 @@
 /**
- * マスタ編集 /masters（SPEC §19・§32 台帳）
+ * マスタ編集 /masters（SPEC §19・§36 台帳）
  * - 台帳: 1 行 = 1 つの対象。開くと適用開始月ごとの変更の履歴（修正・元に戻す・削除）、「＋ 変更」で変更を追加
  * - download モード（既定の config.json）: 行の追加・修正・削除と確認、検証エラーで保存不可、差分、CSV の中身、下書き復元
  * - gitlab モード: masters.json を page.route で書き換えて有効にし、GitLab API を page.route でモック
@@ -324,9 +324,9 @@ async function staleDraftWithConflict(page: Page): Promise<void> {
   await addRate(page, "部長", "14000", "2026-11");
   await page.evaluate((k) => {
     const draft = JSON.parse(localStorage.getItem(k)!);
-    // 下書きを作ったときの元データでは課長が 9900 だった（= その後、他の人が 10000 に変えた）。コミットも古い
+    // 下書きを作ったときの元データでは課長が 9877 だった（= その後、他の人が 10000 に変えた）。コミットも古い
     draft.files.rates.baseCommitId = "0".repeat(40);
-    draft.files.rates.baseText = draft.files.rates.baseText.replace("課長,10000,", "課長,9900,");
+    draft.files.rates.baseText = draft.files.rates.baseText.replace("課長,10000,", "課長,9877,");
     localStorage.setItem(k, JSON.stringify(draft));
     sessionStorage.setItem("__e2e_keep_draft__", "1");
   }, DRAFT_KEY);
@@ -352,7 +352,7 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   const conflict = page.locator("fieldset.yn-me-conflict");
   await expect(conflict).toHaveCount(1);
   await expect(conflict.locator("legend")).toContainText("課長: あなたも他の人も、この行を変更しました");
-  await expect(conflict).toContainText("下書きを作ったときの行: 課長 ・ 9900 ・ 2025-04");
+  await expect(conflict).toContainText("下書きを作ったときの行: 課長 ・ 9877 ・ 2025-04");
   await expect(conflict.getByRole("radio", { name: /自分の下書きを残す: 時間単価（円）: 10500/ })).toBeVisible();
   await expect(conflict.getByRole("radio", { name: /最新のデータを残す: 時間単価（円）: 10000/ })).toBeVisible();
   // 選ばずに復元 → 止めて案内し、最初の未選択の行へフォーカス
@@ -373,11 +373,11 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   await expect(diff).toContainText("時間単価（円）: 10000 → 10500");
   await expect(diff).toContainText("藤井 隆");
   await expect(diff).toContainText("部長 ・ 14000 ・ 2026-11");
-  await expect(diff).not.toContainText("9900");
+  await expect(diff).not.toContainText("9877");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
   expect(text).toBe(expectedRates(true));
-  expect(text).not.toContain("9900");
+  expect(text).not.toContain("9877");
   // 元データのコミットを示し、GitLab 側が新しければアップロードしないよう案内
   await expect(page.locator(".yn-me-steps")).toContainText("アップロードせずに");
   if (PAYLOAD.files.rates.lastCommitId) await expect(page.locator('[data-base-commit="rates"]')).toContainText(PAYLOAD.files.rates.lastCommitId.slice(0, 8));
@@ -623,8 +623,8 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
 
   const t = page.locator("table.yn-me-table");
   await expect(t.locator("caption")).toHaveCount(1);
-  // 名前（ID）・区分・役職・部署・課・所属チーム・変更の履歴・状態・操作
-  await expect(t.locator("thead th[scope=col]")).toHaveCount(9);
+  // 名前（ID）・区分・役職・部署・課・所属チーム・在籍区分・変更の履歴・状態・操作
+  await expect(t.locator("thead th[scope=col]")).toHaveCount(10);
   const g = t.locator("tbody tr.yn-me-group").first();
   await expect(g.locator("th[scope=row]")).toHaveCount(1);
   // 行の操作ボタンは「誰の行か」を名前で含む（ID ではなく）

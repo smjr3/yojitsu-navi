@@ -102,14 +102,14 @@
 | 未登録メンバー | `memberUnknown = true`。個人単価があれば使い、無ければ 0・`rateMissing`（§6 手順 4 と同じ） |
 | 所属チームの基準月（集計） | `memberBaseMonth = min(period.to, asOfMonth)`（§11 の組織木と同じ。未来の組織で集計しない）。基準月に有効レコードが無ければ期間内の最後の MemberMonth の値 |
 | `aggregateMembers` の `teamIds` | 基準月の所属チームがこの集合に入るメンバーだけ（配下を含めるなら呼び出し側が `descendantIds` を渡す）。`includeNoTeam` で未所属も含める |
-| `contractIds` | byContract をその契約に絞って数える（チーム詳細の「このチームの契約に工数を付けた人」に使える） |
+| `contractIds` | byContract をその契約に絞って数える（チーム詳細の「このチームの案件に工数を付けた人」に使える） |
 | `includesPreliminary` | 実績時間 > 0 の速報月を含むか |
 | 並び | memberMonths は memberId → month 昇順、byContract は contractId 昇順。`aggregateMembers` の members は memberId 昇順 |
 | 単価の変遷 | `memberRateHistory(dataset | MasterIndex, memberId, period)`。月ごとに `rateFor` を引き、単価・出どころ・役職が同じ月をまとめる。マスタにあるが入社前の月は飛ばす。`Model` は単価マスタを持たない（NaN 単価を Model に漏らさないため `Model.rates` は足さなかった）ので Dataset から計算する |
 
 ### model.json のサイズ
 
-`memberMonths` はダミーデータで 603 行・契約別 1,920 行、JSON で **486 KB**（model.json 540 KB の 9 割）。全ページが読む model.json に入れると倍近くなるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`、503 KB・gzip 25 KB）でメンバー別の画面だけに配る。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
+`memberMonths` は全ページが読む model.json に入れるとほぼ倍になるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`）でメンバー別の画面だけに配る（5 倍のダミーデータで model.json 約 3.1 MB・member-months.json 約 3.0 MB）。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
 
 ### 性能
 
