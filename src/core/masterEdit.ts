@@ -12,6 +12,7 @@ import { addMonths, isValidYearMonth } from "./calendar.js";
 import { parseDataset, type DatasetFiles } from "./csv.js";
 import type { Config, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
+import { T, fmt } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // 対象ファイルの定義
@@ -53,60 +54,60 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     id: "members",
     path: "data/masters/members.csv",
     issueFile: "masters/members.csv",
-    label: "メンバー",
+    label: T.masterFiles.members,
     history: "effective",
     keyColumns: ["member_id"],
     columns: [
-      { name: "member_id", label: "メンバーID", input: "member", required: true },
-      { name: "name", label: "氏名", input: "text", required: true },
-      { name: "kind", label: "区分", input: "kind", required: true },
-      { name: "title", label: "役職", input: "title", required: false },
-      { name: "department", label: "部署", input: "text", required: false },
-      { name: "section", label: "課", input: "text", required: false },
-      { name: "team_id", label: "所属チーム", input: "team", required: false },
-      { name: "effective_from", label: "適用開始月", input: "month", required: true },
+      { name: "member_id", label: T.masterFiles.colMemberId, input: "member", required: true },
+      { name: "name", label: T.masterFiles.colName, input: "text", required: true },
+      { name: "kind", label: T.masterFiles.colKind, input: "kind", required: true },
+      { name: "title", label: T.masterFiles.colTitle, input: "title", required: false },
+      { name: "department", label: T.masterFiles.colDepartment, input: "text", required: false },
+      { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
+      { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
+      { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
     ],
   },
   rates: {
     id: "rates",
     path: "data/masters/rates.csv",
     issueFile: "masters/rates.csv",
-    label: "単価",
+    label: T.masterFiles.rates,
     history: "effective",
     keyColumns: ["key"],
     columns: [
-      { name: "key", label: "役職名 または メンバーID", input: "rateKey", required: true },
-      { name: "hourly_rate", label: "時間単価（円）", input: "number", required: true },
-      { name: "effective_from", label: "適用開始月", input: "month", required: true },
+      { name: "key", label: T.masterFiles.colRateKey, input: "rateKey", required: true },
+      { name: "hourly_rate", label: T.masterFiles.colHourlyRate, input: "number", required: true },
+      { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
     ],
   },
   teams: {
     id: "teams",
     path: "data/masters/teams.csv",
     issueFile: "masters/teams.csv",
-    label: "チーム",
+    label: T.masterFiles.teams,
     history: "effective",
     keyColumns: ["team_id"],
     columns: [
-      { name: "team_id", label: "チームID", input: "text", required: true },
-      { name: "name", label: "チーム名", input: "text", required: true },
-      { name: "parent_team_id", label: "親チーム", input: "team", required: false },
-      { name: "effective_from", label: "適用開始月", input: "month", required: true },
+      { name: "team_id", label: T.masterFiles.colTeamIdKey, input: "text", required: true },
+      { name: "name", label: T.masterFiles.colTeamName, input: "text", required: true },
+      { name: "parent_team_id", label: T.masterFiles.colParentTeam, input: "team", required: false },
+      { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
     ],
   },
   assignments: {
     id: "assignments",
     path: "data/assignments.csv",
     issueFile: "assignments.csv",
-    label: "アサイン",
+    label: T.masterFiles.assignments,
     history: "period",
     keyColumns: ["member_id", "contract_id"],
     columns: [
-      { name: "member_id", label: "メンバーID", input: "member", required: true },
-      { name: "contract_id", label: "契約ID", input: "contract", required: true },
-      { name: "start_month", label: "開始月", input: "month", required: true },
-      { name: "end_month", label: "終了月", input: "month", required: true },
-      { name: "allocation", label: "配分（人月）", input: "number", required: true },
+      { name: "member_id", label: T.masterFiles.colMemberId, input: "member", required: true },
+      { name: "contract_id", label: T.masterFiles.colContractId, input: "contract", required: true },
+      { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
+      { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
+      { name: "allocation", label: T.masterFiles.colAllocation, input: "number", required: true },
     ],
   },
 };
@@ -594,25 +595,25 @@ export interface ImpactEffects {
 /** 列ごとの「変わる内容」（ファイル → 列 → [順位, 文, 原価が変わるか]）。§19.1 */
 const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> = {
   members: {
-    title: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
-    member_id: [1, "メンバーマスタへの登録の有無（未登録の扱い）", false],
-    team_id: [2, "所属チームによる組織別の集計（メンバー別の所属・チームでの絞り込み、チーム詳細の応援の区別）", false],
-    department: [3, "メンバー詳細の部署・課の表示", false],
-    section: [3, "メンバー詳細の部署・課の表示", false],
-    name: [4, "氏名の表示", false],
-    kind: [5, "区分（社員／パートナー）の表示", false],
+    title: [0, T.masterFiles.effectRate, true],
+    member_id: [1, T.masterFiles.effectMemberId, false],
+    team_id: [2, T.masterFiles.effectTeamId, false],
+    department: [3, T.masterFiles.effectDepartment, false],
+    section: [3, T.masterFiles.effectDepartment, false],
+    name: [4, T.masterFiles.effectName, false],
+    kind: [5, T.masterFiles.effectKind, false],
   },
   rates: {
-    key: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
-    hourly_rate: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
+    key: [0, T.masterFiles.effectRate, true],
+    hourly_rate: [0, T.masterFiles.effectRate, true],
   },
   teams: {
-    team_id: [0, "組織の木とチーム別の集計", false],
-    parent_team_id: [1, "組織の木と上位組織の合計（配下の合計）", false],
-    name: [2, "チーム名の表示", false],
+    team_id: [0, T.masterFiles.effectTeamTree, false],
+    parent_team_id: [1, T.masterFiles.effectParent, false],
+    name: [2, T.masterFiles.effectTeamName, false],
   },
   assignments: {
-    allocation: [0, "着地見込み（アサイン方式）とメンバー別の計画（計画時間・計画原価）", false],
+    allocation: [0, T.masterFiles.effectAllocation, false],
   },
 };
 
@@ -623,18 +624,18 @@ export function describeImpactEffects(fileId: MasterFileId, columns: readonly st
   hits.sort((a, b) => a[0] - b[0]);
   const effects = [...new Set(hits.map((e) => e[1]))];
   const costChanges = hits.some((e) => e[2]);
-  if (effects.length === 0) return { effects: ["その月の行の値"], costChanges: false, note: null };
-  const note = fileId === "members" && !costChanges ? "原価・粗利・消化率・着地見込みは変わりません（単価は役職で、契約の担当チームは契約で決まるため）。" : null;
+  if (effects.length === 0) return { effects: [T.masterFiles.effectDefault], costChanges: false, note: null };
+  const note = fileId === "members" && !costChanges ? T.masterFiles.noCostChangeNote : null;
   return { effects, costChanges, note };
 }
 
 /** 影響の月を「2026-04〜2026-10（7か月）」のように短く言う（連続していない月は「ほか」） */
 export function describeImpactMonths(months: readonly YearMonth[]): string {
-  if (months.length === 0) return "なし";
+  if (months.length === 0) return T.common.none;
   const first = months[0] as string;
   const last = months[months.length - 1] as string;
-  if (months.length === 1) return `${first}（1か月）`;
-  return `${first}〜${last}（${months.length}か月）`;
+  if (months.length === 1) return fmt(T.masterFiles.oneMonth, { first });
+  return fmt(T.masterFiles.monthRange, { first, last, n: months.length });
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@
  * - エラーは conflict / permission / network / other に分類し、人が読める文を付ける
  */
 import type { MasterEditConfig } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 /** fetch の最小限の形（Response は ok / status / text() だけ使う） */
 export type FetchLike = (
@@ -146,19 +147,19 @@ const CONFLICT_PATTERN = /changed since|last_commit_id|has been (?:modified|upda
 export function classifyHttpError(step: "user" | "commit" | "mr", status: number, body: string): GitLabError {
   const detail = gitlabMessage(body);
   if (status === 401) {
-    return new GitLabError("permission", "トークンが無効か期限切れです。GitLab で Personal Access Token（scope: api）を作り直して入力してください。", { status, detail });
+    return new GitLabError("permission", T.gitlab.tokenInvalid, { status, detail });
   }
   if (status === 403) {
-    return new GitLabError("permission", "このプロジェクトに保存する権限がありません。保存できるのは Developer 以上のメンバーです（保護ブランチへの直接コミットは Maintainer が必要なこともあります）。", { status, detail });
+    return new GitLabError("permission", T.gitlab.noPermission, { status, detail });
   }
   if (status === 409 || (step === "commit" && status === 400 && CONFLICT_PATTERN.test(detail))) {
-    return new GitLabError("conflict", "他の人が先に同じファイルを更新しました。あなたの編集内容は下書きに残っています。他の人の更新が CI でビルドされたあとにこのページを再読み込みすると、下書きの変更を最新のデータに当て直して復元できます（同じ行を両方で変えていれば、どちらを残すか選べます）。", { status, detail });
+    return new GitLabError("conflict", T.gitlab.conflict, { status, detail });
   }
   if (status === 404) {
-    return new GitLabError("other", "プロジェクトかブランチが見つかりません。config.json の masterEdit.gitlab（projectId・targetBranch）を確認してください。権限が無い場合も 404 になります。", { status, detail });
+    return new GitLabError("other", T.gitlab.notFound, { status, detail });
   }
-  const what = step === "user" ? "トークンの確認" : step === "commit" ? "コミット" : "マージリクエストの作成";
-  return new GitLabError("other", `GitLab で${what}に失敗しました（HTTP ${status}）。`, { status, detail });
+  const what = step === "user" ? T.gitlab.stepUser : step === "commit" ? T.gitlab.stepCommit : T.gitlab.stepMr;
+  return new GitLabError("other", fmt(T.gitlab.failed, { step: what, status }), { status, detail });
 }
 
 /** fetch 自体が失敗した（ネットワーク断・CORS で拒否・証明書など。ブラウザからは区別できない） */
@@ -166,7 +167,7 @@ export function networkError(cause: unknown): GitLabError {
   const detail = cause instanceof Error ? cause.message : String(cause);
   return new GitLabError(
     "network",
-    "GitLab に接続できませんでした。社内ネットワーク（VPN）につながっているか確認してください。GitLab が別ドメインのためブラウザから API を呼べない（CORS）場合もあります。その場合は CSV をダウンロードして GitLab の画面からアップロードしてください。",
+    T.gitlab.network,
     { detail },
   );
 }
@@ -198,7 +199,7 @@ async function request<T>(fetchImpl: FetchLike, step: "user" | "commit" | "mr", 
   try {
     return (text === "" ? {} : JSON.parse(text)) as T;
   } catch {
-    throw new GitLabError("other", "GitLab の応答を読めませんでした（JSON ではありません）。apiBaseUrl が API のURL（…/api/v4）になっているか確認してください。", { status: res.status, detail: text.slice(0, 300) });
+    throw new GitLabError("other", T.gitlab.notJson, { status: res.status, detail: text.slice(0, 300) });
   }
 }
 
@@ -232,9 +233,9 @@ export interface SaveResult {
  */
 export async function saveToGitLab(fetchImpl: FetchLike, req: SaveRequest): Promise<SaveResult> {
   const cfg = req.config;
-  if (effectiveSaveMode(cfg) !== "gitlab") throw new GitLabError("other", "GitLab の保存先（apiBaseUrl・projectId）が設定されていません。");
-  if (req.token.trim() === "") throw new GitLabError("permission", "GitLab のトークンを入力してください。");
-  if (req.files.length === 0) throw new GitLabError("other", "保存する変更がありません。");
+  if (effectiveSaveMode(cfg) !== "gitlab") throw new GitLabError("other", T.gitlab.notConfigured);
+  if (req.token.trim() === "") throw new GitLabError("permission", T.gitlab.noToken);
+  if (req.files.length === 0) throw new GitLabError("other", T.gitlab.noChanges);
   const token = req.token.trim();
   const me = await request<{ username?: string }>(fetchImpl, "user", `${cfg.gitlab.apiBaseUrl}/user`, token, "GET");
   const user = typeof me.username === "string" ? me.username : "user";
@@ -257,7 +258,7 @@ export async function saveToGitLab(fetchImpl: FetchLike, req: SaveRequest): Prom
   } catch (e) {
     const err = e as GitLabError;
     // コミットは済んでいるので「ダウンロードに切り替え」は出さない（network → other）
-    throw new GitLabError(err.kind === "permission" ? "permission" : "other", `コミットはブランチ ${branch} に保存しましたが、マージリクエストを作れませんでした。GitLab の画面からこのブランチの MR を作成してください。（${err.message}）`, {
+    throw new GitLabError(err.kind === "permission" ? "permission" : "other", fmt(T.gitlab.mrFailed, { branch, error: err.message }), {
       status: err.status,
       detail: err.detail,
       partial: { branch, commitUrl },
