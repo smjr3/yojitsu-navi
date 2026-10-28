@@ -2,7 +2,7 @@
  * メンバー別（SPEC §18）: 一覧 /members と詳細 /member?id=
  *   - 数値が core（aggregateMembers / memberMonthlySeries）と一致（比較は経過月）
  *   - 内訳パネル（計画 = 配分 × 基準時間 × 単価、実績 = 実績行 → 作業ログ）
- *   - 遷移（一覧 → 詳細 → 契約詳細、契約詳細 → メンバー詳細）、チーム絞り込み、検索
+ *   - 遷移（一覧 → 詳細 → 案件詳細、案件詳細 → メンバー詳細）、チーム絞り込み、検索
  *   - Excel 出力、a11y（見出し・キーボード）、赤を使わない、ダーク、390px
  * 金額は既定単位に依存しないよう URL に unit=yen を付ける。
  */
@@ -59,7 +59,7 @@ test.describe("メンバー一覧 /members", () => {
     expect(await cellText(foot, col(h, "計画額"))).toBe(yen(agg.total.plannedCost));
     expect(await cellText(foot, col(h, "実績"))).toBe(yen(agg.total.actualCost));
     expect(await cellText(foot, col(h, "稼働率"))).toBe(formatPercent(agg.total.utilization));
-    // 実績の合計は同じ期間の契約実績の合計と一致（コアの不変条件を画面でも）
+    // 実績の合計は同じ期間の案件実績の合計と一致（コアの不変条件を画面でも）
     const cost = model.contracts.reduce((a, r) => a + r.months.filter((cm) => CMP.from <= cm.month && cm.month <= CMP.to).reduce((b, cm) => b + cm.cost, 0), 0);
     expect(agg.total.actualCost).toBe(cost);
   });
@@ -165,7 +165,7 @@ test.describe("メンバー一覧 /members", () => {
 });
 
 test.describe("メンバー詳細 /member", () => {
-  test("M011: 基本情報・KPI・月次（期間全体）・契約別（経過月）・単価の変遷が core と一致", async ({ page }) => {
+  test("M011: 基本情報・KPI・月次（期間全体）・案件別（経過月）・単価の変遷が core と一致", async ({ page }) => {
     await gotoPage(page, `/member?id=M011&from=${FY.from}&to=${FY.to}&${U}`);
     const t = aggregateMembers(model, { period: CMP, memberIds: ["M011"] }).members[0]!;
     await expect(page.locator("h1")).toContainText("小林 玲奈");
@@ -188,8 +188,8 @@ test.describe("メンバー詳細 /member", () => {
     }
     expect(await cellText(monthly.locator("tfoot tr"), col(mh, "実績"))).toBe(yen(t.actualCost));
 
-    // 契約別（経過月）。アサインの無い契約は「アサインなし」
-    const contracts = tableByCaption(page, "契約別の計画と実績");
+    // 案件別（経過月）。アサインの無い案件は「アサインなし」
+    const contracts = tableByCaption(page, "案件別の計画と実績");
     const ch = await headerIndex(contracts);
     await expect(dataRows(contracts)).toHaveCount(t.byContract.length);
     for (const c of t.byContract) {
@@ -206,7 +206,7 @@ test.describe("メンバー詳細 /member", () => {
     await expect(dataRows(rates).nth(1)).toContainText("主任");
   });
 
-  test("月の根拠と契約の根拠、契約別の行から契約詳細へ、契約詳細のメンバー行からメンバー詳細へ", async ({ page }) => {
+  test("月の根拠と案件の根拠、案件別の行から案件詳細へ、案件詳細のメンバー行からメンバー詳細へ", async ({ page }) => {
     await gotoPage(page, `/member?id=M011&from=${FY.from}&to=${FY.to}&${U}`);
     const monthly = tableByCaption(page, "月ごとの計画と実績");
     const mh = await headerIndex(monthly);
@@ -217,7 +217,7 @@ test.describe("メンバー詳細 /member", () => {
     await expect(dialog(page).locator("table")).toContainText("8,500円");
     await page.keyboard.press("Escape");
 
-    const contracts = tableByCaption(page, "契約別の計画と実績");
+    const contracts = tableByCaption(page, "案件別の計画と実績");
     await contracts.locator('tbody tr[data-key="C002"] .yn-row-link').click();
     await expect(page).toHaveURL(/\/contract\?/);
     expect(query(page).get("id")).toBe("C002");

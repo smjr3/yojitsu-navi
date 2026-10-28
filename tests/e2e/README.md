@@ -37,13 +37,14 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | ファイル | 内容 |
 |---|---|
 | `smoke.spec.ts` | 全ページがエラー 0・失敗リクエスト 0 で開き、h1 と計算基準日 2026-10-27 がある |
-| `numbers.spec.ts` | KPI・チーム行・契約行・契約詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
+| `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
 | `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
 | `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |
 | `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・工数の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
-| `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 契約一覧の絞り込み など） |
+| `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄） |
+| `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
 | `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
 | `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |

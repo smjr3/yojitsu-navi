@@ -48,7 +48,7 @@ test("稼働計画: 時間で入力すると人月に直して保存し、表示
   const d = page.locator("dialog.yn-me-dialog[open]");
   await expect(d.locator("#yn-me-f-member_id")).toHaveValue("小林 玲奈");
   await expect(d.locator('input[name="member_id"]')).toHaveValue("M011");
-  // 案件で選ぶ（期間 2026-11〜2027-03 は更新後の契約 C002 に割り当てられる。§31.3）
+  // 案件で選ぶ（期間 2026-11〜2027-03 は更新後の案件 C002 に割り当てられる。§31.3）
   await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-start_month").fill("2026-11");
   await d.locator("#yn-me-f-end_month").fill("2027-03");

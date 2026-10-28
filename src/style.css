@@ -2550,7 +2550,7 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-warn-text);
   font-weight: 600;
 }
-/* 退職した月以降（§32）。配分が残っていれば is-over / is-set の色の上に斜線で示す */
+/* 退職した月以降（§35）。配分が残っていれば is-over / is-set の色の上に斜線で示す */
 .yn-me-plan-cell.is-left {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--yn-hairline-strong) 6px 7px);
 }

@@ -185,7 +185,7 @@ describe("fetch-members を通しで", () => {
     const cur = memberRows();
     const latest = new Map<string, Record<string, string>>();
     for (const r of cur) latest.set(r.member_id ?? "", r as Record<string, string>);
-    // 人事データには在籍者だけが載る（退職者 status=退職 は載らない。§32）
+    // 人事データには在籍者だけが載る（退職者 status=退職 は載らない。§35）
     const retired = [...latest.values()].filter((r) => r.status === "退職").length;
     expect(retired).toBeGreaterThan(0);
     const hr = [...latest.values()]

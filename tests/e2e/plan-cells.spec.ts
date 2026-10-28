@@ -162,7 +162,7 @@ test("スマホ幅（390）・ダーク: 編集欄は画面下のシートで、
   expect(hscroll).toBe(false);
 });
 
-test("アサインの追加: 案件を選び、期間が契約の切り替わりをまたぐと 2 行に分けて保存", async ({ page }) => {
+test("アサインの追加: 案件を選び、期間が案件の切り替わりをまたぐと 2 行に分けて保存", async ({ page }) => {
   await gotoPage(page, "/masters?view=assignments");
   await page.getByRole("button", { name: /アサインを追加/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
@@ -213,7 +213,7 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
   await expect(d.locator('input[name="member_id"]')).toHaveValue("M022");
 });
 
-test("ID を前面に出さない: メンバー一覧・契約一覧・契約詳細・メンバー詳細", async ({ page }) => {
+test("ID を前面に出さない: メンバー一覧・案件一覧・案件詳細・メンバー詳細", async ({ page }) => {
   await gotoPage(page, "/members");
   await expect(page.locator("table.yn-table tbody")).toContainText("小林 玲奈");
   await expect(page.locator("table.yn-table tbody")).not.toContainText("M011");
@@ -265,4 +265,24 @@ test("下書きの復元待ちのあいだは、セルをクリックしても�
   await expect(page.locator("#yn-plan-tip")).toBeVisible();
   await expect(page.locator("#yn-plan-tip")).not.toContainText("クリックで修正");
   await expect(pop(page)).toHaveCount(0);
+});
+
+test("修正欄を開いたまま画面を狭く・広くしても、画面の中に収まり操作できる", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2027-02").click();
+  const p = pop(page);
+  await expect(p).toBeVisible();
+  const inView = async () => {
+    const r = (await p.boundingBox())!;
+    const vp = page.viewportSize()!;
+    return r.x >= -1 && r.x + r.width <= vp.width + 1;
+  };
+  for (const size of [{ width: 368, height: 944 }, { width: 1024, height: 768 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(inView).toBe(true);
+    await expect(p.locator(".yn-combo-toggle")).toBeInViewport();
+  }
+  await p.locator(".yn-combo-toggle").click();
+  await expect(p.locator("[role=listbox]")).toBeVisible();
 });

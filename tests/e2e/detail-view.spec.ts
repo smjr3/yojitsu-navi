@@ -1,13 +1,13 @@
 /**
  * 閲覧画面のレビュー指摘（M3 / M5 / L1 / L2 / L3 / L4 / L6 / L9）の回帰テスト
  *   M3  チーム詳細のメンバー別実績の根拠パネルは、選択単位に関係なく円
- *   M5  明細の表（作業ログ・メンバー別実績・メンバー詳細の月別/契約別/単価）は選択単位に関係なく円で、見出しに「（円）」。
+ *   M5  明細の表（作業ログ・メンバー別実績・メンバー詳細の月別/案件別/単価）は選択単位に関係なく円で、見出しに「（円）」。
  *       メンバー一覧の行（メンバー×期間の集計）は選択単位に従う。差額に添える文は丸め後の値で判定
  *   L1  「単価なし」は赤にしない（neutral）
- *   L2  顧客詳細の担当チーム行 → 契約一覧は顧客キー（厳密）＋チームで絞り、件数が行と一致する
+ *   L2  顧客詳細の担当チーム行 → 案件一覧は顧客キー（厳密）＋チームで絞り、件数が行と一致する
  *   L3  顧客詳細はチーム絞り込みを引き継ぎ、数字が変わることを注記する
  *   L4  メンバー別をチームで絞っても、期間全体の計画の対象が経過月だけで決まらない
- *   L6  合計行の着地差は年度内の契約が 0 件なら「—」
+ *   L6  合計行の着地差は年度内の案件が 0 件なら「—」
  *   L9  メンバー列は名前順、検索欄の案内にチームが入る
  * 既定単位（百万円）で開いて「単位に従わない」ことを確かめる。
  */
@@ -39,7 +39,7 @@ async function expectAllYen(table: ReturnType<typeof tableByCaption>, label: str
 }
 
 test.describe("M5 明細の表は常に円（既定の百万円で開く）", () => {
-  test("契約詳細: 作業ログ表（単価・金額）とメンバー別の実績が円で、見出しに（円）", async ({ page }) => {
+  test("案件詳細: 作業ログ表（単価・金額）とメンバー別の実績が円で、見出しに（円）", async ({ page }) => {
     await gotoPage(page, "/contract?id=C008&unit=m");
     // KPI・月ごとの予実は選択単位（百万円）に従う
     await expect(kpiValue(page, 0)).toContainText("百万円");
@@ -88,12 +88,12 @@ test.describe("M5 明細の表は常に円（既定の百万円で開く）", ()
     await page.keyboard.press("Escape");
   });
 
-  test("メンバー詳細: 月ごと・契約別・単価の表が円。KPI は選択単位", async ({ page }) => {
+  test("メンバー詳細: 月ごと・案件別・単価の表が円。KPI は選択単位", async ({ page }) => {
     await gotoPage(page, "/member?id=M019&unit=m");
     await expect(kpiValue(page, 0)).toContainText("百万円");
     for (const [caption, labels] of [
       ["月ごとの計画と実績", ["計画額", "実績", "差額"]],
-      ["契約別の計画と実績", ["計画額", "実績", "差額"]],
+      ["案件別の計画と実績", ["計画額", "実績", "差額"]],
       ["単価の変遷", ["時間単価"]],
     ] as const) {
       const table = tableByCaption(page, caption);
@@ -152,7 +152,7 @@ test.describe("L1 単価なしは赤にしない", () => {
   const withMissing = model.contracts.find((r) => r.months.some((m) => m.costLines.some((l) => l.rateMissing)))!;
   const tid = withMissing.contract.teamId!;
 
-  test("契約詳細とチーム詳細の『単価なし』チップは neutral", async ({ page }) => {
+  test("案件詳細とチーム詳細の『単価なし』チップは neutral", async ({ page }) => {
     await gotoPage(page, `/contract?id=${withMissing.contract.contractId}&unit=yen`);
     const chip = tableByCaption(page, "メンバー別の実績").locator(".yn-chip", { hasText: "単価なし" }).first();
     await expect(chip).toBeVisible();
@@ -178,7 +178,7 @@ test.describe("L1 単価なしは赤にしない", () => {
 });
 
 test.describe("L2 / L3 顧客詳細", () => {
-  test("担当チーム行 → 契約一覧: 顧客キーで厳密に絞り、件数が行の契約数と一致する（担当チームの多い顧客から 8 社・全行）", async ({ page }) => {
+  test("担当チーム行 → 案件一覧: 顧客キーで厳密に絞り、件数が行の案件数と一致する（担当チームの多い顧客から 8 社・全行）", async ({ page }) => {
     // 全顧客を回すと 5 倍のデータで数分かかるため、担当チームが多い（＝行の多い）顧客から選ぶ
     const sample = [...groups].sort((a, b) => b.contractIds.length - a.contractIds.length || a.key.localeCompare(b.key)).slice(0, 8);
     for (const g of sample) {
@@ -189,17 +189,17 @@ test.describe("L2 / L3 顧客詳細", () => {
       for (const k of keys) {
         const h = await headerIndex(teams);
         const row = teams.locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(k)}]`) });
-        const count = parseNumber(await cellText(row, col(h, "契約数")))!;
+        const count = parseNumber(await cellText(row, col(h, "案件数")))!;
         await row.locator("a").first().click();
         await page.locator("#page-skeleton").waitFor({ state: "detached" }).catch(() => {});
-        await expect(page.locator("h1").first()).toHaveText("契約一覧");
+        await expect(page.locator("h1").first()).toHaveText("案件一覧");
         expect(query(page).get("customer")).toBe(g.key);
         expect(query(page).get("team")).toBe(k);
         await expect(page.locator(".yn-note", { hasText: "だけを表示しています" })).toBeVisible();
-        const table = tableByCaption(page, "契約一覧");
+        const table = tableByCaption(page, "案件一覧");
         if (count === 0) await expect(table).toHaveCount(0);
         else await expect(dataRows(table), `${g.key} / ${k}`).toHaveCount(count);
-        // 全行がこの顧客の契約
+        // 全行がこの顧客の案件
         for (const id of await rowKeys(table)) expect(g.contractIds).toContain(id);
         await page.goBack();
         await page.locator("#page-skeleton").waitFor({ state: "detached" }).catch(() => {});
@@ -208,8 +208,8 @@ test.describe("L2 / L3 顧客詳細", () => {
     }
   });
 
-  test("契約一覧 ?customer=&direct=1: 主担当チームがちょうどそのチームの契約だけ（配下は含まない）", async ({ page }) => {
-    // 上位チームの配下にだけ契約がある顧客: direct なしは配下の契約を含み、direct=1 は 0 件
+  test("案件一覧 ?customer=&direct=1: 主担当チームがちょうどそのチームの案件だけ（配下は含まない）", async ({ page }) => {
+    // 上位チームの配下にだけ案件がある顧客: direct なしは配下の案件を含み、direct=1 は 0 件
     let pick: { team: string; key: string; inScope: string[]; direct: string[] } | null = null;
     for (const n of Object.values(tree)) {
       const ids = new Set(contractsForTeam(model, n.teamId, tree).map((c) => c.contractId));
@@ -219,30 +219,30 @@ test.describe("L2 / L3 顧客詳細", () => {
         if (!pick && inScope.length > 0 && direct.length < inScope.length) pick = { team: n.teamId, key: g.key, inScope, direct };
       }
     }
-    expect(pick, "配下にだけ契約がある顧客がいる").toBeTruthy();
+    expect(pick, "配下にだけ案件がある顧客がいる").toBeTruthy();
     const { team, key, inScope, direct } = pick!;
     const base = `/contracts?team=${team}&customer=${encodeURIComponent(key)}&unit=yen&from=${FY.from}&to=${FY.to}`;
 
     await gotoPage(page, base);
-    await expect(dataRows(tableByCaption(page, "契約一覧"))).toHaveCount(inScope.length);
-    expect((await rowKeys(tableByCaption(page, "契約一覧"))).sort()).toEqual([...inScope].sort());
+    await expect(dataRows(tableByCaption(page, "案件一覧"))).toHaveCount(inScope.length);
+    expect((await rowKeys(tableByCaption(page, "案件一覧"))).sort()).toEqual([...inScope].sort());
 
     await gotoPage(page, `${base}&direct=1`);
-    if (direct.length === 0) await expect(page.getByText("該当する契約がありません")).toBeVisible();
-    else await expect(dataRows(tableByCaption(page, "契約一覧"))).toHaveCount(direct.length);
+    if (direct.length === 0) await expect(page.getByText("該当する案件がありません")).toBeVisible();
+    else await expect(dataRows(tableByCaption(page, "案件一覧"))).toHaveCount(direct.length);
     await expect(page.locator(".yn-note", { hasText: "配下のチームは含みません" })).toBeVisible();
   });
 
-  test("未知の顧客キー: 警告と解除リンク、0 件。解除で全契約に戻る", async ({ page }) => {
+  test("未知の顧客キー: 警告と解除リンク、0 件。解除で全案件に戻る", async ({ page }) => {
     await gotoPage(page, "/contracts?customer=__nothing__&unit=yen");
     await expect(page.locator(".yn-note-warn", { hasText: "見つかりません" })).toBeVisible();
-    await expect(page.getByText("該当する契約がありません")).toBeVisible();
+    await expect(page.getByText("該当する案件がありません")).toBeVisible();
     await page.getByRole("link", { name: "絞り込みを解除" }).click();
-    await expect(dataRows(tableByCaption(page, "契約一覧")).first()).toBeVisible();
+    await expect(dataRows(tableByCaption(page, "案件一覧")).first()).toBeVisible();
     expect(query(page).get("customer")).toBeNull();
   });
 
-  test("L3: チームで絞ると顧客詳細もそのチームの契約だけで集計して注記を出す。含まないチームなら 0 件の警告。全体に戻すと注記は消える", async ({ page }) => {
+  test("L3: チームで絞ると顧客詳細もそのチームの案件だけで集計して注記を出す。含まないチームなら 0 件の警告。全体に戻すと注記は消える", async ({ page }) => {
     // ダミーデータは顧客が 1 つの系統に収まるので、「含む系統」と「含まない系統」で確かめる
     const g = groups.find((x) => x.contractIds.some((id) => (tree.D1?.descendantIds ?? []).includes(contractResult(id, model).contract.teamId ?? "")))!;
     const d1 = new Set(contractsForTeam(model, "D1", tree).map((c) => c.contractId));
@@ -251,7 +251,7 @@ test.describe("L2 / L3 顧客詳細", () => {
     await gotoPage(page, `/customer?key=${encodeURIComponent(g.key)}&team=D1&unit=yen`);
     await expect(kpiValue(page, 0)).toHaveText(yen(inFy(scoped).budget));
     await expect(kpiValue(page, 1)).toHaveText(yen(inFy(scoped).cost));
-    const note = page.locator(".yn-note", { hasText: "契約だけで集計しています" });
+    const note = page.locator(".yn-note", { hasText: "案件だけで集計しています" });
     await expect(note).toContainText(`全 ${g.contractIds.length} 件のうち ${scoped.length} 件`);
     await expect(page.locator("#yn-filter-team")).toHaveValue("D1");
 
@@ -260,10 +260,10 @@ test.describe("L2 / L3 顧客詳細", () => {
     await page.locator("#yn-filter-team").selectOption(other);
     const noneIds = new Set(contractsForTeam(model, other, tree).map((c) => c.contractId));
     const n = g.contractIds.filter((id) => noneIds.has(id)).length;
-    await expect(page.locator(".yn-note", { hasText: "契約だけで集計しています" })).toContainText(`全 ${g.contractIds.length} 件のうち ${n} 件`);
+    await expect(page.locator(".yn-note", { hasText: "案件だけで集計しています" })).toContainText(`全 ${g.contractIds.length} 件のうち ${n} 件`);
 
     await page.locator("#yn-filter-team").selectOption("");
-    await expect(page.locator(".yn-note", { hasText: "契約だけで集計しています" })).toHaveCount(0);
+    await expect(page.locator(".yn-note", { hasText: "案件だけで集計しています" })).toHaveCount(0);
     await expect(kpiValue(page, 0)).toHaveText(yen(inFy(g.contractIds).budget));
   });
 
@@ -274,7 +274,7 @@ test.describe("L2 / L3 顧客詳細", () => {
     const first = dataRows(table).first();
     const listed = await cellText(first, col(h, "実績"));
     await first.locator("a").first().click();
-    await expect(page.locator(".yn-note", { hasText: "契約だけで集計しています" })).toBeVisible();
+    await expect(page.locator(".yn-note", { hasText: "案件だけで集計しています" })).toBeVisible();
     await expect(kpiValue(page, 1)).toHaveText(listed);
   });
 });
@@ -283,9 +283,9 @@ test.describe("L6 合計行の着地差は年度内 0 件なら —", () => {
   const g = groups.find((x) => x.contractIds.includes("C016"))!;
   const early = "2025-04";
 
-  test("契約一覧: 年度に掛からない契約だけ表示しているとき", async ({ page }) => {
+  test("案件一覧: 年度に掛からない案件だけ表示しているとき", async ({ page }) => {
     await gotoPage(page, `/contracts?customer=${encodeURIComponent(g.key)}&from=${early}&to=${early}&unit=yen`);
-    const table = tableByCaption(page, "契約一覧");
+    const table = tableByCaption(page, "案件一覧");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(1);
     expect(await cellText(dataRows(table).first(), col(h, "着地差"))).toBe("—");
@@ -301,9 +301,9 @@ test.describe("L6 合計行の着地差は年度内 0 件なら —", () => {
     expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe(row);
   });
 
-  test("年度内の契約があれば合計行に金額が出る（契約一覧・既定期間）", async ({ page }) => {
+  test("年度内の案件があれば合計行に金額が出る（案件一覧・既定期間）", async ({ page }) => {
     await gotoPage(page, "/contracts?unit=yen");
-    const table = tableByCaption(page, "契約一覧");
+    const table = tableByCaption(page, "案件一覧");
     const h = await headerIndex(table);
     expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).not.toBe("—");
   });

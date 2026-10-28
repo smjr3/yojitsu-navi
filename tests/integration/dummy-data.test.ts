@@ -89,7 +89,7 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     expect(byMember.size).toBe(3);
     expect(byMember.has("M025")).toBe(true);
     for (const months of byMember.values()) expect(months.sort()).toEqual(monthRange("2025-04", "2026-10"));
-    // 退職（§32）: 退職後の工数 1 人・退職後のアサイン 1 人。どちらも status=退職 の行を持つ人
+    // 退職（§35）: 退職後の工数 1 人・退職後のアサイン 1 人。どちらも status=退職 の行を持つ人
     const left = new Set(ds.members.filter((m) => m.status === "left").map((m) => m.memberId));
     expect(left.size).toBeGreaterThanOrEqual(12);
     for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);

@@ -43,9 +43,9 @@ export interface PlanMemberRow {
   overMonths: YearMonth[];
   /** 期間に掛かるアサイン行（契約ID・開始月の順） */
   assignments: PlanAssignment[];
-  /** 退職した月（§32。期間の最終月までに退職していれば その月、在籍中なら null） */
+  /** 退職した月（§35。期間の最終月までに退職していれば その月、在籍中なら null） */
   leftFrom: YearMonth | null;
-  /** 退職した月以降に配分が残っている月（§32。アサインの終了し忘れ） */
+  /** 退職した月以降に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
 }
 
@@ -95,7 +95,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     seen.add(id);
     ids.push(id);
   };
-  // 所属メンバー（members ファイルの初出順）。退職した月より後は所属に数えない（§32）
+  // 所属メンバー（members ファイルの初出順）。退職した月より後は所属に数えない（§35）
   const inTeamAt = (id: string, m: YearMonth) => {
     const rec = memberIdx.at(id, m);
     return !!rec && !isLeftRecord(rec) && inScope(rec.teamId, m);

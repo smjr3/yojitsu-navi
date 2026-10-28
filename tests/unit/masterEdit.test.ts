@@ -511,7 +511,7 @@ describe("rebaseDraftFile（古い下書きを最新の土台に当て直す）"
     expect(r.conflicts[0]!.mine).toMatchObject({ member_id: "E2", team_id: "S11", note: "y" });
     expect(r.conflicts[0]!.columns).toEqual(["team_id"]);
     const m = rebaseDraftFile("members", f, latest, { [r.conflicts[0]!.id]: "mine" });
-    // 末尾は省略可の列 status（§32。どちらの版にも無いので空）
+    // 末尾は省略可の列 status（§35。どちらの版にも無いので空）
     expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x,", "E2,佐藤,employee,課長,,,S11,2025-04,y,"]);
   });
 

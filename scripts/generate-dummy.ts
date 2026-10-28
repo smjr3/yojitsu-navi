@@ -50,7 +50,7 @@ export interface MemberRow {
   section: string;
   team_id: string;
   effective_from: YearMonth;
-  /** 在籍状態（空 = 在籍、"退職" = この月から在籍しない。SPEC §32） */
+  /** 在籍状態（空 = 在籍、"退職" = この月から在籍しない。SPEC §35） */
   status: string;
 }
 

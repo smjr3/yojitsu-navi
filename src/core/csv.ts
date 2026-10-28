@@ -206,7 +206,7 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   return table;
 }
 
-/** members.csv の status 列（§32）: 空・「在籍」・active = 在籍、「退職」・left・retired = 退職。それ以外はそのまま（検証でエラー） */
+/** members.csv の status 列（§35）: 空・「在籍」・active = 在籍、「退職」・left・retired = 退職。それ以外はそのまま（検証でエラー） */
 export function memberStatus(raw: string): { status?: string } {
   const v = raw.normalize("NFKC").trim();
   if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
@@ -267,7 +267,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     section: r.get("section"),
     teamId: nullable(r.get("team_id")),
     effectiveFrom: r.get("effective_from"),
-    // 省略可の列（§32）。空・「在籍」は在籍（項目を持たない）
+    // 省略可の列（§35）。空・「在籍」は在籍（項目を持たない）
     ...memberStatus(r.get("status")),
   }));
 

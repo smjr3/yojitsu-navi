@@ -170,7 +170,7 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
   });
 }
 
-/** 退職した月以降に残っているアサイン（§32。終了月の直し忘れ）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */
+/** 退職した月以降に残っているアサイン（§35。終了月の直し忘れ）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */
 function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
   const file = "assignments.csv";
   const masters = createMasterIndex(dataset);
@@ -193,7 +193,7 @@ function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
   }
 }
 
-/** 退職した月以降に付いた作業実績（§32）。実績には数える（単価は退職の行の役職）が、入力の誤りの可能性が高いので警告。メンバーごとにまとめる */
+/** 退職した月以降に付いた作業実績（§35）。実績には数える（単価は退職の行の役職）が、入力の誤りの可能性が高いので警告。メンバーごとにまとめる */
 function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
   const file = "worklogs";
   const masters = createMasterIndex(dataset);

@@ -103,7 +103,7 @@ export function createMasterIndex(
   };
 }
 
-/** 退職の行か（SPEC §32。members.csv の status 列が「退職」） */
+/** 退職の行か（SPEC §35。members.csv の status 列が「退職」） */
 export function isLeftRecord(m: Pick<MemberRecord, "status"> | null | undefined): boolean {
   return m?.status === "left";
 }

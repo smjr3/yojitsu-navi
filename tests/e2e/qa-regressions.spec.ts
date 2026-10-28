@@ -3,7 +3,7 @@
  * - URL の team にプロトタイプのキー（constructor 等）を入れても例外にならず、全体に戻る
  * - 960px 未満でも上部タブがすべて見える（2 段目に回る）
  * - 並べ替えは絞り込み・単位の変更や「戻る」で既定に戻らない。絞り込み・検索は「戻る」で復元される
- * - 契約詳細の ID は前後の空白・大文字小文字の違いを許す
+ * - 案件詳細の ID は前後の空白・大文字小文字の違いを許す
  */
 import { test, expect, gotoPage, kpiValue } from "./helpers/app.js";
 
@@ -32,7 +32,7 @@ for (const width of [768, 900]) {
   });
 }
 
-test("契約一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
+test("案件一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const sortTh = page.locator('th[data-key="grossMargin"]');
   await sortTh.locator("button").click();
@@ -52,7 +52,7 @@ test("契約一覧: 並べ替え・絞り込み・検索が、絞り込み変更
   await expect(page.locator("table tbody tr[data-key]")).toHaveCount(count);
 });
 
-test("契約詳細: ID の前後の空白と大文字小文字の違いを許す", async ({ page }) => {
+test("案件詳細: ID の前後の空白と大文字小文字の違いを許す", async ({ page }) => {
   await gotoPage(page, "/contract?id=c008%20");
   await expect(page.locator("h1")).toHaveText("こもれび出版 / 会員サイト保守");
   await expect(page.getByText("見つかりません")).toHaveCount(0);

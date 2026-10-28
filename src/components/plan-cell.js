@@ -51,8 +51,8 @@ export function planCellEditor() {
   let onClose = null;
   const isSheet = () => document.documentElement.clientWidth < 640;
   // 狭い画面は画面下に寄せたシート（CSS）。広い画面はセルの近く。
-  // 開いたまま画面幅が変わったときも呼ぶ（広い画面で付けた位置が残ると、狭い画面で画面外に出る）
-  const layout = () => {
+  // 開いたまま画面幅が変わったとき（回転・ウィンドウの縮小）も、広い画面で付けた位置を外してシートに戻す
+  const place = () => {
     if (!anchor || !el.open) return;
     if (isSheet()) {
       el.style.removeProperty("left");
@@ -60,7 +60,7 @@ export function planCellEditor() {
       el.style.removeProperty("width");
     } else placeNear(el, anchor, { width: 380 });
   };
-  const reposition = layout;
+  const reposition = place;
   el.addEventListener("click", (ev) => {
     if (ev.target === el) el.close();
   });
@@ -77,7 +77,7 @@ export function planCellEditor() {
     onClose = opts.onClose ?? null;
     el.replaceChildren(content);
     if (!el.open) el.showModal();
-    layout();
+    place();
     addEventListener("resize", reposition);
   }
   /** 中身の高さが変わったとき（注記を出したときなど）に置き直す */

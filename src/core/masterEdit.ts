@@ -67,7 +67,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
       { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
-      // 在籍状態（§32）。省略可。「退職」の行の effective_from から在籍しない
+      // 在籍状態（§35）。省略可。「退職」の行の effective_from から在籍しない
       { name: "status", label: T.masterFiles.colStatus, input: "status", required: false },
     ],
   },

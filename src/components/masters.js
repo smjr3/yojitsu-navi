@@ -268,7 +268,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
       return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}`, left };
     })
-      // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§32）
+      // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
       .sort((a, b) => Number(a.left) - Number(b.left));
   }
   function projectOptions() {
@@ -1074,7 +1074,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </select>`;
     }
     if (col.input === "status") {
-      // 在籍状態（§32）。CSV では空 = 在籍、「退職」= 退職
+      // 在籍状態（§35）。CSV では空 = 在籍、「退職」= 退職
       const left = value !== "" && value !== T.masters.statusActive;
       const known = value === "" || value === T.masters.statusActive || value === T.masters.statusLeft || /^(left|retired)$/i.test(value);
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
