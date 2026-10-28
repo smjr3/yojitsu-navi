@@ -4,6 +4,7 @@
  *  - fmt(T.xxx, { a, b }) で、文言の {名前} がすべて差し込まれる（書き換えで {名前} を打ち間違えたら気付く）
  *  - 文言はすべて空でない文字列
  */
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -80,5 +81,12 @@ describe("画面文言 ja.js", () => {
   it("fmt は {名前} を値に置き換え、渡されていない {名前} はそのまま残す", () => {
     expect(fmt("{a} と {b}", { a: 1 })).toBe("1 と {b}");
     expect(fmt("{n}件", { n: 0 })).toBe("0件");
+  });
+
+  it("計算ルールの本文 rules.txt: 差し込み口はすべて既知の名前（未知の {名前} が画面にそのまま出ない）", () => {
+    const page = execFileSync(process.execPath, [join(ROOT, "src", "rules.md.js")], { encoding: "utf-8" });
+    const prose = page.slice(page.indexOf('<div class="yn-prose">')).replace(/```[\s\S]*?```/g, "");
+    expect([...prose.matchAll(/(?<!\$)\{(\w+)\}/g)].map((m) => m[0])).toEqual([]);
+    expect(page).toContain("${contract}");
   });
 });

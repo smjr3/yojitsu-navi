@@ -918,4 +918,12 @@ export default {
     colRow: "行",
     issuesCaption: "データ検証の結果",
   },
+
+  // ── 計算ルール（本文は rules.txt） ─────────────────────────
+  rules: {
+    lead: "画面の数値がどう計算されているかの説明です。設定値（config.json）は現在の値に置き換えて表示しています。詳細な仕様は docs/SPEC.md を参照してください。",
+    // config.json に labels が無いときの呼び名
+    defaultLabels: { customer: "顧客", project: "案件", contract: "契約", team: "チーム", member: "メンバー" },
+    defaultCostType: "工数原価",
+  },
 };
