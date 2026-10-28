@@ -2553,34 +2553,6 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-row.is-focus > th {
   box-shadow: inset 3px 0 0 var(--yn-focus);
 }
-.yn-me-plan-detail > td {
-  background: var(--yn-wash);
-}
-.yn-me-plan-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.yn-me-plan-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-  font-size: 13px;
-}
-.yn-me-plan-contract {
-  flex: 1 1 240px;
-}
-.yn-me-plan-period,
-.yn-me-plan-alloc {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.yn-me-plan-item .yn-me-issues {
-  flex-basis: 100%;
-}
 .yn-team-org {
   margin: 0 0 6px;
   font-size: 13px;
@@ -2589,14 +2561,14 @@ html:has(dialog.yn-dialog[open]) {
 /* 横スクロールする表の中で、行全体にまたがる説明（行のエラー・稼働計画の明細）は左端に貼り付ける。
    操作ボタンへフォーカスが移ると表が右端までスクロールし、狭い幅では中身が見えなくなるため */
 #observablehq-main .yn-me-issue-row td > .yn-me-issues,
-#observablehq-main .yn-me-plan-detail > td > * {
+#observablehq-main .yn-me-plan-hist > td > * {
   position: sticky;
   left: 12px;
   max-width: calc(100vw - 72px);
 }
 @media (min-width: 640px) {
   #observablehq-main .yn-me-issue-row td > .yn-me-issues,
-  #observablehq-main .yn-me-plan-detail > td > * {
+  #observablehq-main .yn-me-plan-hist > td > * {
     max-width: min(calc(100vw - 112px), 960px);
   }
 }
@@ -3266,3 +3238,218 @@ html:has(dialog.yn-dialog[open]) {
     border-left: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * 台帳（マスタ編集: 1 対象 1 行＋変更の履歴。SPEC §32）
+ * ------------------------------------------------------------------------- */
+.yn-me-ledger .yn-me-group.is-open > th,
+.yn-me-ledger .yn-me-group.is-open > td {
+  background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+  border-bottom-color: transparent;
+}
+.yn-me-ledger .yn-me-hist > th,
+.yn-me-ledger .yn-me-hist > td {
+  background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+  font-size: 13px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.yn-me-ledger .yn-me-hist > th {
+  padding-left: 16px;
+  white-space: nowrap;
+}
+.yn-me-ledger .yn-me-issue-row > td {
+  background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+}
+.yn-me-hist-from {
+  display: block;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.yn-me-hist-arrow {
+  color: var(--yn-text-muted);
+}
+.yn-me-val.is-same {
+  color: var(--yn-text-muted);
+}
+.yn-me-diff-val {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+}
+.yn-me-diff-val .yn-me-before,
+.yn-me-diff-val .yn-me-val {
+  display: inline;
+}
+.yn-me-hist .is-edited .yn-me-val {
+  font-weight: 700;
+}
+.yn-me-hist-cell {
+  white-space: nowrap;
+}
+.yn-me-hist-cell .yn-chip {
+  margin-left: 4px;
+}
+.yn-me-hist-toggle {
+  font-variant-numeric: tabular-nums;
+}
+.yn-me-next {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--yn-link);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * 稼働計画: 人の行の下の案件・契約外予定の行と変更の履歴（SPEC §32）
+ * ------------------------------------------------------------------------- */
+.yn-me-plan-row.is-open > th,
+.yn-me-plan-row.is-open > td {
+  border-bottom-color: transparent;
+}
+.yn-me-plan-sub > th,
+.yn-me-plan-sub > td {
+  background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+  font-size: 13px;
+}
+.yn-me-plan-sub > th {
+  padding-left: 22px !important;
+}
+.yn-me-plan-sub.is-outside > th,
+.yn-me-plan-sub.is-outside > td {
+  background: linear-gradient(var(--yn-wash-strong), var(--yn-wash-strong)), var(--yn-card);
+}
+.yn-me-plan-sub-who {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.yn-me-plan-sub-who .yn-me-plan-name {
+  font-weight: 500;
+}
+.yn-me-plan-sub-who .yn-me-plan-team {
+  flex-basis: 100%;
+}
+.yn-me-plan-sub.is-empty > td {
+  padding-left: 22px;
+  font-size: 12px;
+}
+.yn-me-plan-hist > td {
+  background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+  padding: 6px 12px 10px 22px;
+}
+.yn-me-plan-histbox > p {
+  margin: 0 0 4px;
+}
+.yn-me-plan-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.yn-me-plan-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 3px 8px;
+  border-left: 3px solid var(--yn-hairline-strong);
+  background: var(--yn-card);
+}
+.yn-me-plan-entry.kind-change {
+  border-left-color: var(--yn-focus);
+}
+.yn-me-plan-entry.kind-end {
+  background: transparent;
+  color: var(--yn-text-muted);
+  border-left-style: dashed;
+}
+.yn-me-plan-entry .yn-me-plan-period {
+  min-width: 10.5em;
+  font-variant-numeric: tabular-nums;
+}
+.yn-me-plan-entry .yn-me-plan-alloc {
+  min-width: 5.5em;
+  text-align: right;
+  font-weight: 600;
+}
+.yn-me-plan-kind.is-change {
+  color: var(--yn-link);
+}
+.yn-me-plan-kind.is-warn {
+  color: var(--yn-warn-text);
+  font-weight: 600;
+}
+.yn-me-plan-entry .yn-me-hint {
+  display: inline;
+  max-width: none;
+}
+.yn-me-plan-entry .yn-me-row-actions {
+  margin-left: auto;
+}
+.yn-me-plan-entry .yn-me-issues {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+}
+.yn-me-plan-foot-sub th,
+.yn-me-plan-foot-sub td {
+  font-size: 12px;
+  color: var(--yn-text-2);
+  font-weight: 400;
+}
+.yn-plan-tip-list li.is-outside {
+  color: var(--yn-text-2);
+  border-top: 1px dashed var(--yn-hairline-strong);
+}
+.yn-plan-pop-outside {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--yn-hairline-strong);
+}
+.yn-me-plan-csv + .yn-me-plan-csv {
+  margin-top: 24px;
+}
+/* 「＋ 変更」ダイアログ */
+.yn-me-chg-scope {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.yn-me-chg-scope legend {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.yn-radio-col {
+  display: grid;
+  gap: 6px;
+}
+.yn-radio-col .yn-radio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.yn-radio-col input[type="month"] {
+  width: auto;
+  min-width: 10em;
+}
+.yn-me-chg-preview {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--yn-text-2);
+  min-height: 1.4em;
+}
+.yn-me-lead-name {
+  font-weight: 600;
+}
+.yn-me-hist-name {
+  display: block;
+  font-size: 12px;
+  white-space: normal;
+}
+.yn-me-hist-toggle { font-weight: 500; }

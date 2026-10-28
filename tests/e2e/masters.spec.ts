@@ -1,5 +1,6 @@
 /**
- * マスタ編集 /masters（SPEC §19）
+ * マスタ編集 /masters（SPEC §19・§32 台帳）
+ * - 台帳: 1 行 = 1 つの対象。開くと適用開始月ごとの変更の履歴（修正・元に戻す・削除）、「＋ 変更」で変更を追加
  * - download モード（既定の config.json）: 行の追加・修正・削除と確認、検証エラーで保存不可、差分、CSV の中身、下書き復元
  * - gitlab モード: masters.json を page.route で書き換えて有効にし、GitLab API を page.route でモック
  *   （mr / direct / 競合 / 403 / CORS 失敗 → download 切替）
@@ -71,7 +72,7 @@ async function selectTab(page: Page, label: string): Promise<void> {
 /** 単価タブで行を追加する（過去に影響すれば確認画面で適用まで押す） */
 async function addRate(page: Page, key: string, rate: string, from: string): Promise<void> {
   await selectTab(page, "単価");
-  await page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" }).click();
+  await page.getByRole("button", { name: "＋ 新しい単価" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await d.locator("#yn-me-f-key").fill(key);
   await d.locator("#yn-me-f-hourly_rate").fill(rate);
@@ -85,30 +86,65 @@ function ratesTable(page: Page) {
   return page.locator("table.yn-me-table");
 }
 
+/** 台帳の対象の行（data-group = キー） */
+function group(page: Page, key: string) {
+  return page.locator(`tr.yn-me-group[data-group="${key}"]`);
+}
+
+/** 対象の変更の履歴の行（開いていなければ開く） */
+async function history(page: Page, key: string) {
+  const toggle = group(page, key).locator(".yn-me-hist-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  return page.locator(`tr.yn-me-hist[data-parent="${key}"]`);
+}
+
+/** 対象ごとの行の数（キーの種類の数） */
+function groupCount(id: "members" | "rates" | "teams"): number {
+  const doc = parseMasterDoc(id, PAYLOAD.files[id].text);
+  return new Set(doc.rows.map((r) => r.cells[0])).size;
+}
+
 test.beforeEach(async ({ page }) => {
   // 下書きが前のテストから残らないように（同じオリジンの localStorage はテストごとに新しいコンテキストだが念のため）
   await page.addInitScript(() => {
     if (!sessionStorage.getItem("__e2e_keep_draft__")) localStorage.removeItem("yojitsu-navi:masters-draft:v1");
+    // 再訪は「別のタブ・後日」として扱う（同じタブの続きは聞かずに戻る。plan-history.spec で確かめる）
+    sessionStorage.removeItem("yojitsu-navi:masters-draft-session");
   });
 });
 
-test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのファイルのタブ＋稼働計画、説明文（折りたたみ）、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、台帳の 3 タブ（稼働計画は別画面）、説明文（折りたたみ）、行数は対象の数、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
   const links = page.locator(".yn-tools a.yn-tool");
   await expect(links.last()).toHaveText("マスタ編集");
   await expect(links.last()).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /アサイン/, /稼働計画/]);
+  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/]);
   // 説明は折りたたみ（既定で閉じる）。開くと中身が見える
   const intro = page.locator("details.yn-me-intro");
   await expect(intro).not.toHaveAttribute("open", "");
   await intro.locator("summary").click();
   await expect(intro.getByText("実績 = 作業時間 × 単価")).toBeVisible();
-  for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"], ["アサイン", "assignments"]] as const) {
+  // アサイン・契約外予定は稼働計画の画面で直す（リンク）
+  await expect(intro.getByRole("link", { name: /稼働計画/ })).toHaveAttribute("href", /plan/);
+  for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"]] as const) {
     await selectTab(page, label);
-    const n = parseMasterDoc(id, PAYLOAD.files[id].text).rows.length;
-    await expect(page.locator("table.yn-me-table tbody tr.yn-me-row")).toHaveCount(n);
+    await expect(page.locator("table.yn-me-table tbody tr.yn-me-group")).toHaveCount(groupCount(id));
+    // 履歴の行は閉じている
+    await expect(page.locator("table.yn-me-table tbody tr.yn-me-hist")).toHaveCount(0);
     await expect(page.locator("#yn-me-panel")).toContainText(MASTER_FILES[id].path);
   }
+  // 主任は 2 件の履歴（2025-04 8000 → 2026-04 8500）。開くと前 → 後
+  await selectTab(page, "単価");
+  await expect(group(page, "主任")).toContainText("8500");
+  await expect(group(page, "主任").locator(".yn-me-hist-toggle")).toContainText("変更 2件");
+  const h = await history(page, "主任");
+  await expect(h).toHaveCount(2);
+  await expect(h.nth(0)).toContainText("2025-04 から");
+  await expect(h.nth(0)).toContainText("登録");
+  await expect(h.nth(1)).toContainText("2026-04 から");
+  await expect(h.nth(1)).toContainText("いまの値");
+  await expect(h.nth(1)).toContainText("8000 → 8500");
   await expect(page.getByRole("heading", { name: "保存（CSV ダウンロード）" })).toBeVisible();
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
   await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
@@ -117,9 +153,16 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
 test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", async ({ page }) => {
   await open(page);
   await addRate(page, "部長", "14000", "2026-11");
-  const last = ratesTable(page).locator("tbody tr.yn-me-row").last();
-  await expect(last).toContainText("14000");
-  await expect(last).toContainText("追加");
+  // 今の値は 12000 のまま。予定の変更として見える
+  const g = group(page, "部長");
+  await expect(g).toContainText("12000");
+  await expect(g).toContainText("14000");
+  await expect(g).toContainText("予定 1");
+  await expect(g).toContainText("追加");
+  const h = await history(page, "部長");
+  await expect(h.last()).toContainText("2026-11 から");
+  await expect(h.last()).toContainText("予定");
+  await expect(h.last()).toContainText("12000 → 14000");
   await expect(page.getByRole("tab", { name: /単価/ })).toContainText("変更 1");
   const diff = page.locator(".yn-me-diff-table");
   await expect(diff.locator("tbody tr")).toHaveCount(1);
@@ -141,7 +184,7 @@ test("過去に影響する追加・修正・削除は確認画面で影響月�
   await open(page);
   await selectTab(page, "単価");
   // 追加（2026-04 → 2026-10 までの 7 か月）
-  await page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" }).click();
+  await page.getByRole("button", { name: "＋ 新しい単価" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await expect(d).toHaveRole("dialog");
   await d.locator("#yn-me-f-key").fill("一般");
@@ -156,37 +199,41 @@ test("過去に影響する追加・修正・削除は確認画面で影響月�
   await d.locator('[data-role="submit"]').click();
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
-  await expect(ratesTable(page).locator("tbody tr.yn-me-row").last()).toContainText("6500");
+  // 2026-04 からの値が今の値になる
+  await expect(group(page, "一般")).toContainText("6500");
+  await expect(group(page, "一般").locator(".yn-me-hist-toggle")).toContainText("変更 2件");
 
-  // 既存行の修正: 変わる値と影響を表示
-  const row = ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "課長" }).first();
-  await row.getByRole("button", { name: /行を修正/ }).click();
+  // 今の値の修正: 変わる値と影響を表示
+  const row = group(page, "課長");
+  await row.getByRole("button", { name: /課長 の今の値/ }).click();
   await d.locator("#yn-me-f-hourly_rate").fill("10500");
   await d.locator('[data-role="submit"]').click();
   await expect(d.locator(".yn-me-change-list")).toContainText("10000 → 10500");
   await expect(d.locator(".yn-me-impact")).toContainText(/影響: \d+ か月/);
   await d.locator('[data-role="submit"]').click();
-  await expect(row).toContainText("変更");
-  // 元に戻す
-  await row.getByRole("button", { name: /変更を元に戻す/ }).click();
-  await expect(row).not.toContainText("変更");
+  await expect(row.locator(".yn-me-state")).toContainText("変更");
+  // 修正した履歴は開いて見える。元に戻す
+  const kacho = await history(page, "課長");
+  await expect(kacho.first()).toContainText("10500");
+  await kacho.first().getByRole("button", { name: /修正を元に戻す/ }).click();
+  await expect(row.locator(".yn-me-state")).not.toContainText("変更");
 
   // 削除（確認つき）→ 一覧から取り消し
-  const p002 = ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" });
-  await p002.getByRole("button", { name: /行を削除/ }).click();
+  const p002 = await history(page, "P002");
+  await p002.getByRole("button", { name: /藤井 隆 の 2025-10 からの履歴を削除/ }).click();
   await expect(d).toContainText("行を削除しますか");
   await expect(d.locator(".yn-me-impact")).toContainText("過去の計算結果が変わります");
   await d.locator('[data-role="confirm-delete"]').click();
-  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" })).toHaveCount(0);
+  await expect(group(page, "P002")).toHaveCount(0);
   await expect(page.locator(".yn-me-removed")).toContainText("藤井 隆");
   await page.getByRole("button", { name: "削除を取り消す" }).click();
-  await expect(ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" })).toHaveCount(1);
+  await expect(group(page, "P002")).toHaveCount(1);
 });
 
 test("必須の未入力はダイアログで止め、検証エラーは行に表示して保存（ダウンロード）を押せない", async ({ page }) => {
   await open(page);
   await selectTab(page, "単価");
-  await page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" }).click();
+  await page.getByRole("button", { name: "＋ 新しい単価" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await d.locator('[data-role="submit"]').click();
   await expect(d.locator(".yn-me-form-msg")).toContainText("入力してください");
@@ -194,6 +241,8 @@ test("必須の未入力はダイアログで止め、検証エラーは行に�
   await expect(d).toHaveCount(0);
 
   await addRate(page, "課長", "abc", "2026-12");
+  // エラーのある対象は履歴を自動で開く
+  await expect(group(page, "課長")).toHaveClass(/is-invalid/);
   const bad = ratesTable(page).locator("tbody tr.yn-me-row.is-invalid");
   await expect(bad).toHaveCount(1);
   await expect(page.locator(".yn-me-issue-row")).toContainText("hourly_rate が数値ではありません");
@@ -204,8 +253,8 @@ test("必須の未入力はダイアログで止め、検証エラーは行に�
 
   // 別タブの行にもエラーが出る: チームを消すとメンバー行がエラー
   await selectTab(page, "組織");
-  const team = page.locator("table.yn-me-table tbody tr.yn-me-row").filter({ hasText: "S11" }).first();
-  await team.getByRole("button", { name: /行を削除/ }).click();
+  const team = await history(page, "S11");
+  await team.first().getByRole("button", { name: /履歴を削除/ }).click();
   await page.locator('[data-role="confirm-delete"]').click();
   await expect(page.getByRole("tab", { name: /メンバー/ })).toContainText(/エラー \d+/);
   await page.locator(".yn-me-check-slot").getByRole("button", { name: /メンバー/ }).click();
@@ -266,11 +315,11 @@ async function staleDraftWithConflict(page: Page): Promise<void> {
   await open(page);
   await selectTab(page, "単価");
   const d = page.locator("dialog.yn-me-dialog[open]");
-  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "課長" }).first().getByRole("button", { name: /行を修正/ }).click();
+  await group(page, "課長").getByRole("button", { name: /課長 の今の値/ }).click();
   await d.locator("#yn-me-f-hourly_rate").fill("10500");
   await d.locator('[data-role="submit"]').click();
   await d.locator('[data-role="submit"]').click();
-  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "藤井 隆" }).getByRole("button", { name: /行を削除/ }).click();
+  await (await history(page, "P002")).getByRole("button", { name: /履歴を削除/ }).click();
   await d.locator('[data-role="confirm-delete"]').click();
   await addRate(page, "部長", "14000", "2026-11");
   await page.evaluate((k) => {
@@ -352,8 +401,10 @@ test("影響ダイアログ: 所属チームだけ変える行の追加は「組
   await open(page);
   await selectTab(page, "メンバー");
   const d = page.locator("dialog.yn-me-dialog[open]");
-  const first = page.locator("table.yn-me-table tbody tr.yn-me-row").first();
-  await first.getByRole("button", { name: /新しい適用開始月の行を追加/ }).click();
+  const first = page.locator("table.yn-me-table tbody tr.yn-me-group").first();
+  await first.getByRole("button", { name: /の変更を追加/ }).click();
+  // 変える月は既定で翌月（過去を変えない）
+  await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11");
   const team = d.locator("#yn-me-f-team_id");
   const current = await team.inputValue();
   const other = await team.locator("option").evaluateAll((opts, cur) => opts.map((o) => (o as HTMLOptionElement).value).find((v) => v !== "" && v !== cur)!, current);
@@ -429,7 +480,7 @@ test.describe("gitlab モード", () => {
     expect(calls[2]!.body).toMatchObject({ source_branch: commit.branch, target_branch: "main", title: "2026年11月の部長単価改定" });
     // 保存後は下書きを消し、編集をロック
     expect(await page.evaluate((k) => localStorage.getItem(k), DRAFT_KEY)).toBeNull();
-    await expect(page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "＋ 新しい単価" })).toBeDisabled();
     await page.getByRole("button", { name: "新しく編集を始める（元のデータから）" }).click();
     await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
   });
@@ -533,9 +584,9 @@ test("取り込みモード（memberSource.adapter = csv）: メンバーの取�
   await patchMasters(page, (p) => ({ ...p, memberSourceAdapter: "csv" }));
   await open(page);
   await expect(page.locator("#yn-me-panel")).toContainText("人事データから自動で取り込みます");
-  const row = page.locator("table.yn-me-table tbody tr.yn-me-row").first();
-  await expect(row.getByRole("button", { name: /行を削除/ })).toHaveCount(0);
-  await row.getByRole("button", { name: /行を修正/ }).click();
+  const row = await history(page, "M001");
+  await expect(row.getByRole("button", { name: /履歴を削除/ })).toHaveCount(0);
+  await row.first().getByRole("button", { name: /履歴を修正/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   for (const name of ["name", "kind", "title", "department", "section"]) await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
   await expect(d.locator('[name="team_id"]')).toBeEnabled();
@@ -551,17 +602,17 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
   await expect(page.getByRole("tab", { name: /単価/ })).toBeFocused();
   await expect(page.getByRole("tab", { name: /単価/ })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: /稼働計画/ })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /組織/ })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(first).toBeFocused();
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "yn-me-tab-members");
 
-  const add = page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" });
+  const add = page.getByRole("button", { name: "＋ 新しいメンバー" });
   await add.click();
   const d = page.getByRole("dialog");
   await expect(d).toBeVisible();
   const labelledBy = await d.getAttribute("aria-labelledby");
-  await expect(page.locator(`#${labelledBy}`)).toContainText("新しい適用開始月の行を追加");
+  await expect(page.locator(`#${labelledBy}`)).toContainText("新しいメンバー");
   await expect(d.locator("#yn-me-f-member_id")).toBeFocused();
   // すべての入力にラベル
   const ids = await d.locator("input, select").evaluateAll((els) => els.filter((e) => (e as HTMLInputElement).type !== "hidden").map((e) => e.id));
@@ -572,10 +623,18 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
 
   const t = page.locator("table.yn-me-table");
   await expect(t.locator("caption")).toHaveCount(1);
-  await expect(t.locator("thead th[scope=col]")).toHaveCount(10);
-  await expect(t.locator("tbody tr.yn-me-row").first().locator("th[scope=row]")).toHaveCount(1);
-  // 行の操作ボタンは「何の行か」を名前に含む
-  await expect(t.locator("tbody tr.yn-me-row").first().getByRole("button", { name: /M001 の行を修正/ })).toBeVisible();
+  // 名前（ID）・区分・役職・部署・課・所属チーム・変更の履歴・状態・操作
+  await expect(t.locator("thead th[scope=col]")).toHaveCount(9);
+  const g = t.locator("tbody tr.yn-me-group").first();
+  await expect(g.locator("th[scope=row]")).toHaveCount(1);
+  // 行の操作ボタンは「誰の行か」を名前で含む（ID ではなく）
+  await expect(g.getByRole("button", { name: /佐藤 健一 の今の値/ })).toBeVisible();
+  await expect(g.getByRole("button", { name: /佐藤 健一 の変更の履歴（1 件）/ })).toHaveAttribute("aria-expanded", "false");
+  await g.getByRole("button", { name: /佐藤 健一 の変更の履歴/ }).click();
+  await expect(g.getByRole("button", { name: /佐藤 健一 の変更の履歴/ })).toBeFocused();
+  await expect(g.getByRole("button", { name: /佐藤 健一 の変更の履歴/ })).toHaveAttribute("aria-expanded", "true");
+  const controls = await g.getByRole("button", { name: /佐藤 健一 の変更の履歴/ }).getAttribute("aria-controls");
+  await expect(page.locator(`#${controls}`)).toHaveClass(/yn-me-hist/);
   // h1 は 1 つ
   await expect(page.locator("h1")).toHaveCount(1);
 });
@@ -588,7 +647,7 @@ test("ダークモード・390px: 横スクロール無し、主要な操作が�
   expect(bg).not.toBe("rgb(255, 255, 255)");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
-  await expect(page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "＋ 新しいメンバー" })).toBeVisible();
   await addRate(page, "部長", "14000", "2026-11");
   await expect(page.locator(".yn-me-diff-table")).toBeVisible();
   const overflow2 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -12,9 +12,21 @@ title: マスタ編集
 import { html } from "htl";
 import { T, fmt, rich } from "./i18n/index.js";
 import { pageHeader, loadJson, errorState } from "./components/layout.js";
-import { mastersEditor } from "./components/masters.js";
+import { mastersEditor, LEDGER_VIEWS } from "./components/masters.js";
 import { effectiveSaveMode } from "./core/gitlab.js";
 import { dateIso, monthJa } from "./components/format.js";
+```
+
+```js
+// アサイン・稼働計画は稼働計画の画面で編集する（§32）。以前のリンク（?view=assignments / plan）はそちらへ
+{
+  const v = new URLSearchParams(location.search).get("view");
+  if (v === "assignments" || v === "plan") {
+    const q = new URLSearchParams(location.search);
+    q.delete("view");
+    location.replace(`./plan${q.toString() ? `?${q}` : ""}`);
+  }
+}
 ```
 
 ```js
@@ -44,7 +56,7 @@ if (model && mastersData && !mastersData.error) {
       <div><dt>${T.masterFiles.members}</dt><dd>${rich(T.mastersPage.introMembers)}</dd></div>
       <div><dt>${T.masterFiles.rates}</dt><dd>${rich(T.mastersPage.introRates)}</dd></div>
       <div><dt>${T.masterFiles.teams}</dt><dd>${rich(T.mastersPage.introTeams)}</dd></div>
-      <div><dt>${T.mastersPage.introAssignmentsTitle}</dt><dd>${rich(T.mastersPage.introAssignments)}</dd></div>
+      <div><dt>${T.mastersPage.introAssignmentsTitle}</dt><dd>${rich(T.mastersPage.introAssignments)} <a href="./plan">${T.mastersPage.introPlanLink}</a></dd></div>
     </dl>
     <p class="yn-me-intro-rule">${rich(T.mastersPage.introRule, { asOf: dateIso(model.meta.asOf), month: monthJa(model.meta.asOfMonth) })}</p>
     <ol class="yn-me-flow" aria-label=${T.mastersPage.flowLabel}>
@@ -63,6 +75,6 @@ if (model && mastersData?.error) {
   display(errorState({ title: T.mastersPage.loadFailed, error: mastersData.error }));
 } else if (model && mastersData) {
   const params = new URLSearchParams(location.search);
-  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null }));
+  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, views: LEDGER_VIEWS, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null }));
 }
 ```

@@ -172,6 +172,16 @@ export interface Assignment {
   allocation: number;
 }
 
+/** 契約外予定（§30.5・§32）: 人 × 期間 × 人月。作業種別は持たない。契約の計画額・着地見込みには入れない */
+export interface OutsidePlan {
+  memberId: string;
+  startMonth: YearMonth;
+  endMonth: YearMonth;
+  /** 人月（0〜1.0） */
+  personMonths: number;
+  note: string;
+}
+
 export interface TeamRecord {
   teamId: string;
   name: string;
@@ -245,6 +255,8 @@ export interface Dataset {
   worklogs: Worklog[];
   /** 作業種別の分類表（§30.1）。省略・空 = すべて契約内 */
   taskTypes?: TaskTypeRule[];
+  /** 契約外予定（§32）。省略・空 = なし */
+  outsidePlans?: OutsidePlan[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }

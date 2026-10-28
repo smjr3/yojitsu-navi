@@ -40,6 +40,9 @@ import { baseConfig } from "./fixtures.js";
 const RATES = "key,hourly_rate,effective_from\n本部長,15000,2025-04\n部長,12000,2025-04\n主任,8000,2025-04\n部長,13000,2026-04\n";
 const range = { fromMonth: "2025-04", toMonth: "2026-10" };
 
+/** 契約外予定（§32）の空のファイル */
+const OUTSIDE_EMPTY = "member_id,start_month,end_month,person_months,note\n";
+
 describe("splitCsvRecords", () => {
   it("引用符内のカンマ・改行・二重引用符を 1 セルとして読み、元テキストも返す", () => {
     const text = 'a,b\r\n"x,1","line1\nline2"\n"say ""hi""",z';
@@ -296,6 +299,7 @@ describe("validateEdited", () => {
     rates: parseMasterDoc("rates", RATES),
     teams: parseMasterDoc("teams", teams),
     assignments: parseMasterDoc("assignments", assignments),
+    outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
   });
 
   it("元データはエラー 0", () => {
@@ -349,12 +353,14 @@ describe("下書き", () => {
     rates: { text: RATES, lastCommitId: "b" },
     teams: { text: "team_id,name,parent_team_id,effective_from\n", lastCommitId: "c" },
     assignments: { text: "member_id,contract_id,start_month,end_month,allocation\n", lastCommitId: null },
+    outside: { text: OUTSIDE_EMPTY, lastCommitId: null },
   };
   const pristine = (): Record<MasterFileId, MasterDoc> => ({
     members: parseMasterDoc("members", bases.members.text),
     rates: parseMasterDoc("rates", bases.rates.text),
     teams: parseMasterDoc("teams", bases.teams.text),
     assignments: parseMasterDoc("assignments", bases.assignments.text),
+    outside: parseMasterDoc("outside", bases.outside.text),
   });
 
   it("キーは yojitsu-navi:masters-draft:v1", () => {

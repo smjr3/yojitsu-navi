@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName } from "./normalize.js";
-import type { Assignment, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, OutsidePlan, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -142,6 +142,8 @@ export interface DatasetFiles {
   holidays: string;
   /** 作業種別の分類表（§30.1）。省略・空 = 分類なし（すべて契約内） */
   taskTypes?: string;
+  /** 契約外予定（§32）。省略・空 = なし */
+  outsidePlans?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
   /** worklogs と同じ順のファイル名（警告にファイル名・行番号を出すため。無ければ worklogs[i]） */
@@ -159,6 +161,7 @@ export interface ParsedDataset {
 
 const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
   taskTypes: ["task", "category"],
+  outsidePlans: ["member_id", "start_month", "end_month", "person_months"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -300,9 +303,21 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
   }
 
   const taskTypes = parseTaskTypes(files.taskTypes, issues);
+  // 契約外予定（§32）: 省略可。空なら読まない（列の欠落も問わない）
+  const outsidePlans: OutsidePlan[] =
+    (files.outsidePlans ?? "").trim() === ""
+      ? []
+      : parseTable("outside-plans.csv", files.outsidePlans as string, REQUIRED_COLUMNS.outsidePlans, issues).rows.map((r) => ({
+          memberId: r.get("member_id"),
+          startMonth: r.get("start_month"),
+          endMonth: r.get("end_month"),
+          personMonths: parseNumberCell(r.get("person_months")),
+          note: r.get("note"),
+        }));
 
   const dataset: Dataset = { config: files.config, contracts, mappings, assignments, teams, members, rates, holidays, worklogs };
   if (taskTypes.length > 0) dataset.taskTypes = taskTypes;
+  if (outsidePlans.length > 0) dataset.outsidePlans = outsidePlans;
   if (files.worklogFetchedAt !== undefined) dataset.worklogFetchedAt = files.worklogFetchedAt;
 
   // 列の欠落・引用符の閉じ忘れがあるファイルは、行ごとのエラーが同じ原因で大量に出るだけなので、元のエラーだけを残す

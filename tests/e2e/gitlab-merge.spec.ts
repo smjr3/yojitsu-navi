@@ -156,7 +156,7 @@ test.describe("CSV で直接編集", () => {
     await expect(page.locator(".yn-me-csv-result")).toContainText("追加 1・変更 0・削除 0");
     await expect(area).toHaveValue(/課長,11000,2026-11\n$/);
     await page.getByRole("button", { name: "表で編集" }).click();
-    await expect(page.locator("table.yn-me-table tbody tr.yn-me-row").last()).toContainText("11000");
+    await expect(page.locator('tr.yn-me-group[data-group="課長"]')).toContainText("11000");
   });
 });
 

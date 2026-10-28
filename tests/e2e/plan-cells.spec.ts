@@ -1,5 +1,5 @@
 /**
- * 稼働計画のセル（SPEC §31.4）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
+ * 稼働計画のセル（SPEC §31.4・§32: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
  */
 import type { Page } from "@playwright/test";
 import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.js";
@@ -7,11 +7,12 @@ import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.j
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (sessionStorage.getItem("yn-e2e-keep-draft") !== "1") localStorage.removeItem("yojitsu-navi:masters-draft:v1");
+    sessionStorage.removeItem("yojitsu-navi:masters-draft-session");
     sessionStorage.removeItem("yojitsu-navi:plan-cell-scope");
   });
 });
 
-const cell = (page: Page, member: string, month: string) => page.locator(`[data-fk="plan:cell:${member}:${month}"]`);
+const cell = (page: Page, member: string, month: string) => page.locator(`[data-fk="plan:cell:${member}:all:${month}"]`);
 const pop = (page: Page) => page.locator("dialog.yn-plan-pop[open]");
 
 test("行は 1 行に詰め、ID は出さない（名前と所属だけ）", async ({ page }) => {
@@ -26,13 +27,18 @@ test("行は 1 行に詰め、ID は出さない（名前と所属だけ）", as
 
 test("セルにマウスを載せると内訳の吹き出し、フォーカスでも出る", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
-  await cell(page, "M010", "2026-12").hover();
+  await cell(page, "M010", "2026-10").hover();
   const tip = page.locator("#yn-plan-tip");
   await expect(tip).toBeVisible();
-  await expect(tip).toContainText("2026年12月 合計 0.90 人月（144 時間）");
+  await expect(tip).toContainText("2026年10月 合計 0.90 人月（144 時間）");
   await expect(tip).toContainText("青葉物流 / 倉庫管理システム保守");
   await expect(tip).toContainText("空き 0.10 人月");
   await expect(tip).not.toContainText("C002");
+  // 契約外予定のある月: 内訳に契約外予定、合計が 1.0 を超えると超過
+  await cell(page, "M010", "2026-12").hover();
+  await expect(tip).toContainText("2026年12月 合計 1.10 人月");
+  await expect(tip).toContainText("契約外予定");
+  await expect(tip).toContainText("1.0 人月を 0.10 超えています");
   await page.mouse.move(0, 0);
   await expect(tip).toBeHidden();
   await cell(page, "M010", "2027-01").focus();
@@ -50,19 +56,26 @@ test("クリックで修正: この月だけ変えると行を月で分け、元
   await page.keyboard.type("0.5");
   await page.keyboard.press("Enter");
   await expect(p).toHaveCount(0);
-  await expect(cell(page, "M010", "2026-12")).toHaveText("0.50");
-  await expect(cell(page, "M010", "2026-11")).toHaveText("0.90");
-  await expect(cell(page, "M010", "2027-01")).toHaveText("0.90");
+  // 人の行は保守 0.5 ＋ 契約外予定 0.2
+  await expect(cell(page, "M010", "2026-12")).toHaveText("0.70");
+  await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
+  await expect(cell(page, "M010", "2027-01")).toHaveText("1.10");
   // フォーカスは修正したセルへ戻る
   await expect(cell(page, "M010", "2026-12")).toBeFocused();
-  // 3 行に分かれる（4〜11月 0.9・12月 0.5・1〜3月 0.9）
+  // 案件の行は 1 行のまま。変更の履歴が 3 件（4月〜 0.9・12月 0.5 に変更・1月〜 0.9 に変更）
   await page.locator('[data-fk="plan:toggle:M010"]').click();
-  await expect(page.locator("#yn-me-plan-d-M010 .yn-me-plan-item")).toHaveCount(3);
-  // 元に戻す → 1 行・変更なし
+  const subs = page.locator('tr.yn-me-plan-sub.is-project[data-member="M010"]');
+  await expect(subs).toHaveCount(1);
+  await subs.locator('[data-fk^="plan:hist:"]').click();
+  const entries = page.locator("tr.yn-me-plan-hist li.yn-me-plan-entry[data-key]");
+  await expect(entries).toHaveCount(3);
+  await expect(entries.nth(1)).toContainText("0.90 → 0.50 人月に変更");
+  await expect(entries.nth(2)).toContainText("0.50 → 0.90 人月に変更");
+  // 元に戻す → 1 件・変更なし
   await cell(page, "M010", "2026-12").click();
   await p.locator("#yn-plan-pop-0").fill("0.9");
   await p.locator("#yn-plan-pop-0").press("Enter");
-  await expect(page.locator("#yn-me-plan-d-M010 .yn-me-plan-item")).toHaveCount(1);
+  await expect(entries).toHaveCount(1);
   await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
 });
 
@@ -163,8 +176,8 @@ test("スマホ幅（390）・ダーク: 編集欄は画面下のシートで、
 });
 
 test("アサインの追加: 案件を選び、期間が契約の切り替わりをまたぐと 2 行に分けて保存", async ({ page }) => {
-  await gotoPage(page, "/masters?view=assignments");
-  await page.getByRole("button", { name: /アサインを追加/ }).click();
+  await gotoPage(page, "/plan?team=T111");
+  await page.getByRole("button", { name: "＋ 計画を追加", exact: true }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await pickCombo(d.locator("#yn-me-f-member_id"), "インフラ 小林");
   await expect(d.locator("#yn-me-f-member_id")).toHaveValue("小林 玲奈");
@@ -176,16 +189,20 @@ test("アサインの追加: 案件を選び、期間が契約の切り替わり
   await expect(d.locator(".yn-me-split")).toContainText("2 行に分けて保存します: 2026-01〜2026-03、2026-04〜2026-06");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
-  const added = page.locator("tr.yn-me-row.is-added");
-  await expect(added).toHaveCount(2);
-  await expect(added.first()).toContainText("小林 玲奈");
-  await expect(added.first()).toContainText("青葉物流 / 倉庫管理システム保守");
+  const diff = page.locator(".yn-me-diff-table");
+  await expect(diff).toContainText("小林 玲奈 ・ 青葉物流 / 倉庫管理システム保守 ・ 2026-01 ・ 2026-03 ・ 0.05");
+  await expect(diff).toContainText("小林 玲奈 ・ 青葉物流 / 倉庫管理システム保守 ・ 2026-04 ・ 2026-06 ・ 0.05");
+  // 案件の行は 1 行のまま（契約が 2 つでも案件でまとめる）。4〜6 月は 0.95
+  const sub = page.locator('tr.yn-me-plan-sub.is-project[data-member="M011"]');
+  await expect(sub).toHaveCount(1);
+  await expect(sub).toContainText("追加");
+  await expect(cell(page, "M011", "2026-06")).toHaveText("0.95");
   await expect(page.locator("table.yn-me-table tbody")).not.toContainText("C001");
 });
 
 test("候補の入力欄: 打った文字で絞り込み、候補に無い文字は元の値に戻す。Esc は候補だけ閉じる", async ({ page }) => {
-  await gotoPage(page, "/masters?view=assignments");
-  await page.getByRole("button", { name: /アサインを追加/ }).click();
+  await gotoPage(page, "/plan");
+  await page.getByRole("button", { name: "＋ 計画を追加", exact: true }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   const input = d.locator("#yn-me-f-member_id");
   await input.click();
