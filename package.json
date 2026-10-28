@@ -5,7 +5,9 @@
   "description": "保守契約の予実（粗利）管理ダッシュボード",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/seed-npm-cache.mjs",
     "dev": "observable preview",
+    "prebuild": "node scripts/seed-npm-cache.mjs",
     "build": "observable build",
     "clean": "observable clean",
     "fetch": "tsx scripts/fetch-worklogs.ts",
