@@ -94,7 +94,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   }
 }
 
-function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
+function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "masters/teams.csv";
   dataset.teams.forEach((t, i) => {
     const row = rowOf(i);
@@ -102,6 +102,9 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: Iss
     if (!isValidYearMonth(t.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: `${file} ${row} 行目: effective_from の形式が不正です: ${t.effectiveFrom}`, file, row });
     if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
       push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: `${file} ${row} 行目: 親チーム ${t.parentTeamId} は存在しません`, file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
+    }
+    if (t.leaderMemberId != null && t.leaderMemberId !== "" && !memberIds.has(t.leaderMemberId)) {
+      push({ severity: "error", code: "TEAM_UNKNOWN_LEADER", message: `${file} ${row} 行目: リーダー ${t.leaderMemberId} は members.csv に存在しません`, file, row, ref: { teamId: t.teamId, memberId: t.leaderMemberId } });
     }
   });
   // 循環: effective_from の各時点の組織で検出する
@@ -212,7 +215,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateContracts(dataset, push);
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
-  validateTeams(dataset, teamIds, push);
+  validateTeams(dataset, teamIds, memberIds, push);
   validateMembers(dataset, teamIds, push);
   validateRates(dataset, push);
   validateHolidays(dataset, push);

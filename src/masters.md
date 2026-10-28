@@ -42,8 +42,8 @@ if (model && mastersData && !mastersData.error) {
     <dl class="yn-me-intro-grid">
       <div><dt>メンバー</dt><dd>所属チーム・役職。<strong>役職</strong>を変えると、その月からの<strong>時間単価</strong>が変わり原価が変わります。</dd></div>
       <div><dt>単価</dt><dd>役職ごと・パートナー個人の時間単価。<strong>原価 = 作業時間 × 単価</strong> なので、原価・粗利・消化率・着地見込みが変わります。</dd></div>
-      <div><dt>チーム</dt><dd>組織の名前と親子関係。チーム一覧の組織の木と、上位組織の合計が変わります。</dd></div>
-      <div><dt>アサイン</dt><dd>誰をどの契約に何人月割り当てるか。着地見込み（アサイン方式）とメンバー別の計画が変わります。</dd></div>
+      <div><dt>組織</dt><dd>組織の名前・種別（課・チーム・班など自由）・親子関係・リーダー。チーム一覧の組織の木と、上位組織の合計が変わります。</dd></div>
+      <div><dt>アサイン／稼働計画</dt><dd>誰をどの契約に何人月割り当てるか。「稼働計画」タブでは組織のメンバー別・月別にまとめて見ながら入力できます（人月でも時間でも入力可）。着地見込み（アサイン方式）とメンバー別の計画が変わります。</dd></div>
     </dl>
     <p class="yn-me-intro-rule"><strong>履歴は「行を追加」で残します。</strong>「4月から単価を変える」なら、既存の行は書き換えず、適用開始月を 4 月にした行を追加します。適用開始月より前の月は、これまでの値のまま計算されます。過去の月の数値が変わる操作には、適用前に影響する月数を表示します（計算基準日 ${dateIso(model.meta.asOf)}、${monthJa(model.meta.asOfMonth)} までを「過去」として数えます）。</p>
     <ol class="yn-me-flow" aria-label="保存までの流れ">
@@ -61,6 +61,7 @@ if (model && mastersData && !mastersData.error) {
 if (model && mastersData?.error) {
   display(errorState({ title: "マスタのデータを読み込めませんでした", error: mastersData.error }));
 } else if (model && mastersData) {
-  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth }));
+  const params = new URLSearchParams(location.search);
+  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null }));
 }
 ```

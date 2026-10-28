@@ -32,8 +32,11 @@ import {
   rowState,
   staleDraftFiles,
   updateRow,
+  planSourcesFromDocs,
   validateEdited,
 } from "../core/masterEdit.js";
+import { allocationFromInput, flattenTeamTree, hoursFromAllocation, memberTeamAt, planView } from "../core/plan.js";
+import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 
@@ -52,9 +55,9 @@ export const FILE_HELP = {
     howto: "単価改定は「新しい適用開始月の行を追加」。例: 4月から部長の単価を上げる → キー「部長」、適用開始月 2026-04 の行を足す。",
   },
   teams: {
-    what: "チーム（組織）の名前と親子関係。",
-    effect: "チーム一覧の組織の木と、上位組織の合計（配下の合計）が変わります。チームを消すと、そのチームを使っているメンバー・契約が検証エラーになります。",
-    howto: "組織変更は、変わった月からの行を追加します（過去の月は当時の組織のまま集計されます）。",
+    what: "組織（本部・事業部・課・チーム・班など）の名前・種別・親子関係・リーダー。段数は自由で、種別は組織ごとに好きな呼び名を付けられます。",
+    effect: "チーム一覧の組織の木と、上位組織の合計（配下の合計）が変わります。種別とリーダーは表示だけで、数値は変わりません。組織を消すと、その組織を使っているメンバー・契約が検証エラーになります。",
+    howto: "組織変更（新設・統合・改称・格上げ・リーダー交代）は、変わった月からの行を追加します（過去の月は当時の組織のまま集計されます）。",
   },
   assignments: {
     what: "誰を、どの契約に、何人月（0〜1.0）割り当てるか。",
@@ -62,6 +65,24 @@ export const FILE_HELP = {
     howto: "期間（開始月〜終了月）と配分を入力します。配分を途中で変えるときは、元の行の終了月を前月にして、新しい行を追加します。",
   },
 };
+
+/** 稼働計画タブ（§23。アサインのファイルを、組織 × メンバー × 月で見せる別の見せ方） */
+export const PLAN_VIEW_ID = "plan";
+const VIEW_IDS = [...MASTER_FILE_IDS, PLAN_VIEW_ID];
+const VIEW_LABELS = { plan: { label: "稼働計画", file: "人 × 月の一覧" } };
+
+/** 月 m を含む年度の 12 か月 */
+function fiscalMonths(month, startMonth) {
+  const [y, m] = month.split("-").map(Number);
+  const fy = m >= startMonth ? y : y - 1;
+  const first = `${fy}-${String(startMonth).padStart(2, "0")}`;
+  return Array.from({ length: 12 }, (_, i) => addMonths(first, i));
+}
+
+/** 人月の表示（小数 2 桁）。保存・表示は人月に統一（§23.2） */
+function pm(v) {
+  return (Math.round(v * 100) / 100).toFixed(2);
+}
 
 const KIND_LABELS = { employee: "社員", partner: "パートナー" };
 const STATE_LABELS = { added: "追加", changed: "変更" };
@@ -126,7 +147,7 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (url, init) => window.fetch(url, init), now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, initialView = null, initialTeam = null, initialMember = null, fetchImpl = (url, init) => window.fetch(url, init), now = () => new Date() }) {
   const local = safeStorage("local");
   const session = safeStorage("session");
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
@@ -139,7 +160,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   let docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
   /** 古い土台の下書きを当て直して復元したファイル → { applied, resolved }（表の上に注記する） */
   let rebasedInfo = {};
-  let active = "members";
+  let active = VIEW_IDS.includes(initialView) ? initialView : "members";
+  const std = config.standardHoursPerMonth;
+  // 稼働計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
+  const plan = {
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts).members, initialMember, asOfMonth) : null),
+    months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
+    focusMember: initialMember,
+    open: new Set(initialMember ? [initialMember] : []),
+  };
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   let mode = effectiveSaveMode(data.masterEdit);
   const configuredMode = mode;
@@ -199,6 +228,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     const latest = latestByKey(docs.teams, "team_id");
     return new Map([...latest.entries()].map(([id, v]) => [id, cellOf(docs.teams, v.row, "name")]));
   }
+  /** 組織の種別の候補（いま使われている値。§21） */
+  function levelOptions() {
+    const s = new Set();
+    for (const r of docs.teams.rows) {
+      const v = cellOf(docs.teams, r, "level");
+      if (v) s.add(v);
+    }
+    return [...s];
+  }
   function titleOptions() {
     const s = new Set();
     for (const r of docs.members.rows) {
@@ -218,6 +256,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     if (value === "") return null;
     if (column === "team_id" || column === "parent_team_id") return teamNames().get(value) ?? "（存在しないチーム）";
     if ((fileId === "assignments" && column === "member_id") || (fileId === "rates" && column === "key")) return memberNames().get(value) ?? null;
+    if (column === "leader_member_id") return memberNames().get(value) ?? "（存在しないメンバー）";
+    if (column === "allocation" && Number.isFinite(Number(value))) return `= ${hoursFromAllocation(Number(value), std)} 時間`;
     if (column === "contract_id") {
       const c = contracts.find((x) => x.id === value);
       return c ? `${c.customer} / ${c.project}` : "（存在しない契約）";
@@ -251,6 +291,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   /** 文書を差し替え → 検証 → 下書き保存 → 描き直し */
   function commit(fileId, nextDoc, focus) {
     docs = { ...docs, [fileId]: nextDoc };
+    // 稼働計画タブで追加・修正した行は、そのメンバーの計画を開いて見せる
+    if (active === PLAN_VIEW_ID && fileId === "assignments" && focus?.startsWith("edit:")) {
+      const row = nextDoc.rows.find((r) => r.id === focus.slice(5));
+      if (row) plan.open.add(cellOf(nextDoc, row, "member_id"));
+    }
     validation = validateEdited(docs, data.context, config);
     outcome = outcome?.kind === "error" ? outcome : null;
     downloaded = new Set();
@@ -376,25 +421,26 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       if (focus) focusKey(`tab:${id}`);
     };
     const onKey = (ev) => {
-      const i = MASTER_FILE_IDS.indexOf(active);
+      const i = VIEW_IDS.indexOf(active);
       let next = null;
-      if (ev.key === "ArrowRight") next = MASTER_FILE_IDS[(i + 1) % MASTER_FILE_IDS.length];
-      else if (ev.key === "ArrowLeft") next = MASTER_FILE_IDS[(i + MASTER_FILE_IDS.length - 1) % MASTER_FILE_IDS.length];
-      else if (ev.key === "Home") next = MASTER_FILE_IDS[0];
-      else if (ev.key === "End") next = MASTER_FILE_IDS[MASTER_FILE_IDS.length - 1];
+      if (ev.key === "ArrowRight") next = VIEW_IDS[(i + 1) % VIEW_IDS.length];
+      else if (ev.key === "ArrowLeft") next = VIEW_IDS[(i + VIEW_IDS.length - 1) % VIEW_IDS.length];
+      else if (ev.key === "Home") next = VIEW_IDS[0];
+      else if (ev.key === "End") next = VIEW_IDS[VIEW_IDS.length - 1];
       if (next) {
         ev.preventDefault();
         select(next);
       }
     };
     parts.tabs.replaceChildren(html`<div class="yn-me-tabs" role="tablist" aria-label="編集するファイル" onkeydown=${onKey}>
-      ${MASTER_FILE_IDS.map((id) => {
-        const errs = errorCount(id);
+      ${VIEW_IDS.map((id) => {
+        const isPlan = id === PLAN_VIEW_ID;
+        const errs = isPlan ? 0 : errorCount(id);
         const selected = id === active;
-        return html`<button type="button" role="tab" id=${`yn-me-tab-${id}`} class="yn-me-tab" aria-selected=${selected ? "true" : "false"} aria-controls="yn-me-panel" tabindex=${selected ? "0" : "-1"} data-fk=${`tab:${id}`} onclick=${() => select(id)}>
-          <span class="yn-me-tab-label">${MASTER_FILES[id].label}</span>
-          <span class="yn-me-tab-file">${fileName(MASTER_FILES[id].path)}</span>
-          ${counts[id] > 0 ? html`<span class="yn-chip yn-chip-neutral">変更 ${integer(counts[id])}</span>` : null}
+        return html`<button type="button" role="tab" id=${`yn-me-tab-${id}`} class=${isPlan ? "yn-me-tab yn-me-tab-plan" : "yn-me-tab"} aria-selected=${selected ? "true" : "false"} aria-controls="yn-me-panel" tabindex=${selected ? "0" : "-1"} data-fk=${`tab:${id}`} onclick=${() => select(id)}>
+          <span class="yn-me-tab-label">${isPlan ? VIEW_LABELS.plan.label : MASTER_FILES[id].label}</span>
+          <span class="yn-me-tab-file">${isPlan ? VIEW_LABELS.plan.file : fileName(MASTER_FILES[id].path)}</span>
+          ${!isPlan && counts[id] > 0 ? html`<span class="yn-chip yn-chip-neutral">変更 ${integer(counts[id])}</span>` : null}
           ${errs > 0 ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> エラー ${integer(errs)}</span>` : null}
         </button>`;
       })}
@@ -403,6 +449,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
 
   // ---- 表 -----------------------------------------------------------------
   function renderPanel() {
+    if (active === PLAN_VIEW_ID) {
+      renderPlanPanel();
+      return;
+    }
     const fileId = active;
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
@@ -525,6 +575,136 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     </section>`);
   }
 
+  // ---- 稼働計画（§23） -------------------------------------------------------
+  function renderPlanPanel() {
+    const src = planSourcesFromDocs(docs, data.context.contracts);
+    const months = plan.months;
+    const last = months[months.length - 1];
+    const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
+    const tree = teamTreeAt({ teams: src.teams }, treeMonth).tree;
+    const flat = flattenTeamTree(tree);
+    const view = planView(src, plan.teamId, months);
+    const names = memberNames();
+    const tNames = teamNames();
+    const doc = docs.assignments;
+    const issues = validation.byRow.assignments;
+    const unit = plan.teamId ? tree[plan.teamId] : null;
+    const leaderText = (id) => (id ? `${names.get(id) ?? "（存在しないメンバー）"}（${id}）` : "未設定");
+    const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? ` ・ リーダー ${names.get(n.leaderMemberId) ?? n.leaderMemberId}` : ""}`;
+    const contractLabel = (id) => {
+      const c = contracts.find((x) => x.id === id);
+      return c ? `${id} ${c.customer} / ${c.project}` : `${id}（存在しない契約）`;
+    };
+    const fyLabel = `${months[0].slice(0, 4)}年度（${monthJa(months[0])}〜${monthJa(last)}）`;
+    const shiftYear = (d) => {
+      plan.months = months.map((m) => addMonths(m, 12 * d));
+      renderPanel();
+      focusKey(d < 0 ? "plan:prev" : "plan:next");
+    };
+    const teamSel = html`<select id="yn-me-plan-team" class="yn-select" data-fk="plan:team">
+      <option value="" selected=${plan.teamId === null}>すべての組織</option>
+      ${flat.map((n) => html`<option value=${n.teamId} selected=${plan.teamId === n.teamId}>${optLabel(n)}</option>`)}
+      ${plan.teamId !== null && !tree[plan.teamId] ? html`<option value=${plan.teamId} selected>${plan.teamId}（この年度の組織にありません）</option>` : null}
+    </select>`;
+    teamSel.addEventListener("change", () => {
+      plan.teamId = teamSel.value || null;
+      plan.focusMember = null;
+      renderPanel();
+      focusKey("plan:team");
+    });
+    const defaultStart = () => {
+      const next = addMonths(asOfMonth, 1);
+      return next >= months[0] && next <= last ? next : months[0];
+    };
+    const addFor = (memberId, focus) => openRowDialog({ fileId: "assignments", mode: "add", preset: { ...(memberId ? { member_id: memberId } : {}), start_month: defaultStart(), end_month: last }, focus });
+    const toggle = (memberId) => {
+      if (plan.open.has(memberId)) plan.open.delete(memberId);
+      else plan.open.add(memberId);
+      renderPanel();
+      focusKey(`plan:toggle:${memberId}`);
+    };
+
+    const body = view.rows.flatMap((r) => {
+      const open = plan.open.has(r.memberId);
+      const detailId = `yn-me-plan-d-${r.memberId}`;
+      const rowErrors = r.assignments.reduce((n, a) => n + (issues[a.rowId] ?? []).filter((i) => i.severity === "error").length, 0);
+      const changed = r.assignments.filter((a) => {
+        const row = doc.rows.find((x) => x.id === a.rowId);
+        return row && rowState(doc, row) !== "unchanged";
+      }).length;
+      const sum = r.monthly.reduce((a, b) => a + b, 0);
+      const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}`} data-member=${r.memberId}>
+        <th scope="row">
+          <span class="yn-me-plan-name">${r.name || r.memberId}</span> <span class="yn-me-hint">${r.memberId}${r.teamId ? ` ・ ${tNames.get(r.teamId) ?? r.teamId}` : ""}</span>
+          <span class="yn-chip-row">${r.support ? html`<span class="yn-chip yn-chip-neutral">応援</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> 1.0 超 ${integer(r.overMonths.length)}か月</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">変更 ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> エラー ${integer(rowErrors)}</span>` : null}</span>
+        </th>
+        ${r.monthly.map((v, i) => html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`} title=${`${months[i]}: ${pm(v)} 人月`}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-label="0">—</span>`}</td>`)}
+        <td class="num">${pm(sum)}</td>
+        <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} onclick=${() => toggle(r.memberId)}>計画 ${integer(r.assignments.length)}件 ${open ? "▴" : "▾"}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${locked} aria-label=${`${r.name || r.memberId} の計画を追加`} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>＋ 追加</button>
+        </div></td>
+      </tr>`;
+      if (!open) return [main];
+      const items = r.assignments.map((a) => {
+        const row = doc.rows.find((x) => x.id === a.rowId);
+        const st = row ? rowState(doc, row) : "unchanged";
+        const list = issues[a.rowId] ?? [];
+        return html`<li class=${`yn-me-plan-item is-${st}`}>
+          <span class="yn-me-plan-contract">${contractLabel(a.contractId)}</span>
+          <span class="yn-me-plan-period">${a.startMonth}〜${a.endMonth}</span>
+          <span class="yn-me-plan-alloc">${Number.isFinite(a.allocation) ? `${pm(a.allocation)} 人月/月` : "（配分が数値ではありません）"}</span>
+          ${st !== "unchanged" ? html`<span class=${`yn-chip ${st === "added" ? "yn-chip-ok" : "yn-chip-neutral"}`}>${st === "added" ? "＋" : "✎"} ${STATE_LABELS[st]}</span>` : null}
+          <span class="yn-me-row-actions">
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${locked} aria-label=${`${a.contractId} の計画を修正`} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>修正</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${locked} aria-label=${`${a.contractId} の計画を削除`} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>削除</button>
+          </span>
+          ${list.length ? html`<ul class="yn-me-issues">${list.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? "エラー" : "警告"}: ${issueText(i)}</li>`)}</ul>` : null}
+        </li>`;
+      });
+      return [
+        main,
+        html`<tr class="yn-me-plan-detail" id=${detailId}><td colspan=${months.length + 3}>
+          ${items.length ? html`<ul class="yn-me-plan-items">${items}</ul>` : html`<p class="yn-muted">この年度に掛かる計画はありません。</p>`}
+          ${r.overMonths.length ? html`<p class="yn-me-small">1.0 人月を超える月: ${r.overMonths.join("、")}（このままでは保存できません）</p>` : null}
+        </td></tr>`,
+      ];
+    });
+
+    parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan" role="tabpanel" aria-labelledby=${`yn-me-tab-${PLAN_VIEW_ID}`}>
+      <div class="yn-me-panel-head">
+        <div>
+          <h2 class="yn-section-title">稼働計画<span class="yn-me-path"> ${data.files.assignments.path}</span></h2>
+          <p class="yn-me-help"><strong>内容:</strong> リーダーが、組織のメンバー一人ひとりを「どの契約に、月何人月」充てるかを入れる画面です。中身はアサイン（assignments.csv）で、保存・下書き・検証は他のタブと同じです。</p>
+          <p class="yn-me-help"><strong>入力のしかた:</strong> 人月（例 0.1）でも時間（例 16 時間）でも入力できます。時間は ${integer(std)} 時間 = 1 人月で人月に直して保存し、表示は人月に揃えます。1 人の月の合計は 1.0 人月までです。</p>
+        </div>
+      </div>
+      <div class="yn-me-toolbar yn-me-plan-toolbar">
+        <label class="yn-me-plan-label" for="yn-me-plan-team">組織</label>${teamSel}
+        <span class="yn-me-plan-fy">
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:prev" aria-label="前の年度" onclick=${() => shiftYear(-1)}>◀</button>
+          <span aria-live="polite">${fyLabel}</span>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:next" aria-label="次の年度" onclick=${() => shiftYear(1)}>▶</button>
+        </span>
+        <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${locked} onclick=${() => addFor(null, "add:plan")}>＋ 計画を追加</button>
+      </div>
+      ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ・ リーダー: ${leaderText(unit.leaderMemberId)} ・ 配下の組織とメンバーを含みます（他の組織から、この組織の契約に入る人は「応援」）</p>` : null}
+      <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label="稼働計画の表（横にスクロールできます）">
+        <table class="yn-table yn-table-compact yn-me-table yn-me-plan-table">
+          <caption class="visually-hidden">稼働計画: ${unit ? unit.name : "すべての組織"}、${fyLabel}。セルは月の配分合計（人月）</caption>
+          <thead><tr>
+            <th scope="col">メンバー</th>
+            ${months.map((m) => html`<th scope="col" class="num">${Number(m.slice(5))}月</th>`)}
+            <th scope="col" class="num">年度計<span class="yn-th-sub">人月</span></th>
+            <th scope="col">操作</th>
+          </tr></thead>
+          <tbody>${body.length ? body : html`<tr class="yn-table-empty"><td colspan=${months.length + 3}>この組織・年度のメンバーがいません。</td></tr>`}</tbody>
+          ${view.rows.length ? html`<tfoot><tr><th scope="row">合計（${integer(view.rows.length)}人）</th>${view.totals.map((v) => html`<td class="num">${pm(v)}</td>`)}<td class="num">${pm(view.totals.reduce((a, b) => a + b, 0))}</td><td></td></tr></tfoot>` : null}
+        </table>
+      </div>
+    </section>`);
+  }
+
   // ---- 行の追加・修正ダイアログ --------------------------------------------
   function fieldFor(fileId, col, value, disabled) {
     const id = `yn-me-f-${col.name}`;
@@ -549,6 +729,35 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
         ${contracts.map((c) => html`<option value=${c.id} selected=${value === c.id}>${c.id} ${c.customer} / ${c.project}</option>`)}
         ${value !== "" && !contracts.some((c) => c.id === value) ? html`<option value=${value} selected>${value}（存在しない契約）</option>` : null}
       </select>`;
+    }
+    if (col.input === "allocation") {
+      // 入力は人月か時間を選べる。保存は人月（§23.2）
+      const unitSel = html`<select id=${`${id}-unit`} name="__allocation_unit" class="yn-select yn-me-unit" disabled=${disabled}>
+        <option value="personMonth" selected>人月</option>
+        <option value="hours">時間</option>
+      </select>`;
+      const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode="decimal" aria-describedby=${`${id}-hint ${id}-conv`}>`;
+      const conv = html`<span class="yn-me-conv" id=${`${id}-conv`} aria-live="polite"></span>`;
+      const update = () => {
+        const out = allocationFromInput(input.value, unitSel.value, std);
+        const n = Number(out);
+        conv.textContent = out === "" || !Number.isFinite(n) ? "" : unitSel.value === "hours" ? `${input.value.trim()} 時間 = ${out} 人月（${std} 時間 = 1 人月）として保存` : `${out} 人月 = ${hoursFromAllocation(n, std)} 時間`;
+      };
+      let lastUnit = "personMonth";
+      unitSel.addEventListener("change", () => {
+        // 単位を切り替えたら、入っている値を新しい単位に換算して見せる
+        const n = Number(input.value.normalize("NFKC").trim());
+        if (input.value.trim() !== "" && Number.isFinite(n)) input.value = lastUnit === "personMonth" ? String(hoursFromAllocation(n, std)) : allocationFromInput(String(n), "hours", std);
+        lastUnit = unitSel.value;
+        update();
+      });
+      input.addEventListener("input", update);
+      update();
+      return html`<span class="yn-me-alloc">${input}<label class="visually-hidden" for=${`${id}-unit`}>配分の入力単位</label>${unitSel}</span>${conv}`;
+    }
+    if (col.input === "level") {
+      const listId = `${id}-list`;
+      return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${levelOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
@@ -576,7 +785,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     effective_from: "この月から有効（YYYY-MM）。過去の月を選ぶと過去の数値が変わります",
     start_month: "YYYY-MM",
     end_month: "YYYY-MM（この月を含む）",
-    allocation: "0〜1.0（1.0 = 1人月 = 基準時間）",
+    allocation: "0〜1.0 人月（1.0 = 基準時間）。右で「時間」を選ぶと時間で入力でき、人月に直して保存します",
+    level: "課・チーム・班など（自由入力。既存の値から選べます）",
+    leader_member_id: "リーダーのメンバーID（空 = 未設定）",
+    parent_team_id: "空 = 最上位",
     hourly_rate: "円の数値（例 12000）",
     key: "役職名（例 部長）か、パートナー個人の単価ならメンバーID",
     member_id: "既存のメンバーIDから選ぶか、新しいIDを入力",
@@ -587,7 +799,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   /**
    * 追加（mode: "add"、template があればその行を写して適用開始月を翌月に）／修正（mode: "edit"）
    */
-  function openRowDialog({ fileId, mode, rowId = null, template = null, focus }) {
+  function openRowDialog({ fileId, mode, rowId = null, template = null, preset = null, focus }) {
     if (locked) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
@@ -601,6 +813,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       if (def.history === "effective") initial = { ...initial, effective_from: next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
+      if (preset) initial = { ...initial, ...preset };
     }
     const lockImported = (name) => fileId === "members" && importMode && MEMBER_IMPORTED_COLUMNS.includes(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template);
     const title = mode === "edit" ? `${def.label}の行を修正` : def.history === "effective" ? `${def.label}: 新しい適用開始月の行を追加` : "アサインを追加";
@@ -653,6 +866,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
         const el = form.querySelector(`[name="${c.name}"]`);
         if (el) values[c.name] = String(el.value ?? "").trim();
       }
+      const unitSel = form.querySelector('[name="__allocation_unit"]');
+      if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, std);
       return values;
     };
     const backToForm = () => {
@@ -730,8 +945,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       <div class="yn-dialog-body">${form}</div>
     </div>`);
     if (!dialog.open) dialog.showModal();
-    const first = form.querySelector("input:not([disabled]), select:not([disabled])");
-    first?.focus();
+    // 最初の空欄にフォーカス（稼働計画でメンバーを入れて開いたときは契約から）。空欄が無ければ最初の欄
+    const fields = [...form.querySelectorAll("input:not([disabled]), select:not([disabled])")].filter((el) => el.name !== "__allocation_unit");
+    (fields.find((el) => el.value === "") ?? fields[0])?.focus();
   }
 
   function openDeleteDialog(fileId, rowId, focus) {

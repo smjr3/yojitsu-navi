@@ -218,7 +218,7 @@ export function teamTreeAt(dataset: Pick<Dataset, "teams">, month: YearMonth): T
   const tree: Record<string, TeamNode> = {};
   for (const teamId of order) {
     const rec = active.get(teamId) as TeamRecord;
-    tree[teamId] = { teamId, name: rec.name, parentTeamId: parentOf.get(teamId) ?? null, depth: 0, children: [], descendantIds: [] };
+    tree[teamId] = { teamId, name: rec.name, parentTeamId: parentOf.get(teamId) ?? null, level: rec.level ?? "", leaderMemberId: rec.leaderMemberId ?? null, depth: 0, children: [], descendantIds: [] };
   }
   const rootTeamIds: string[] = [];
   for (const teamId of order) {

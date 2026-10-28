@@ -12,7 +12,7 @@ title: チーム一覧
 import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, aggregate } from "./core/index.js";
 import { createStore } from "./components/state.js";
-import { scopeFor, flattenTree, teamRow } from "./components/analysis.js";
+import { scopeFor, flattenTree, teamRow, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, teamCountColumns, withForecastCount } from "./components/table.js";
@@ -44,7 +44,10 @@ const vm = (() => {
   const rootTeamIds = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
   const flat = flattenTree(tree, rootTeamIds);
   const rows = flat.map(({ node, depth, parent, hasChildren }) => ({
-    ...teamRow(model, node.teamId, node.name, depth, scope.period, state.method, tree),
+    ...teamRow(model, node.teamId, node.name, depth, scope.period, state.method, tree, {
+      level: node.level,
+      leader: node.leaderMemberId ? memberNameAt(model, node.leaderMemberId, scope.treeMonth) : "",
+    }),
     key: node.teamId,
     parentKey: parent,
     hasChildren,
@@ -63,7 +66,7 @@ if (model) {
     pageHeader({
       model,
       title: "チーム一覧",
-      lead: "組織階層（事業部 › 課 › チーム）ごとの予実。上位の行は配下すべてのチームの合計です。行をクリックすると、そのチームの詳細（KPI・契約・メンバー別原価）に移動します。",
+      lead: "組織階層（本部 › 事業部 › 課 › チーム › 班など、組織ごとに設定した種別）ごとの予実。上位の行は配下すべてのチームの合計です。行をクリックすると、そのチームの詳細（KPI・契約・メンバー別原価）に移動します。",
       breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "チーム一覧" }],
       includesPreliminary: vm?.totals.includesPreliminary ?? false,
     }),
@@ -84,6 +87,8 @@ if (vm) {
   }
   const columns = [
     { key: "name", label: "チーム", type: "text" },
+    { key: "level", label: "種別", type: "text", hideNarrow: true },
+    { key: "leader", label: "リーダー", type: "text", hideNarrow: true },
     ...teamCountColumns(),
     ...standardColumns({
       forecastLabel: "着地粗利",

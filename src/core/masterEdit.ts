@@ -9,8 +9,9 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
-import { parseDataset, type DatasetFiles } from "./csv.js";
-import type { Config, YearMonth } from "./types.js";
+import { parseCsvTable, parseDataset, type DatasetFiles } from "./csv.js";
+import type { PlanAssignment, PlanSources } from "./plan.js";
+import type { Config, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "team" | "member" | "contract" | "rateKey" | "title";
+  input: "text" | "month" | "number" | "kind" | "team" | "member" | "contract" | "rateKey" | "title" | "level" | "allocation";
   required: boolean;
 }
 
@@ -84,14 +85,16 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     id: "teams",
     path: "data/masters/teams.csv",
     issueFile: "masters/teams.csv",
-    label: "チーム",
+    label: "組織",
     history: "effective",
     keyColumns: ["team_id"],
     columns: [
-      { name: "team_id", label: "チームID", input: "text", required: true },
-      { name: "name", label: "チーム名", input: "text", required: true },
-      { name: "parent_team_id", label: "親チーム", input: "team", required: false },
+      { name: "team_id", label: "組織ID", input: "text", required: true },
+      { name: "name", label: "組織名", input: "text", required: true },
+      { name: "parent_team_id", label: "親組織", input: "team", required: false },
       { name: "effective_from", label: "適用開始月", input: "month", required: true },
+      { name: "level", label: "種別（課・チーム・班など）", input: "level", required: false },
+      { name: "leader_member_id", label: "リーダー", input: "member", required: false },
     ],
   },
   assignments: {
@@ -106,7 +109,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "contract_id", label: "契約ID", input: "contract", required: true },
       { name: "start_month", label: "開始月", input: "month", required: true },
       { name: "end_month", label: "終了月", input: "month", required: true },
-      { name: "allocation", label: "配分（人月）", input: "number", required: true },
+      { name: "allocation", label: "配分（人月）", input: "allocation", required: true },
     ],
   },
 };
@@ -610,6 +613,8 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
     team_id: [0, "組織の木とチーム別の集計", false],
     parent_team_id: [1, "組織の木と上位組織の合計（配下の合計）", false],
     name: [2, "チーム名の表示", false],
+    level: [3, "組織の種別（課・チーム・班など）の表示", false],
+    leader_member_id: [4, "組織のリーダーの表示", false],
   },
   assignments: {
     allocation: [0, "着地見込み（アサイン方式）とメンバー別の計画（計画時間・計画原価）", false],
@@ -1084,4 +1089,54 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
     conflicts,
     unresolved: conflicts.filter((c) => choices[c.id] !== "mine" && choices[c.id] !== "theirs").map((c) => c.id),
   };
+}
+
+// ---------------------------------------------------------------------------
+// 稼働計画タブ（§23）の入力: 編集中の文書 → PlanSources
+// ---------------------------------------------------------------------------
+
+/** 編集中（保存前）の組織・メンバー・アサインと、契約の担当組織から稼働計画の計算の入力を作る */
+export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments">, contractsText: string): PlanSources {
+  const teams: TeamRecord[] = docs.teams.rows.map((r) => {
+    const v = rowRecord(docs.teams, r);
+    return {
+      teamId: (v.team_id ?? "").trim(),
+      name: (v.name ?? "").trim(),
+      parentTeamId: (v.parent_team_id ?? "").trim() || null,
+      effectiveFrom: (v.effective_from ?? "").trim(),
+      level: (v.level ?? "").trim(),
+      leaderMemberId: (v.leader_member_id ?? "").trim() || null,
+    };
+  });
+  const members: MemberRecord[] = docs.members.rows.map((r) => {
+    const v = rowRecord(docs.members, r);
+    return {
+      memberId: (v.member_id ?? "").trim(),
+      name: (v.name ?? "").trim(),
+      kind: (v.kind ?? "").trim() as MemberRecord["kind"],
+      title: (v.title ?? "").trim(),
+      department: (v.department ?? "").trim(),
+      section: (v.section ?? "").trim(),
+      teamId: (v.team_id ?? "").trim() || null,
+      effectiveFrom: (v.effective_from ?? "").trim(),
+    };
+  });
+  const assignments: PlanAssignment[] = docs.assignments.rows.map((r) => {
+    const v = rowRecord(docs.assignments, r);
+    const raw = (v.allocation ?? "").trim();
+    return {
+      rowId: r.id,
+      memberId: (v.member_id ?? "").trim(),
+      contractId: (v.contract_id ?? "").trim(),
+      startMonth: (v.start_month ?? "").trim(),
+      endMonth: (v.end_month ?? "").trim(),
+      allocation: raw === "" ? Number.NaN : Number(raw),
+    };
+  });
+  const contractTeams = new Map<string, string | null>();
+  for (const row of parseCsvTable(contractsText).rows) {
+    const id = row.get("contract_id");
+    if (id !== "" && !contractTeams.has(id)) contractTeams.set(id, row.get("team_id") || null);
+  }
+  return { teams, members, assignments, contractTeams };
 }

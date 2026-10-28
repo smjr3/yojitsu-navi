@@ -2344,3 +2344,94 @@ th[aria-sort="descending"] .yn-sort-icon {
     font-size: 12px;
   }
 }
+
+/* ---- 稼働計画（§23）・組織の種別とリーダー（§21・§22） ---- */
+.yn-me-alloc {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.yn-me-alloc > .yn-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 6em;
+}
+.yn-me-alloc > .yn-me-unit {
+  flex: 0 0 6.5em;
+  width: 6.5em;
+}
+.yn-me-conv {
+  display: block;
+  font-size: 12px;
+  color: var(--yn-text-2);
+  margin-top: 2px;
+}
+.yn-me-plan-toolbar {
+  align-items: center;
+}
+.yn-me-plan-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+.yn-me-plan-toolbar .yn-select {
+  max-width: min(100%, 420px);
+}
+.yn-me-plan-fy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.yn-me-plan-unit {
+  font-size: 13px;
+  color: var(--yn-text-2);
+  margin: 4px 0 8px;
+}
+.yn-me-plan-table th[scope="row"] {
+  min-width: 180px;
+}
+.yn-me-plan-name {
+  font-weight: 600;
+}
+.yn-me-plan-cell.is-over {
+  background: var(--yn-warn-bg);
+  color: var(--yn-warn-text);
+  font-weight: 600;
+}
+.yn-me-plan-row.is-focus > th {
+  box-shadow: inset 3px 0 0 var(--yn-focus);
+}
+.yn-me-plan-detail > td {
+  background: var(--yn-wash);
+}
+.yn-me-plan-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.yn-me-plan-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.yn-me-plan-contract {
+  flex: 1 1 240px;
+}
+.yn-me-plan-period,
+.yn-me-plan-alloc {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.yn-me-plan-item .yn-me-issues {
+  flex-basis: 100%;
+}
+.yn-team-org {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--yn-text-2);
+}

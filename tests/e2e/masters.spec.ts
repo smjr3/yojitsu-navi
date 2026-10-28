@@ -92,15 +92,15 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのタブ、説明文、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのファイルのタブ＋稼働計画、説明文、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
   const links = page.locator(".yn-tools a");
   await expect(links.last()).toHaveText("マスタ編集");
   await expect(links.last()).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /チーム/, /アサイン/]);
+  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /アサイン/, /稼働計画/]);
   await expect(page.getByRole("heading", { name: /何を編集すると何が変わるか/ })).toBeVisible();
   await expect(page.locator(".yn-me-intro")).toContainText("原価 = 作業時間 × 単価");
-  for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["チーム", "teams"], ["アサイン", "assignments"]] as const) {
+  for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"], ["アサイン", "assignments"]] as const) {
     await selectTab(page, label);
     const n = parseMasterDoc(id, PAYLOAD.files[id].text).rows.length;
     await expect(page.locator("table.yn-me-table tbody tr.yn-me-row")).toHaveCount(n);
@@ -200,7 +200,7 @@ test("必須の未入力はダイアログで止め、検証エラーは行に�
   await expect(page.locator("#yn-me-save-reason")).toContainText("検証エラーが 1 件");
 
   // 別タブの行にもエラーが出る: チームを消すとメンバー行がエラー
-  await selectTab(page, "チーム");
+  await selectTab(page, "組織");
   const team = page.locator("table.yn-me-table tbody tr.yn-me-row").filter({ hasText: "S11" }).first();
   await team.getByRole("button", { name: /行を削除/ }).click();
   await page.locator('[data-role="confirm-delete"]').click();
@@ -538,7 +538,7 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
   await expect(page.getByRole("tab", { name: /単価/ })).toBeFocused();
   await expect(page.getByRole("tab", { name: /単価/ })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: /アサイン/ })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /稼働計画/ })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(first).toBeFocused();
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "yn-me-tab-members");

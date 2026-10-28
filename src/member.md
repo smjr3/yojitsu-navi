@@ -113,6 +113,7 @@ if (vm) {
       title: html`<span class="yn-title-id">${memberId}</span> ${vm.name}`,
       breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "メンバー別", href: store.href("./members") }, { label: vm.name }],
       includesPreliminary: totals?.includesPreliminary ?? false,
+      extra: html`<a class="yn-btn yn-btn-sm" id="yn-member-plan-link" href=${`./plan?member=${encodeURIComponent(memberId)}`}>この人の稼働計画を入力</a>`,
     }),
   );
   const teamText = (id) => (id ? teamName(model, id, vm.tree) : "未所属");
