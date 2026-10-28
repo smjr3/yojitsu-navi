@@ -56,19 +56,25 @@ export function infoTip(content, { label = T.layout.infoLabel } = {}) {
   const btn = html`<button type="button" class="yn-tip-btn" aria-label=${label} aria-describedby=${id} aria-expanded="false">?</button>`;
   const root = html`<span class="yn-tip">${btn}${pop}</span>`;
   let pinned = false;
+  // 開いた後に呼ぶ（高さを測るため）。下に入らなければ上に出し、どちらにも入らなければ画面内に収める
   const place = () => {
     const r = btn.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
     const w = Math.min(360, vw - 32);
     pop.style.width = `${w}px`;
     pop.style.left = `${Math.max(16, Math.min(r.left, vw - w - 16))}px`;
-    pop.style.top = `${r.bottom + 6}px`;
+    const h = pop.offsetHeight;
+    const below = r.bottom + 6;
+    const above = r.top - 6 - h;
+    const top = below + h <= vh - 8 ? below : above >= 8 ? above : Math.max(8, vh - 8 - h);
+    pop.style.top = `${top}px`;
   };
   // 吹き出しは position: fixed なので、開いている間にスクロールしたら閉じる
-  const onScroll = () => hide();
+  const onScroll = (e) => e.target !== pop && hide(); // 長い説明を吹き出しの中でスクロールしたときは閉じない
   const show = () => {
-    place();
     root.classList.add("is-open");
+    place();
     btn.setAttribute("aria-expanded", "true");
     addEventListener("scroll", onScroll, { passive: true, capture: true });
   };
