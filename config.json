@@ -45,7 +45,7 @@
     }
   },
   "costTypes": [
-    { "id": "labor", "label": "工数原価" }
+    { "id": "labor", "label": "工数" }
   ],
   "masterEdit": {
     "mode": "download",

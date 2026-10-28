@@ -2499,3 +2499,17 @@ html:has(dialog.yn-dialog[open]) {
   font-size: 13px;
   color: var(--yn-text-2);
 }
+/* 横スクロールする表の中で、行全体にまたがる説明（行のエラー・稼働計画の明細）は左端に貼り付ける。
+   操作ボタンへフォーカスが移ると表が右端までスクロールし、狭い幅では中身が見えなくなるため */
+#observablehq-main .yn-me-issue-row td > .yn-me-issues,
+#observablehq-main .yn-me-plan-detail > td > * {
+  position: sticky;
+  left: 12px;
+  max-width: calc(100vw - 72px);
+}
+@media (min-width: 640px) {
+  #observablehq-main .yn-me-issue-row td > .yn-me-issues,
+  #observablehq-main .yn-me-plan-detail > td > * {
+    max-width: min(calc(100vw - 112px), 960px);
+  }
+}

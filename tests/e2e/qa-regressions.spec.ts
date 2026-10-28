@@ -76,3 +76,23 @@ test("「速報含む」のアイコンはフォントに頼らず円で描く",
   expect(box.width).toBeGreaterThanOrEqual(10);
   expect(box.height).toBeGreaterThanOrEqual(10);
 });
+
+test("スマホ幅のマスタ編集: 行を追加して表が右へスクロールしても、行のエラー文が見える", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoPage(page, "/masters");
+  await page.getByRole("tab", { name: /組織/ }).click();
+  await page.locator('button[data-fk="add:teams"]').click();
+  const dlg = page.locator("dialog[open]");
+  await dlg.locator('[name="team_id"]').fill("QA1");
+  await dlg.locator('[name="name"]').fill("リーダー不明");
+  await dlg.locator('[name="leader_member_id"]').fill("NOPE");
+  await dlg.locator('[data-role="submit"]').click();
+  if (await page.locator("dialog[open] .yn-me-confirm").isVisible().catch(() => false)) await page.locator('dialog[open] [data-role="submit"]').click();
+  const ul = page.locator(".yn-me-issue-row .yn-me-issues").first();
+  await expect(ul).toContainText("NOPE");
+  await page.locator(".yn-me-issue-row").first().evaluate((tr) => tr.closest(".yn-table-wrap")!.scrollTo({ left: 10000 }));
+  const box = (await ul.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+});
