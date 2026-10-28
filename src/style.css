@@ -2018,6 +2018,7 @@ th[aria-sort="descending"] .yn-sort-icon {
     border: 1px solid var(--yn-hairline);
     border-radius: var(--yn-radius-sm);
   }
+}
 
 /* ==== members ==== */
 /* メンバー別の KPI 4 枚: 幅が足りれば 4 列、足りなければ 2×2（3+1 に崩さない） */

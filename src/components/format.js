@@ -38,6 +38,16 @@ export function moneySigned(yen, unit = "yen") {
   return yen < 0 ? s : `+${s}`;
 }
 
+/**
+ * 差額（計画 − 実績）に添える文。判定は表示と同じ丸め後の値で行う（SPEC §12:
+ * 「±0.0百万円」なのに「計画より原価が少ない」と出さない）。
+ */
+export function varianceNote(yen, unit = "yen") {
+  if (typeof yen !== "number" || !Number.isFinite(yen)) return "";
+  const r = roundToUnit(yen, toCoreUnit(unit));
+  return r > 0 ? "計画より原価が少ない" : r < 0 ? "計画より原価が多い" : "計画どおり";
+}
+
 /** 割合の差（ポイント）。0.012 → "+1.2pt"。マイナスは formatPercent と同じ記号 */
 export function pointsSigned(delta, digits = 1) {
   if (typeof delta !== "number" || !Number.isFinite(delta)) return EMPTY_VALUE;

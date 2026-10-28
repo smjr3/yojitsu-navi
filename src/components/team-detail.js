@@ -93,7 +93,7 @@ export function memberCostSpec({ model, contractIds, period, unit, member, detai
     rows: [
       { label: "作業時間", value: formatHours(member.hours) },
       { label: "原価行の数", value: `${rows.length}` },
-      { label: "原価合計", value: money(member.amount, unit), emphasis: true },
+      { label: "原価合計", value: money(member.amount, "yen"), emphasis: true },
     ],
     sections: [
       {
@@ -105,9 +105,9 @@ export function memberCostSpec({ model, contractIds, period, unit, member, detai
             detailHref ? html`<a href=${detailHref(id)}>${id}</a>` : id,
             formatHours(l.hours),
             l.rateMissing ? "単価なし" : money(l.hourlyRate, "yen"),
-            money(l.amount, unit),
+            money(l.amount, "yen"),
           ]),
-          foot: ["合計", "", formatHours(member.hours), "", money(member.amount, unit)],
+          foot: ["合計", "", formatHours(member.hours), "", money(member.amount, "yen")],
         },
       },
     ],

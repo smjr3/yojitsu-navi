@@ -11,6 +11,8 @@ title: 契約一覧
 ```js
 import { html } from "htl";
 import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID } from "./core/index.js";
+import { customerGroups } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -42,6 +44,13 @@ const listFilter = (() => {
   const q = new URLSearchParams(location.search);
   return { deficit: q.get("f") === "deficit", over: q.get("f") === "over", prelim: q.get("f") === "prelim", text: q.get("q") ?? "", showOutside: false };
 })();
+
+// 顧客キーでの厳密絞り込み（?customer=<key>）。顧客詳細の担当チーム行から来る。
+// direct=1 のときは主担当チームがちょうど team の契約だけ（配下のチームは含めない）。検索語（部分一致）とは別物
+const customerParam = (() => {
+  const q = new URLSearchParams(location.search);
+  return { key: q.get("customer") ?? "", direct: q.get("direct") === "1" };
+})();
 ```
 
 ```js
@@ -49,10 +58,15 @@ const vm = (() => {
   if (!model || !state) return null;
   const scope = scopeFor(model, state);
   const ids = scope.contractIds ? new Set(scope.contractIds) : null;
+  const customerGroup = customerParam.key ? customerGroups(model).find((g) => g.key === customerParam.key) ?? null : null;
+  const customerIds = customerGroup ? new Set(customerGroup.contractIds) : null;
+  const direct = customerParam.direct && state.team;
   const all = model.contracts
     .filter((r) => !ids || ids.has(r.contract.contractId))
+    .filter((r) => !customerParam.key || (customerIds && customerIds.has(r.contract.contractId)))
+    .filter((r) => !direct || (state.team === UNASSIGNED_TEAM_ID ? !r.contract.teamId : r.contract.teamId === state.team))
     .map((r) => ({ ...contractRow(model, r, scope.period, state.method, scope.tree), key: r.contract.contractId, searchText: normalizeName(`${r.contract.contractId} ${r.contract.customerName} ${r.contract.projectName}`) }));
-  return { scope, all, unit: state.unit, method: state.method, includesPreliminary: all.some((r) => r.includesPreliminary) };
+  return { scope, all, customerGroup, unit: state.unit, method: state.method, includesPreliminary: all.some((r) => r.includesPreliminary) };
 })();
 ```
 
@@ -77,6 +91,18 @@ if (store) display(filterBar(store, model));
 ```js
 if (vm?.scope.teamMissing) {
   display(note(`選択したチーム「${vm.scope.teamLabel}」は ${monthJa(vm.scope.treeMonth)} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件になります。`, "warn"));
+}
+```
+
+```js
+// 顧客キーで絞っているとき: 何で絞っているかと解除のリンクを出す
+if (vm && customerParam.key) {
+  const clear = store.href("./contracts");
+  display(
+    vm.customerGroup
+      ? note(html`顧客「${vm.customerGroup.label}」の契約だけを表示しています${customerParam.direct && state.team ? `（主担当チームが「${vm.scope.teamLabel}」の契約のみ。配下のチームは含みません）` : ""}。 <a href=${clear}>絞り込みを解除</a>`)
+      : note(html`顧客「${customerParam.key}」は見つかりません（顧客名が変わったか、データから無くなった可能性があります）。契約は 0 件になります。 <a href=${clear}>絞り込みを解除</a>`, "warn"),
+  );
 }
 ```
 
@@ -184,7 +210,8 @@ if (vm) {
     grossMargin: sumTotals.grossMargin,
     burnRate: sumTotals.burnRate,
     isOverBudget: sumTotals.isOverBudget,
-    forecastGrossProfit: sumForecast.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
+    // 着地粗利は年度に掛かる契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
+    forecastGrossProfit: rows.some((r) => r.forecastGrossProfit !== null) ? sumForecast.forecastGrossProfit : null,
     isDeficit: false,
     status: null,
   };

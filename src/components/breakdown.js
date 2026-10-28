@@ -244,7 +244,7 @@ export function costMonthSpec({ contract, cm, unit, model }) {
     `${l.memberName}（${l.memberId}）`,
     l.memberTeamId ? (model?.teamTree?.[l.memberTeamId]?.name ?? l.memberTeamId) : "—",
     formatHours(l.hours),
-    l.rateMissing ? html`<span class="yn-chip yn-chip-danger"><span class="yn-chip-icon" aria-hidden="true">▲</span>単価なし</span>` : money(l.hourlyRate, "yen"),
+    l.rateMissing ? html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">▲</span>単価なし</span>` : money(l.hourlyRate, "yen"),
     l.rateSource ? `${l.rateSource.key}（${l.rateSource.effectiveFrom}〜）` : "—",
     money(l.amount, unit),
   ]);

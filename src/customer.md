@@ -13,7 +13,7 @@ title: 顧客詳細
 import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
-import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
+import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { filterBar } from "./components/filters.js";
@@ -52,7 +52,11 @@ const listFilter = { showOutside: false };
 const vm = (() => {
   if (!model || !state || !group) return null;
   const period = { from: state.from, to: state.to };
-  const scope = { period, contractIds: group.contractIds };
+  // チームを絞っているときは、そのチーム（配下含む）の契約だけで集計する（顧客別の一覧と同じ。L3）
+  const teamScope = scopeFor(model, state);
+  const inTeam = teamScope.contractIds ? new Set(teamScope.contractIds) : null;
+  const contractIds = inTeam ? group.contractIds.filter((id) => inTeam.has(id)) : group.contractIds;
+  const scope = { period, contractIds, teamId: state.team, teamLabel: teamScope.teamLabel, teamMissing: teamScope.teamMissing };
   const { totals, forecast } = summarize(model, scope, state.method);
   const series = seriesWithForecast(model, scope, state.method);
   const compare = priorYearComparison(model, scope);
@@ -86,7 +90,7 @@ if (vm) {
     pageHeader({
       model,
       title: group.label,
-      lead: `この顧客の ${group.contractIds.length} 件の契約を合算した予実です。数値をクリックすると計算根拠が開きます。`,
+      lead: `この顧客の ${vm.scope.contractIds.length} 件の契約を合算した予実です。数値をクリックすると計算根拠が開きます。`,
       breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "顧客別", href: store.href("./customers") }, { label: group.label }],
       includesPreliminary: vm.totals.includesPreliminary,
     }),
@@ -95,7 +99,21 @@ if (vm) {
 ```
 
 ```js
-if (store && group) display(filterBar(store, model, { show: ["period", "method", "unit"] }));
+if (store && group) display(filterBar(store, model, { show: ["period", "team", "method", "unit"] }));
+```
+
+```js
+// チームで絞っているときは数字が顧客全体と変わるので明示する（外れたら消えるよう、無いときは空の要素を出す）
+if (vm) {
+  display(
+    vm.scope.teamId
+      ? note(
+          `${vm.scope.teamLabel}（配下含む）の契約だけで集計しています（この顧客の全 ${group.contractIds.length} 件のうち ${vm.scope.contractIds.length} 件）。顧客全体を見るには、チームを「全体」に戻してください。`,
+          vm.scope.contractIds.length === 0 ? "warn" : "info",
+        )
+      : html`<div></div>`,
+  );
+}
 ```
 
 ```js
@@ -200,7 +218,7 @@ const outsideState = outsideToggle ? Generators.input(outsideToggle) : null;
 if (vm) {
   const { scope, unit } = vm;
   const f = outsideState ?? listFilter;
-  const all = group.contractIds.map((id) => {
+  const all = scope.contractIds.map((id) => {
     const r = model.contracts.find((x) => x.contract.contractId === id);
     return { ...contractRow(model, r, scope.period, vm.method, vm.tree), key: id };
   });
@@ -236,7 +254,7 @@ if (vm) {
   const { scope, unit, method, tree } = vm;
   // 契約の teamId ごと（配下をまとめず、契約に登録された主担当チームそのもの）
   const byTeam = new Map();
-  for (const id of group.contractIds) {
+  for (const id of scope.contractIds) {
     const c = model.contracts.find((x) => x.contract.contractId === id).contract;
     const tid = c.teamId ? c.teamId : UNASSIGNED_TEAM_ID;
     if (!byTeam.has(tid)) byTeam.set(tid, []);
@@ -245,7 +263,7 @@ if (vm) {
   const rows = [...byTeam.entries()]
     .map(([tid, ids]) => ({ ...idsRow(model, ids, scope.period, method, { name: tid === UNASSIGNED_TEAM_ID ? UNASSIGNED_TEAM_LABEL : teamName(model, tid, tree), teamId: tid }), key: tid }))
     .filter((r) => r.contractCount > 0 || r.fyContractCount > 0);
-  display(sectionTitle("担当チーム別", `${group.label} の契約を、契約に登録された主担当チームごとに集計（${monthJa(treeMonthFor(model, scope.period))} 時点の組織名）。契約数は期間内の契約、着地粗利は年度に掛かる契約（件数を併記）が母集団です。行をクリックすると、そのチームの契約一覧に移動します。`));
+  display(sectionTitle("担当チーム別", `${group.label} の契約を、契約に登録された主担当チームごとに集計（${monthJa(treeMonthFor(model, scope.period))} 時点の組織名）。契約数は期間内の契約、着地粗利は年度に掛かる契約（件数を併記）が母集団です。行をクリックすると、この顧客のこのチームの契約一覧（契約一覧を顧客とチームで絞った表示）に移動します。`));
   if (rows.length === 0) {
     display(emptyState({ title: "選択期間に掛かる契約がありません", text: "期間を変えてください。", icon: "○" }));
   } else {
@@ -263,7 +281,7 @@ if (vm) {
         caption: "担当チーム別",
         exportName: `customer_teams_${scope.period.from}_${scope.period.to}`,
         sort: { key: "status", dir: "asc" },
-        rowHref: (r) => store.href("./contracts", { team: r.teamId }, { q: group.label }),
+        rowHref: (r) => store.href("./contracts", { team: r.teamId }, { customer: group.key, direct: 1 }),
       }),
     );
   }
