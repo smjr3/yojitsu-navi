@@ -988,6 +988,63 @@ h3 {
   color: var(--yn-text-2);
   max-width: 80ch;
 }
+/* 見出し横の「?」と説明の吹き出し（layout.js の infoTip） */
+.yn-title-with-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.yn-tip {
+  display: inline-flex;
+  flex: none;
+}
+.yn-tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yn-text-muted);
+  font: 700 11px/1 var(--sans-serif);
+  cursor: help;
+}
+.yn-tip-btn:hover,
+.yn-tip.is-open .yn-tip-btn {
+  color: var(--yn-link);
+  border-color: var(--yn-link);
+}
+.yn-tip-btn:focus-visible {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 1px;
+}
+.yn-tip-pop {
+  display: none;
+  position: fixed;
+  z-index: 30;
+  padding: 8px 12px;
+  background: var(--yn-card);
+  color: var(--yn-text-2);
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  white-space: normal;
+  text-align: left;
+}
+.yn-tip.is-open .yn-tip-pop {
+  display: block;
+}
+.yn-tip-pop .yn-me-help {
+  display: block;
+  margin: 0 0 4px;
+}
 .yn-card {
   background: var(--yn-card);
   border: 1px solid var(--yn-hairline);
@@ -1854,13 +1911,17 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-me-intro {
   margin: 0 0 16px;
-  padding: 16px;
+  padding: 10px 16px;
   background: var(--yn-card);
   border: 1px solid var(--yn-hairline);
   border-radius: var(--yn-radius);
 }
 .yn-me-intro-title {
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.yn-me-intro[open] > .yn-me-intro-title {
   margin: 0 0 8px;
 }
 .yn-me-intro-grid {

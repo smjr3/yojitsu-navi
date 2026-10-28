@@ -92,14 +92,17 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのファイルのタブ＋稼働計画、説明文、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのファイルのタブ＋稼働計画、説明文（折りたたみ）、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
   const links = page.locator(".yn-tools a");
   await expect(links.last()).toHaveText("マスタ編集");
   await expect(links.last()).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /アサイン/, /稼働計画/]);
-  await expect(page.getByRole("heading", { name: /何を編集すると何が変わるか/ })).toBeVisible();
-  await expect(page.locator(".yn-me-intro")).toContainText("実績 = 作業時間 × 単価");
+  // 説明は折りたたみ（既定で閉じる）。開くと中身が見える
+  const intro = page.locator("details.yn-me-intro");
+  await expect(intro).not.toHaveAttribute("open", "");
+  await intro.locator("summary").click();
+  await expect(intro.getByText("実績 = 作業時間 × 単価")).toBeVisible();
   for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"], ["アサイン", "assignments"]] as const) {
     await selectTab(page, label);
     const n = parseMasterDoc(id, PAYLOAD.files[id].text).rows.length;

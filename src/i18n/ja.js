@@ -59,6 +59,10 @@ export default {
   // ── ページ上部（基準日・速報バッジ・エラー表示） ───────────────
   layout: {
     breadcrumbsLabel: "パンくず",
+    // 見出しの横の「?」（カーソルを合わせると説明が出る）の読み上げ名
+    infoLabel: "説明",
+    aboutPage: "{title}の説明",
+    aboutSection: "{title}の説明",
     metaLabel: "データの基準",
     asOf: "計算基準日",
     fiscalYear: "年度",
@@ -313,7 +317,9 @@ export default {
   // ── 主要指標のタイル（全体サマリー・チーム詳細・顧客詳細・契約詳細で共通） ─────
   kpi: {
     noCompare: "前年同期の比較データなし",
-    compareText: "{diff} ・ {current}の累計を前年同期（{prior}）と比較{partial}",
+    // タイルに出す短い比較。詳しい比較期間（compareText）はカーソルを合わせると出る
+    compareShort: "前年同期比 {diff}",
+    compareText: "{current}の累計を前年同期（{prior}）と比較{partial}",
     // 前年の一部の月にしかデータが無いとき {partial} に入る
     comparePartial: "。前年はデータのある月のみ",
     noElapsed: "経過月なし",
@@ -634,7 +640,7 @@ export default {
     lead: "顧客ごとの予実。同じ顧客の契約（更新前後・複数案件）をまとめて、どの顧客が悪いかを見ます。行をクリックすると、その顧客の契約と担当チームの内訳に移動します。",
     teamMissing: "選択したチーム「{team}」は {month} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。顧客は 0 件になります。",
     sectionTitle: "顧客ごとの予実",
-    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約数は期間内の契約、着地差は年度に掛かる契約（件数を併記）が母集団です。状態の「超過見込み N件」は超過見込みの契約数、「消化率超過」は消化率が基準超。既定の並び: 超過見込み・消化率超過の顧客を先頭に、消化率の高い順。{hidden}",
+    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約数は期間内の契約、着地差は年度に掛かる契約（件数を併記）が母集団です。状態の「超過見込み N件」は超過見込みの契約数、「消化率超過」は消化率が基準超。既定の並び: 超過見込み・消化率超過の顧客を先頭に、消化率の高い順。",
     colCustomer: "顧客",
     totalSubtitle: "表示中の {n} 顧客 ・ {period}",
     totalRow: "合計（{n}顧客）",
@@ -664,7 +670,7 @@ export default {
     chipOutside: "期間外の契約も表示",
     chipOutsideTitle: "選択した期間に 1 か月も掛からない契約も表示",
     sectionTitle: "契約ごとの予実",
-    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約列は 顧客 / 案件 と ID・チーム・期間（YY/MM）。既定の並び: 超過見込み・消化率超過の契約を先頭に、消化率の高い順。{hidden}",
+    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約列は 顧客 / 案件 と ID・チーム・期間（YY/MM）。既定の並び: 超過見込み・消化率超過の契約を先頭に、消化率の高い順。",
     colProject: "案件",
     totalSubtitle: "表示中の {n} 件 ・ {period}",
     totalRow: "合計（{n}件）",
@@ -685,7 +691,7 @@ export default {
     lead: "この顧客の {n} 件の契約を合算した予実です。数値をクリックすると計算根拠が開きます。",
     teamFiltered: "{team}（配下含む）の契約だけで集計しています（この顧客の全 {total} 件のうち {n} 件）。顧客全体を見るには、チームを「全体」に戻してください。",
     contractsTitle: "この顧客の契約",
-    contractsHint: "{period} ・ 着地: {method}（{fy}）。クリックで契約詳細へ。{hidden}",
+    contractsHint: "{period} ・ 着地: {method}（{fy}）。クリックで契約詳細へ。",
     noContractsTitle: "選択期間に掛かる契約がありません",
     noContractsText: "期間を変えるか、「期間外の契約も表示」を選んでください。",
     contractsCaption: "顧客の契約一覧",
@@ -715,7 +721,7 @@ export default {
     summaryHint: "{period} ・ {team}{children} ・ {month} 時点の組織で集計。前年同期は経過月の累計を12か月前と比べます。",
     childrenTitle: "配下のチーム",
     childrenHint: "{team} の直下のチームごとの予実（上位の行は、さらにその配下の合計）。行をクリックするとそのチームの詳細へ。契約数は期間内、着地差は {fy} に掛かる契約（件数を併記）が母集団です。",
-    contractsHint: "{team}{children} の契約。着地: {method}（{fy}年度）。既定の並び: 超過見込み・消化率超過の契約を先頭に、消化率の高い順。{hidden}クリックで契約詳細へ。",
+    contractsHint: "{team}{children} の契約。着地: {method}（{fy}年度）。既定の並び: 超過見込み・消化率超過の契約を先頭に、消化率の高い順。クリックで契約詳細へ。",
     noContractsTitle: "期間内の契約がありません",
     noContractsText: "{team} には、選択した期間（{period}）に掛かる契約がありません。期間を広げてください。",
     contractsCaption: "チームの契約一覧",

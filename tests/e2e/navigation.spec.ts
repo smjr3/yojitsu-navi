@@ -34,7 +34,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
   expect(expected.length).toBeGreaterThan(0);
   expect(new Set(await rowKeys(contracts))).toEqual(new Set(expected));
-  await expect(page.locator(".yn-section-hint").first()).toContainText(tree[leaf]!.name);
+  await expect(page.locator(".yn-section-head .yn-tip-pop").first()).toContainText(tree[leaf]!.name);
   // 行をクリック（リンク以外のセル）で詳細へ
   const firstKey = (await rowKeys(contracts))[0]!;
   const h = await headerIndex(contracts);
@@ -323,4 +323,20 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     const e0 = contractRowExpected(contractResult((await first.getAttribute("data-key"))!, model), FY, "recent3", model);
     expect(await cellText(first, col(h, "予算"))).toBe(yen(e0.totals.budget, unit));
   }
+});
+
+test("見出し横の「?」: カーソルで説明が開き、Esc で閉じる。タップ（クリック）でも開く", async ({ page }) => {
+  await page.goto("./teams");
+  const tip = page.locator(".yn-section-head .yn-tip").first();
+  const pop = tip.locator(".yn-tip-pop");
+  await expect(pop).toBeHidden();
+  await tip.locator(".yn-tip-btn").hover();
+  await expect(pop).toBeVisible();
+  await expect(pop).toContainText("母集団");
+  await tip.locator(".yn-tip-btn").press("Escape");
+  await expect(pop).toBeHidden();
+  await page.mouse.move(0, 0);
+  await tip.locator(".yn-tip-btn").click();
+  await expect(pop).toBeVisible();
+  await expect(tip.locator(".yn-tip-btn")).toHaveAttribute("aria-expanded", "true");
 });

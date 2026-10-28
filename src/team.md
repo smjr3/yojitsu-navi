@@ -187,8 +187,9 @@ if (vm?.exists) {
   display(
     sectionTitle(
       T.app.pages.contracts,
-      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: METHOD_LABELS[method], fy: model.meta.fiscalYear, hidden: outside > 0 ? fmt(T.team.hiddenOutside, { n: outside }) : "" }),
+      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: METHOD_LABELS[method], fy: model.meta.fiscalYear }),
       html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.filterContracts}</a>`,
+      outside > 0 ? fmt(T.team.hiddenOutside, { n: outside }) : null,
     ),
   );
   if (rows.length === 0) {

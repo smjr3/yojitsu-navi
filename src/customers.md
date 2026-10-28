@@ -149,7 +149,9 @@ if (vm) {
   display(
     sectionTitle(
       T.customers.sectionTitle,
-      fmt(T.customers.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear, hidden: outsideCount > 0 && !f.showOutside ? fmt(T.customers.hiddenOutside, { n: outsideCount }) : "" }),
+      fmt(T.customers.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
+      null,
+      outsideCount > 0 && !f.showOutside ? fmt(T.customers.hiddenOutside, { n: outsideCount }) : null,
     ),
   );
   const columns = [

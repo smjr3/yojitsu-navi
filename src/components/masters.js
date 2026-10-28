@@ -40,6 +40,7 @@ import { allocationFromInput, flattenTeamTree, hoursFromAllocation, memberTeamAt
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
+import { infoTip } from "./layout.js";
 
 export const TOKEN_STORAGE_KEY = "yojitsu-navi:gitlab-token";
 
@@ -545,9 +546,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel" role="tabpanel" aria-labelledby=${`yn-me-tab-${fileId}`}>
       <div class="yn-me-panel-head">
         <div>
-          <h2 class="yn-section-title">${def.label}<span class="yn-me-path"> ${meta.path}</span></h2>
-          <p class="yn-me-help"><strong>${T.masters.helpWhat}</strong> ${help.what} <strong>${T.masters.helpEffect}</strong> ${help.effect}</p>
-          <p class="yn-me-help"><strong>${T.masters.helpHowto}</strong> ${help.howto}</p>
+          <div class="yn-title-with-tip"><h2 class="yn-section-title">${def.label}<span class="yn-me-path"> ${meta.path}</span></h2>${infoTip(
+            html`<span class="yn-me-help"><strong>${T.masters.helpWhat}</strong> ${help.what}</span><span class="yn-me-help"><strong>${T.masters.helpEffect}</strong> ${help.effect}</span><span class="yn-me-help"><strong>${T.masters.helpHowto}</strong> ${help.howto}</span>`,
+            { label: fmt(T.layout.aboutSection, { title: def.label }) },
+          )}</div>
         </div>
       </div>
       ${notes.map((n) => html`<p class="yn-note yn-note-warn">${n}</p>`)}
@@ -675,9 +677,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan" role="tabpanel" aria-labelledby=${`yn-me-tab-${PLAN_VIEW_ID}`}>
       <div class="yn-me-panel-head">
         <div>
-          <h2 class="yn-section-title">${T.plan.tabLabel}<span class="yn-me-path"> ${data.files.assignments.path}</span></h2>
-          <p class="yn-me-help">${rich(T.plan.helpWhat)}</p>
-          <p class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</p>
+          <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.plan.tabLabel}<span class="yn-me-path"> ${data.files.assignments.path}</span></h2>${infoTip(
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span>`,
+            { label: fmt(T.layout.aboutSection, { title: T.plan.tabLabel }) },
+          )}</div>
         </div>
       </div>
       <div class="yn-me-toolbar yn-me-plan-toolbar">

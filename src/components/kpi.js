@@ -19,7 +19,7 @@ export function statTile({ label, value, sub = null, compare = null, status = nu
     ? html`<span class=${`yn-chip yn-chip-${status.kind}`}><span class="yn-chip-icon" aria-hidden="true">${chipIcon(status.kind)}</span>${status.text}</span>`
     : null;
   const compareNode = compare
-    ? html`<span class=${`yn-kpi-compare${compare.good === true ? " is-good" : compare.good === false ? " is-bad" : ""}`}>
+    ? html`<span title=${compare.title ?? null} class=${`yn-kpi-compare${compare.good === true ? " is-good" : compare.good === false ? " is-bad" : ""}`}>
         ${compare.direction ? html`<span class="yn-kpi-arrow" aria-hidden="true">${compare.direction === "up" ? "▲" : compare.direction === "down" ? "▼" : "―"}</span>` : null}
         ${compare.text}</span>`
     : null;

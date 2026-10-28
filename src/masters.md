@@ -38,8 +38,8 @@ if (model) {
 ```js
 if (model && mastersData && !mastersData.error) {
   const mode = effectiveSaveMode(mastersData.masterEdit);
-  display(html`<section class="yn-me-intro" aria-labelledby="yn-me-intro-title">
-    <h2 id="yn-me-intro-title" class="yn-me-intro-title">${T.mastersPage.introTitle}</h2>
+  display(html`<details class="yn-me-intro">
+    <summary class="yn-me-intro-title">${T.mastersPage.introTitle}</summary>
     <dl class="yn-me-intro-grid">
       <div><dt>${T.masterFiles.members}</dt><dd>${rich(T.mastersPage.introMembers)}</dd></div>
       <div><dt>${T.masterFiles.rates}</dt><dd>${rich(T.mastersPage.introRates)}</dd></div>
@@ -54,7 +54,7 @@ if (model && mastersData && !mastersData.error) {
       <li><span class="yn-me-flow-n" aria-hidden="true">4</span> ${mode === "gitlab" ? T.mastersPage.flow4Gitlab : T.mastersPage.flow4Download}</li>
     </ol>
     <p class="yn-me-small">${T.mastersPage.draftNote}</p>
-  </section>`);
+  </details>`);
 }
 ```
 
