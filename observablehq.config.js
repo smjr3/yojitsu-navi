@@ -91,10 +91,33 @@ function header({ path }) {
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
-  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}</nav>
+  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<button type="button" class="yn-tool yn-theme-toggle" aria-pressed="false">${escapeHtml(ja.app.themeToggle)}</button></nav>
 </div>
 <div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
 }
+
+/**
+ * テーマ（既定ライト）。描画前に localStorage の選択を <html data-theme> に戻し、ヘッダーの切替ボタンで保存する。
+ * Framework の dark（グラフの配色）は body の color-scheme を見て自動で追従する（style.css の :root[data-theme="dark"]）。
+ */
+const THEME_SCRIPT = `(() => {
+  const KEY = "yn-theme";
+  const root = document.documentElement;
+  const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
+  const apply = (t) => {
+    root.dataset.theme = t === "dark" ? "dark" : "light";
+    for (const b of document.querySelectorAll(".yn-theme-toggle")) b.setAttribute("aria-pressed", String(t === "dark"));
+  };
+  apply(read());
+  document.addEventListener("DOMContentLoaded", () => apply(read()));
+  document.addEventListener("click", (e) => {
+    if (!(e.target instanceof Element) || !e.target.closest(".yn-theme-toggle")) return;
+    const next = root.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem(KEY, next); } catch {}
+    apply(next);
+  });
+})();`;
+const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,
@@ -114,7 +137,7 @@ export default {
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
   // ファイル名は worklogKey(id)（英数字以外の ID は "~"＋16進。ローダ・画面の fetchWorklogs も同じ関数を使う）
   dynamicPaths: contractIds().map((id) => `/data/worklogs/${worklogKey(id)}.json`),
-  head: '<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">',
+  head,
   toc: false,
   pager: false,
   sidebar: false,

@@ -8,7 +8,7 @@
  */
 import { createRequire } from "node:module";
 import { aggregateMembers, memberMonthlySeries, type Period } from "../../src/core/index.js";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, query } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, query } from "./helpers/app.js";
 import { fiscalPeriod, getModel, treeAt, yen, formatPercent } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
@@ -292,7 +292,9 @@ test.describe("表示の作法", () => {
   });
 
   test.describe("ダーク", () => {
-    test.use({ colorScheme: "dark" });
+    test.beforeEach(async ({ page }) => {
+      await useDarkTheme(page);
+    });
     test("背景が暗く、グラフの凡例が出る", async ({ page }) => {
       await gotoPage(page, `/member?id=M011&${U}`);
       const lum = await page.evaluate(() => {

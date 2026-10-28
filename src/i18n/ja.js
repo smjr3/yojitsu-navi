@@ -21,6 +21,8 @@ export default {
     footer: "予実ナビ — 保守契約の予実管理",
     tabsLabel: "画面",
     toolsLabel: "補助",
+    // ヘッダー右端のテーマ切替（押すとダーク／もう一度でライト。aria-pressed で状態を示す）
+    themeToggle: "ダーク表示",
     // 上部タブ
     nav: {
       index: "全体",

@@ -88,9 +88,13 @@ for (const path of PAGES) {
           dialogWasOpen = true;
           // 開いているダイアログは Esc で閉じられる（半分の確率で閉じ、残りは中を触らせる）
           if (random() < 0.5) {
-            // 選択欄（select）にフォーカスがあると、Enter/Space で開いたリストを最初の Esc が閉じる（ブラウザ標準）。
-            // 利用者と同じく、その場合はもう一度 Esc を押す
-            const onSelect = await page.evaluate(() => document.activeElement?.tagName === "SELECT");
+            // 選択欄（select）や月・日付の入力欄にフォーカスがあると、Enter/Space で開いたリストやカレンダーを
+            // 最初の Esc が閉じる（ブラウザ標準）。利用者と同じく、その場合はもう一度 Esc を押す
+            const onSelect = await page.evaluate(() => {
+              const el = document.activeElement;
+              if (el?.tagName === "SELECT") return true;
+              return el instanceof HTMLInputElement && ["month", "date", "week", "time", "datetime-local"].includes(el.type);
+            });
             await page.keyboard.press("Escape");
             if (onSelect && (await page.locator("dialog[open]").count()) > 0) await page.keyboard.press("Escape");
             await expect(page.locator("dialog[open]"), `Esc でダイアログが閉じる (step ${step})`).toHaveCount(0);

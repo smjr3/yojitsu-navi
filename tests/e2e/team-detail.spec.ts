@@ -2,7 +2,7 @@
  * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、契約一覧（列順）、メンバー別実績、組織の変遷、空状態、遷移、Excel、a11y
  */
 import { createRequire } from "node:module";
-import { test, expect, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
 import { UNASSIGNED_TEAM_ID, contractsInPeriod, contractRowExpected, fiscalPeriod, forecastFor, formatPercent, getModel, teamContractIds, totalsFor, treeAt, yen } from "./helpers/core.js";
 import { teamMemberCosts, teamOrgChanges } from "../../src/core/index.js";
 
@@ -266,7 +266,9 @@ test.describe("狭幅（390px）", () => {
 });
 
 test.describe("ダーク・1024px", () => {
-  test.use({ colorScheme: "dark" });
+  test.beforeEach(async ({ page }) => {
+    await useDarkTheme(page);
+  });
   test("背景が暗く、グラフと凡例が出る", async ({ page }) => {
     await gotoPage(page, "/team?id=S21&unit=yen");
     await page.waitForLoadState("networkidle");

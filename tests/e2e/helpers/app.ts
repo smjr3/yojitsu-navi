@@ -50,6 +50,15 @@ export const test = base.extend<{ errors: ErrorLog }>({
   ],
 });
 
+/** ダーク表示を選んだ状態にする（既定はライト。ヘッダーの切替ボタンと同じ localStorage キー）。goto より前に呼ぶ */
+export async function useDarkTheme(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("yn-theme", "dark");
+    } catch {}
+  });
+}
+
 /** ページを開き、ヘッダ（モデル読み込み後に描画）と h1 が出るまで待つ */
 export async function gotoPage(page: Page, path: string): Promise<void> {
   await page.goto(path);

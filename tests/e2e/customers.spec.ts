@@ -4,7 +4,7 @@
  */
 import { createRequire } from "node:module";
 import type { Page } from "@playwright/test";
-import { test, expect, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
 import { aggregate, fiscalPeriod, forecastFor, formatPercent, getModel, teamContractIds, totalsFor, yen } from "./helpers/core.js";
 import { NONE_CUSTOMER_KEY, customerKey, groupByCustomer } from "../../src/core/index.js";
 
@@ -494,7 +494,9 @@ test.describe("画面の作法", () => {
   });
 
   test.describe("ダークモード", () => {
-    test.use({ colorScheme: "dark" });
+    test.beforeEach(async ({ page }) => {
+      await useDarkTheme(page);
+    });
     for (const [name, path] of [["一覧", "/customers"], ["詳細", detailPath]] as const) {
       test(`${name}: 背景が暗く、エラー無し`, async ({ page }) => {
         await go(page, path);
