@@ -8,9 +8,12 @@ import {
   addRow,
   cellOf,
   deleteRow,
+  describeImpactEffects,
   describeImpactMonths,
   diffMasterDoc,
   docFromDraft,
+  draftFileCount,
+  draftFileOf,
   escapeCsvCell,
   formatCsvRecord,
   impactBetween,
@@ -20,6 +23,7 @@ import {
   makeDraft,
   parseDraft,
   parseMasterDoc,
+  rebaseDraftFile,
   restoreRow,
   revertRow,
   rowState,
@@ -262,7 +266,7 @@ describe("impactOfChange（過去月への影響）", () => {
   });
 
   it("impactOfChange はセル配列でも使える（変化なしは 0 件）", () => {
-    expect(impactOfChange("rates", ["key", "hourly_rate", "effective_from"], [["a", "1", "2025-04"]], [["a", "1", "2025-04"]], range)).toEqual({ months: [], keys: [] });
+    expect(impactOfChange("rates", ["key", "hourly_rate", "effective_from"], [["a", "1", "2025-04"]], [["a", "1", "2025-04"]], range)).toEqual({ months: [], keys: [], columns: [] });
     expect(describeImpactMonths([])).toBe("なし");
     expect(describeImpactMonths(["2026-10"])).toBe("2026-10（1か月）");
   });
@@ -374,10 +378,184 @@ describe("下書き", () => {
   it("壊れた下書きは null", () => {
     expect(parseDraft(null)).toBeNull();
     expect(parseDraft("{")).toBeNull();
-    expect(parseDraft(JSON.stringify({ version: 2, files: {} }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ version: 3, files: {} }))).toBeNull();
     expect(parseDraft(JSON.stringify({ version: 1, files: { bogus: {} } }))).toBeNull();
     expect(parseDraft(JSON.stringify({ version: 1, files: { rates: { baseText: "", rows: [{ id: 1, cells: [] }] } } }))).toBeNull();
     expect(parseDraft(JSON.stringify({ version: 1, files: { rates: { baseText: "", rows: [{ id: "n1", cells: [1] }] } } }))).toBeNull();
     expect(parseDraft(JSON.stringify({ version: 1, savedAt: "t", files: {} }))).not.toBeNull();
+  });
+});
+
+describe("下書きの形式（土台 ＋ 差分）", () => {
+  it("差分だけを持つ（変更は土台の行番号、削除は行番号、追加はセル）", () => {
+    let doc = parseMasterDoc("rates", RATES);
+    doc = updateRow(doc, "o1", { hourly_rate: "12500" });
+    doc = deleteRow(doc, "o2");
+    doc = addRow(doc, { key: "課長", hourly_rate: "11000", effective_from: "2026-11" }).doc;
+    const f = draftFileOf(doc, { text: RATES, lastCommitId: "b" });
+    expect(f).toEqual({ baseText: RATES, baseCommitId: "b", changed: [{ baseIndex: 1, cells: ["部長", "12500", "2025-04"] }], removed: [2], added: [["課長", "11000", "2026-11"]] });
+    expect(draftFileCount(f)).toBe(3);
+  });
+
+  it("以前の形式（version 1: 編集後の全行）は差分の形に直して読む", () => {
+    let doc = parseMasterDoc("rates", RATES);
+    doc = deleteRow(updateRow(doc, "o0", { hourly_rate: "1" }), "o3");
+    const v1 = { version: 1, savedAt: "t", files: { rates: { baseText: RATES, baseCommitId: null, rows: doc.rows, nextId: 1 } } };
+    const d = parseDraft(JSON.stringify(v1))!;
+    expect(d.version).toBe(2);
+    expect(d.files.rates).toEqual({ baseText: RATES, baseCommitId: null, changed: [{ baseIndex: 0, cells: ["本部長", "1", "2025-04"] }], removed: [3], added: [] });
+    expect(serializeMasterDoc(docFromDraft("rates", d.files.rates!)).text).toBe(serializeMasterDoc(doc).text);
+  });
+
+  it("version 2 の壊れた差分は null", () => {
+    const ok = { baseText: "", baseCommitId: null, changed: [], removed: [], added: [] };
+    expect(parseDraft(JSON.stringify({ version: 2, savedAt: "t", files: { rates: ok } }))).not.toBeNull();
+    expect(parseDraft(JSON.stringify({ version: 2, files: { rates: { ...ok, removed: [-1] } } }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ version: 2, files: { rates: { ...ok, changed: [{ baseIndex: 0, cells: [1] }] } } }))).toBeNull();
+    expect(parseDraft(JSON.stringify({ version: 2, files: { rates: { ...ok, added: "x" } } }))).toBeNull();
+  });
+});
+
+describe("rebaseDraftFile（古い下書きを最新の土台に当て直す）", () => {
+  // 下書き: 部長 12000 → 12500（o1）、主任（o2）を削除、課長を追加
+  const mine = () => {
+    let doc = parseMasterDoc("rates", RATES);
+    doc = updateRow(doc, "o1", { hourly_rate: "12500" });
+    doc = deleteRow(doc, "o2");
+    return addRow(doc, { key: "課長", hourly_rate: "11000", effective_from: "2026-11" }).doc;
+  };
+  const draft = () => draftFileOf(mine(), { text: RATES, lastCommitId: "b" });
+  const keys = (doc: MasterDoc) => doc.rows.map((r) => r.cells.join(","));
+
+  it("土台が同じなら下書きを作った文書そのもの（stale でない）", () => {
+    const r = rebaseDraftFile("rates", draft(), RATES);
+    expect(r.stale).toBe(false);
+    expect(r.conflicts).toEqual([]);
+    expect(r.applied).toBe(3);
+    expect(serializeMasterDoc(r.doc).text).toBe(serializeMasterDoc(mine()).text);
+  });
+
+  it("他の人が別の行を変え・行を足していても、下書きの変更は最新の土台に当て直され、他の人の変更も残る", () => {
+    // 最新: 先頭に一般を挿入、本部長を 15500 に、末尾にパートナー行
+    const latest = "key,hourly_rate,effective_from\n一般,6000,2025-04\n本部長,15500,2025-04\n部長,12000,2025-04\n主任,8000,2025-04\n部長,13000,2026-04\nP009,9000,2026-01\n";
+    const r = rebaseDraftFile("rates", draft(), latest);
+    expect(r.stale).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    expect(r.applied).toBe(3);
+    expect(keys(r.doc)).toEqual(["一般,6000,2025-04", "本部長,15500,2025-04", "部長,12500,2025-04", "部長,13000,2026-04", "P009,9000,2026-01", "課長,11000,2026-11"]);
+    // 文書は最新の土台に対する編集（差分は自分の 3 件だけ）
+    const d = diffMasterDoc(r.doc);
+    expect([d.added.length, d.changed.length, d.removed.length]).toEqual([1, 1, 1]);
+    expect(serializeMasterDoc(r.doc).text.startsWith("key,hourly_rate,effective_from\n一般,6000,2025-04\n本部長,15500,2025-04\n")).toBe(true);
+  });
+
+  it("同じ行を両方が変えたら衝突。選ばなければ最新のまま・unresolved、選んだ側が採られる", () => {
+    const latest = RATES.replace("部長,12000,2025-04", "部長,12800,2025-04");
+    const r = rebaseDraftFile("rates", draft(), latest);
+    expect(r.conflicts).toEqual([
+      { id: "1", kind: "both-changed", base: { key: "部長", hourly_rate: "12000", effective_from: "2025-04" }, mine: { key: "部長", hourly_rate: "12500", effective_from: "2025-04" }, theirs: { key: "部長", hourly_rate: "12800", effective_from: "2025-04" }, columns: ["hourly_rate"] },
+    ]);
+    expect(r.unresolved).toEqual(["1"]);
+    expect(keys(r.doc)).toContain("部長,12800,2025-04");
+    const m = rebaseDraftFile("rates", draft(), latest, { "1": "mine" });
+    expect(m.unresolved).toEqual([]);
+    expect(keys(m.doc)).toContain("部長,12500,2025-04");
+    expect(keys(m.doc)).not.toContain("部長,12800,2025-04");
+    const t = rebaseDraftFile("rates", draft(), latest, { "1": "theirs" });
+    expect(keys(t.doc)).toContain("部長,12800,2025-04");
+    // 主任の削除・課長の追加は衝突せずに当たる
+    expect(keys(t.doc).some((k) => k.startsWith("主任"))).toBe(false);
+    expect(keys(t.doc)).toContain("課長,11000,2026-11");
+  });
+
+  it("両方が同じ値に変えた・両方が削除した行は衝突にしない", () => {
+    const latest = RATES.replace("部長,12000,2025-04", "部長,12500,2025-04").replace("主任,8000,2025-04\n", "");
+    const r = rebaseDraftFile("rates", draft(), latest);
+    expect(r.conflicts).toEqual([]);
+    expect(r.applied).toBe(3);
+    expect(diffMasterDoc(r.doc).count).toBe(1); // 追加だけが残る
+  });
+
+  it("自分が変えた行を他の人が削除・自分が消した行を他の人が変えた → それぞれ衝突（自分を選ぶと行を戻す／消す）", () => {
+    const latest = RATES.replace("部長,12000,2025-04\n", "").replace("主任,8000,2025-04", "主任,8200,2025-04");
+    const r = rebaseDraftFile("rates", draft(), latest);
+    expect(r.conflicts.map((c) => [c.id, c.kind, c.mine === null, c.theirs === null])).toEqual([
+      ["1", "changed-vs-deleted", false, true],
+      ["2", "deleted-vs-changed", true, false],
+    ]);
+    const m = rebaseDraftFile("rates", draft(), latest, { "1": "mine", "2": "mine" });
+    expect(keys(m.doc)).toEqual(["本部長,15000,2025-04", "部長,13000,2026-04", "部長,12500,2025-04", "課長,11000,2026-11"]);
+    const t = rebaseDraftFile("rates", draft(), latest, { "1": "theirs", "2": "theirs" });
+    expect(keys(t.doc)).toEqual(["本部長,15000,2025-04", "主任,8200,2025-04", "部長,13000,2026-04", "課長,11000,2026-11"]);
+  });
+
+  it("最新側で列が増えても、列名で当て直す（下書きに無い列は最新の値）", () => {
+    const text = "member_id,name,kind,title,department,section,team_id,effective_from\nE1,山田,employee,主任,,,S11,2025-04\nE2,佐藤,employee,課長,,,S12,2025-04\n";
+    let doc = parseMasterDoc("members", text);
+    doc = updateRow(doc, "o1", { team_id: "S11" });
+    const f = draftFileOf(doc, { text, lastCommitId: null });
+    const latest = "member_id,name,kind,title,department,section,team_id,effective_from,note\nE1,山田,employee,主任,,,S11,2025-04,x\nE2,佐藤,employee,課長,,,S12,2025-04,y\n";
+    const r = rebaseDraftFile("members", f, latest);
+    // 列が増えたので全行の内容が変わった扱い。E2 は同じキーの行と対になり、衝突として出る（note は最新側の値を引き継ぐ）
+    expect(r.conflicts).toHaveLength(1);
+    expect(r.conflicts[0]!.mine).toMatchObject({ member_id: "E2", team_id: "S11", note: "y" });
+    expect(r.conflicts[0]!.columns).toEqual(["team_id"]);
+    const m = rebaseDraftFile("members", f, latest, { [r.conflicts[0]!.id]: "mine" });
+    expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x", "E2,佐藤,employee,課長,,,S11,2025-04,y"]);
+  });
+
+  it("土台にない行番号は無視する（壊れた下書きでも落ちない）", () => {
+    const f = { baseText: RATES, baseCommitId: null, changed: [{ baseIndex: 99, cells: ["x", "1", "2026-01"] }], removed: [42], added: [] };
+    const r = rebaseDraftFile("rates", f, RATES);
+    expect(r.conflicts).toEqual([]);
+    expect(serializeMasterDoc(r.doc).text).toBe(RATES);
+  });
+});
+
+describe("影響ダイアログの「何が変わるか」", () => {
+  const MEMBERS = "member_id,name,kind,title,department,section,team_id,effective_from\nE1,山田,employee,主任,第1事業部,1課,S11,2025-04\n";
+  const m = parseMasterDoc("members", MEMBERS);
+
+  it("所属チームだけを変える行の追加 → 列は team_id だけ。原価・粗利は変わらないと明記", () => {
+    const after = addRow(m, { member_id: "E1", name: "山田", kind: "employee", title: "主任", department: "第1事業部", section: "1課", team_id: "S12", effective_from: "2026-04" }).doc;
+    const imp = impactBetween(m, after, range);
+    expect(imp.months).toHaveLength(7);
+    expect(imp.columns).toEqual(["team_id"]);
+    const e = describeImpactEffects("members", imp.columns);
+    expect(e.costChanges).toBe(false);
+    expect(e.effects.join("")).toContain("組織別の集計");
+    expect(e.effects.join("")).not.toContain("原価・粗利");
+    expect(e.note).toContain("原価・粗利・消化率・着地見込みは変わりません");
+  });
+
+  it("部署・課だけ → 部署・課の表示。役職 → 単価と原価・粗利・消化率・着地見込み（先頭）", () => {
+    const dept = updateRow(m, "o0", { department: "第2事業部", section: "2課" });
+    expect(impactBetween(m, dept, range).columns).toEqual(["department", "section"]);
+    expect(describeImpactEffects("members", ["department", "section"]).effects).toEqual(["メンバー詳細の部署・課の表示"]);
+    const title = updateRow(m, "o0", { title: "課長", team_id: "S12" });
+    const cols = impactBetween(m, title, range).columns;
+    expect(cols).toEqual(["title", "team_id"]);
+    const e = describeImpactEffects("members", cols);
+    expect(e.costChanges).toBe(true);
+    expect(e.effects[0]).toBe("時間単価と、原価・粗利・消化率・着地見込み");
+    expect(e.note).toBeNull();
+  });
+
+  it("行が増える・無くなる月はキー列も変わった列に含める。値が同じで適用開始月だけ違う月は数えない", () => {
+    const del = deleteRow(m, "o0");
+    expect(impactBetween(m, del, range).columns).toEqual(["member_id", "name", "kind", "title", "department", "section", "team_id"]);
+    const same = addRow(m, { member_id: "E1", name: "山田", kind: "employee", title: "主任", department: "第1事業部", section: "1課", team_id: "S11", effective_from: "2026-04" }).doc;
+    expect(impactBetween(m, same, range)).toEqual({ months: [], keys: ["E1"], columns: [] });
+  });
+
+  it("単価・チーム・アサイン", () => {
+    const before = parseMasterDoc("rates", RATES);
+    const imp = impactBetween(before, updateRow(before, "o0", { hourly_rate: "1" }), range);
+    expect(imp.columns).toEqual(["hourly_rate"]);
+    expect(describeImpactEffects("rates", imp.columns).costChanges).toBe(true);
+    expect(describeImpactEffects("teams", ["name"]).effects).toEqual(["チーム名の表示"]);
+    expect(describeImpactEffects("teams", ["parent_team_id"]).effects[0]).toContain("上位組織の合計");
+    expect(describeImpactEffects("assignments", ["allocation"]).effects[0]).toContain("着地見込み（アサイン方式）");
+    expect(describeImpactEffects("rates", [])).toEqual({ effects: ["その月の行の値"], costChanges: false, note: null });
   });
 });

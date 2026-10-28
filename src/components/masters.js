@@ -1,7 +1,7 @@
 /**
  * マスタ編集画面（SPEC §19）の部品: タブ・表・行の追加／修正／削除ダイアログ・検証・差分・保存（GitLab / CSV ダウンロード）・下書き
  *
- * 純粋ロジック（CSV の書き出し・差分・影響月・検証・GitLab API）は src/core/masterEdit.ts と src/core/gitlab.ts。
+ * 純粋ロジック（CSV の書き出し・差分・影響月・検証・下書きの当て直し・GitLab API）は src/core/masterEdit.ts と src/core/gitlab.ts。
  * ここは状態を持って DOM を描くだけ。状態が変わるたびに該当部分を描き直し、data-fk でフォーカスを戻す。
  *
  *   mastersEditor({ data, asOfMonth, minMonth, storage, fetchImpl, now }) → HTMLElement
@@ -16,9 +16,10 @@ import {
   addRow,
   cellOf,
   deleteRow,
+  describeImpactEffects,
   describeImpactMonths,
   diffMasterDoc,
-  docFromDraft,
+  draftFileCount,
   impactBetween,
   issueText,
   makeDraft,
@@ -26,6 +27,7 @@ import {
   parseMasterDoc,
   restoreRow,
   revertRow,
+  rebaseDraftFile,
   rowRecord,
   rowState,
   staleDraftFiles,
@@ -132,10 +134,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   const contracts = parseCsvTable(data.context.contracts).rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name") })).filter((c) => c.id !== "");
 
   // ---- 状態 ---------------------------------------------------------------
-  const bases = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }]));
+  // 編集の土台は常にこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。書き換えない
+  const bases = Object.freeze(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, Object.freeze({ text: data.files[id].text, lastCommitId: data.files[id].lastCommitId })])));
   let docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
-  /** 下書きを土台が古いまま復元したファイル */
-  let staleRestored = [];
+  /** 古い土台の下書きを当て直して復元したファイル → { applied, resolved }（表の上に注記する） */
+  let rebasedInfo = {};
   let active = "members";
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   let mode = effectiveSaveMode(data.masterEdit);
@@ -154,6 +157,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     pendingDraft = null;
   }
   let draftSavedAt = null;
+  /** 下書きの衝突の選択: fileId → 衝突 id → "mine" | "theirs" */
+  let draftChoices = {};
+  /** 復元を押したが選んでいない衝突があるときの案内 */
+  let draftMsg = "";
 
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
   const parts = {
@@ -253,6 +260,43 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   }
 
   // ---- 下書きの復元 ---------------------------------------------------------
+  const CONFLICT_TEXT = {
+    "both-changed": "あなたも他の人も、この行を変更しました",
+    "changed-vs-deleted": "あなたが変更した行を、他の人が削除しました",
+    "deleted-vs-changed": "あなたが削除した行を、他の人が変更しました",
+  };
+
+  /** 衝突 1 件の選択肢（自分の下書き／最新のデータ） */
+  function conflictItem(fileId, c) {
+    const def = MASTER_FILES[fileId];
+    const cols = def.columns.filter((col) => docs[fileId].header.includes(col.name));
+    const keyText = def.keyColumns.map((k) => (c.base[k] ?? "").trim()).join(" / ");
+    const shown = cols.filter((col) => c.columns.includes(col.name));
+    const values = (rec, deletedText) =>
+      rec === null
+        ? html`<span class="yn-me-conflict-del">${deletedText}</span>`
+        : html`<span class="yn-me-conflict-vals">${(shown.length ? shown : cols).map((col, i) => html`${i > 0 ? " / " : ""}${col.label}: <strong>${(rec[col.name] ?? "").trim() || "（空）"}</strong>`)}</span>`;
+    const chosen = draftChoices[fileId]?.[c.id] ?? null;
+    const name = `yn-me-conflict-${fileId}-${c.id}`;
+    const option = (value, label, rec, deletedText) => {
+      const input = html`<input type="radio" name=${name} value=${value} checked=${chosen === value}>`;
+      input.dataset.fk = `conflict:${fileId}:${c.id}:${value}`;
+      input.addEventListener("change", () => {
+        draftChoices = { ...draftChoices, [fileId]: { ...(draftChoices[fileId] ?? {}), [c.id]: value } };
+        draftMsg = "";
+        renderDraft();
+        focusKey(`conflict:${fileId}:${c.id}:${value}`);
+      });
+      return html`<label class="yn-me-conflict-opt">${input}<span><span class="yn-me-conflict-label">${label}:</span> ${values(rec, deletedText)}</span></label>`;
+    };
+    return html`<fieldset class=${`yn-me-conflict${chosen ? "" : " is-unresolved"}`} data-conflict=${`${fileId}:${c.id}`}>
+      <legend><span class="yn-chip yn-chip-neutral">${def.label}</span> ${keyText}: ${CONFLICT_TEXT[c.kind]}</legend>
+      <p class="yn-me-small">下書きを作ったときの行: ${cols.map((col) => (c.base[col.name] ?? "").trim() || "—").join(" ・ ")}</p>
+      ${option("mine", "自分の下書きを残す", c.mine, "この行を削除する")}
+      ${option("theirs", "最新のデータを残す", c.theirs, "削除されたまま（行なし）")}
+    </fieldset>`;
+  }
+
   function renderDraft() {
     if (!pendingDraft) {
       parts.draft.replaceChildren();
@@ -260,15 +304,28 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     }
     const d = pendingDraft;
     const stale = staleDraftFiles(d, bases);
-    const counts = Object.entries(d.files).map(([id, f]) => `${MASTER_FILES[id].label} ${integer(diffMasterDoc(docFromDraft(id, f)).count)}件`);
+    const ids = MASTER_FILE_IDS.filter((id) => d.files[id]);
+    // 下書きの差分を、このビルドの元データ（最新の土台）に当て直す。土台が同じならそのまま戻るだけ
+    const results = Object.fromEntries(ids.map((id) => [id, rebaseDraftFile(id, d.files[id], bases[id].text, draftChoices[id] ?? {})]));
+    const counts = ids.map((id) => `${MASTER_FILES[id].label} ${integer(draftFileCount(d.files[id]))}件`);
+    const conflicts = ids.flatMap((id) => results[id].conflicts.map((c) => ({ fileId: id, c })));
+    const unresolved = ids.flatMap((id) => results[id].unresolved.map((cid) => `${id}:${cid}`));
+    const applied = ids.reduce((sum, id) => sum + results[id].applied, 0);
     const restore = () => {
-      for (const [id, f] of Object.entries(d.files)) {
-        // 土台が古ければ、下書きに保存した土台（と当時の最終コミット ID）に対する編集として戻す
-        bases[id] = { text: f.baseText, lastCommitId: f.baseCommitId };
-        docs = { ...docs, [id]: docFromDraft(id, f) };
+      if (unresolved.length) {
+        draftMsg = `どちらを残すか、まだ選んでいない行が ${integer(unresolved.length)} 件あります。すべて選んでから復元してください。`;
+        renderDraft();
+        parts.draft.querySelector(`[data-conflict="${CSS.escape(unresolved[0])}"] input`)?.focus();
+        return;
       }
-      staleRestored = stale;
+      rebasedInfo = {};
+      for (const id of ids) {
+        docs = { ...docs, [id]: results[id].doc };
+        if (results[id].stale) rebasedInfo[id] = { applied: results[id].applied, resolved: results[id].conflicts.length };
+      }
       pendingDraft = null;
+      draftChoices = {};
+      draftMsg = "";
       validation = validateEdited(docs, data.context, config);
       persistDraft();
       renderAll();
@@ -277,6 +334,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     const discard = () => {
       local.remove(DRAFT_STORAGE_KEY);
       pendingDraft = null;
+      draftChoices = {};
+      draftMsg = "";
       persistDraft();
       renderAll();
       focusKey(`tab:${active}`);
@@ -285,8 +344,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       <h2 id="yn-me-draft-title" class="yn-me-banner-title">保存していない編集内容（下書き）があります</h2>
       <p>${dateTimeJst(d.savedAt)} に自動保存した下書き: ${counts.join("、")}。続きから編集するには「下書きを復元する」を押してください。</p>
       ${stale.length
-        ? html`<p class="yn-me-stale" role="alert"><strong>元データが更新されています</strong>（${stale.map((id) => fileName(MASTER_FILES[id].path)).join("、")}）。下書きを作ったあとに、他の人がこのファイルを更新しました。復元すると古いデータを土台にした編集になり、GitLab に保存すると「競合」で止まります。変更内容を確認して、最新のデータで編集し直すことをおすすめします。</p>`
+        ? html`<div class="yn-me-stale" role="alert">
+            <p><strong>元データが更新されています</strong>（${stale.map((id) => fileName(MASTER_FILES[id].path)).join("、")}）。下書きを作ったあとに、他の人がこのファイルを更新しました。復元すると、下書きの変更（追加・変更・削除）を<strong>最新のデータに当て直します</strong>（古いデータを土台にしたまま保存・ダウンロードすることはありません）。</p>
+            <p>そのまま当て直せる変更: ${integer(applied)} 件。${conflicts.length
+              ? html`他の人も同じ行を変更・削除しているため当て直せない変更: <strong>${integer(conflicts.length)} 件</strong>。下の一覧で、行ごとにどちらを残すか選んでから復元してください。`
+              : "当て直せない変更（他の人も同じ行を変えたもの）はありません。"}</p>
+          </div>`
         : null}
+      ${conflicts.length
+        ? html`<div class="yn-me-conflicts">
+            <h3 class="yn-me-subtitle">どちらを残すか選んでください（${integer(conflicts.length)} 件、未選択 ${integer(unresolved.length)} 件）</h3>
+            ${conflicts.map(({ fileId, c }) => conflictItem(fileId, c))}
+          </div>`
+        : null}
+      ${draftMsg ? html`<p class="yn-me-form-msg" role="alert">${draftMsg}</p>` : null}
       <p class="yn-me-actions">
         <button type="button" class="yn-btn yn-btn-primary" data-fk="draft:restore" onclick=${restore}>下書きを復元する</button>
         <button type="button" class="yn-btn" data-fk="draft:discard" onclick=${discard}>下書きを破棄する</button>
@@ -376,7 +447,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
     const notes = [];
     if (meta.encoding && meta.encoding !== "utf-8") notes.push(`元のファイルは ${meta.encoding === "shift_jis" ? "Shift_JIS" : "BOM 付き UTF-8"} です。保存すると UTF-8（BOM なし）に変わるため、GitLab 上では全行が変更として表示されます。`);
     if (meta.lineEnding === "crlf") notes.push("元のファイルの改行が CRLF です。保存すると LF に揃えるため、GitLab 上では全行が変更として表示されます。");
-    if (staleRestored.includes(fileId)) notes.push("このファイルは、古い元データを土台にした下書きから復元しました。保存の前に、最新のデータと食い違いが無いか確認してください。");
+    if (rebasedInfo[fileId]) {
+      const ri = rebasedInfo[fileId];
+      notes.push(`このファイルは、古い元データで作った下書きを最新のデータに当て直して復元しました（そのまま当て直した変更 ${integer(ri.applied)} 件${ri.resolved ? `、どちらを残すか選んだ行 ${integer(ri.resolved)} 件` : ""}）。保存の前に「変更内容」で確認してください。`);
+    }
     if (fileId === "members" && importMode) notes.push(`氏名・区分・役職・部署・課は人事データから自動で取り込みます（memberSource: ${data.memberSourceAdapter}）。ここで編集できるのは所属チームと適用開始月だけです。`);
 
     const rowsHtml = shown.flatMap((r) => {
@@ -490,6 +564,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
           ? titleOptions().map((t) => ({ v: t, l: "役職" }))
           : [...titleOptions().map((t) => ({ v: t, l: "役職" })), ...[...names.entries()].map(([k, n]) => ({ v: k, l: `個人単価: ${n}` }))];
     return html`<span class="yn-me-combo">${input}<datalist id=${listId}>${options.map((o) => html`<option value=${o.v} label=${o.l}></option>`)}</datalist></span>`;
+  }
+
+  /** 過去月への影響の注記。何が変わるかは、過去の月で値が変わる列で出し分ける（§19.1） */
+  function impactNote(fileId, impact, tail) {
+    const eff = describeImpactEffects(fileId, impact.columns);
+    return html`<p class="yn-me-impact" role="alert" data-cost-changes=${eff.costChanges ? "true" : "false"}><span aria-hidden="true">!</span> <strong>過去の計算結果が変わります（影響: ${integer(impact.months.length)} か月）</strong><br>${describeImpactMonths(impact.months)} の${eff.effects.join("、")}が変わります。${eff.note ? html`<strong class="yn-me-impact-safe">${eff.note}</strong>` : null}${tail}</p>`;
   }
 
   const FIELD_HINTS = {
@@ -633,7 +713,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
             ? html`<p><strong>この行を次のように変更します。</strong></p><ul class="yn-me-change-list">${changes.map((c) => html`<li>${c.label}: <span class="yn-me-before">${(rowRecord(before, row)[c.name] ?? "").trim() || "（空）"}</span> → <span class="yn-me-after">${values[c.name] || "（空）"}</span></li>`)}</ul>`
             : html`<p><strong>この行を追加します。</strong></p>`}
           ${impact.months.length
-            ? html`<p class="yn-me-impact" role="alert"><span aria-hidden="true">!</span> <strong>過去の計算結果が変わります（影響: ${integer(impact.months.length)} か月）</strong><br>${describeImpactMonths(impact.months)} の原価・粗利などが変わります（計算基準月 ${monthJa(asOfMonth)} までを過去として数えています）。</p>`
+            ? impactNote(fileId, impact, `計算基準月 ${monthJa(asOfMonth)} までを過去として数えています。`)
             : html`<p class="yn-me-impact-none">過去の計算結果は変わりません（${monthJa(asOfMonth)} までの月に影響しません）。</p>`}
           <p><button type="button" class="yn-btn" onclick=${backToForm}>入力に戻る</button></p>
         </div>`,
@@ -681,7 +761,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
       <div class="yn-dialog-body">
         <dl class="yn-me-dl">${columns.map((c) => html`<div><dt>${c.label}</dt><dd>${(rec[c.name] ?? "").trim() || "—"}</dd></div>`)}</dl>
         ${impact.months.length
-          ? html`<p class="yn-me-impact" role="alert"><span aria-hidden="true">!</span> <strong>過去の計算結果が変わります（影響: ${integer(impact.months.length)} か月）</strong><br>${describeImpactMonths(impact.months)} の数値が変わります。履歴を終わらせたいだけなら、削除ではなく新しい適用開始月の行を追加してください。</p>`
+          ? impactNote(fileId, impact, "履歴を終わらせたいだけなら、削除ではなく新しい適用開始月の行を追加してください。")
           : html`<p class="yn-me-impact-none">過去の計算結果は変わりません。</p>`}
         <p class="yn-me-small">削除は保存するまで確定しません。「削除する行」の一覧から取り消せます。</p>
         <div class="yn-me-form-foot">
@@ -816,9 +896,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
   }
 
   function resetAll(focus = "add:" + active) {
-    for (const id of MASTER_FILE_IDS) bases[id] = { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId };
     docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
-    staleRestored = [];
+    rebasedInfo = {};
     locked = false;
     outcome = null;
     downloaded = new Set();
@@ -939,6 +1018,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
         <ol class="yn-me-steps">
           <li>下のボタンで、変更したファイルをダウンロードします（ファイル名は元と同じ。UTF-8・BOM なし）。</li>
           <li>GitLab でこのプロジェクトを開き、同じ場所のファイル（${files.length ? files.map((id, i) => html`${i > 0 ? "、" : ""}<code>${MASTER_FILES[id].path}</code>`) : html`<code>data/masters/…</code>`}）を開きます。</li>
+          <li class="yn-me-step-check">ファイルの最新のコミットが、この画面の元データ（ダウンロードボタンの横に表示）と同じか確認します。<strong>違っていれば他の人が先に更新しています。アップロードせずに</strong>、その更新が CI でビルドされたあとにこの画面を再読み込みしてください（下書きは最新のデータに当て直して復元できます）。</li>
           <li>「置換」（Replace）を押し、ダウンロードしたファイルを選びます。</li>
           <li>コミットメッセージに変更の理由を書き、「新しいブランチで MR を作成」を選んでコミットします（Web IDE で複数ファイルをまとめて置き換えてもかまいません）。</li>
           <li>マージされると CI がビルドし直し、画面の数値に反映されます。反映を確認したら、この画面の下書きを破棄してください。</li>
@@ -950,6 +1030,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, fetchImpl = (
                 return html`<p class="yn-me-dl-row">
                   <button type="button" class="yn-btn yn-btn-primary yn-export" data-fk=${`dl:${id}`} disabled=${!!reason} onclick=${() => download(id)}>⤓ ${fileName(MASTER_FILES[id].path)} をダウンロード</button>
                   <span class="yn-me-small">${MASTER_FILES[id].label}: ${integer(diffMasterDoc(docs[id]).count)}件の変更${downloaded.has(id) ? "・ダウンロード済み" : ""}</span>
+                  <span class="yn-me-small" data-base-commit=${id}>${bases[id].lastCommitId ? html`元データ: コミット <code>${bases[id].lastCommitId.slice(0, 8)}</code>` : "元データのコミットは取得できませんでした（GitLab のファイルの履歴で最近の更新が無いか確認してください）"}</span>
                   ${link ? html`<a href=${link} target="_blank" rel="noopener" class="yn-me-small">GitLab でこのファイルを開く</a>` : null}
                 </p>`;
               })

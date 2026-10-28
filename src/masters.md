@@ -52,7 +52,7 @@ if (model && mastersData && !mastersData.error) {
       <li><span class="yn-me-flow-n" aria-hidden="true">3</span> 「変更内容」で差分を確認</li>
       <li><span class="yn-me-flow-n" aria-hidden="true">4</span> ${mode === "gitlab" ? "GitLab に保存（マージリクエスト／コミット）" : "CSV をダウンロードして GitLab にアップロード"}</li>
     </ol>
-    <p class="yn-me-small">編集中の内容は、このブラウザに下書きとして自動保存されます（保存するまで他の人には見えません）。</p>
+    <p class="yn-me-small">編集中の内容は、このブラウザに下書きとして自動保存されます（保存するまで他の人には見えません）。下書きのあとに他の人が元データを更新していたら、復元のときに下書きの変更を最新のデータに当て直します（同じ行を両方で変えていれば、どちらを残すか選びます）。</p>
   </section>`);
 }
 ```

@@ -152,7 +152,7 @@ export function classifyHttpError(step: "user" | "commit" | "mr", status: number
     return new GitLabError("permission", "このプロジェクトに保存する権限がありません。保存できるのは Developer 以上のメンバーです（保護ブランチへの直接コミットは Maintainer が必要なこともあります）。", { status, detail });
   }
   if (status === 409 || (step === "commit" && status === 400 && CONFLICT_PATTERN.test(detail))) {
-    return new GitLabError("conflict", "他の人が先に同じファイルを更新しました。あなたの編集内容は残っています。ページを再読み込みすると最新のデータに対して下書きを復元できます（変更を確認してから保存し直してください）。", { status, detail });
+    return new GitLabError("conflict", "他の人が先に同じファイルを更新しました。あなたの編集内容は下書きに残っています。他の人の更新が CI でビルドされたあとにこのページを再読み込みすると、下書きの変更を最新のデータに当て直して復元できます（同じ行を両方で変えていれば、どちらを残すか選べます）。", { status, detail });
   }
   if (status === 404) {
     return new GitLabError("other", "プロジェクトかブランチが見つかりません。config.json の masterEdit.gitlab（projectId・targetBranch）を確認してください。権限が無い場合も 404 になります。", { status, detail });
