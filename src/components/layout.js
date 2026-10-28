@@ -75,6 +75,10 @@ export function infoTip(content, { label = T.layout.infoLabel } = {}) {
   const show = () => {
     root.classList.add("is-open");
     place();
+    // 吹き出しが近くの別の「?」やボタンに重なっても押せるように、読むだけの吹き出しはクリックを素通りさせる。
+    // 中でスクロールする長い説明やリンクを含むときだけ受け止める
+    const interactive = pop.scrollHeight > pop.clientHeight + 1 || pop.querySelector("a, button, input, select, textarea") !== null;
+    pop.style.pointerEvents = interactive ? "auto" : "none";
     btn.setAttribute("aria-expanded", "true");
     addEventListener("scroll", onScroll, { passive: true, capture: true });
   };
