@@ -561,4 +561,88 @@ export default {
     legendPlanned: "計画時間（配分 × 基準時間）",
     legendActual: "実績時間（作業実績）",
   },
+
+  // ── 各画面で共通の文 ──────────────────────────────────
+  pages: {
+    teamMissing: "選択したチーム「{team}」は {month} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件として集計しています。",
+    showTable: "表で見る",
+  },
+
+  // ── 全体サマリー ──────────────────────────────────
+  index: {
+    lead: "保守契約の予算（契約額の月割り）と原価（工数 × 単価）を突き合わせ、粗利と年度末の着地見込みを見る画面です。数値をクリックすると計算根拠が開きます。",
+    monthlyHint: "{period} の予算・原価・粗利。{asOfMonth} 以降は着地見込み（{method}）です。",
+    deficitHint: "{fy} の着地粗利がマイナスになる契約（{method}）。クリックで契約詳細へ。",
+    noDeficitTitle: "赤字見込みの契約はありません",
+    noDeficitText: "{team} の契約はすべて黒字で着地する見込みです。",
+    byTeam: "チーム別",
+    childTeams: "{team} の配下チーム",
+    byDivision: "事業部ごとの集計",
+    // {scope} には childTeams か byDivision が入る
+    byTeamHint: "{scope}（{month} 時点の組織）。契約数は期間内の契約、着地粗利は {fy} に掛かる契約（件数を併記）が母集団です。行をクリックするとそのチームの詳細に移動します。",
+    toTeams: "チーム一覧へ",
+    noChildTitle: "配下のチームはありません",
+    noChildText: "このチームは末端のチームです。契約一覧で契約ごとの数値を確認できます。",
+    openContracts: "契約一覧を開く",
+    byTeamCaption: "チーム別の集計",
+  },
+
+  // ── チーム一覧 ───────────────────────────────────
+  teams: {
+    lead: "組織階層（事業部 › 課 › チーム）ごとの予実。上位の行は配下すべてのチームの合計です。行をクリックすると、そのチームの詳細（KPI・契約・メンバー別原価）に移動します。",
+    sectionTitle: "組織別の予実",
+    sectionHint: "{period} ・ {month} 時点の組織で表示 ・ 着地: {method}（{fy}年度）。契約数は期間内の契約、着地粗利は年度に掛かる契約（件数を併記）が母集団です。状態の「赤字 N件」は配下で赤字見込みの契約数、「予算超過」は消化率が基準超。",
+    orgNote: "期間の終了月（{month}）時点の組織で集計しています。現在（{asOfMonth}）の組織と異なる場合があります。",
+    empty: "チームがありません",
+  },
+
+  // ── 顧客別（一覧） ─────────────────────────────────
+  customers: {
+    filterLabel: "顧客の絞り込み",
+    searchPlaceholder: "顧客名で検索",
+    searchAria: "顧客名で検索（全角・半角、大文字・小文字、株式会社などの違いは区別しません）",
+    filterHead: "絞り込み",
+    showOutside: "期間外の顧客も表示",
+    showOutsideTitle: "選択した期間に 1 か月も掛からない契約だけの顧客も表示",
+    lead: "顧客ごとの予実。同じ顧客の契約（更新前後・複数案件）をまとめて、どの顧客が悪いかを見ます。行をクリックすると、その顧客の契約と担当チームの内訳に移動します。",
+    teamMissing: "選択したチーム「{team}」は {month} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。顧客は 0 件になります。",
+    sectionTitle: "顧客ごとの予実",
+    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約数は期間内の契約、着地粗利は年度に掛かる契約（件数を併記）が母集団です。状態の「赤字 N件」は赤字見込みの契約数、「予算超過」は消化率が基準超。既定の並び: 赤字・予算超過の顧客を先頭に、消化率の高い順。{hidden}",
+    colCustomer: "顧客",
+    totalSubtitle: "表示中の {n} 顧客 ・ {period}",
+    totalRow: "合計（{n}顧客）",
+    emptyTitle: "該当する顧客がありません",
+    emptyText: "検索語か期間・チームを変えてください。",
+    caption: "顧客一覧",
+    hiddenOutside: "選択期間に掛かる契約が無い顧客 {n}件は非表示（「期間外の顧客も表示」で表示）。",
+  },
+
+  // ── 契約一覧 ────────────────────────────────────
+  contracts: {
+    customerFiltered: "顧客「{customer}」の契約だけを表示しています{direct}。",
+    customerFilteredDirect: "（主担当チームが「{team}」の契約のみ。配下のチームは含みません）",
+    customerNotFound: "顧客「{customer}」は見つかりません（顧客名が変わったか、データから無くなった可能性があります）。契約は 0 件になります。",
+    clearFilter: "絞り込みを解除",
+    filterLabel: "契約の絞り込み",
+    searchPlaceholder: "顧客・案件・契約IDで検索",
+    searchAria: "顧客・案件・契約IDで検索（全角・半角、大文字・小文字は区別しません）",
+    lead: "契約ごとの予算・原価・粗利・消化率と年度末の着地見込み。赤い表示は「消化率が基準を超えた」か「赤字で着地する見込み」のどちらかです。行をクリックすると契約詳細へ移動します。",
+    teamMissing: "選択したチーム「{team}」は {month} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件になります。",
+    chipDeficit: "赤字見込み",
+    chipDeficitTitle: "年度末に赤字で着地する見込みの契約",
+    chipOver: "消化率超過",
+    chipOverTitle: "消化率が {percent}% を超えた契約",
+    chipPrelim: "速報含む",
+    chipPrelimTitle: "確定前の月を含む契約",
+    chipOutside: "期間外の契約も表示",
+    chipOutsideTitle: "選択した期間に 1 か月も掛からない契約も表示",
+    sectionTitle: "契約ごとの予実",
+    sectionHint: "{period} ・ {team} ・ 着地: {method}（{fy}年度）。契約列は 顧客 / 案件 と ID・チーム・期間（YY/MM）。既定の並び: 赤字見込み・予算超過の契約を先頭に、消化率の高い順。{hidden}",
+    colProject: "案件",
+    totalSubtitle: "表示中の {n} 件 ・ {period}",
+    totalRow: "合計（{n}件）",
+    emptyTitle: "該当する契約がありません",
+    emptyText: "絞り込み条件か期間・チームを変えてください。",
+    hiddenOutside: "選択期間に掛からない契約 {n}件は非表示（表示する → 「期間外の契約も表示」をチェック）。",
+  },
 };
