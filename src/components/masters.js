@@ -160,6 +160,7 @@ function latestByKey(doc, keyColumn) {
  */
 export function mastersEditor({ data, config, asOfMonth, minMonth, initialView = null, initialTeam = null, initialMember = null, fetchImpl = null, now = () => new Date() }) {
   const local = safeStorage("local");
+  const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
   const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now });
