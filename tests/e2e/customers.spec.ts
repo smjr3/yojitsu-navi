@@ -43,14 +43,14 @@ async function expectRow(page: Page, key: string, ids: readonly string[], method
   const f = forecastFor(method, ids as string[], model);
   expect(parseNumber(await cellText(row, col(h, "契約数")))).toBe(t.contractCount);
   expect(await cellText(row, col(h, "予算"))).toBe(yen(t.budget));
-  expect(await cellText(row, col(h, "原価"))).toBe(yen(t.cost));
-  expect(await cellText(row, col(h, "粗利"))).toBe(yen(t.grossProfit));
-  expect(await cellText(row, col(h, "粗利率"))).toBe(formatPercent(t.grossMargin));
+  expect(await cellText(row, col(h, "実績"))).toBe(yen(t.cost));
+  expect(await cellText(row, col(h, "残予算"))).toBe(yen(t.grossProfit));
+  expect(await cellText(row, col(h, "残予算率"))).toBe(formatPercent(t.grossMargin));
   expect(await cellText(row, col(h, "消化率"))).toContain(formatPercent(t.burnRate));
-  // 着地粗利セルは金額の下に年度内の件数（「N件」）を併記する（チーム一覧と同じ）
+  // 着地差セルは金額の下に年度内の件数（「N件」）を併記する（チーム一覧と同じ）
   const fyCount = ids.filter((id) => (model.contracts.find((r) => r.contract.contractId === id)!.forecasts[method].breakdown.contractMonthsInFY.length ?? 0) > 0).length;
-  const fcCell = cell(row, col(h, "着地粗利"));
-  if (fyCount === 0) expect(await cellText(row, col(h, "着地粗利"))).toBe("—");
+  const fcCell = cell(row, col(h, "着地差"));
+  if (fyCount === 0) expect(await cellText(row, col(h, "着地差"))).toBe("—");
   else {
     expect((await fcCell.locator("button").first().innerText()).replace(/[▲\s]/g, "")).toBe(`${yen(f.forecastGrossProfit)}${fyCount}件`);
   }
@@ -81,8 +81,8 @@ test.describe("顧客一覧 /customers", () => {
     const all = totalsFor(FY, undefined, model);
     await expect(sum).toContainText("合計");
     expect(await cellText(sum, col(h, "予算"))).toBe(yen(all.budget));
-    expect(await cellText(sum, col(h, "原価"))).toBe(yen(all.cost));
-    expect(await cellText(sum, col(h, "粗利"))).toBe(yen(all.grossProfit));
+    expect(await cellText(sum, col(h, "実績"))).toBe(yen(all.cost));
+    expect(await cellText(sum, col(h, "残予算"))).toBe(yen(all.grossProfit));
     expect(parseNumber(await cellText(sum, col(h, "契約数")))).toBe(all.contractCount);
     // 行の予算の合計も一致
     const rows = dataRows(table);
@@ -95,7 +95,7 @@ test.describe("顧客一覧 /customers", () => {
     expect(await dialogRow(page, "予算合計")).toBe(yen(all.budget));
   });
 
-  test("数値の根拠ボタン: 顧客行の予算・着地粗利の内訳が開き、値が表と一致", async ({ page }) => {
+  test("数値の根拠ボタン: 顧客行の予算・着地差の内訳が開き、値が表と一致", async ({ page }) => {
     await go(page, "/customers");
     const g = listed().find((x) => x.ids.length >= 2)!;
     expect(g).toBeTruthy();
@@ -108,10 +108,10 @@ test.describe("顧客一覧 /customers", () => {
     expect(await dialogRow(page, "対象契約")).toBe(`${inFy(g.ids).contractCount}件`);
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toHaveCount(0);
-    await cell(row, col(h, "原価")).locator("button").click();
-    await expect(dialog(page).locator("#yn-dialog-title")).toContainText("原価の計算根拠");
+    await cell(row, col(h, "実績")).locator("button").click();
+    await expect(dialog(page).locator("#yn-dialog-title")).toContainText("実績の計算根拠");
     await page.keyboard.press("Escape");
-    await cell(row, col(h, "着地粗利")).locator("button").click();
+    await cell(row, col(h, "着地差")).locator("button").click();
     await expect(dialog(page)).toBeVisible();
     await page.keyboard.press("Escape");
   });
@@ -183,8 +183,10 @@ test.describe("顧客一覧 /customers", () => {
     const hr = aoa.findIndex((r) => r.some((c) => c === "顧客"));
     expect(hr).toBeGreaterThanOrEqual(0);
     const header = aoa[hr]!.map((x) => String(x ?? ""));
-    for (const label of ["顧客", "契約数（期間内）", "予算（円）", "原価（円）", "粗利（円）", "粗利率（%）", "消化率（%）", "着地粗利（年度内）（円）"]) expect(header, label).toContain(label);
-    const body = aoa.slice(hr + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+    for (const label of ["顧客", "契約数（期間内）", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（年度内）（円）"]) expect(header, label).toContain(label);
+    const rowsAll = aoa.slice(hr + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+    expect(String(rowsAll.at(-1)![0]), "最終行は合計行").toMatch(/^合計/);
+    const body = rowsAll.slice(0, -1);
     expect(body.length).toBe(keys.length);
     const byLabel = new Map(groups.map((g) => [g.label, g]));
     for (const r of body) {
@@ -192,7 +194,7 @@ test.describe("顧客一覧 /customers", () => {
       expect(g).toBeTruthy();
       const t = inFy(g!.contractIds);
       expect(r[header.indexOf("予算（円）")]).toBe(t.budget);
-      expect(r[header.indexOf("原価（円）")]).toBe(t.cost);
+      expect(r[header.indexOf("実績（円）")]).toBe(t.cost);
       expect(r[header.indexOf("契約数（期間内）")]).toBe(t.contractCount);
     }
   });
@@ -411,18 +413,18 @@ test.describe("画面の作法", () => {
     await expect(page.locator("tbody tr[data-key]").first().locator("th[scope=row]")).toHaveCount(1);
   });
 
-  test("赤は消化率超過と赤字見込みだけ: 色だけに頼らず文字（▲・赤字／予算超過）を持つ", async ({ page }) => {
+  test("赤は消化率超過と超過見込みだけ: 色だけに頼らず文字（▲・超過見込み／消化率超過）を持つ", async ({ page }) => {
     await go(page, "/customers");
     const chips = await page.locator("tbody .yn-chip-danger").allTextContents();
-    for (const t of chips) expect(t).toMatch(/赤字|予算超過/);
+    for (const t of chips) expect(t).toMatch(/超過見込み|予算超過|消化率超過/);
     const dangerText = await page.locator("tbody .yn-danger-text").evaluateAll((els) => els.map((e) => (e.textContent ?? "").replace(/[▲\s]/g, "")));
     for (const t of dangerText) expect(t.length).toBeGreaterThan(0);
-    // 赤字見込みの契約を持つ顧客に『赤字 N件』が出る
+    // 超過見込みの契約を持つ顧客に『赤字 N件』が出る
     const deficitCustomers = listed().filter((g) => forecastFor("recent3", g.ids, model).deficitContractIds.length > 0);
     expect(deficitCustomers.length).toBeGreaterThan(0);
     for (const g of deficitCustomers) {
       const n = forecastFor("recent3", g.ids, model).deficitContractIds.length;
-      await expect(rowByKey(page, "顧客一覧", g.key)).toContainText(`赤字 ${n}件`);
+      await expect(rowByKey(page, "顧客一覧", g.key)).toContainText(`超過見込み ${n}件`);
     }
   });
 
@@ -464,14 +466,14 @@ test.describe("画面の作法", () => {
       expect(m.page).toBe(true);
       expect(m.sw, `表 scrollWidth ${m.sw} <= clientWidth ${m.cw}`).toBeLessThanOrEqual(m.cw + 1);
       const h = await headerIndex(table);
-      for (const l of ["予算", "原価", "粗利", "粗利率", "消化率", "着地粗利"]) await expect(table.locator("thead th").nth(col(h, l))).toBeVisible();
+      for (const l of ["予算", "実績", "残予算", "残予算率", "消化率", "着地差"]) await expect(table.locator("thead th").nth(col(h, l))).toBeVisible();
     });
   }
 
-  test("列順は他の一覧と同じ: 予算・原価・粗利・粗利率・消化率・着地粗利（状態は最後）", async ({ page }) => {
+  test("列順は他の一覧と同じ: 予算・実績・残予算・残予算率・消化率・着地差（状態は最後）", async ({ page }) => {
     await go(page, "/customers");
     const h = await headerIndex(tableByCaption(page, "顧客一覧"));
-    const order = ["予算", "原価", "粗利", "粗利率", "消化率", "着地粗利", "状態"].map((l) => col(h, l));
+    const order = ["予算", "実績", "残予算", "残予算率", "消化率", "着地差", "状態"].map((l) => col(h, l));
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(col(h, "顧客")).toBeLessThan(col(h, "予算"));
   });

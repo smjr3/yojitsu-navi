@@ -1,13 +1,13 @@
 /**
  * 閲覧画面のレビュー指摘（M3 / M5 / L1 / L2 / L3 / L4 / L6 / L9）の回帰テスト
- *   M3  チーム詳細のメンバー別原価の根拠パネルは、選択単位に関係なく円
- *   M5  明細の表（作業ログ・メンバー別原価・メンバー詳細の月別/契約別/単価）は選択単位に関係なく円で、見出しに「（円）」。
+ *   M3  チーム詳細のメンバー別実績の根拠パネルは、選択単位に関係なく円
+ *   M5  明細の表（作業ログ・メンバー別実績・メンバー詳細の月別/契約別/単価）は選択単位に関係なく円で、見出しに「（円）」。
  *       メンバー一覧の行（メンバー×期間の集計）は選択単位に従う。差額に添える文は丸め後の値で判定
  *   L1  「単価なし」は赤にしない（neutral）
  *   L2  顧客詳細の担当チーム行 → 契約一覧は顧客キー（厳密）＋チームで絞り、件数が行と一致する
  *   L3  顧客詳細はチーム絞り込みを引き継ぎ、数字が変わることを注記する
  *   L4  メンバー別をチームで絞っても、期間全体の計画の対象が経過月だけで決まらない
- *   L6  合計行の着地粗利は年度内の契約が 0 件なら「—」
+ *   L6  合計行の着地差は年度内の契約が 0 件なら「—」
  *   L9  メンバー列は名前順、検索欄の案内にチームが入る
  * 既定単位（百万円）で開いて「単位に従わない」ことを確かめる。
  */
@@ -39,20 +39,20 @@ async function expectAllYen(table: ReturnType<typeof tableByCaption>, label: str
 }
 
 test.describe("M5 明細の表は常に円（既定の百万円で開く）", () => {
-  test("契約詳細: 作業ログ表（単価・金額）とメンバー別の原価が円で、見出しに（円）", async ({ page }) => {
+  test("契約詳細: 作業ログ表（単価・金額）とメンバー別の実績が円で、見出しに（円）", async ({ page }) => {
     await gotoPage(page, "/contract?id=C008&unit=m");
     // KPI・月ごとの予実は選択単位（百万円）に従う
     await expect(kpiValue(page, 0)).toContainText("百万円");
 
-    const members = tableByCaption(page, "メンバー別の原価");
+    const members = tableByCaption(page, "メンバー別の実績");
     const mh = await headerIndex(members);
-    expect([...mh.keys()]).toContain("原価（円）");
-    await expectAllYen(members, "原価");
-    // 値は core の原価行の合計と一致
+    expect([...mh.keys()]).toContain("実績（円）");
+    await expectAllYen(members, "実績");
+    // 値は core の実績行の合計と一致
     const r = contractResult("C008", model);
     const byMember = new Map<string, number>();
     for (const m of r.months) if (m.month >= FY.from && m.month <= FY.to) for (const l of m.costLines) byMember.set(l.memberId, (byMember.get(l.memberId) ?? 0) + l.amount);
-    for (const [id, amount] of byMember) expect(await cellText(members.locator(`tbody tr[data-key="${id}"]`), col(mh, "原価"))).toBe(yen(amount));
+    for (const [id, amount] of byMember) expect(await cellText(members.locator(`tbody tr[data-key="${id}"]`), col(mh, "実績"))).toBe(yen(amount));
 
     await page.getByRole("button", { name: "作業ログを読み込む" }).click();
     const wl = tableByCaption(page, "作業ログ");
@@ -65,19 +65,19 @@ test.describe("M5 明細の表は常に円（既定の百万円で開く）", ()
     expect(await cellText(wl.locator("tfoot tr"), col(wh, "金額"))).toBe(yen(total));
   });
 
-  test("チーム詳細: メンバー別の原価が円。根拠パネル（M3）も円", async ({ page }) => {
+  test("チーム詳細: メンバー別の実績が円。根拠パネル（M3）も円", async ({ page }) => {
     await gotoPage(page, "/team?id=S21&unit=m");
-    const table = tableByCaption(page, "メンバー別の原価");
+    const table = tableByCaption(page, "メンバー別の実績");
     const h = await headerIndex(table);
-    expect([...h.keys()]).toContain("原価（円）");
-    await expectAllYen(table, "原価");
+    expect([...h.keys()]).toContain("実績（円）");
+    await expectAllYen(table, "実績");
     const key = (await rowKeys(table))[0]!;
-    const amountText = await cellText(table.locator(`tbody tr[data-key="${key}"]`), col(h, "原価"));
+    const amountText = await cellText(table.locator(`tbody tr[data-key="${key}"]`), col(h, "実績"));
     await table.locator(`tbody tr[data-key="${key}"] td button.yn-num`).nth(1).click();
     const d = dialog(page);
     await expect(d).toBeVisible();
-    // 根拠は常に円: 「原価合計」も原価行の金額も、フッターの合計も 百万円/千円 を含まない
-    expect(await dialogRow(page, "原価合計")).toBe(amountText);
+    // 根拠は常に円: 「実績合計」も実績行の金額も、フッターの合計も 百万円/千円 を含まない
+    expect(await dialogRow(page, "実績合計")).toBe(amountText);
     await expect(d).not.toContainText("百万円");
     await expect(d).not.toContainText("千円");
     const lines = d.locator("table tbody tr");
@@ -92,15 +92,15 @@ test.describe("M5 明細の表は常に円（既定の百万円で開く）", ()
     await gotoPage(page, "/member?id=M019&unit=m");
     await expect(kpiValue(page, 0)).toContainText("百万円");
     for (const [caption, labels] of [
-      ["月ごとの計画と実績", ["計画原価", "実績原価", "差額"]],
-      ["契約別の計画と実績", ["計画原価", "実績原価", "差額"]],
+      ["月ごとの計画と実績", ["計画額", "実績", "差額"]],
+      ["契約別の計画と実績", ["計画額", "実績", "差額"]],
       ["単価の変遷", ["時間単価"]],
     ] as const) {
       const table = tableByCaption(page, caption);
       await expect(table).toBeVisible();
       const h = await headerIndex(table);
       for (const label of labels) {
-        const head = [...h.keys()].find((k) => k.startsWith(label));
+        const head = [...h.keys()].find((k) => k === label || k.startsWith(`${label}（`));
         expect(head, `${caption} の「${label}」見出し`).toContain("（円）");
         const rows = dataRows(table);
         const n = await rows.count();
@@ -118,33 +118,33 @@ test.describe("M5 明細の表は常に円（既定の百万円で開く）", ()
     await gotoPage(page, "/members?unit=m");
     const table = tableByCaption(page, "メンバー別の計画と実績");
     const h = await headerIndex(table);
-    expect([...h.keys()].some((k) => k.startsWith("計画原価"))).toBe(true);
+    expect([...h.keys()].some((k) => k.startsWith("計画額"))).toBe(true);
     expect([...h.keys()].some((k) => k.includes("（円）"))).toBe(false);
-    expect(await cellText(dataRows(table).first(), col(h, "計画原価"))).toContain("百万円");
+    expect(await cellText(dataRows(table).first(), col(h, "計画額"))).toContain("百万円");
     // 差額タイルの文 = 表示（百万円に丸めた値）の符号
     const cmp = { from: FY.from, to: FY.to < ASOF ? FY.to : ASOF };
     const v = aggregateMembers(model, { period: cmp }).total.variance;
     const r = Math.round(v / 100_000) / 10;
-    const expected = r > 0 ? "計画より原価が少ない" : r < 0 ? "計画より原価が多い" : "計画どおり";
+    const expected = r > 0 ? "計画より実績が少ない" : r < 0 ? "計画より実績が多い" : "計画どおり";
     await expect(page.locator(".yn-kpi-grid").first().locator(".yn-kpi").nth(2)).toContainText(expected);
   });
 
   test("Excel 出力の金額は従来どおり円の整数（列名に（円））", async ({ page }) => {
     await gotoPage(page, "/team?id=S21&unit=m");
-    const table = tableByCaption(page, "メンバー別の原価");
+    const table = tableByCaption(page, "メンバー別の実績");
     const h = await headerIndex(table);
     const key = (await rowKeys(table))[0]!;
-    const shown = parseNumber(await cellText(table.locator(`tbody tr[data-key="${key}"]`), col(h, "原価")))!;
+    const shown = parseNumber(await cellText(table.locator(`tbody tr[data-key="${key}"]`), col(h, "実績")))!;
     const dl = page.waitForEvent("download");
     await page.locator(".yn-table-block").filter({ has: table }).locator(".yn-export").click();
     const d = await dl;
     const wb = XLSX.readFile((await d.path())!);
     const aoa = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb.Sheets[wb.SheetNames[0]!]!, { header: 1, defval: null });
-    const hr = aoa.findIndex((r) => r.some((c) => c === "原価（円）"));
+    const hr = aoa.findIndex((r) => r.some((c) => c === "実績（円）"));
     expect(hr).toBeGreaterThanOrEqual(0);
     const header = aoa[hr]!.map((x) => String(x ?? ""));
     const row = aoa.slice(hr + 1).find((r) => String(r[0] ?? "").includes(key) || r.some((c) => c === shown));
-    expect(row![header.indexOf("原価（円）")]).toBe(shown);
+    expect(row![header.indexOf("実績（円）")]).toBe(shown);
   });
 });
 
@@ -154,7 +154,7 @@ test.describe("L1 単価なしは赤にしない", () => {
 
   test("契約詳細とチーム詳細の『単価なし』チップは neutral", async ({ page }) => {
     await gotoPage(page, `/contract?id=${withMissing.contract.contractId}&unit=yen`);
-    const chip = tableByCaption(page, "メンバー別の原価").locator(".yn-chip", { hasText: "単価なし" }).first();
+    const chip = tableByCaption(page, "メンバー別の実績").locator(".yn-chip", { hasText: "単価なし" }).first();
     await expect(chip).toBeVisible();
     await expect(chip).toHaveClass(/yn-chip-neutral/);
     await expect(page.locator(".yn-chip-danger", { hasText: "単価なし" })).toHaveCount(0);
@@ -162,15 +162,15 @@ test.describe("L1 単価なしは赤にしない", () => {
 
     await gotoPage(page, `/team?id=${tid}&unit=yen`);
     await expect(page.locator(".yn-chip-danger", { hasText: "単価なし" })).toHaveCount(0);
-    await expect(tableByCaption(page, "メンバー別の原価").locator(".yn-chip-neutral", { hasText: "単価なし" }).first()).toBeVisible();
+    await expect(tableByCaption(page, "メンバー別の実績").locator(".yn-chip-neutral", { hasText: "単価なし" }).first()).toBeVisible();
   });
 
-  test("根拠パネルの原価行の『単価なし』も赤くない", async ({ page }) => {
+  test("根拠パネルの実績行の『単価なし』も赤くない", async ({ page }) => {
     await gotoPage(page, `/contract?id=${withMissing.contract.contractId}&unit=yen`);
     const month = withMissing.months.find((m) => m.costLines.some((l) => l.rateMissing))!.month;
     const table = tableByCaption(page, "月ごとの予実");
     const h = await headerIndex(table);
-    await cell(table.locator(`tbody tr[data-key="${month}"]`), col(h, "原価")).locator("button").click();
+    await cell(table.locator(`tbody tr[data-key="${month}"]`), col(h, "実績")).locator("button").click();
     const d = dialog(page);
     await expect(d.locator(".yn-chip", { hasText: "単価なし" }).first()).toBeVisible();
     await expect(d.locator(".yn-chip-danger")).toHaveCount(0);
@@ -270,14 +270,14 @@ test.describe("L2 / L3 顧客詳細", () => {
     const table = tableByCaption(page, "顧客一覧");
     const h = await headerIndex(table);
     const first = dataRows(table).first();
-    const listed = await cellText(first, col(h, "原価"));
+    const listed = await cellText(first, col(h, "実績"));
     await first.locator("a").first().click();
     await expect(page.locator(".yn-note", { hasText: "契約だけで集計しています" })).toBeVisible();
     await expect(kpiValue(page, 1)).toHaveText(listed);
   });
 });
 
-test.describe("L6 合計行の着地粗利は年度内 0 件なら —", () => {
+test.describe("L6 合計行の着地差は年度内 0 件なら —", () => {
   const g = groups.find((x) => x.contractIds.includes("C016"))!;
   const early = "2025-04";
 
@@ -286,24 +286,24 @@ test.describe("L6 合計行の着地粗利は年度内 0 件なら —", () => {
     const table = tableByCaption(page, "契約一覧");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(1);
-    expect(await cellText(dataRows(table).first(), col(h, "着地粗利"))).toBe("—");
-    expect(await cellText(table.locator("tfoot tr"), col(h, "着地粗利"))).toBe("—");
+    expect(await cellText(dataRows(table).first(), col(h, "着地差"))).toBe("—");
+    expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe("—");
   });
 
-  test("顧客一覧: 行と合計行の着地粗利が食い違わない（行が値を持つなら合計行も同じ値）", async ({ page }) => {
+  test("顧客一覧: 行と合計行の着地差が食い違わない（行が値を持つなら合計行も同じ値）", async ({ page }) => {
     await gotoPage(page, `/customers?q=${encodeURIComponent(g.label)}&from=${early}&to=${early}&unit=yen`);
     const table = tableByCaption(page, "顧客一覧");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(1);
-    const row = (await cellText(dataRows(table).first(), col(h, "着地粗利"))).replace(/\d+件$/, "");
-    expect(await cellText(table.locator("tfoot tr"), col(h, "着地粗利"))).toBe(row);
+    const row = (await cellText(dataRows(table).first(), col(h, "着地差"))).replace(/\d+件$/, "");
+    expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe(row);
   });
 
   test("年度内の契約があれば合計行に金額が出る（契約一覧・既定期間）", async ({ page }) => {
     await gotoPage(page, "/contracts?unit=yen");
     const table = tableByCaption(page, "契約一覧");
     const h = await headerIndex(table);
-    expect(await cellText(table.locator("tfoot tr"), col(h, "着地粗利"))).not.toBe("—");
+    expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).not.toBe("—");
   });
 });
 

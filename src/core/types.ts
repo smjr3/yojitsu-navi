@@ -343,6 +343,7 @@ export type WarningCode =
   | "CONTRACT_INVALID"
   | "DUPLICATE_CONTRACT_ID"
   | "MAPPING_UNKNOWN_CONTRACT"
+  | "MAPPING_EXCLUDED_CONTRACT"
   | "MAPPING_AMBIGUOUS"
   | "EXCLUDED_NO_CUSTOMER";
 
@@ -363,7 +364,7 @@ export interface UnmappedWorklogGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
-  reason: "NO_RULE" | "OUT_OF_PERIOD" | "UNKNOWN_CONTRACT";
+  reason: "NO_RULE" | "OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT";
 }
 
 export interface ModelMeta {

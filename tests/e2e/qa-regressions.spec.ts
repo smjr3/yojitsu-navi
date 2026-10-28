@@ -57,3 +57,22 @@ test("契約詳細: ID の前後の空白と大文字小文字の違いを許す
   await expect(page.locator("h1")).toContainText("C008");
   await expect(page.getByText("見つかりません")).toHaveCount(0);
 });
+
+test("スマホ幅ではヘッダを固定しない（画面の 1/4 を占めない）。PC 幅では固定する", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoPage(page, "/contracts");
+  await page.mouse.wheel(0, 1500);
+  await expect.poll(() => page.evaluate(() => document.querySelector("#observablehq-header")!.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => document.querySelector("#observablehq-header")!.getBoundingClientRect().top)).toBe(0);
+});
+
+test("「速報含む」のアイコンはフォントに頼らず円で描く", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const icon = page.locator(".yn-icon-prelim").first();
+  await expect(icon).toBeVisible();
+  const box = (await icon.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(10);
+  expect(box.height).toBeGreaterThanOrEqual(10);
+});

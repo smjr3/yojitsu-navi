@@ -126,6 +126,7 @@ C010（将来開始）には 2027-01〜03 の配分があり、C012（実績ゼ�
 - `EXCLUDED_NO_CUSTOMER`（顧客名なし 約 330 時間）
 - `UNKNOWN_MEMBER` M099
 - `RATE_MISSING` M025 × 19 か月
+- `MEMBER_RATE_UNDEFINED` 役職「技術顧問」（M025）
 
 ## 別シナリオを作る
 

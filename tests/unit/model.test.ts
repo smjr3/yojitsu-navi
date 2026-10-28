@@ -207,7 +207,7 @@ describe("buildModel — 境界・警告", () => {
     expect(typeof model.meta.generatedAt).toBe("string");
   });
 
-  it("不正契約・重複契約は除外され警告になる。その契約を指すマッピングは未知扱い", () => {
+  it("不正契約・重複契約は除外され警告になる。その契約を指すマッピングは「除外中」", () => {
     const ds = dataset({
       contracts: [contract({ contractId: "BAD", startMonth: "2027-01", endMonth: "2026-01" }), contract({ contractId: "C1" }), contract({ contractId: "C1", totalAmount: 1 }), contract({ contractId: "NEG", totalAmount: -1 })],
       mappings: [rule("ABC株式会社", "", "BAD")],
@@ -216,8 +216,8 @@ describe("buildModel — 境界・警告", () => {
     const model = buildModel(ds, { asOf: "2026-10-27" });
     expect(model.contracts.map((c) => c.contract.contractId)).toEqual(["C1"]);
     expect(model.contracts[0]?.contract.totalAmount).toBe(2_400_000);
-    expect(model.warnings.map((w) => w.code)).toEqual(["CONTRACT_INVALID", "DUPLICATE_CONTRACT_ID", "CONTRACT_INVALID", "MAPPING_UNKNOWN_CONTRACT", "UNMAPPED_WORKLOG"]);
-    expect(model.unmapped[0]?.reason).toBe("UNKNOWN_CONTRACT");
+    expect(model.warnings.map((w) => w.code)).toEqual(["CONTRACT_INVALID", "DUPLICATE_CONTRACT_ID", "CONTRACT_INVALID", "MAPPING_EXCLUDED_CONTRACT", "UNMAPPED_WORKLOG"]);
+    expect(model.unmapped[0]?.reason).toBe("EXCLUDED_CONTRACT");
   });
 
   it("minMonth / maxMonth は契約の最小開始月〜最大終了月", () => {

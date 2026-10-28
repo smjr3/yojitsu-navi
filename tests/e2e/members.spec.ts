@@ -1,7 +1,7 @@
 /**
  * メンバー別（SPEC §18）: 一覧 /members と詳細 /member?id=
  *   - 数値が core（aggregateMembers / memberMonthlySeries）と一致（比較は経過月）
- *   - 内訳パネル（計画 = 配分 × 基準時間 × 単価、実績 = 原価行 → 作業ログ）
+ *   - 内訳パネル（計画 = 配分 × 基準時間 × 単価、実績 = 実績行 → 作業ログ）
  *   - 遷移（一覧 → 詳細 → 契約詳細、契約詳細 → メンバー詳細）、チーム絞り込み、検索
  *   - Excel 出力、a11y（見出し・キーボード）、赤を使わない、ダーク、390px
  * 金額は既定単位に依存しないよう URL に unit=yen を付ける。
@@ -51,15 +51,15 @@ test.describe("メンバー一覧 /members", () => {
       expect(await cellText(row, col(h, "計画時間"))).toBe(hoursText(m.plannedHours));
       expect(await cellText(row, col(h, "実績時間"))).toBe(hoursText(m.actualHours));
       expect(await cellText(row, col(h, "稼働率"))).toBe(formatPercent(m.utilization));
-      expect(await cellText(row, col(h, "計画原価"))).toBe(yen(m.plannedCost));
-      expect(await cellText(row, col(h, "実績原価"))).toBe(yen(m.actualCost));
+      expect(await cellText(row, col(h, "計画額"))).toBe(yen(m.plannedCost));
+      expect(await cellText(row, col(h, "実績"))).toBe(yen(m.actualCost));
       expect(await cellText(row, col(h, "差額"))).toBe(signed(m.variance));
     }
     const foot = table.locator("tfoot tr");
-    expect(await cellText(foot, col(h, "計画原価"))).toBe(yen(agg.total.plannedCost));
-    expect(await cellText(foot, col(h, "実績原価"))).toBe(yen(agg.total.actualCost));
+    expect(await cellText(foot, col(h, "計画額"))).toBe(yen(agg.total.plannedCost));
+    expect(await cellText(foot, col(h, "実績"))).toBe(yen(agg.total.actualCost));
     expect(await cellText(foot, col(h, "稼働率"))).toBe(formatPercent(agg.total.utilization));
-    // 実績原価の合計は同じ期間の契約原価の合計と一致（コアの不変条件を画面でも）
+    // 実績の合計は同じ期間の契約実績の合計と一致（コアの不変条件を画面でも）
     const cost = model.contracts.reduce((a, r) => a + r.months.filter((cm) => CMP.from <= cm.month && cm.month <= CMP.to).reduce((b, cm) => b + cm.cost, 0), 0);
     expect(agg.total.actualCost).toBe(cost);
   });
@@ -85,7 +85,7 @@ test.describe("メンバー一覧 /members", () => {
     await page.locator("#yn-m-text").fill("ｍ011");
     await expect(dataRows(table)).toHaveCount(1);
     const h = await headerIndex(table);
-    expect(await cellText(table.locator("tfoot tr"), col(h, "実績原価"))).toBe(yen(target.actualCost));
+    expect(await cellText(table.locator("tfoot tr"), col(h, "実績"))).toBe(yen(target.actualCost));
     await page.locator("#yn-m-text").fill("該当なしzzz");
     await expect(table.locator("tbody")).toContainText("検索に一致するメンバーがいません");
   });
@@ -98,7 +98,7 @@ test.describe("メンバー一覧 /members", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(0));
   });
 
-  test("内訳: 計画原価は 配分 × 基準時間 × 単価 の明細、実績原価は原価行と作業ログ、稼働率・合計行も根拠を持つ", async ({ page }) => {
+  test("内訳: 計画額は 配分 × 基準時間 × 単価 の明細、実績は実績行と作業ログ、稼働率・合計行も根拠を持つ", async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     const agg = aggregateMembers(model, { period: CMP });
     const m = agg.members.find((x) => x.memberId === "M011")!;
@@ -106,17 +106,17 @@ test.describe("メンバー一覧 /members", () => {
     const h = await headerIndex(table);
     const row = await rowByKey(page, "メンバー別の計画と実績", "M011");
 
-    await cell(row, col(h, "計画原価")).locator("button.yn-num").click();
+    await cell(row, col(h, "計画額")).locator("button.yn-num").click();
     await expect(dialog(page)).toBeVisible();
     await expect(dialog(page).locator(".yn-bd-formula")).toContainText("配分人月 × 基準時間");
-    expect(await dialogRow(page, "計画原価")).toBe(yen(m.plannedCost));
+    expect(await dialogRow(page, "計画額")).toBe(yen(m.plannedCost));
     expect(await dialogRow(page, "計画時間")).toBe(hoursText(m.plannedHours));
     await expect(dialog(page).locator("table")).toContainText("役職「主任」（2026-04〜）");
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toHaveCount(0);
 
-    await cell(row, col(h, "実績原価")).locator("button.yn-num").click();
-    expect(await dialogRow(page, "実績原価")).toBe(yen(m.actualCost));
+    await cell(row, col(h, "実績")).locator("button.yn-num").click();
+    expect(await dialogRow(page, "実績")).toBe(yen(m.actualCost));
     await dialog(page).getByRole("button", { name: "作業ログを読み込む" }).click();
     await expect(dialog(page).locator(".yn-bd-lazy table")).toBeVisible();
     await expect(dialog(page).locator(".yn-bd-lazy tbody tr").first()).toContainText("M011");
@@ -126,8 +126,8 @@ test.describe("メンバー一覧 /members", () => {
     expect(await dialogRow(page, "稼働率")).toBe(formatPercent(m.utilization));
     await page.keyboard.press("Escape");
 
-    await table.locator("tfoot tr").locator("td").nth(col(h, "実績原価")).locator("button.yn-num").click();
-    expect(await dialogRow(page, "実績原価（合計）")).toBe(yen(agg.total.actualCost));
+    await table.locator("tfoot tr").locator("td").nth(col(h, "実績")).locator("button.yn-num").click();
+    expect(await dialogRow(page, "実績（合計）")).toBe(yen(agg.total.actualCost));
     await page.keyboard.press("Escape");
   });
 
@@ -151,14 +151,14 @@ test.describe("メンバー一覧 /members", () => {
     const aoa = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb.Sheets[wb.SheetNames[0]!]!, { header: 1, defval: null });
     const hr = aoa.findIndex((r) => r.includes("メンバーID"));
     const header = aoa[hr]!.map((x) => String(x ?? ""));
-    for (const label of ["メンバー", "メンバーID", "所属チーム", "役職", "区分", "計画時間（h）", "実績時間（h）", "稼働率（%）", "計画原価（円）", "実績原価（円）", "差額（計画−実績）（円）", "状態"]) expect(header).toContain(label);
+    for (const label of ["メンバー", "メンバーID", "所属チーム", "役職", "区分", "計画時間（h）", "実績時間（h）", "稼働率（%）", "計画額（円）", "実績（円）", "差額（計画−実績）（円）", "状態"]) expect(header).toContain(label);
     const agg = aggregateMembers(model, { period: CMP });
     const body = aoa.slice(hr + 1).filter((r) => r[header.indexOf("メンバーID")]);
     expect(body).toHaveLength(agg.members.length);
     for (const r of body) {
       const m = agg.members.find((x) => x.memberId === r[header.indexOf("メンバーID")])!;
-      expect(r[header.indexOf("計画原価（円）")]).toBe(m.plannedCost);
-      expect(r[header.indexOf("実績原価（円）")]).toBe(m.actualCost);
+      expect(r[header.indexOf("計画額（円）")]).toBe(m.plannedCost);
+      expect(r[header.indexOf("実績（円）")]).toBe(m.actualCost);
       expect(r[header.indexOf("差額（計画−実績）（円）")]).toBe(m.variance);
     }
   });
@@ -183,10 +183,10 @@ test.describe("メンバー詳細 /member", () => {
     for (const p of series) {
       const row = monthly.locator(`tbody tr[data-key="${p.month}"]`);
       expect(await cellText(row, col(mh, "計画時間"))).toBe(hoursText(p.plannedHours));
-      expect(await cellText(row, col(mh, "計画原価"))).toBe(yen(p.plannedCost));
-      expect(await cellText(row, col(mh, "実績原価"))).toBe(p.month > ASOF ? "—" : yen(p.actualCost));
+      expect(await cellText(row, col(mh, "計画額"))).toBe(yen(p.plannedCost));
+      expect(await cellText(row, col(mh, "実績"))).toBe(p.month > ASOF ? "—" : yen(p.actualCost));
     }
-    expect(await cellText(monthly.locator("tfoot tr"), col(mh, "実績原価"))).toBe(yen(t.actualCost));
+    expect(await cellText(monthly.locator("tfoot tr"), col(mh, "実績"))).toBe(yen(t.actualCost));
 
     // 契約別（経過月）。アサインの無い契約は「アサインなし」
     const contracts = tableByCaption(page, "契約別の計画と実績");
@@ -194,8 +194,8 @@ test.describe("メンバー詳細 /member", () => {
     await expect(dataRows(contracts)).toHaveCount(t.byContract.length);
     for (const c of t.byContract) {
       const row = contracts.locator(`tbody tr[data-key="${c.contractId}"]`);
-      expect(await cellText(row, col(ch, "計画原価"))).toBe(yen(c.plannedCost));
-      expect(await cellText(row, col(ch, "実績原価"))).toBe(yen(c.actualCost));
+      expect(await cellText(row, col(ch, "計画額"))).toBe(yen(c.plannedCost));
+      expect(await cellText(row, col(ch, "実績"))).toBe(yen(c.actualCost));
       if (c.assignedMonths === 0) await expect(row).toContainText("アサインなし");
     }
 
@@ -211,9 +211,9 @@ test.describe("メンバー詳細 /member", () => {
     const monthly = tableByCaption(page, "月ごとの計画と実績");
     const mh = await headerIndex(monthly);
     const jul = monthly.locator('tbody tr[data-key="2026-07"]');
-    await cell(jul, col(mh, "計画原価")).locator("button.yn-num").click();
+    await cell(jul, col(mh, "計画額")).locator("button.yn-num").click();
     const p = memberMonthlySeries(model, "M011", { from: "2026-07", to: "2026-07" })[0]!;
-    expect(await dialogRow(page, "計画原価")).toBe(yen(p.plannedCost));
+    expect(await dialogRow(page, "計画額")).toBe(yen(p.plannedCost));
     await expect(dialog(page).locator("table")).toContainText("8,500円");
     await page.keyboard.press("Escape");
 
@@ -221,7 +221,7 @@ test.describe("メンバー詳細 /member", () => {
     await contracts.locator('tbody tr[data-key="C002"] .yn-row-link').click();
     await expect(page).toHaveURL(/\/contract\?/);
     expect(query(page).get("id")).toBe("C002");
-    const members = tableByCaption(page, "メンバー別の原価");
+    const members = tableByCaption(page, "メンバー別の実績");
     await members.locator('tbody tr[data-key="M011"] .yn-row-link').click();
     await expect(page).toHaveURL(/\/member\?/);
     expect(query(page).get("id")).toBe("M011");

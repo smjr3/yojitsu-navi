@@ -8,7 +8,7 @@ import { T, fmt } from "../i18n/index.js";
 /** 速報バッジ（期間に速報月を含むとき） */
 export function preliminaryBadge(includes) {
   return includes
-    ? html`<span class="yn-badge yn-badge-prelim" role="status" title=${T.layout.prelimBadgeTitle}><span aria-hidden="true">◔</span> ${T.layout.prelimBadge}</span>`
+    ? html`<span class="yn-badge yn-badge-prelim" role="status" title=${T.layout.prelimBadgeTitle}><span class="yn-icon-prelim" aria-hidden="true">◔</span> ${T.layout.prelimBadge}</span>`
     : html`<span class="yn-badge yn-badge-final" title=${T.layout.finalBadgeTitle}><span aria-hidden="true">●</span> ${T.layout.finalBadge}</span>`;
 }
 

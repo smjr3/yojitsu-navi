@@ -49,7 +49,7 @@ export function chipIcon(kind) {
 
 /** 状態チップ（表のセルやヘッダで共通に使う） */
 export function statusChip(kind, text, title = null) {
-  return html`<span class=${`yn-chip yn-chip-${kind}`} title=${title}><span class="yn-chip-icon" aria-hidden="true">${chipIcon(kind)}</span>${text}</span>`;
+  return html`<span class=${`yn-chip yn-chip-${kind}`} title=${title}><span class=${`yn-chip-icon${kind === "prelim" ? " yn-icon-prelim" : ""}`} aria-hidden="true">${chipIcon(kind)}</span>${text}</span>`;
 }
 
 /** KPI の行 */

@@ -38,7 +38,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   // 行をクリック（リンク以外のセル）で詳細へ
   const firstKey = (await rowKeys(contracts))[0]!;
   const h = await headerIndex(contracts);
-  await cell(contracts.locator(`tbody tr[data-key="${firstKey}"]`), col(h, "粗利率")).click({ position: { x: 2, y: 2 } });
+  await cell(contracts.locator(`tbody tr[data-key="${firstKey}"]`), col(h, "残予算率")).click({ position: { x: 2, y: 2 } });
   await expect(page).toHaveURL(/\/contract\?/);
   expect(query(page).get("id")).toBe(firstKey);
   expect(query(page).get("team")).toBe(leaf);
@@ -166,7 +166,7 @@ test("見出しクリックで並べ替え: aria-sort が切り替わり、数�
   await expect(dataRows(table)).toHaveCount(desc.length);
 });
 
-test("絞り込み: 赤字見込み / 消化率超過 / 速報含む / 期間外も表示 / 検索", async ({ page }) => {
+test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外も表示 / 検索", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const table = () => tableByCaption(page, "契約一覧");
   const all = contractsInPeriod(FY, undefined, model);
@@ -182,20 +182,20 @@ test("絞り込み: 赤字見込み / 消化率超過 / 速報含む / 期間外
       .toEqual([...ids].sort());
     await expect(page.locator(".yn-table-count")).toHaveText(`${ids.length} 件`);
   };
-  // 赤字見込み
+  // 超過見込み
   const deficit = [...ex].filter(([, e]) => e.isDeficit).map(([id]) => id);
   expect(deficit).toContain("C008");
   await page.locator("#yn-f-deficit").check();
-  await expectRows(deficit, "赤字見込み");
+  await expectRows(deficit, "超過見込み");
   const h = await headerIndex(table());
-  for (const id of deficit) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("赤字見込み");
+  for (const id of deficit) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("超過見込み");
   await page.locator("#yn-f-deficit").uncheck();
   await expectRows([...ex.keys()], "解除");
   // 消化率超過
   const over = [...ex].filter(([, e]) => e.isOverBudget).map(([id]) => id);
   await page.locator("#yn-f-over").check();
   await expectRows(over, "消化率超過");
-  for (const id of over) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("予算超過");
+  for (const id of over) expect(await cellText(table().locator(`tbody tr[data-key="${id}"]`), col(h, "状態"))).toContain("消化率超過");
   await page.locator("#yn-f-over").uncheck();
   // 速報含む
   const prelim = [...ex].filter(([, e]) => e.includesPreliminary).map(([id]) => id);
@@ -244,9 +244,9 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     seen.push({
       id: (await row.getAttribute("data-key"))!,
       budget: parseNumber(await cellText(row, col(h, "予算")))!,
-      cost: parseNumber(await cellText(row, col(h, "原価")))!,
-      gp: parseNumber(await cellText(row, col(h, "粗利")))!,
-      forecast: parseNumber(await cellText(row, col(h, "着地粗利"))),
+      cost: parseNumber(await cellText(row, col(h, "実績")))!,
+      gp: parseNumber(await cellText(row, col(h, "残予算")))!,
+      forecast: parseNumber(await cellText(row, col(h, "着地差"))),
     });
   }
   const exportBtn = page.locator(".yn-table-block").filter({ has: table }).locator(".yn-table-toolbar .yn-export");
@@ -267,11 +267,17 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
   expect(headerRow, "見出し行（契約ID を含む行）がある").toBeGreaterThanOrEqual(0);
   if (headerRow > 0) expect(String(aoa[0]![0] ?? ""), "先頭行は単位の注記").toContain("単位");
   const header = aoa[headerRow]!.map((x) => String(x ?? ""));
-  for (const label of ["契約ID", "顧客", "案件", "チーム", "契約期間", "予算（円）", "原価（円）", "粗利（円）", "粗利率（%）", "消化率（%）", "着地粗利（円）", "状態"]) {
+  for (const label of ["契約ID", "顧客", "案件", "チーム", "契約期間", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（円）", "状態"]) {
     expect(header, `見出し ${label}`).toContain(label);
   }
-  const body = aoa.slice(headerRow + 1).filter((r) => r.some((c) => c !== null && c !== ""));
-  expect(body.length, "行数 = 表示中の行数（合計行は含まない）").toBe(seen.length);
+  const rowsAll = aoa.slice(headerRow + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+  // 最終行は画面の合計行と同じ
+  const total = rowsAll.at(-1)!;
+  expect(String(total[0]), "最終行は合計行").toMatch(/^合計/);
+  const body = rowsAll.slice(0, -1);
+  expect(body.length, "行数 = 表示中の行数 + 合計行").toBe(seen.length);
+  const bi = header.indexOf("予算（円）");
+  expect(total[bi], "合計行の予算 = 各行の合計").toBe(body.reduce((a, r) => a + Number(r[bi]), 0));
   const ci = (label: string) => header.indexOf(label);
   for (let i = 0; i < seen.length; i++) {
     const r = body[i]!;
@@ -279,18 +285,18 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     expect(r[ci("契約ID")], `行 ${i} の契約ID（並び順も同じ）`).toBe(s.id);
     expect(typeof r[ci("予算（円）")], "金額は数値セル").toBe("number");
     expect(r[ci("予算（円）")]).toBe(s.budget);
-    expect(r[ci("原価（円）")]).toBe(s.cost);
-    expect(r[ci("粗利（円）")]).toBe(s.gp);
-    expect(r[ci("着地粗利（円）")]).toBe(s.forecast);
+    expect(r[ci("実績（円）")]).toBe(s.cost);
+    expect(r[ci("残予算（円）")]).toBe(s.gp);
+    expect(r[ci("着地差（円）")]).toBe(s.forecast);
     const e = contractRowExpected(contractResult(s.id, model), FY, "recent3", model);
     expect(r[ci("予算（円）")]).toBe(e.totals.budget);
-    const margin = r[ci("粗利率（%）")];
+    const margin = r[ci("残予算率（%）")];
     if (e.totals.grossMargin !== null) expect(margin).toBeCloseTo(Math.round(e.totals.grossMargin * 1000) / 10, 6);
     const cust = contractResult(s.id, model).contract.customerName;
     expect(r[ci("顧客")]).toBe(cust);
   }
   // 表示単位が 百万円（既定）・千円 でも Excel の金額は円の整数（見出しも「（円）」のまま）
-  const bodyYen = body.map((r) => ({ id: String(r[ci("契約ID")]), budget: r[ci("予算（円）")], cost: r[ci("原価（円）")] }));
+  const bodyYen = body.map((r) => ({ id: String(r[ci("契約ID")]), budget: r[ci("予算（円）")], cost: r[ci("実績（円）")] }));
   for (const unit of ["m", "k"] as const) {
     await page.locator(`.yn-seg-btn[data-unit=${unit}]`).click();
     await expect(page.locator(`.yn-seg-btn[data-unit=${unit}]`)).toHaveAttribute("aria-pressed", "true");
@@ -305,13 +311,13 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     const header2 = aoa2[headerRow2]!.map((x) => String(x ?? ""));
     expect(header2, `表示単位 ${unit} でも見出しは円`).toContain("予算（円）");
     expect(header2.some((x) => /（(百万円|千円)）/.test(x)), `表示単位 ${unit} の見出しが混ざらない`).toBe(false);
-    const rows2 = aoa2.slice(headerRow2 + 1).filter((r) => r.some((c) => c !== null && c !== ""));
+    const rows2 = aoa2.slice(headerRow2 + 1).filter((r) => r.some((c) => c !== null && c !== "") && !/^合計/.test(String(r[0])));
     expect(rows2.length).toBe(bodyYen.length);
     for (let i = 0; i < rows2.length; i++) {
       const id = String(rows2[i]![header2.indexOf("契約ID")]);
       const e = contractRowExpected(contractResult(id, model), FY, "recent3", model);
       expect(rows2[i]![header2.indexOf("予算（円）")], `${unit}: ${id} 予算（円）`).toBe(e.totals.budget);
-      expect(rows2[i]![header2.indexOf("原価（円）")], `${unit}: ${id} 原価（円）`).toBe(e.totals.cost);
+      expect(rows2[i]![header2.indexOf("実績（円）")], `${unit}: ${id} 実績（円）`).toBe(e.totals.cost);
     }
     // 表示は選択単位（core の値を同じ書式で丸めたもの）
     const e0 = contractRowExpected(contractResult((await first.getAttribute("data-key"))!, model), FY, "recent3", model);

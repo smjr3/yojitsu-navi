@@ -1,5 +1,5 @@
 /**
- * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、契約一覧（列順）、メンバー別原価、組織の変遷、空状態、遷移、Excel、a11y
+ * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、契約一覧（列順）、メンバー別実績、組織の変遷、空状態、遷移、Excel、a11y
  */
 import { createRequire } from "node:module";
 import { test, expect, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
@@ -72,7 +72,7 @@ test("配下のチーム: 直下の子だけが並び、数値は core と一致
     const t = totalsFor(FY, teamContractIds(id, FY, model)!, model);
     const row = table.locator(`tbody tr[data-key="${id}"]`);
     expect(parseNumber(await cellText(row, col(h, "予算")))).toBe(t.budget);
-    expect(parseNumber(await cellText(row, col(h, "原価")))).toBe(t.cost);
+    expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(t.cost);
   }
   await table.locator('tbody tr[data-key="S22"] .yn-row-link').click();
   await expect(page).toHaveURL(/\/team\?/);
@@ -87,7 +87,7 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
   const expected = contractsInPeriod(FY, ids, model);
   expect(new Set(await rowKeys(table))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
   const h = await headerIndex(table);
-  const order = ["契約", "予算", "原価", "粗利", "粗利率", "消化率", "着地粗利", "状態"].map((l) => col(h, l));
+  const order = ["契約", "予算", "実績", "残予算", "残予算率", "消化率", "着地差", "状態"].map((l) => col(h, l));
   expect(order).toEqual([...order].sort((a, b) => a - b));
   // 契約一覧ページの列順と同じ
   const labelsHere = [...h.keys()];
@@ -99,7 +99,7 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
     const e = contractRowExpected(r, FY, "recent3", model);
     const row = table.locator(`tbody tr[data-key="${r.contract.contractId}"]`);
     expect(parseNumber(await cellText(row, col(h, "予算")))).toBe(e.totals.budget);
-    expect(parseNumber(await cellText(row, col(h, "原価")))).toBe(e.totals.cost);
+    expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(e.totals.cost);
   }
   // 数値は根拠ボタン
   await expect(table.locator("tbody td button.yn-num").first()).toBeVisible();
@@ -116,7 +116,7 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
   expect(body.map((r) => r[header.indexOf("契約ID")]).sort()).toEqual(expected.map((r) => r.contract.contractId).sort());
   // 行クリック → 契約詳細
   const first = expected[0]!.contract.contractId;
-  await cell(table.locator(`tbody tr[data-key="${first}"]`), col(h, "粗利率")).click({ position: { x: 2, y: 2 } });
+  await cell(table.locator(`tbody tr[data-key="${first}"]`), col(h, "残予算率")).click({ position: { x: 2, y: 2 } });
   await expect(page).toHaveURL(/\/contract\?/);
   expect(query(page).get("id")).toBe(first);
   await page.goBack();
@@ -129,18 +129,18 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
   expect(new Set(await rowKeys(tableByCaption(page, "契約一覧")))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
 });
 
-test("メンバー別原価: 作業実績軸（所属が別でも含む）。core と一致し、合計は KPI の原価、根拠ボタンで原価行", async ({ page }) => {
+test("メンバー別実績: 作業実績軸（所属が別でも含む）。core と一致し、合計は KPI の実績、根拠ボタンで実績行", async ({ page }) => {
   await gotoPage(page, "/team?id=S21&unit=yen");
-  const table = tableByCaption(page, "メンバー別の原価");
+  const table = tableByCaption(page, "メンバー別の実績");
   const ids = teamContractIds("S21", FY, model)!;
   const rows = teamMemberCosts(model, ids, FY, new Set(tree.S21!.descendantIds));
   expect(rows.length).toBeGreaterThan(0);
   expect(new Set(await rowKeys(table))).toEqual(new Set(rows.map((r) => r.memberId)));
-  expect((await rowKeys(table))[0]).toBe(rows[0]!.memberId); // 既定は原価の大きい順
+  expect((await rowKeys(table))[0]).toBe(rows[0]!.memberId); // 既定は実績の大きい順
   const h = await headerIndex(table);
   for (const r of rows) {
     const row = table.locator(`tbody tr[data-key="${r.memberId}"]`);
-    expect(parseNumber(await cellText(row, col(h, "原価")))).toBe(r.amount);
+    expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
     expect(parseNumber(await cellText(row, col(h, "時間")))).toBeCloseTo(r.hours, 2);
     if (r.outsideHours > 0) await expect(row).toContainText("応援");
     else await expect(row).not.toContainText("応援");
@@ -150,7 +150,7 @@ test("メンバー別原価: 作業実績軸（所属が別でも含む）。cor
   // 根拠
   const top = rows[0]!;
   await table.locator(`tbody tr[data-key="${top.memberId}"] td button.yn-num`).nth(1).click();
-  expect(await dialogRow(page, "原価合計")).toBe(yen(top.amount));
+  expect(await dialogRow(page, "実績合計")).toBe(yen(top.amount));
   await expect(dialog(page).locator("table tbody tr").first()).toBeVisible();
   await page.keyboard.press("Escape");
 });

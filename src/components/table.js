@@ -127,10 +127,24 @@ export function safeFileName(name) {
 export const EXPORT_UNIT_NOTE = T.table.exportUnitNote;
 
 /** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存。金額は常に円の整数 */
-export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1" }) {
+export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1", summary = null }) {
   const XLSX = await import("xlsx");
   const header = columns.map((c) => exportLabel(c, unit));
-  const body = rows.map((r) => columns.map((c) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit))));
+  const valueOf = (c, r) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit));
+  const body = rows.map((r) => columns.map((c) => valueOf(c, r)));
+  // 画面の合計行（tfoot）と同じ列だけ値を入れる
+  if (summary) {
+    body.push(columns.map((c, ci) => {
+      if (ci === 0) return summary.name ?? T.table.total;
+      const has = summary[c.key] !== undefined && summary[c.key] !== null;
+      if (c.summary === false || (!has && (!isNumeric(c) || !c.get))) return null;
+      try {
+        return valueOf(c, summary);
+      } catch {
+        return null; // 行専用の exportValue（ID など）は合計行では空にする
+      }
+    }));
+  }
   const ws = XLSX.utils.aoa_to_sheet([[EXPORT_UNIT_NOTE], header, ...body]);
   ws["!cols"] = columns.map((c) => ({ wch: Math.max(10, Math.min(40, String(exportLabel(c, unit)).length * 2)) }));
   const wb = XLSX.utils.book_new();
@@ -333,6 +347,7 @@ export function dataTable({
         unit,
         name: exportName,
         sheet: caption ?? exportName,
+        summary,
       }))
     : null;
 

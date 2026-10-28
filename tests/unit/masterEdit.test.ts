@@ -525,10 +525,10 @@ describe("影響ダイアログの「何が変わるか」", () => {
     expect(e.costChanges).toBe(false);
     expect(e.effects.join("")).toContain("組織別の集計");
     expect(e.effects.join("")).not.toContain("原価・粗利");
-    expect(e.note).toContain("原価・粗利・消化率・着地見込みは変わりません");
+    expect(e.note).toContain("実績・残予算・消化率・着地見込みは変わりません");
   });
 
-  it("部署・課だけ → 部署・課の表示。役職 → 単価と原価・粗利・消化率・着地見込み（先頭）", () => {
+  it("部署・課だけ → 部署・課の表示。役職 → 単価と実績・残予算・消化率・着地見込み（先頭）", () => {
     const dept = updateRow(m, "o0", { department: "第2事業部", section: "2課" });
     expect(impactBetween(m, dept, range).columns).toEqual(["department", "section"]);
     expect(describeImpactEffects("members", ["department", "section"]).effects).toEqual(["メンバー詳細の部署・課の表示"]);
@@ -537,7 +537,7 @@ describe("影響ダイアログの「何が変わるか」", () => {
     expect(cols).toEqual(["title", "team_id"]);
     const e = describeImpactEffects("members", cols);
     expect(e.costChanges).toBe(true);
-    expect(e.effects[0]).toBe("時間単価と、原価・粗利・消化率・着地見込み");
+    expect(e.effects[0]).toBe("時間単価と、実績・残予算・消化率・着地見込み");
     expect(e.note).toBeNull();
   });
 

@@ -99,7 +99,7 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
   await expect(links.last()).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /チーム/, /アサイン/]);
   await expect(page.getByRole("heading", { name: /何を編集すると何が変わるか/ })).toBeVisible();
-  await expect(page.locator(".yn-me-intro")).toContainText("原価 = 作業時間 × 単価");
+  await expect(page.locator(".yn-me-intro")).toContainText("実績 = 作業時間 × 単価");
   for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["チーム", "teams"], ["アサイン", "assignments"]] as const) {
     await selectTab(page, label);
     const n = parseMasterDoc(id, PAYLOAD.files[id].text).rows.length;
@@ -345,7 +345,7 @@ test("下書きの当て直し: 「最新のデータを残す」を選ぶと他
   expect(readFileSync((await dl.path())!, "utf-8")).toBe(expectedRates(false));
 });
 
-test("影響ダイアログ: 所属チームだけ変える行の追加は「組織別の集計」と出し、原価・粗利は変わらないと明記。役職を変えると原価・粗利", async ({ page }) => {
+test("影響ダイアログ: 所属チームだけ変える行の追加は「組織別の集計」と出し、実績・残予算は変わらないと明記。役職を変えると実績・残予算", async ({ page }) => {
   await open(page);
   await selectTab(page, "メンバー");
   const d = page.locator("dialog.yn-me-dialog[open]");
@@ -360,13 +360,13 @@ test("影響ダイアログ: 所属チームだけ変える行の追加は「組
   const impact = d.locator(".yn-me-impact");
   await expect(impact).toContainText("過去の計算結果が変わります（影響: 7 か月）");
   await expect(impact).toContainText("所属チームによる組織別の集計");
-  await expect(impact).toContainText("原価・粗利・消化率・着地見込みは変わりません");
+  await expect(impact).toContainText("実績・残予算・消化率・着地見込みは変わりません");
   await expect(impact).toHaveAttribute("data-cost-changes", "false");
   await d.getByRole("button", { name: "入力に戻る" }).click();
   await team.selectOption(current);
   await d.locator("#yn-me-f-title").fill("部長");
   await d.locator('[data-role="submit"]').click();
-  await expect(impact).toContainText("時間単価と、原価・粗利・消化率・着地見込みが変わります");
+  await expect(impact).toContainText("時間単価と、実績・残予算・消化率・着地見込みが変わります");
   await expect(impact).not.toContainText("組織別の集計");
   await expect(impact).toHaveAttribute("data-cost-changes", "true");
 });

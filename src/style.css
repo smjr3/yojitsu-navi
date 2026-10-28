@@ -182,6 +182,15 @@ body {
     margin: -24px -32px 24px;
   }
 }
+/* スマホ幅では固定するとヘッダ（タブ＋表示条件）が画面の約 1/4 を占めるので、固定せず一緒にスクロールさせる */
+@media (max-width: 639px) {
+  #observablehq-header {
+    position: static;
+  }
+  :root:has(#observablehq-header) {
+    scroll-padding-top: 0;
+  }
+}
 .yn-topbar {
   display: flex;
   align-items: stretch;
@@ -554,6 +563,23 @@ h3 {
   line-height: 1.5;
   white-space: nowrap;
   vertical-align: middle;
+}
+/* 「◔」はフォントによって点にしか見えないので、文字は隠して円を描く（スクリーンリーダーには元々読ませない） */
+.yn-icon-prelim,
+.yn-chip-icon.yn-icon-prelim {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 2px;
+  vertical-align: -1px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: conic-gradient(currentColor 0 25%, transparent 0);
+  color: inherit;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .yn-badge-prelim,
 .yn-chip-prelim {
