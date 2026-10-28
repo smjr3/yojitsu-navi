@@ -43,6 +43,16 @@ function parseCsv(text) {
   return rows;
 }
 import ja from "./src/i18n/ja.js";
+import { badgeConfig, mrBadgeScript } from "./src/components/header-badge.js";
+
+/** config.json の masterEdit（ヘッダーのマージ待ち件数バッジの接続先。§27）。読めなければ空 */
+function masterEditConfig() {
+  try {
+    return JSON.parse(decode(readFileSync(new URL("./config.json", import.meta.url)))).masterEdit ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** data/contracts.csv の契約ID（作業ログ明細の動的パス用）。読めなければ空 */
 function contractIds() {
@@ -77,7 +87,7 @@ const TOOLS = [
   { name: ja.app.nav.dataCheck, path: "/data-check" },
   { name: ja.app.nav.rules, path: "/rules" },
   { name: ja.app.nav.plan, path: "/plan" },
-  { name: ja.app.nav.masters, path: "/masters" },
+  { name: ja.app.nav.masters, path: "/masters", badge: true },
 ];
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -85,13 +95,20 @@ const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "
 /** 共通ヘッダ: ロゴ・タブ・右上リンク ＋ フィルタバーの差し込み口（mountFilterBar が使う） */
 function header({ path }) {
   const isOn = (item) => (item.match ?? [item.path]).includes(path);
+  // badge: マージ待ちの件数（head の mrBadgeScript が数を入れて表示する。0 件は隠す）
+  const badge = `<span class="yn-mr-badge" hidden><span class="yn-mr-badge-n" aria-hidden="true"></span><span class="yn-mr-badge-sr visually-hidden"></span></span>`;
   const link = (item, cls) =>
-    `<a class="${cls}" href="${item.path}"${isOn(item) ? ' aria-current="page"' : ""}>${escapeHtml(item.name)}</a>`;
+    `<a class="${cls}" href="${item.path}"${isOn(item) ? ' aria-current="page"' : ""}>${escapeHtml(item.name)}${item.badge ? badge : ""}</a>`;
+  // テーマ切替と設定は、他のリンクと見分けられるアイコンのボタン（§28）
+  const moon = `<svg class="yn-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M20.7 14.6A8.5 8.5 0 0 1 9.4 3.3a.8.8 0 0 0-1-.9A10 10 0 1 0 21.6 15.6a.8.8 0 0 0-.9-1z"/></svg>`;
+  const sun = `<svg class="yn-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>`;
+  const gear = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .3.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>`;
+  const settingsOn = path === "/settings";
   return `<div class="yn-topbar">
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
-  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<button type="button" class="yn-tool yn-theme-toggle" aria-pressed="false">${escapeHtml(ja.app.themeToggle)}</button></nav>
+  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><button type="button" class="yn-icon-btn yn-theme-toggle" aria-pressed="false" aria-label="${escapeHtml(ja.app.themeToggle)}" title="${escapeHtml(ja.app.themeToggle)}">${moon}${sun}</button><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a></span></nav>
 </div>
 <div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
 }
@@ -108,16 +125,22 @@ const THEME_SCRIPT = `(() => {
     root.dataset.theme = t === "dark" ? "dark" : "light";
     for (const b of document.querySelectorAll(".yn-theme-toggle")) b.setAttribute("aria-pressed", String(t === "dark"));
   };
+  const choose = (t) => {
+    try { localStorage.setItem(KEY, t); } catch {}
+    apply(t);
+    window.dispatchEvent(new CustomEvent("yn-theme", { detail: root.dataset.theme }));
+  };
   apply(read());
+  // 設定画面（§28）からも同じ方法で切り替える
+  window.ynSetTheme = choose;
   document.addEventListener("DOMContentLoaded", () => apply(read()));
   document.addEventListener("click", (e) => {
     if (!(e.target instanceof Element) || !e.target.closest(".yn-theme-toggle")) return;
-    const next = root.dataset.theme === "dark" ? "light" : "dark";
-    try { localStorage.setItem(KEY, next); } catch {}
-    apply(next);
+    choose(root.dataset.theme === "dark" ? "light" : "dark");
   });
 })();`;
-const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script>`;
+const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
+const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,
@@ -133,6 +156,7 @@ export default {
     { name: ja.app.pages.dataCheck, path: "/data-check" },
     { name: ja.app.pages.plan, path: "/plan" },
     { name: ja.app.pages.masters, path: "/masters" },
+    { name: ja.app.pages.settings, path: "/settings" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
   // ファイル名は worklogKey(id)（英数字以外の ID は "~"＋16進。ローダ・画面の fetchWorklogs も同じ関数を使う）

@@ -20,27 +20,40 @@ export type FetchLike = (
 export type SaveMode = "gitlab" | "download";
 
 export const DEFAULT_MASTER_EDIT: MasterEditConfig = {
-  mode: "download",
+  mode: "gitlab",
   gitlab: { apiBaseUrl: "", projectId: "", targetBranch: "main", commitMode: "mr" },
 };
 
-/** config の masterEdit を既定値で補う（無い・壊れている項目は既定値） */
+/** デモ（§29）の接続先。ブラウザ内の模擬（gitlab-mock.ts）がこの URL を受ける */
+export const DEMO_API_BASE = "https://gitlab.demo.invalid/api/v4";
+export const DEMO_PROJECT_ID = "demo/yojitsu-navi";
+
+/** config の masterEdit を既定値で補う（無い・壊れている項目は既定値。§24 で既定は gitlab） */
 export function resolveMasterEdit(cfg: Partial<MasterEditConfig> | null | undefined): MasterEditConfig {
   const g: Partial<MasterEditConfig["gitlab"]> = cfg?.gitlab ?? {};
+  const mode = cfg?.mode === "download" || cfg?.mode === "demo" ? cfg.mode : "gitlab";
+  const apiBaseUrl = typeof g.apiBaseUrl === "string" ? g.apiBaseUrl.trim().replace(/\/+$/, "") : "";
+  const projectId = typeof g.projectId === "string" || typeof g.projectId === "number" ? String(g.projectId).trim() : "";
   return {
-    mode: cfg?.mode === "gitlab" ? "gitlab" : "download",
+    mode,
     gitlab: {
-      apiBaseUrl: typeof g.apiBaseUrl === "string" ? g.apiBaseUrl.trim().replace(/\/+$/, "") : "",
-      projectId: typeof g.projectId === "string" || typeof g.projectId === "number" ? String(g.projectId).trim() : "",
+      apiBaseUrl: mode === "demo" ? DEMO_API_BASE : apiBaseUrl,
+      projectId: mode === "demo" ? DEMO_PROJECT_ID : projectId,
       targetBranch: typeof g.targetBranch === "string" && g.targetBranch.trim() !== "" ? g.targetBranch.trim() : "main",
-      commitMode: g.commitMode === "direct" ? "direct" : "mr",
+      commitMode: g.commitMode === "direct" && mode !== "demo" ? "direct" : "mr",
     },
   };
 }
 
-/** 実際に使う保存方式: mode が gitlab でも apiBaseUrl か projectId が空なら download（§19.2） */
+/** 実際に使う保存方式: mode が gitlab でも apiBaseUrl か projectId が空なら download（§19.2）。demo は gitlab と同じ流れ */
 export function effectiveSaveMode(cfg: MasterEditConfig): SaveMode {
+  if (cfg.mode === "demo") return "gitlab";
   return cfg.mode === "gitlab" && cfg.gitlab.apiBaseUrl !== "" && cfg.gitlab.projectId !== "" ? "gitlab" : "download";
+}
+
+/** GitLab 接続（MR 一覧・バッジ・設定画面）が使えるか */
+export function gitlabConfigured(cfg: MasterEditConfig): boolean {
+  return effectiveSaveMode(cfg) === "gitlab";
 }
 
 /** プロジェクトの API パス（"group/project" は URL エンコードする） */
@@ -144,8 +157,16 @@ export function gitlabMessage(body: string): string {
 const CONFLICT_PATTERN = /changed since|last_commit_id|has been (?:modified|updated)|conflict|outdated/i;
 
 /** HTTP ステータスと本文からエラーを分類する（step はどの操作か） */
-export function classifyHttpError(step: "user" | "commit" | "mr", status: number, body: string): GitLabError {
+export type Step = "user" | "commit" | "mr" | "project" | "list" | "file" | "merge" | "close";
+
+export function classifyHttpError(step: Step, status: number, body: string): GitLabError {
   const detail = gitlabMessage(body);
+  if (step === "merge") {
+    // GitLab はマージできない人に 401 を返す（トークンは直前の一覧取得で確認済み）
+    if (status === 401 || status === 403) return new GitLabError("permission", T.gitlab.noMergePermission, { status, detail });
+    if (status === 405 || status === 406 || status === 422) return new GitLabError("conflict", T.gitlab.notMergeable, { status, detail });
+    if (status === 409) return new GitLabError("conflict", T.gitlab.mergeShaChanged, { status, detail });
+  }
   if (status === 401) {
     return new GitLabError("permission", T.gitlab.tokenInvalid, { status, detail });
   }
@@ -158,7 +179,7 @@ export function classifyHttpError(step: "user" | "commit" | "mr", status: number
   if (status === 404) {
     return new GitLabError("other", T.gitlab.notFound, { status, detail });
   }
-  const what = step === "user" ? T.gitlab.stepUser : step === "commit" ? T.gitlab.stepCommit : T.gitlab.stepMr;
+  const what = T.gitlab.steps[step];
   return new GitLabError("other", fmt(T.gitlab.failed, { step: what, status }), { status, detail });
 }
 
@@ -176,7 +197,7 @@ export function networkError(cause: unknown): GitLabError {
 // 呼び出し
 // ---------------------------------------------------------------------------
 
-async function request<T>(fetchImpl: FetchLike, step: "user" | "commit" | "mr", url: string, token: string, method: string, body?: unknown): Promise<T> {
+async function requestText(fetchImpl: FetchLike, step: Step, url: string, token: string, method: string, body?: unknown): Promise<{ status: number; text: string }> {
   const headers: Record<string, string> = { "PRIVATE-TOKEN": token, Accept: "application/json" };
   const init: { method: string; headers: Record<string, string>; body?: string } = { method, headers };
   if (body !== undefined) {
@@ -196,10 +217,15 @@ async function request<T>(fetchImpl: FetchLike, step: "user" | "commit" | "mr", 
     if (res.ok) throw networkError(e);
   }
   if (!res.ok) throw classifyHttpError(step, res.status, text);
+  return { status: res.status, text };
+}
+
+async function request<T>(fetchImpl: FetchLike, step: Step, url: string, token: string, method: string, body?: unknown): Promise<T> {
+  const res = await requestText(fetchImpl, step, url, token, method, body);
   try {
-    return (text === "" ? {} : JSON.parse(text)) as T;
+    return (res.text === "" ? {} : JSON.parse(res.text)) as T;
   } catch {
-    throw new GitLabError("other", T.gitlab.notJson, { status: res.status, detail: text.slice(0, 300) });
+    throw new GitLabError("other", T.gitlab.notJson, { status: res.status, detail: res.text.slice(0, 300) });
   }
 }
 
@@ -273,4 +299,173 @@ export async function saveToGitLab(fetchImpl: FetchLike, req: SaveRequest): Prom
     mergeRequestIid: typeof created.iid === "number" ? created.iid : null,
     user,
   };
+}
+
+// ---------------------------------------------------------------------------
+// マージ待ちの変更（§26）・設定画面の接続確認（§28）
+// ---------------------------------------------------------------------------
+
+/** この画面で作る MR のソースブランチの接頭辞（masterBranchName と同じ） */
+export const MASTER_BRANCH_PREFIX = "masters/";
+
+/** GitLab の権限レベル（access_level） */
+export const ACCESS_LEVELS: Readonly<Record<number, string>> = { 10: "Guest", 20: "Reporter", 30: "Developer", 40: "Maintainer", 50: "Owner" };
+
+export interface GitLabUser {
+  username: string;
+  name: string;
+}
+
+export interface ConnectionInfo {
+  user: GitLabUser;
+  /** プロジェクトでの権限レベル（プロジェクトとグループの大きいほう。取れなければ null） */
+  accessLevel: number | null;
+}
+
+function token0(token: string): string {
+  const t = token.trim();
+  if (t === "") throw new GitLabError("permission", T.gitlab.noToken);
+  return t;
+}
+
+function ensureConfigured(cfg: MasterEditConfig): void {
+  if (!gitlabConfigured(cfg)) throw new GitLabError("other", T.gitlab.notConfigured);
+}
+
+/** トークンの持ち主 */
+export async function fetchCurrentUser(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<GitLabUser> {
+  ensureConfigured(cfg);
+  const me = await request<{ username?: unknown; name?: unknown }>(fetchImpl, "user", `${cfg.gitlab.apiBaseUrl}/user`, token0(token), "GET");
+  return userOf(me);
+}
+
+/** 接続の確認: トークンの持ち主と、このプロジェクトでの権限 */
+export async function checkConnection(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionInfo> {
+  ensureConfigured(cfg);
+  const t = token0(token);
+  const user = await fetchCurrentUser(fetchImpl, cfg, t);
+  const project = await request<{ permissions?: { project_access?: { access_level?: unknown } | null; group_access?: { access_level?: unknown } | null } }>(fetchImpl, "project", projectPath(cfg), t, "GET");
+  const levels = [project.permissions?.project_access?.access_level, project.permissions?.group_access?.access_level].filter((v): v is number => typeof v === "number");
+  return { user, accessLevel: levels.length ? Math.max(...levels) : null };
+}
+
+export interface MergeRequestSummary {
+  iid: number;
+  title: string;
+  description: string;
+  author: GitLabUser;
+  createdAt: string;
+  webUrl: string | null;
+  sourceBranch: string;
+  /** 競合（GitLab が判定済みのとき） */
+  hasConflicts: boolean;
+}
+
+function userOf(u: unknown): GitLabUser {
+  const o = (u && typeof u === "object" ? u : {}) as { username?: unknown; name?: unknown };
+  return { username: typeof o.username === "string" ? o.username : "", name: typeof o.name === "string" ? o.name : "" };
+}
+
+function summaryOf(m: Record<string, unknown>): MergeRequestSummary {
+  return {
+    iid: Number(m.iid),
+    title: typeof m.title === "string" ? m.title : "",
+    description: typeof m.description === "string" ? m.description : "",
+    author: userOf(m.author),
+    createdAt: typeof m.created_at === "string" ? m.created_at : "",
+    webUrl: typeof m.web_url === "string" ? m.web_url : null,
+    sourceBranch: typeof m.source_branch === "string" ? m.source_branch : "",
+    hasConflicts: m.has_conflicts === true,
+  };
+}
+
+/** マスタ編集の MR か（targetBranch 向けで、この画面のブランチから） */
+export function isMasterMergeRequest(cfg: MasterEditConfig, m: { source_branch?: unknown; target_branch?: unknown; state?: unknown }): boolean {
+  return typeof m.source_branch === "string" && m.source_branch.startsWith(MASTER_BRANCH_PREFIX) && m.target_branch === cfg.gitlab.targetBranch && (m.state === undefined || m.state === "opened");
+}
+
+/** 開いているマスタ編集の MR（新しい順） */
+export async function listMasterMergeRequests(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<MergeRequestSummary[]> {
+  ensureConfigured(cfg);
+  const q = `state=opened&target_branch=${encodeURIComponent(cfg.gitlab.targetBranch)}&order_by=created_at&sort=desc&per_page=100`;
+  const list = await request<unknown>(fetchImpl, "list", `${projectPath(cfg)}/merge_requests?${q}`, token0(token), "GET");
+  if (!Array.isArray(list)) throw new GitLabError("other", T.gitlab.notJson, { detail: "not an array" });
+  return list
+    .filter((m): m is Record<string, unknown> => !!m && typeof m === "object" && isMasterMergeRequest(cfg, m as Record<string, unknown>))
+    .map(summaryOf)
+    .filter((m) => Number.isFinite(m.iid));
+}
+
+export interface MergeRequestDetail extends MergeRequestSummary {
+  /** このトークンの人がマージできるか（GitLab の user.can_merge。§26 の出し分けに使う） */
+  canMerge: boolean;
+  headSha: string | null;
+  baseSha: string | null;
+  /** MR のパイプラインの状態（success / failed / running …。無ければ null） */
+  pipelineStatus: string | null;
+  /** GitLab のマージ可否の詳細（mergeable / conflict / ci_must_pass …。古い GitLab は merge_status） */
+  mergeStatus: string | null;
+}
+
+export async function getMergeRequest(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number): Promise<MergeRequestDetail> {
+  ensureConfigured(cfg);
+  const m = await request<Record<string, unknown>>(fetchImpl, "list", `${projectPath(cfg)}/merge_requests/${iid}`, token0(token), "GET");
+  const refs = (m.diff_refs && typeof m.diff_refs === "object" ? m.diff_refs : {}) as { base_sha?: unknown; head_sha?: unknown };
+  const user = (m.user && typeof m.user === "object" ? m.user : {}) as { can_merge?: unknown };
+  const pipe = (m.head_pipeline && typeof m.head_pipeline === "object" ? m.head_pipeline : null) as { status?: unknown } | null;
+  const status = typeof m.detailed_merge_status === "string" ? m.detailed_merge_status : typeof m.merge_status === "string" ? m.merge_status : null;
+  return {
+    ...summaryOf(m),
+    canMerge: user.can_merge === true,
+    headSha: typeof refs.head_sha === "string" ? refs.head_sha : typeof m.sha === "string" ? m.sha : null,
+    baseSha: typeof refs.base_sha === "string" ? refs.base_sha : null,
+    pipelineStatus: pipe && typeof pipe.status === "string" ? pipe.status : null,
+    mergeStatus: status,
+  };
+}
+
+/** ファイルの中身（ref 時点）。無ければ null */
+export async function fetchFileRaw(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string): Promise<string | null> {
+  ensureConfigured(cfg);
+  try {
+    const res = await requestText(fetchImpl, "file", `${projectPath(cfg)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`, token0(token), "GET");
+    return res.text;
+  } catch (e) {
+    if (e instanceof GitLabError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+export interface FileChange {
+  path: string;
+  before: string | null;
+  after: string | null;
+}
+
+/** MR で変わったファイル（paths のうち、base と head で中身が違うもの） */
+export async function mergeRequestFileChanges(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, mr: Pick<MergeRequestDetail, "baseSha" | "headSha">, paths: readonly string[]): Promise<FileChange[]> {
+  const base = mr.baseSha ?? cfg.gitlab.targetBranch;
+  const head = mr.headSha;
+  if (!head) return [];
+  const out = await Promise.all(
+    paths.map(async (path) => {
+      const [before, after] = await Promise.all([fetchFileRaw(fetchImpl, cfg, token, path, base), fetchFileRaw(fetchImpl, cfg, token, path, head)]);
+      return { path, before, after };
+    }),
+  );
+  return out.filter((c) => c.before !== c.after);
+}
+
+/** マージする（sha = 確認した head。違えば GitLab が 409 で拒否する） */
+export async function mergeMergeRequest(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number, sha: string | null): Promise<void> {
+  ensureConfigured(cfg);
+  const body: Record<string, unknown> = { should_remove_source_branch: true };
+  if (sha) body.sha = sha;
+  await request(fetchImpl, "merge", `${projectPath(cfg)}/merge_requests/${iid}/merge`, token0(token), "PUT", body);
+}
+
+/** 取り下げる（MR を閉じる） */
+export async function closeMergeRequest(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number): Promise<void> {
+  ensureConfigured(cfg);
+  await request(fetchImpl, "close", `${projectPath(cfg)}/merge_requests/${iid}`, token0(token), "PUT", { state_event: "close" });
 }
