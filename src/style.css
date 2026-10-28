@@ -2616,6 +2616,19 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-who .yn-chip {
   flex: none;
 }
+/* 狭い画面: 名前を先に見せ、チップは名前の下に回す（チップで名前が隠れないように） */
+@media (max-width: 639px) {
+  .yn-me-plan-who {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .yn-me-plan-who .yn-me-plan-name {
+    flex: 1 0 100%;
+  }
+  .yn-me-plan-row .yn-me-plan-team {
+    display: none;
+  }
+}
 .yn-me-plan-table .yn-me-row-actions .yn-btn-sm {
   min-height: 26px;
   padding: 1px 8px;
@@ -3346,6 +3359,9 @@ html:has(dialog.yn-dialog[open]) {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
   padding: 6px 12px 10px 22px;
 }
+.yn-me-plan-histbox {
+  white-space: normal;
+}
 .yn-me-plan-histbox > p {
   margin: 0 0 4px;
 }
@@ -3393,6 +3409,15 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-entry .yn-me-hint {
   display: inline;
   max-width: none;
+}
+/* 契約外予定のメモは長くても 1 行（全文は title） */
+.yn-me-plan-entry .yn-me-plan-note {
+  display: inline-block;
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 .yn-me-plan-entry .yn-me-row-actions {
   margin-left: auto;

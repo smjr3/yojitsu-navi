@@ -1225,6 +1225,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const editable = !(locked || pendingDraft);
     const label = targetLabel(target);
     const pmText = (v) => (Number.isFinite(v) ? fmt(T.planEdit.pmValue, { pm: pm(v) }) : T.plan.allocNotNumber);
+    // 「YYYY-MM から計画なし」は、その月より後に始まる最初の履歴の手前（無ければ最後）に置く（重なりのある履歴の間に挟まないため）
+    const ends = [];
     const items = entries.flatMap((e) => {
       const row = doc.rows.find((x) => x.id === e.rowId);
       const st = row ? rowState(doc, row) : "unchanged";
@@ -1245,7 +1247,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         <span class="yn-me-plan-alloc">${pmText(e.value)}</span>
         <span class=${`yn-me-plan-kind${e.kind === "overlap" || e.kind === "invalid" ? " is-warn" : e.kind === "change" ? " is-change" : ""}`}>${e.kind === "overlap" || e.kind === "invalid" ? html`<span aria-hidden="true">! </span>` : null}${what}</span>
         ${contract ? html`<span class="yn-me-hint">${fmt(T.planEdit.contractPeriod, { from: contract.startMonth, to: contract.endMonth })}</span>` : null}
-        ${fileId === "outside" && row && cellOf(doc, row, "note") ? html`<span class="yn-me-hint">${cellOf(doc, row, "note")}</span>` : null}
+        ${fileId === "outside" && row && cellOf(doc, row, "note") ? html`<span class="yn-me-hint yn-me-plan-note" title=${cellOf(doc, row, "note")}>${cellOf(doc, row, "note")}</span>` : null}
         ${stateChips(st === "changed" ? 1 : 0, st === "added" ? 1 : 0, list.some((i) => i.severity === "error") ? 1 : 0)}
         <span class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${e.rowId}`} disabled=${!editable} aria-label=${fmt(T.planEdit.entryEditAria, { target: label, period })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: e.rowId, focus: `edit:${e.rowId}` })}>${T.masters.edit}</button>
@@ -1254,9 +1256,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         </span>
         ${list.length ? issueList(list) : null}
       </li>`;
-      if (!e.endsBefore) return [li];
-      return [li, html`<li class="yn-me-plan-entry kind-end"><span class="yn-me-plan-period">${fmt(T.planEdit.fromMonth, { month: e.endsBefore })}</span><span class="yn-me-plan-kind">${T.planEdit.kindEnd}</span></li>`];
+      if (e.endsBefore) ends.push({ month: e.endsBefore, el: html`<li class="yn-me-plan-entry kind-end"><span class="yn-me-plan-period">${fmt(T.planEdit.fromMonth, { month: e.endsBefore })}</span><span class="yn-me-plan-kind">${T.planEdit.kindEnd}</span></li>` });
+      li.dataset.start = /^\d{4}-\d{2}$/.test(e.startMonth) ? e.startMonth : "";
+      return [li];
     });
+    for (const end of ends) {
+      const at = items.findIndex((x) => x.dataset.start && x.dataset.start > end.month);
+      if (at < 0) items.push(end.el);
+      else items.splice(at, 0, end.el);
+    }
     return html`<div class="yn-me-plan-histbox">
       <p class="yn-me-small">${fmt(T.planEdit.histLead, { target: label })}</p>
       ${items.length ? html`<ol class="yn-me-plan-entries">${items}</ol>` : html`<p class="yn-muted">${T.planEdit.histEmpty}</p>`}
