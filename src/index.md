@@ -91,7 +91,7 @@ if (vm) {
     const d = a - b;
     const dir = d > 0 ? "up" : d < 0 ? "down" : "flat";
     const text = fmt(T.kpi.compareText, { diff: points ? pointsSigned(d) : moneySigned(d, unit), current: spanLabel(compare.current), prior: spanLabel(compare.prior), partial: compare.partial ? T.kpi.comparePartial : "" });
-    return { text, direction: dir, good: good === null ? null : good(d) };
+    return { text: fmt(T.kpi.compareShort, { diff: points ? pointsSigned(d) : moneySigned(d, unit) }), title: text, direction: dir, good: good === null ? null : good(d) };
   };
   const elapsedLabel = (months) =>
     months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });

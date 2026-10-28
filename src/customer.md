@@ -132,7 +132,7 @@ if (vm) {
     const d = a - b;
     const dir = d > 0 ? "up" : d < 0 ? "down" : "flat";
     const text = fmt(T.kpi.compareText, { diff: points ? pointsSigned(d) : moneySigned(d, unit), current: spanLabel(compare.current), prior: spanLabel(compare.prior), partial: compare.partial ? T.kpi.comparePartial : "" });
-    return { text, direction: dir, good: good === null ? null : good(d) };
+    return { text: fmt(T.kpi.compareShort, { diff: points ? pointsSigned(d) : moneySigned(d, unit) }), title: text, direction: dir, good: good === null ? null : good(d) };
   };
   const elapsedLabel = (months) =>
     months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });
@@ -228,7 +228,9 @@ if (vm) {
   display(
     sectionTitle(
       T.customer.contractsTitle,
-      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: METHOD_LABELS[vm.method], fy: fiscalYearLabel(model.meta.fiscalYear), hidden: hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : "" }),
+      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: METHOD_LABELS[vm.method], fy: fiscalYearLabel(model.meta.fiscalYear) }),
+      null,
+      hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : null,
     ),
   );
   if (outsideToggle && hidden > 0) display(outsideToggle);

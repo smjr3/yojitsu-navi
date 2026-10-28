@@ -294,7 +294,7 @@ const worklogSection = (() => {
   const { contract: c, months, unit } = vm;
   const holder = html`<div class="yn-worklog-holder"></div>`;
   const loadBtn = html`<button type="button" class="yn-btn">${T.breakdown.loadWorklogs}</button>`;
-  const status = html`<p class="yn-note" aria-live="polite">${T.contract.worklogLazyNote}</p>`;
+  const status = html`<p class="yn-note" aria-live="polite" hidden></p>`;
   async function load() {
     loadBtn.disabled = true;
     loadBtn.textContent = T.common.loading;
@@ -302,10 +302,12 @@ const worklogSection = (() => {
       const data = await bd.fetchWorklogs(c.contractId);
       const monthSet = new Set(months.map((m) => m.month));
       const entries = data.months.filter((m) => monthSet.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: m.status })));
+      status.hidden = false;
       status.textContent = fmt(T.contract.worklogStatus, { n: integer(entries.length), period: periodJa(vm.period), fetchedAt: data.worklogFetchedAt ?? "—" });
       loadBtn.remove();
       holder.replaceChildren(worklogExplorer(entries, unit, c.contractId));
     } catch (error) {
+      status.hidden = false;
       status.textContent = fmt(T.contract.worklogFailed, { error: error?.message ?? error });
       status.setAttribute("role", "alert");
       loadBtn.disabled = false;
@@ -313,7 +315,7 @@ const worklogSection = (() => {
     }
   }
   loadBtn.addEventListener("click", load);
-  return html`<section>${sectionTitle(T.contract.worklogTitle, T.contract.worklogHint)}${status}${loadBtn}${holder}</section>`;
+  return html`<section>${sectionTitle(T.contract.worklogTitle, `${T.contract.worklogHint}${T.contract.worklogLazyNote}`)}${status}${loadBtn}${holder}</section>`;
 })();
 
 function worklogExplorer(entries, unit, id) {

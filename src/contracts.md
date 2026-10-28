@@ -184,7 +184,9 @@ if (vm) {
   display(
     sectionTitle(
       T.contracts.sectionTitle,
-      fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear, hidden: outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : "" }),
+      fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
+      null,
+      outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : null,
     ),
   );
   const columns = [

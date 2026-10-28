@@ -28,10 +28,9 @@ export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreli
   return html`<header class="yn-page-header">
     ${crumbs}
     <div class="yn-page-title-row">
-      <h1 class="yn-page-title">${title}</h1>
+      <div class="yn-title-with-tip"><h1 class="yn-page-title">${title}</h1>${lead ? infoTip(lead, { label: tipLabel(T.layout.aboutPage, title) }) : null}</div>
       ${extra}
     </div>
-    ${lead ? html`<p class="yn-lead">${lead}</p>` : null}
     ${meta
       ? html`<dl class="yn-meta" aria-label=${T.layout.metaLabel}>
           <div><dt>${T.layout.asOf}</dt><dd><time datetime=${meta.asOf}>${dateIso(meta.asOf)}</time></dd></div>
@@ -44,10 +43,54 @@ export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreli
   </header>`;
 }
 
-/** セクション見出し（番号付きで「一画面一問」を明示） */
-export function sectionTitle(title, hint, actions = null) {
+let tipSeq = 0;
+const tipLabel = (template, title) => (typeof title === "string" ? fmt(template, { title }) : T.layout.infoLabel);
+
+/**
+ * 説明の「?」アイコン。カーソルを合わせる・フォーカスする・押すと吹き出しで説明を出す（Esc で閉じる）。
+ * 画面を簡潔に保つため、操作案内や補足は本文に出さずここに入れる。
+ */
+export function infoTip(content, { label = T.layout.infoLabel } = {}) {
+  const id = `yn-tip-${++tipSeq}`;
+  const pop = html`<span class="yn-tip-pop" role="tooltip" id=${id}>${content}</span>`;
+  const btn = html`<button type="button" class="yn-tip-btn" aria-label=${label} aria-describedby=${id} aria-expanded="false">?</button>`;
+  const root = html`<span class="yn-tip">${btn}${pop}</span>`;
+  let pinned = false;
+  const place = () => {
+    const r = btn.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const w = Math.min(360, vw - 32);
+    pop.style.width = `${w}px`;
+    pop.style.left = `${Math.max(16, Math.min(r.left, vw - w - 16))}px`;
+    pop.style.top = `${r.bottom + 6}px`;
+  };
+  // 吹き出しは position: fixed なので、開いている間にスクロールしたら閉じる
+  const onScroll = () => hide();
+  const show = () => {
+    place();
+    root.classList.add("is-open");
+    btn.setAttribute("aria-expanded", "true");
+    addEventListener("scroll", onScroll, { passive: true, capture: true });
+  };
+  const hide = () => {
+    pinned = false;
+    root.classList.remove("is-open");
+    btn.setAttribute("aria-expanded", "false");
+    removeEventListener("scroll", onScroll, { capture: true });
+  };
+  btn.addEventListener("click", () => (pinned && root.classList.contains("is-open") ? hide() : ((pinned = true), show())));
+  root.addEventListener("mouseenter", show);
+  root.addEventListener("mouseleave", () => pinned || hide());
+  btn.addEventListener("focus", show);
+  btn.addEventListener("blur", hide);
+  btn.addEventListener("keydown", (e) => e.key === "Escape" && hide());
+  return root;
+}
+
+/** セクション見出し。説明（hint）は「?」に入れ、status（非表示件数など今の状態）は見出しの下に出す */
+export function sectionTitle(title, hint, actions = null, status = null) {
   return html`<div class="yn-section-head">
-    <div><h2 class="yn-section-title">${title}</h2>${hint ? html`<p class="yn-section-hint">${hint}</p>` : null}</div>
+    <div><div class="yn-title-with-tip"><h2 class="yn-section-title">${title}</h2>${hint ? infoTip(hint, { label: tipLabel(T.layout.aboutSection, title) }) : null}</div>${status ? html`<p class="yn-section-hint">${status}</p>` : null}</div>
     ${actions ? html`<div class="yn-section-actions">${actions}</div>` : null}
   </div>`;
 }
