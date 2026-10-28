@@ -93,6 +93,8 @@ for (const path of PAGES) {
             const onSelect = await page.evaluate(() => {
               const el = document.activeElement;
               if (el?.tagName === "SELECT") return true;
+              // 候補を開いている名前の入力欄（SPEC §31.2）も、最初の Esc は候補だけを閉じる
+              if (el?.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true") return true;
               return el instanceof HTMLInputElement && ["month", "date", "week", "time", "datetime-local"].includes(el.type);
             });
             await page.keyboard.press("Escape");
@@ -248,7 +250,9 @@ for (const path of PAGES) {
         }
         // 最後に開いているダイアログがあれば必ず Esc で閉じられること
         if ((await page.locator("dialog[open]").count()) > 0) {
+          const listOpen = await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded") === "true");
           await page.keyboard.press("Escape");
+          if (listOpen) await page.keyboard.press("Escape");
           await expect(page.locator("dialog[open]")).toHaveCount(0);
         }
         log(`done. dialog opened at least once: ${dialogWasOpen}`);

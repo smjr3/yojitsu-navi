@@ -166,7 +166,7 @@ export function fetchWorklogs(contractId) {
 
 /** 作業ログ明細の表 */
 export function worklogTable(entries, { unit = "yen", limit = 500 } = {}) {
-  const rows = entries.slice(0, limit).map((w) => [w.date, `${w.memberName}（${w.memberId}）`, w.task, formatHours(w.hours), money(w.hourlyRate, "yen"), money(w.amount, unit)]);
+  const rows = entries.slice(0, limit).map((w) => [w.date, w.memberName, w.task, formatHours(w.hours), money(w.hourlyRate, "yen"), money(w.amount, unit)]);
   const total = entries.reduce((s, w) => s + w.amount, 0);
   const hours = entries.reduce((s, w) => s + w.hours, 0);
   const more = entries.length > limit ? html`<p class="yn-note">${fmt(T.breakdown.showingFirst, { limit: integer(limit), total: integer(entries.length) })}</p>` : null;
@@ -211,8 +211,8 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
     total += sum;
     const b = months[0].budgetBreakdown;
     rows.push([
-      r.contract.contractId,
       `${r.contract.customerName} / ${r.contract.projectName}`,
+      `${r.contract.startMonth}〜${r.contract.endMonth}`,
       money(r.contract.totalAmount, unit),
       `${b.monthCount}`,
       money(b.baseMonthly, unit),
@@ -231,7 +231,7 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
       {
         title: T.breakdown.byContract,
         table: {
-          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.totalAmount, align: "num" }, { label: T.breakdown.monthCount, align: "num" }, { label: T.breakdown.colMonthlyBase, align: "num" }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colBudgetInPeriod, align: "num" }],
+          columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colContractPeriod }, { label: T.breakdown.totalAmount, align: "num" }, { label: T.breakdown.monthCount, align: "num" }, { label: T.breakdown.colMonthlyBase, align: "num" }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colBudgetInPeriod, align: "num" }],
           rows,
         },
       },
@@ -243,11 +243,11 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
 /** 契約×月の原価（CostLine → 作業ログ） */
 export function costMonthSpec({ contract, cm, unit, model }) {
   const lines = cm.costLines.map((l) => [
-    `${l.memberName}（${l.memberId}）`,
+    l.memberName,
     l.memberTeamId ? (model?.teamTree?.[l.memberTeamId]?.name ?? l.memberTeamId) : "—",
     formatHours(l.hours),
     l.rateMissing ? html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">▲</span>${T.breakdown.rateMissing}</span>` : money(l.hourlyRate, "yen"),
-    l.rateSource ? `${l.rateSource.key}（${l.rateSource.effectiveFrom}〜）` : "—",
+    l.rateSource ? `${l.rateSource.key === l.memberId ? T.masters.personalRateHint : l.rateSource.key}（${l.rateSource.effectiveFrom}〜）` : "—",
     money(l.amount, unit),
   ]);
   return {
@@ -298,8 +298,8 @@ export function costAggregateSpec({ model, contractIds, period, unit, label = T.
     total += sum;
     hours += h;
     rows.push([
-      detailHref ? html`<a href=${detailHref(r.contract.contractId)}>${r.contract.contractId}</a>` : r.contract.contractId,
-      `${r.contract.customerName} / ${r.contract.projectName}`,
+      detailHref ? html`<a href=${detailHref(r.contract.contractId)}>${r.contract.customerName} / ${r.contract.projectName}</a>` : `${r.contract.customerName} / ${r.contract.projectName}`,
+      `${r.contract.startMonth}〜${r.contract.endMonth}`,
       `${months.length}`,
       formatHours(h),
       money(sum, unit),
@@ -319,7 +319,7 @@ export function costAggregateSpec({ model, contractIds, period, unit, label = T.
         title: T.breakdown.byContract,
         text: T.breakdown.costAggHint,
         table: {
-          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.cost, align: "num" }, { label: T.breakdown.colNote }],
+          columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colContractPeriod }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.cost, align: "num" }, { label: T.breakdown.colNote }],
           rows,
         },
       },
@@ -435,8 +435,8 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
     const f = r.forecasts[totals.method];
     if (f.breakdown.contractMonthsInFY.length === 0) continue;
     rows.push([
-      detailHref ? html`<a href=${detailHref(r.contract.contractId)}>${r.contract.contractId}</a>` : r.contract.contractId,
-      `${r.contract.customerName} / ${r.contract.projectName}`,
+      detailHref ? html`<a href=${detailHref(r.contract.contractId)}>${r.contract.customerName} / ${r.contract.projectName}</a>` : `${r.contract.customerName} / ${r.contract.projectName}`,
+      `${r.contract.startMonth}〜${r.contract.endMonth}`,
       money(f.fyBudget, unit),
       money(f.breakdown.actualCost, unit),
       money(f.breakdown.remainingCost, unit),
@@ -458,7 +458,7 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
       {
         title: T.breakdown.byContract,
         table: {
-          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.fyBudget, align: "num" }, { label: T.breakdown.actualCost, align: "num" }, { label: T.breakdown.remainingCost, align: "num" }, { label: T.breakdown.forecastGp, align: "num" }, { label: T.breakdown.judgement }],
+          columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colContractPeriod }, { label: T.breakdown.fyBudget, align: "num" }, { label: T.breakdown.actualCost, align: "num" }, { label: T.breakdown.remainingCost, align: "num" }, { label: T.breakdown.forecastGp, align: "num" }, { label: T.breakdown.judgement }],
           rows,
         },
       },
@@ -510,7 +510,8 @@ function memberRows(months, contractIds) {
 }
 
 function contractCell(model, contractId, contractHref) {
-  return html`${contractHref ? html`<a href=${contractHref(contractId)}>${contractId}</a>` : contractId} <span class="yn-muted">${contractLabelOf(model, contractId)}</span>`;
+  const label = contractLabelOf(model, contractId) || contractId;
+  return contractHref ? html`<a href=${contractHref(contractId)}>${label}</a>` : label;
 }
 
 /** 計画（時間・原価）の根拠: 契約×月ごとに 配分 × 基準時間 × 単価 */
@@ -660,7 +661,7 @@ export function memberTotalsSpec({ members, total, measure, unit, period }) {
     sections: [
       {
         title: T.breakdown.byMember,
-        table: { columns: [{ label: T.breakdown.colMember }, { label: d.label, align: "num" }], rows: members.map((m) => [`${m.memberName}（${m.memberId}）`, fmtValue(m[measure])]) },
+        table: { columns: [{ label: T.breakdown.colMember }, { label: d.label, align: "num" }], rows: members.map((m) => [m.memberName, fmtValue(m[measure])]) },
       },
     ],
   };

@@ -5,7 +5,7 @@
  * 月ごとの配分合計（人月）と、期間に掛かるアサイン行を返す。編集中（保存前）のデータで計算する。
  * 人月と時間の換算（§23.2。保存・表示は人月、時間は入力のときだけ）もここに置く。
  */
-import { isValidYearMonth } from "./calendar.js";
+import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
 import { createEffectiveIndex, teamTreeAt } from "./masters.js";
 import type { MemberRecord, TeamNode, TeamRecord, YearMonth } from "./types.js";
@@ -181,4 +181,116 @@ export function allocationFromInput(text: string, unit: "personMonth" | "hours",
 /** 人月 → 時間（入力欄の換算表示用。小数 1 桁） */
 export function hoursFromAllocation(allocation: number, standardHoursPerMonth: number): number {
   return Math.round(allocation * standardHoursPerMonth * 10) / 10;
+}
+
+// ---------------------------------------------------------------------------
+// §31.3 案件を選んで契約へ割り当てる / §31.4 セルでの月ごとの修正
+// ---------------------------------------------------------------------------
+
+/** 案件のキー（顧客名 × 案件名）。画面の候補と保存時の割り当てで同じものを使う */
+export function projectKey(customerName: string, projectName: string): string {
+  return `${customerName.trim()}\u0001${projectName.trim()}`;
+}
+
+export interface ContractPeriod {
+  contractId: string;
+  startMonth: YearMonth;
+  endMonth: YearMonth;
+}
+
+export interface MonthSegment {
+  contractId: string;
+  startMonth: YearMonth;
+  endMonth: YearMonth;
+}
+
+/**
+ * 期間 [from, to] の各月を、案件の契約（contracts）へ割り当てて、同じ契約が続く月をまとめる（§31.3）
+ * - 月 m を含む契約（複数なら開始月が最も遅いもの）
+ * - どれにも入らない月は、m より前に終わった最後の契約、無ければ m より後に始まる最初の契約
+ * 契約が 0 件・月が不正・from > to なら []
+ */
+export function contractSegments(contracts: readonly ContractPeriod[], from: YearMonth, to: YearMonth): MonthSegment[] {
+  const list = contracts.filter((c) => isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && c.startMonth <= c.endMonth);
+  if (list.length === 0 || !isValidYearMonth(from) || !isValidYearMonth(to) || from > to) return [];
+  const byStart = list.slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : a.contractId < b.contractId ? -1 : 1));
+  const pick = (m: YearMonth): string => {
+    let hit: ContractPeriod | null = null;
+    for (const c of byStart) if (c.startMonth <= m && m <= c.endMonth) hit = c;
+    if (hit) return hit.contractId;
+    let before: ContractPeriod | null = null;
+    for (const c of byStart) if (c.endMonth < m && (!before || c.endMonth >= before.endMonth)) before = c;
+    if (before) return before.contractId;
+    return (byStart.find((c) => c.startMonth > m) ?? (byStart[0] as ContractPeriod)).contractId;
+  };
+  const out: MonthSegment[] = [];
+  for (const m of monthRange(from, to)) {
+    const id = pick(m);
+    const last = out[out.length - 1];
+    if (last && last.contractId === id) last.endMonth = m;
+    else out.push({ contractId: id, startMonth: m, endMonth: m });
+  }
+  return out;
+}
+
+export interface AllocationPiece {
+  startMonth: YearMonth;
+  endMonth: YearMonth;
+  /** CSV に書く人月の文字列 */
+  allocation: string;
+}
+
+/** 人月の文字列が 0 か空（その月は計画から外す） */
+function isZeroAllocation(text: string): boolean {
+  const t = text.trim();
+  if (t === "") return true;
+  const n = parseNumberCell(t);
+  return Number.isFinite(n) && Math.abs(n) < EPS;
+}
+
+/**
+ * 計画 1 行（[startMonth, endMonth]・配分 allocation）の月 month を value に変える（§31.4）
+ * scope "month" = その月だけ、"after" = その月から行の終わりまで。
+ * 返すのは書き直した後の行（期間の順）。0 か空の部分は返さない。month が行の外なら元の行のまま
+ */
+export function editMonthAllocation(row: AllocationPiece, month: YearMonth, value: string, scope: "month" | "after"): AllocationPiece[] {
+  if (!isValidYearMonth(month) || month < row.startMonth || month > row.endMonth) return [row];
+  const pieces: AllocationPiece[] = [];
+  if (row.startMonth < month) pieces.push({ startMonth: row.startMonth, endMonth: addMonths(month, -1), allocation: row.allocation });
+  const until = scope === "month" ? month : row.endMonth;
+  pieces.push({ startMonth: month, endMonth: until, allocation: value.trim() });
+  if (until < row.endMonth) pieces.push({ startMonth: addMonths(until, 1), endMonth: row.endMonth, allocation: row.allocation });
+  return pieces.filter((p) => !isZeroAllocation(p.allocation));
+}
+
+/** 配分の文字列が同じ値か（"0.5" と "0.50" は同じ） */
+function sameAllocation(a: string, b: string): boolean {
+  const x = parseNumberCell(a.trim());
+  const y = parseNumberCell(b.trim());
+  return Number.isFinite(x) && Number.isFinite(y) ? Math.abs(x - y) < EPS : a.trim() === b.trim();
+}
+
+/**
+ * 隣り合い（前の行の終わりの翌月 = 次の行の開始月）、配分が同じ行を 1 行にまとめる（§31.4）
+ * rows は同じメンバー・契約の行。返り値は keep（残す行 id → 新しい終了月）と drop（消す行 id）。
+ * 残すのは各まとまりの最初の行（期間順）。preferIds にある行（元からある行）があればそちらを残す
+ */
+export function mergeAdjacent<T extends AllocationPiece & { id: string }>(rows: readonly T[], preferIds: ReadonlySet<string> = new Set()): { keep: Map<string, { startMonth: YearMonth; endMonth: YearMonth }>; drop: string[] } {
+  const sorted = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth).slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : 0));
+  const groups: T[][] = [];
+  for (const r of sorted) {
+    const g = groups[groups.length - 1];
+    const prev = g?.[g.length - 1];
+    if (g && prev && addMonths(prev.endMonth, 1) === r.startMonth && sameAllocation(prev.allocation, r.allocation)) g.push(r);
+    else groups.push([r]);
+  }
+  const keep = new Map<string, { startMonth: YearMonth; endMonth: YearMonth }>();
+  const drop: string[] = [];
+  for (const g of groups) {
+    if (g.length < 2) continue;
+    const keeper = g.find((r) => preferIds.has(r.id)) ?? (g[0] as T);
+    keep.set(keeper.id, { startMonth: (g[0] as T).startMonth, endMonth: (g[g.length - 1] as T).endMonth });
+    for (const r of g) if (r !== keeper) drop.push(r.id);
+  }
+  return { keep, drop };
 }

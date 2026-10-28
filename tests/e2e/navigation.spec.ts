@@ -42,9 +42,9 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   await expect(page).toHaveURL(/\/contract\?/);
   expect(query(page).get("id")).toBe(firstKey);
   expect(query(page).get("team")).toBe(leaf);
-  await expect(page.locator("h1")).toContainText(firstKey);
-  await expect(page.locator("h1 .yn-title-id")).toHaveText(firstKey);
   const r = contractResult(firstKey, model);
+  // 見出しは 顧客 / 案件（ID は出さない。§31.1）
+  await expect(page.locator("h1")).toHaveText(`${r.contract.customerName} / ${r.contract.projectName}`);
   await expect(page.locator("h1")).toContainText(r.contract.customerName);
   // パンくず
   const crumbs = page.locator('nav[aria-label="パンくず"] li');
@@ -52,7 +52,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   await expect(crumbs.nth(0).locator("a")).toHaveText("全体サマリー");
   await expect(crumbs.nth(1).locator("a")).toHaveText("契約一覧");
   await expect(crumbs.nth(1).locator("a")).toHaveAttribute("href", new RegExp(`team=${leaf}`));
-  await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(firstKey);
+  await expect(crumbs.nth(2).locator('[aria-current="page"]')).toHaveText(r.contract.projectName);
   // 主担当チームのリンクと「同じチームの契約一覧」
   await expect(page.locator(".yn-facts > div").filter({ hasText: "主担当" }).locator("a")).toHaveText(tree[r.contract.teamId!]!.name);
   const same = page.getByRole("link", { name: "同じチームの契約一覧" });

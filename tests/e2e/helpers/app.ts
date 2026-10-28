@@ -154,3 +154,21 @@ export function escapeRegExp(s: string): string {
 export function query(page: Page): URLSearchParams {
   return new URL(page.url()).searchParams;
 }
+
+/**
+ * 候補から選ぶ入力欄（SPEC §31.2）で、text を打って候補 option（省略時は最初の候補）を選ぶ。
+ * input は欄の id のロケータ（例 dialog.locator("#yn-me-f-member_id")）
+ */
+export async function pickCombo(input: Locator, text: string, option?: string | RegExp): Promise<void> {
+  await input.click();
+  await input.fill(text);
+  const list = input.page().locator(`#${await input.getAttribute("aria-controls")}`);
+  await expect(list).toBeVisible();
+  if (option === undefined) {
+    await expect(list.locator('[role="option"]').first()).toBeVisible();
+    await input.press("Enter");
+  } else {
+    await list.locator('[role="option"]', { hasText: option }).first().click();
+  }
+  await expect(list).toBeHidden();
+}
