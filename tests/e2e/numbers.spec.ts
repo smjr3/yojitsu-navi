@@ -99,7 +99,7 @@ test.describe("全体サマリー", () => {
     }
   });
 
-  for (const preset of ["prevFy", "recent3", "recent12", "fy"] as const) {
+  for (const preset of ["prevFy", "thisMonth", "recent3", "recent12", "fy"] as const) {
     test(`期間プリセット ${preset} で KPI が core の値になる`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
       const period = presetPeriod(preset, model);
@@ -130,6 +130,22 @@ test.describe("全体サマリー", () => {
     // 既定単位（百万円）の画面でも同じ期間の KPI が core の値（百万円表記）になる
     await page.locator(".yn-seg-btn[data-unit=m]").click();
     await expectKpis(page, { from: "2026-05", to: "2026-05" }, "", "recent3", "m");
+  });
+
+  test("カレンダーで選んだ日付はその月として期間に入る", async ({ page }) => {
+    await gotoPage(page, "/?unit=yen");
+    await page.locator("#yn-filter-from-date").fill("2026-06-15");
+    await page.locator("#yn-filter-to-date").fill("2026-09-03");
+    await expect(page.locator("#yn-filter-from")).toHaveValue("2026-06");
+    await expect(page.locator("#yn-filter-to")).toHaveValue("2026-09");
+    await expectKpis(page, { from: "2026-06", to: "2026-09" }, "", "recent3", "yen");
+    // 日付欄は期間の初日・末日を指す
+    await expect(page.locator("#yn-filter-from-date")).toHaveValue("2026-06-01");
+    await expect(page.locator("#yn-filter-to-date")).toHaveValue("2026-09-30");
+    // 終了日を開始より前にすると開始も合わせる
+    await page.locator("#yn-filter-to-date").fill("2026-05-20");
+    await expect(page.locator("#yn-filter-from")).toHaveValue("2026-05");
+    await expect(page.locator("#yn-filter-to")).toHaveValue("2026-05");
   });
 
   for (const method of ["all", "assignment", "recent3"] as const) {

@@ -350,6 +350,46 @@ body {
 .yn-filterbar-slot .yn-filter-period .yn-filter-row {
   flex-wrap: wrap;
 }
+/* 期間のカレンダー（透明な input[type=date] をアイコンの上に重ねる） */
+.yn-date-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: 6px;
+  color: var(--yn-text-muted);
+  overflow: hidden;
+}
+.yn-date-pick:hover {
+  color: var(--yn-link);
+}
+.yn-date-pick:has(input:focus-visible) {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 1px;
+}
+.yn-date-pick-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.yn-date-pick-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  cursor: pointer;
+}
 .yn-filterbar-slot #yn-filter-team {
   max-width: 240px;
 }

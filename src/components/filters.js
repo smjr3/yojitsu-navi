@@ -32,6 +32,26 @@ function teamOptions(model, selected) {
   return opts;
 }
 
+/** その月の末日（YYYY-MM-DD） */
+function lastDayOf(month) {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * カレンダーで日付を選ぶ小さなボタン。データは月単位なので、選んだ日付はその月（YYYY-MM）として onPick に渡す。
+ * 中の input[type=date] を透明にしてボタン全面に重ね、クリックで各ブラウザのカレンダーを開く
+ * （showPicker は埋め込み表示（iframe）では使えないことがあるため、ネイティブのクリックに任せる）。
+ */
+function datePicker(id, label, model, onPick) {
+  const input = html`<input type="date" id=${id} class="yn-date-pick-input" aria-label=${label} title=${label} min=${`${model.meta.minMonth}-01`} max=${lastDayOf(model.meta.maxMonth)}>`;
+  input.addEventListener("change", () => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input.value)) onPick(input.value.slice(0, 7));
+  });
+  return html`<span class="yn-date-pick"><span class="yn-date-pick-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3"/></svg></span>${input}</span>`;
+}
+
 /**
  * filterBar(store, model, { show: ["period", "team", "method", "unit"] })
  */
@@ -46,8 +66,14 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   if (show.includes("period")) {
     const from = html`<select class="yn-select" id="yn-filter-from" aria-label=${T.filters.from}>${monthOptions(model, state().from)}</select>`;
     const to = html`<select class="yn-select" id="yn-filter-to" aria-label=${T.filters.to}>${monthOptions(model, state().to)}</select>`;
-    from.addEventListener("change", () => store.set({ from: from.value, to: from.value > state().to ? from.value : state().to }));
-    to.addEventListener("change", () => store.set({ to: to.value, from: to.value < state().from ? to.value : state().from }));
+    const setFrom = (m) => store.set({ from: m, to: m > state().to ? m : state().to });
+    const setTo = (m) => store.set({ to: m, from: m < state().from ? m : state().from });
+    from.addEventListener("change", () => setFrom(from.value));
+    to.addEventListener("change", () => setTo(to.value));
+    const fromPick = datePicker("yn-filter-from-date", T.filters.pickFrom, model, setFrom);
+    const toPick = datePicker("yn-filter-to-date", T.filters.pickTo, model, setTo);
+    const fromDate = fromPick.querySelector("input");
+    const toDate = toPick.querySelector("input");
     const presetBtns = presets.map((p) => {
       const b = html`<button type="button" class="yn-seg-btn" data-preset=${p.id} title=${p.label}>${p.short ?? p.label}</button>`;
       b.addEventListener("click", () => store.setPeriod(p.period));
@@ -56,7 +82,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
     const group = html`<fieldset class="yn-filter yn-filter-period">
       <legend>${T.filters.period}</legend>
       <div class="yn-filter-row">
-        <label class="visually-hidden" for="yn-filter-from">${T.filters.from}</label>${from}<span class="yn-filter-sep" aria-hidden="true">〜</span><label class="visually-hidden" for="yn-filter-to">${T.filters.to}</label>${to}
+        <label class="visually-hidden" for="yn-filter-from">${T.filters.from}</label>${from}${fromPick}<span class="yn-filter-sep" aria-hidden="true">〜</span><label class="visually-hidden" for="yn-filter-to">${T.filters.to}</label>${to}${toPick}
         <div class="yn-seg" role="group" aria-label=${T.filters.presetsLabel}>${presetBtns}</div>
       </div>
     </fieldset>`;
@@ -64,6 +90,9 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
     syncers.push((s) => {
       from.value = s.from;
       to.value = s.to;
+      // 日付欄は今の期間の初日・末日を指しておく（カレンダーがその月から開く）
+      fromDate.value = `${s.from}-01`;
+      toDate.value = lastDayOf(s.to);
       for (const b of presetBtns) {
         const p = presets.find((x) => x.id === b.dataset.preset);
         const on = p.period.from === s.from && p.period.to === s.to;

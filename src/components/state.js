@@ -46,7 +46,7 @@ export function defaultState(model) {
   };
 }
 
-/** 期間プリセット（今年度 / 前年度 / 直近3か月 / 直近12か月）。データ範囲に収めて返す */
+/** 期間プリセット（今年度 / 前年度 / 今月 / 直近3か月 / 直近12か月）。今月 = 基準日（asOf）の月。データ範囲に収めて返す */
 export function periodPresets(model) {
   const { meta, config } = model;
   const start = config.fiscalYearStartMonth;
@@ -62,6 +62,7 @@ export function periodPresets(model) {
   return [
     { id: "fy", label: fmt(T.filters.presets.fy, { fy }), short: T.filters.presets.fyShort, period: clip(thisFy) },
     { id: "prevFy", label: fmt(T.filters.presets.prevFy, { fy: fy - 1 }), short: T.filters.presets.prevFyShort, period: clip(prevFy) },
+    { id: "thisMonth", label: T.filters.presets.thisMonth, period: clip(recent(1)) },
     { id: "recent3", label: T.filters.presets.recent3, period: clip(recent(3)) },
     { id: "recent12", label: T.filters.presets.recent12, period: clip(recent(12)) },
   ];
