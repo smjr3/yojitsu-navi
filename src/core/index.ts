@@ -29,6 +29,9 @@ export {
   createEffectiveIndex,
   createMasterIndex,
   effectiveRecordAt,
+  isActiveAt,
+  isLeftRecord,
+  leftMonthOf,
   memberAt,
   rateFor,
   teamTreeAt,
@@ -82,7 +85,7 @@ export {
   teamTreeForMonth,
   type AggregateScope,
 } from "./aggregate.js";
-export { parseCsvTable, parseCsvText, parseDataset, parseNumberCell, type CsvTable, type DatasetFiles, type ParsedDataset } from "./csv.js";
+export { memberStatus, parseCsvTable, parseCsvText, parseDataset, parseNumberCell, type CsvTable, type DatasetFiles, type ParsedDataset } from "./csv.js";
 export { allocationFromInput, contractSegments, editMonthAllocation, mergeAdjacent, projectKey, type AllocationPiece, type ContractPeriod, type MonthSegment, flattenTeamTree, formatAllocation, hoursFromAllocation, memberTeamAt, planView, type PlanAssignment, type PlanMemberRow, type PlanSources, type PlanView } from "./plan.js";
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";

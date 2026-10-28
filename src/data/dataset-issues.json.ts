@@ -1,12 +1,13 @@
 /**
  * データ確認ページ用: CSV 読み込み時の問題 ＋ validateDataset の結果（scripts/validate-data.ts と同じ内容）
  */
-import { validateDataset, type ValidationIssue } from "../core/index.js";
+import type { ValidationIssue } from "../core/index.js";
 import { buildStamp, emitJson, loadParsed, resolveAsOf } from "./_shared.js";
 
 emitJson(() => {
   const parsed = loadParsed();
-  const all = [...parsed.issues, ...validateDataset(parsed.dataset)];
+  // parsed.issues は validateDataset の結果も含む（もう一度かけると同じ問題が文面違いで二重に出る）
+  const all = parsed.issues;
   const seen = new Set<string>();
   const issues: ValidationIssue[] = [];
   for (const i of all) {

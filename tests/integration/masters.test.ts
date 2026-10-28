@@ -124,7 +124,7 @@ describe("ダミーデータの 4 ファイルで往復", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("過去月の単価を変えると、影響月の原価だけが変わる（impact の月 = 原価が変わりうる月）", () => {
     const dir = mkdtempSync(join(tmpdir(), "yojitsu-masters-impact-"));

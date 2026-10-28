@@ -14,8 +14,9 @@
  */
 import { csvFormat } from "d3-dsv";
 import type { MemberImport } from "../adapters/members.js";
+import { memberStatus } from "../../src/core/csv.js";
 
-export const MEMBER_CSV_COLUMNS = ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from"] as const;
+export const MEMBER_CSV_COLUMNS = ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"] as const;
 
 export type MemberCsvRow = Record<string, string>;
 
@@ -88,6 +89,7 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
         section: m.section ?? "",
         team_id: "",
         effective_from: month,
+        status: "",
       };
       rows.push(row);
       byId.set(m.memberId, [{ row, idx: rows.length - 1 }]);
@@ -104,6 +106,9 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
       if (v === undefined) continue;
       if ((cur[col] ?? "").trim() !== v) diff.push(col);
     }
+    // 退職の行（§32）の人が取り込み元にいる = 復職。在籍に戻す（取り込み元に無い人を退職にはしない。一時的な欠けで退職扱いにしないため）
+    const rehired = memberStatus(cur.status ?? "").status === "left";
+    if (rehired) diff.push("status");
     if (diff.length === 0 && curRec) {
       unchanged++;
       continue;
@@ -125,6 +130,7 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
         const v = m[key];
         if (v !== undefined) target[col] = v;
       }
+      if (rehired) target.status = "";
     };
     if ((cur.effective_from ?? "") === month) {
       apply(cur); // 同じ月の行はその場で更新

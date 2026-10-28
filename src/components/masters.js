@@ -8,7 +8,7 @@
  */
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, parseCsvTable, parseNumberCell } from "../core/index.js";
+import { addMonths, memberStatus, parseCsvTable, parseNumberCell } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   MASTER_FILES,
@@ -264,9 +264,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     return [...latest.entries()].map(([id, v]) => {
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
-      const sub = [team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
-      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}` };
-    });
+      const left = memberStatus(get("status")).status === "left";
+      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}`, left };
+    })
+      // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§32）
+      .sort((a, b) => Number(a.left) - Number(b.left));
   }
   function projectOptions() {
     return [...projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
@@ -795,12 +798,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
           tooltip.hide();
           openCellEditor(r, m, btn);
         });
-        return html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`}>${btn}</td>`;
+        const left = r.leftFrom !== null && m >= r.leftFrom;
+        return html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
       });
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(r.overMonths.length) })}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(rowErrors)}</span>` : null}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${r.overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(r.overMonths.length) })}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(changed)}</span>` : null}${rowErrors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(rowErrors)}</span>` : null}
         </div></th>
         ${cells}
         <td class="num">${pm(sum)}</td>
@@ -1069,6 +1073,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         ${value !== "" && value !== "employee" && value !== "partner" ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
       </select>`;
     }
+    if (col.input === "status") {
+      // 在籍状態（§32）。CSV では空 = 在籍、「退職」= 退職
+      const left = value !== "" && value !== T.masters.statusActive;
+      const known = value === "" || value === T.masters.statusActive || value === T.masters.statusLeft || /^(left|retired)$/i.test(value);
+      return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
+        <option value="" selected=${!left}>${T.masters.statusActive}</option>
+        <option value=${T.masters.statusLeft} selected=${left && known}>${T.masters.statusLeft}</option>
+        ${!known ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
+      </select>`;
+    }
     if (col.input === "team") {
       const opts = teamOptions();
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled}>
@@ -1151,6 +1165,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     contract_id: T.masters.hintProject,
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
+    status: T.masters.statusHint,
   };
 
   /**

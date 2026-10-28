@@ -9,7 +9,7 @@
  * warning（未紐付け工数・単価なし等）は表示するだけで止めない。
  */
 import { fileURLToPath } from "node:url";
-import { validateDataset, type ValidationIssue } from "../src/core/validate.js";
+import type { ValidationIssue } from "../src/core/validate.js";
 import { loadDataset } from "./lib/load.js";
 
 export interface Report {
@@ -71,9 +71,10 @@ export function buildReport(issues: ValidationIssue[], summary: { contracts: num
 }
 
 export function runValidation(rootDir: string): Report {
-  const { dataset, issues: parseIssues } = loadDataset(rootDir);
-  const validation = validateDataset(dataset);
-  return buildReport([...parseIssues, ...validation], {
+  // parseDataset（loadDataset）は validateDataset の結果も含む（壊れたファイル起因の大量のエラーは除いた上で）。
+  // ここで validateDataset をもう一度かけると、同じ問題が文面違いで二重に出て、除いたエラーも戻ってしまう
+  const { dataset, issues } = loadDataset(rootDir);
+  return buildReport(issues, {
     contracts: dataset.contracts.length,
     members: dataset.members.length,
     worklogs: dataset.worklogs.length,

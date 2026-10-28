@@ -13,6 +13,8 @@ import { hasErrors, validateDataset } from "../../src/core/validate.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 
 const REPO = join(import.meta.dirname, "..", "..");
+/** 手で作った基本シナリオの契約（DUMMY_DATA.md の前半）。実運用規模の部分は C101 から */
+const BASE_IDS = new Set(Array.from({ length: 21 }, (_, i) => `C${String(i + 1).padStart(3, "0")}`));
 const AS_OF = "2026-10-27";
 
 let ds: Dataset;
@@ -66,36 +68,48 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     expect(hasErrors(issues)).toBe(false);
     expect(countBy(issues.map((i) => i.code))).toEqual({
       WORKLOG_INVALID_HOURS: 1,
-      UNMAPPED_WORKLOG: 3,
+      UNMAPPED_WORKLOG: 4,
       EXCLUDED_NO_CUSTOMER: 1,
       UNKNOWN_MEMBER: 1,
-      RATE_MISSING: 19,
-      MEMBER_RATE_UNDEFINED: 1,
+      RATE_MISSING: 19 * 3,
+      MEMBER_RATE_UNDEFINED: 3,
       TASK_UNCLASSIFIED: 1,
+      WORKLOG_AFTER_LEFT: 1,
+      ASSIGNMENT_AFTER_LEFT: 1,
     });
     // 分類表に無い作業種別は「勉強会」だけ（わざと載せていない）
     expect(issues.find((i) => i.code === "TASK_UNCLASSIFIED")?.ref?.task).toBe("勉強会");
-    expect(issues.find((i) => i.code === "MEMBER_RATE_UNDEFINED")?.ref?.title).toBe("技術顧問");
+    // 単価の無い役職: 技術顧問（基本シナリオ M025）・専門職（実運用規模の 1 人）・パートナー（個人単価の無いパートナー 1 人）
+    expect(issues.filter((i) => i.code === "MEMBER_RATE_UNDEFINED").map((i) => i.ref?.title).sort()).toEqual(["パートナー", "専門職", "技術顧問"]);
     expect(issues.find((i) => i.code === "UNKNOWN_MEMBER")?.ref?.memberId).toBe("M099");
+    // 単価なしの 3 人は、どの人も全 19 か月
     const missing = issues.filter((i) => i.code === "RATE_MISSING");
-    expect(missing.every((i) => i.ref?.memberId === "M025")).toBe(true);
-    expect(missing.map((i) => i.ref?.month).sort()).toEqual(monthRange("2025-04", "2026-10"));
+    const byMember = new Map<string, string[]>();
+    for (const i of missing) byMember.set(String(i.ref?.memberId), [...(byMember.get(String(i.ref?.memberId)) ?? []), String(i.ref?.month)]);
+    expect(byMember.size).toBe(3);
+    expect(byMember.has("M025")).toBe(true);
+    for (const months of byMember.values()) expect(months.sort()).toEqual(monthRange("2025-04", "2026-10"));
+    // 退職（§32）: 退職後の工数 1 人・退職後のアサイン 1 人。どちらも status=退職 の行を持つ人
+    const left = new Set(ds.members.filter((m) => m.status === "left").map((m) => m.memberId));
+    expect(left.size).toBeGreaterThanOrEqual(12);
+    for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);
   });
 
   it("Model の警告も同じ内訳。除外時間は顧客名が空の行の合計と一致", () => {
-    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 3, UNKNOWN_MEMBER: 1, RATE_MISSING: 19, TASK_UNCLASSIFIED: 1 });
+    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 4, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 * 3, TASK_UNCLASSIFIED: 1 });
     const expected = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date)).reduce((a, w) => a + w.hours, 0);
-    expect(expected).toBeGreaterThan(300); // 「約 330 時間」
+    expect(expected).toBeGreaterThan(1000); // 基本シナリオ約 330 時間 ＋ 実運用規模の部分
     expect(model.excludedHours).toBe(expected);
     expect(model.warnings.find((w) => w.code === "EXCLUDED_NO_CUSTOMER")?.hours).toBe(expected);
   });
 
-  it("未紐付けは 3 グループ（社内/勉強会、もみじ不動産、やまびこ通信 = OUT_OF_PERIOD 2h × 1 件 @2026-10-21）", () => {
+  it("未紐付けは 4 グループ（社内/勉強会、社内/技術ナレッジ共有会、もみじ不動産、やまびこ通信 = OUT_OF_PERIOD 2h × 1 件 @2026-10-21）", () => {
     const groups = model.unmapped.map((u) => [u.customerName, u.projectName, u.reason]).sort();
     expect(groups).toEqual([
       ["もみじ不動産", "営業支援ツール検討", "NO_RULE"],
       ["やまびこ通信株式会社", "ネットワーク監視", "OUT_OF_PERIOD"],
       ["社内", "勉強会", "NO_RULE"],
+      ["社内", "技術ナレッジ共有会", "NO_RULE"],
     ]);
     const c010 = model.unmapped.find((u) => u.reason === "OUT_OF_PERIOD")!;
     expect(c010).toMatchObject({ hours: 2, count: 1, firstDate: "2026-10-21", lastDate: "2026-10-21" });
@@ -180,10 +194,16 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(f.breakdown.averageBasisMonths).toEqual(monthRange("2026-04", "2026-09"));
     expect(f.breakdown.remainingCost).toBe(Math.round((f.breakdown.actualCost / 6) * 6));
     expect(f.isDeficit).toBe(true);
-    expect(forecastTotals(model, undefined, "recent3").deficitContractIds).toEqual(["C008"]);
-    expect(forecastTotals(model, undefined, "all").deficitContractIds).toEqual(["C008"]);
+    // 基本シナリオ（C001〜C021）の超過は C008 だけ。実運用規模の部分は 3 割前後が超過（DUMMY_DATA.md）
+    const base = (ids: string[]) => ids.filter((id) => BASE_IDS.has(id));
+    expect(base(forecastTotals(model, undefined, "recent3").deficitContractIds)).toEqual(["C008"]);
+    expect(base(forecastTotals(model, undefined, "all").deficitContractIds)).toEqual(["C008"]);
     // assignment 方式では C013（月 10,000 円の予算）も赤字: M016 の配分 0.05 × 160h = 8h × 一般 6,000 円 = 48,000 円/月 × 残り 6 か月
-    expect(forecastTotals(model, undefined, "assignment").deficitContractIds).toEqual(["C008", "C013"]);
+    expect(base(forecastTotals(model, undefined, "assignment").deficitContractIds)).toEqual(["C008", "C013"]);
+    const fy = model.contracts.filter((r) => r.forecasts.recent3.fyBudget > 0);
+    const deficit = forecastTotals(model, undefined, "recent3").deficitContractIds.length;
+    expect(deficit / fy.length).toBeGreaterThan(0.2);
+    expect(deficit / fy.length).toBeLessThan(0.5);
     const c013 = byId("C013").forecasts.assignment;
     expect(c013.breakdown.assignmentLines).toHaveLength(6);
     expect(c013.breakdown.assignmentLines.every((l) => l.memberId === "M016" && l.allocation === 0.05 && l.hours === 8 && l.hourlyRate === 6000 && l.amount === 48_000)).toBe(true);
@@ -261,8 +281,11 @@ describe("マスタ履歴（DUMMY_DATA.md のエッジケース）", () => {
     // 中間ノード S21 の契約 = T211 配下の契約（asOf の組織では T212 は含まない）
     expect(contractsForTeam(model, "S21").map((c) => c.contractId).sort()).toEqual(["C005", "C008", "C014", "C015"]);
     expect(contractsForTeam(model, "S22").map((c) => c.contractId)).toContain("C007");
-    expect(contractsForTeam(model, UNASSIGNED_TEAM_ID).map((c) => c.contractId)).toEqual(["C009"]);
-    expect(contractsForTeam(model, "HQ")).toHaveLength(model.contracts.length - 1);
+    // 主担当チーム未設定は C009（基本シナリオ）と実運用規模の部分の 1 件
+    const unassigned = contractsForTeam(model, UNASSIGNED_TEAM_ID).map((c) => c.contractId);
+    expect(unassigned).toHaveLength(2);
+    expect(unassigned[0]).toBe("C009");
+    expect(contractsForTeam(model, "HQ")).toHaveLength(model.contracts.length - unassigned.length);
   });
 });
 

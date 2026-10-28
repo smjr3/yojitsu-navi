@@ -7,7 +7,7 @@
 import { contractInvalidReason } from "./budget.js";
 import { isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
-import { createMasterIndex, memberAt, rateFor, teamTreeAt } from "./masters.js";
+import { createMasterIndex, isLeftRecord, memberAt, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
 import { createTaskClassifier, isOutsideWorklog, unclassifiedTaskWarnings } from "./workTypes.js";
 import { T, fmt } from "../i18n/index.js";
@@ -116,7 +116,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   for (const acc of monthlyTotal.values()) {
     // 浮動小数の誤差（0.3+0.7 など）を許容
     if (acc.total > 1 + 1e-9) {
-      push({ severity: "error", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: acc.memberId, month: acc.month, total: acc.total, rows: acc.rows.join(", ") }), file, row: acc.rows[0] as number, ref: { memberId: acc.memberId, month: acc.month, total: acc.total } });
+      push({ severity: "error", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: acc.memberId, month: acc.month, total: Math.round(acc.total * 10000) / 10000, rows: acc.rows.join(", ") }), file, row: acc.rows[0] as number, ref: { memberId: acc.memberId, month: acc.month, total: acc.total } });
     }
   }
 }
@@ -164,7 +164,56 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
       push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: m.memberId, teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
     }
     if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
+    if (m.status !== undefined && m.status !== "left") {
+      push({ severity: "error", code: "MEMBER_STATUS_INVALID", message: fmt(T.checks.memberStatusInvalid, { file, row, memberId: m.memberId, value: m.status }), file, row, ref: { memberId: m.memberId } });
+    }
   });
+}
+
+/** 退職した月以降に残っているアサイン（§32。終了月の直し忘れ）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */
+function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
+  const file = "assignments.csv";
+  const masters = createMasterIndex(dataset);
+  const hit = new Map<string, { rows: number[]; first: YearMonth; last: YearMonth; leftFrom: YearMonth }>();
+  dataset.assignments.forEach((a, i) => {
+    if (!isValidYearMonth(a.startMonth) || !isValidYearMonth(a.endMonth) || a.startMonth > a.endMonth || !(a.allocation > 0)) return;
+    for (const m of monthRange(a.startMonth, a.endMonth)) {
+      const rec = memberAt(masters, a.memberId, m);
+      if (!isLeftRecord(rec)) continue;
+      const acc = hit.get(a.memberId);
+      if (acc) {
+        if (!acc.rows.includes(rowOf(i))) acc.rows.push(rowOf(i));
+        if (m < acc.first) acc.first = m;
+        if (m > acc.last) acc.last = m;
+      } else hit.set(a.memberId, { rows: [rowOf(i)], first: m, last: m, leftFrom: rec!.effectiveFrom });
+    }
+  });
+  for (const [memberId, h] of [...hit].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId } });
+  }
+}
+
+/** 退職した月以降に付いた作業実績（§32）。実績には数える（単価は退職の行の役職）が、入力の誤りの可能性が高いので警告。メンバーごとにまとめる */
+function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
+  const file = "worklogs";
+  const masters = createMasterIndex(dataset);
+  const hit = new Map<string, { memberId: string; memberName: string; hours: number; first: string; last: string; count: number }>();
+  for (const w of dataset.worklogs) {
+    if (!isValidISODate(w.date) || !Number.isFinite(w.hours) || w.hours <= 0) continue;
+    const rec = memberAt(masters, w.memberId, monthOfDate(w.date));
+    if (!isLeftRecord(rec)) continue;
+    const acc = hit.get(w.memberId);
+    if (acc) {
+      acc.hours += w.hours;
+      acc.count++;
+      if (w.date < acc.first) acc.first = w.date;
+      if (w.date > acc.last) acc.last = w.date;
+    } else hit.set(w.memberId, { memberId: w.memberId, memberName: rec?.name || w.memberName, hours: w.hours, first: w.date, last: w.date, count: 1 });
+  }
+  for (const h of [...hit.values()].sort((a, b) => (a.memberId < b.memberId ? -1 : 1))) {
+    const hours = Math.round(h.hours * 100) / 100;
+    push({ severity: "warning", code: "WORKLOG_AFTER_LEFT", message: fmt(T.checks.worklogAfterLeft, { file, memberId: h.memberId, memberName: h.memberName, count: h.count, hours, first: h.first, last: h.last }), file, ref: { memberId: h.memberId, hours } });
+  }
 }
 
 /** 役職に単価が 1 行も無いメンバー（個人単価も無い）→ 実績が 0 円になるので警告。役職ごとにまとめる */
@@ -296,6 +345,8 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateTitleRates(dataset, push);
   validateHolidays(dataset, push);
   validateWorklogs(dataset, push);
+  validateWorkAfterLeft(dataset, push);
+  validateAssignmentsAfterLeft(dataset, push);
   return issues;
 }
 

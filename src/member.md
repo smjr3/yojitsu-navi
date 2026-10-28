@@ -12,7 +12,7 @@ title: メンバー詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { aggregateMembers, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
+import { aggregateMembers, isLeftRecord, leftMonthOf, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { teamName, treeAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -119,8 +119,8 @@ if (vm) {
   );
   const teamText = (id) => (id ? teamName(model, id, vm.tree) : T.members.noTeam);
   display(html`<dl class="yn-facts" aria-label=${T.member.factsLabel}>
-    <div><dt>${T.members.colKind}</dt><dd>${unknown ? statusChip("neutral", T.members.chipUnknown, T.member.unknownTitle) : rec?.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee}</dd></div>
-    <div><dt>${fmt(T.member.teamAt, { team: model.config.labels?.team ?? T.columns.team, month: monthJa(vm.baseMonth) })}</dt><dd>${rec?.teamId ? html`<a href=${store.href("./members", { team: rec.teamId })}>${teamText(rec.teamId)}</a>` : T.members.noTeam}</dd></div>
+    <div><dt>${T.members.colKind}</dt><dd>${unknown ? statusChip("neutral", T.members.chipUnknown, T.member.unknownTitle) : rec?.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee}${leftMonthOf(records) ? html` ${statusChip("neutral", `${T.members.chipLeft} ${monthJa(leftMonthOf(records))}`, fmt(T.members.chipLeftTitle, { month: monthJa(leftMonthOf(records)) }))}` : null}</dd></div>
+    <div><dt>${fmt(T.member.teamAt, { team: model.config.labels?.team ?? T.columns.team, month: monthJa(vm.baseMonth) })}</dt><dd>${isLeftRecord(rec) ? fmt(T.members.leftLastTeam, { team: teamText(rec.teamId) }) : rec?.teamId ? html`<a href=${store.href("./members", { team: rec.teamId })}>${teamText(rec.teamId)}</a>` : T.members.noTeam}</dd></div>
     <div><dt>${T.members.colTitle}</dt><dd>${rec?.title || EMPTY_VALUE}</dd></div>
     ${rec?.department ? html`<div><dt>${T.member.department}</dt><dd>${rec.department}${rec.section ? ` ${rec.section}` : ""}</dd></div>` : null}
   </dl>`);
@@ -133,6 +133,7 @@ if (vm) {
           { key: "team", label: T.members.colTeam, type: "text", get: (r) => teamText(r.teamId) },
           { key: "title", label: T.members.colTitle, type: "text" },
           { key: "kind", label: T.members.colKind, type: "text", get: (r) => (r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
+          { key: "status", label: T.masterFiles.colStatus, type: "text", get: (r) => (isLeftRecord(r) ? T.members.chipLeft : T.masters.statusActive) },
         ],
         rows: records.map((r, i) => ({ ...r, key: `${r.effectiveFrom}-${i}` })),
         caption: T.member.historyCaption,

@@ -206,6 +206,14 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   return table;
 }
 
+/** members.csv の status 列（§32）: 空・「在籍」・active = 在籍、「退職」・left・retired = 退職。それ以外はそのまま（検証でエラー） */
+export function memberStatus(raw: string): { status?: string } {
+  const v = raw.normalize("NFKC").trim();
+  if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
+  if (v === "退職" || v.toLowerCase() === "left" || v.toLowerCase() === "retired") return { status: "left" };
+  return { status: v };
+}
+
 /** 各 CSV テキストから Dataset を組み立てる。検証結果（§14）も issues に含める */
 export function parseDataset(files: DatasetFiles): ParsedDataset {
   const issues: ValidationIssue[] = [];
@@ -259,6 +267,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     section: r.get("section"),
     teamId: nullable(r.get("team_id")),
     effectiveFrom: r.get("effective_from"),
+    // 省略可の列（§32）。空・「在籍」は在籍（項目を持たない）
+    ...memberStatus(r.get("status")),
   }));
 
   const rates: RateRecord[] = parseTable("masters/rates.csv", files.rates, REQUIRED_COLUMNS.rates, issues).rows.map((r) => ({

@@ -197,6 +197,11 @@ export interface MemberRecord {
   /** 空 = チーム非所属 */
   teamId: string | null;
   effectiveFrom: YearMonth;
+  /**
+   * 在籍状態（任意の列 status。SPEC §32）。"left" = この行の effective_from から退職（在籍しない）。
+   * 省略・空 = 在籍。CSV の「退職」「left」は "left" に、それ以外の値はそのまま入る（validateDataset でエラー）
+   */
+  status?: string;
 }
 
 export interface RateRecord {
@@ -541,6 +546,8 @@ export interface MemberTotals {
   teamId: string | null;
   title: string | null;
   kind: MemberKind | null;
+  /** 基準月の時点で退職していれば退職した月（§32）、在籍なら null */
+  leftFrom: YearMonth | null;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;
