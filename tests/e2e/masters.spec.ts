@@ -11,7 +11,7 @@ import type { Page, Request, Route } from "@playwright/test";
 import { test, expect, gotoPage, type ErrorLog } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
-import { MASTER_FILES, parseMasterDoc, serializeMasterDoc, addRow } from "../../src/core/masterEdit.js";
+import { MASTER_FILES, parseMasterDoc, serializeMasterDoc, addRow, deleteRow, updateRow } from "../../src/core/masterEdit.js";
 
 const GITLAB = "https://gitlab.test/api/v4";
 const PAYLOAD = buildMastersPayload(ROOT_DIR);
@@ -240,13 +240,134 @@ test("下書き: 再訪で復元を提案し、復元すると編集が戻る。
   await page.reload();
   await expect(page.locator(".yn-me-stale")).toContainText("元データが更新されています");
   await expect(page.locator(".yn-me-stale")).toContainText("rates.csv");
+  await expect(page.locator(".yn-me-stale")).toContainText("最新のデータに当て直します");
+  await expect(page.locator(".yn-me-stale")).toContainText("そのまま当て直せる変更: 1 件");
+  await expect(page.locator(".yn-me-conflict")).toHaveCount(0);
   await page.getByRole("button", { name: "下書きを復元する" }).click();
   await selectTab(page, "単価");
-  await expect(page.locator("#yn-me-panel")).toContainText("古い元データを土台にした下書き");
+  await expect(page.locator("#yn-me-panel")).toContainText("古い元データで作った下書きを最新のデータに当て直して復元しました");
+  // ダウンロードする CSV は最新の元データ ＋ 自分の追加（下書きの古い土台 15500 は出ない）
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
+  const text = readFileSync((await dl.path())!, "utf-8");
+  expect(text).toBe(RATES_TEXT + "部長,14000,2026-11\n");
+  expect(text).not.toContain("15500");
   // 破棄
   await page.reload();
   await page.getByRole("button", { name: "下書きを破棄する" }).click();
   expect(await page.evaluate((k) => localStorage.getItem(k), DRAFT_KEY)).toBeNull();
+});
+
+/** 単価の課長の行を 10500 に、P002 の行を削除した下書きを作り、その下書きの土台を「他の人が更新する前」に書き換えて再読み込み */
+async function staleDraftWithConflict(page: Page): Promise<void> {
+  await open(page);
+  await selectTab(page, "単価");
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "課長" }).first().getByRole("button", { name: /行を修正/ }).click();
+  await d.locator("#yn-me-f-hourly_rate").fill("10500");
+  await d.locator('[data-role="submit"]').click();
+  await d.locator('[data-role="submit"]').click();
+  await ratesTable(page).locator("tbody tr.yn-me-row").filter({ hasText: "P002" }).getByRole("button", { name: /行を削除/ }).click();
+  await d.locator('[data-role="confirm-delete"]').click();
+  await addRate(page, "部長", "14000", "2026-11");
+  await page.evaluate((k) => {
+    const draft = JSON.parse(localStorage.getItem(k)!);
+    // 下書きを作ったときの元データでは課長が 9900 だった（= その後、他の人が 10000 に変えた）。コミットも古い
+    draft.files.rates.baseCommitId = "0".repeat(40);
+    draft.files.rates.baseText = draft.files.rates.baseText.replace("課長,10000,", "課長,9900,");
+    localStorage.setItem(k, JSON.stringify(draft));
+    sessionStorage.setItem("__e2e_keep_draft__", "1");
+  }, DRAFT_KEY);
+  await page.reload();
+  await expect(page.locator(".yn-me-stale")).toContainText("元データが更新されています");
+}
+
+/** 期待する rates.csv: 最新の元データに、課長 10500・P002 削除・部長 14000 追加 */
+function expectedRates(keepMine: boolean): string {
+  let doc = parseMasterDoc("rates", RATES_TEXT);
+  const kacho = doc.rows.find((r) => r.cells[0] === "課長")!;
+  const p002 = doc.rows.find((r) => r.cells[0] === "P002")!;
+  if (keepMine) doc = updateRow(doc, kacho.id, { hourly_rate: "10500" });
+  doc = deleteRow(doc, p002.id);
+  return serializeMasterDoc(addRow(doc, { key: "部長", hourly_rate: "14000", effective_from: "2026-11" }).doc).text;
+}
+
+test("下書きの当て直し: 土台が変わった後の復元で、同じ行の衝突を行ごとに選んでから復元 → 差分 → ダウンロードは最新の土台＋自分の変更", async ({ page }) => {
+  await staleDraftWithConflict(page);
+  const banner = page.locator(".yn-me-banner");
+  await expect(banner).toContainText("そのまま当て直せる変更: 2 件");
+  await expect(banner).toContainText("当て直せない変更: 1 件");
+  const conflict = page.locator("fieldset.yn-me-conflict");
+  await expect(conflict).toHaveCount(1);
+  await expect(conflict.locator("legend")).toContainText("課長: あなたも他の人も、この行を変更しました");
+  await expect(conflict).toContainText("下書きを作ったときの行: 課長 ・ 9900 ・ 2025-04");
+  await expect(conflict.getByRole("radio", { name: /自分の下書きを残す: 時間単価（円）: 10500/ })).toBeVisible();
+  await expect(conflict.getByRole("radio", { name: /最新のデータを残す: 時間単価（円）: 10000/ })).toBeVisible();
+  // 選ばずに復元 → 止めて案内し、最初の未選択の行へフォーカス
+  await page.getByRole("button", { name: "下書きを復元する" }).click();
+  await expect(banner.locator('[role="alert"].yn-me-form-msg')).toContainText("まだ選んでいない行が 1 件");
+  await expect(conflict.getByRole("radio").first()).toBeFocused();
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+  // キーボードで選ぶ（Space）→ 復元
+  await page.keyboard.press("Space");
+  await expect(conflict.getByRole("radio", { name: /自分の下書きを残す/ })).toBeChecked();
+  await expect(banner).toContainText("未選択 0 件");
+  await page.getByRole("button", { name: "下書きを復元する" }).click();
+  await expect(banner).toHaveCount(0);
+  await selectTab(page, "単価");
+  await expect(page.locator("#yn-me-panel")).toContainText("どちらを残すか選んだ行 1 件");
+  // 差分は最新の元データ（課長 10000）に対する自分の変更
+  const diff = page.locator(".yn-me-diff-table");
+  await expect(diff).toContainText("時間単価（円）: 10000 → 10500");
+  await expect(diff).toContainText("P002");
+  await expect(diff).toContainText("部長 ・ 14000 ・ 2026-11");
+  await expect(diff).not.toContainText("9900");
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
+  const text = readFileSync((await dl.path())!, "utf-8");
+  expect(text).toBe(expectedRates(true));
+  expect(text).not.toContain("9900");
+  // 元データのコミットを示し、GitLab 側が新しければアップロードしないよう案内
+  await expect(page.locator(".yn-me-steps")).toContainText("アップロードせずに");
+  if (PAYLOAD.files.rates.lastCommitId) await expect(page.locator('[data-base-commit="rates"]')).toContainText(PAYLOAD.files.rates.lastCommitId.slice(0, 8));
+  // 復元後の下書きは最新の土台に対する差分（もう一度開いても当て直し不要）
+  await page.reload();
+  await expect(page.locator(".yn-me-banner")).toBeVisible();
+  await expect(page.locator(".yn-me-stale")).toHaveCount(0);
+  await expect(page.locator(".yn-me-banner")).toContainText("単価 3件");
+});
+
+test("下書きの当て直し: 「最新のデータを残す」を選ぶと他の人の値が残り、他の自分の変更は当たる", async ({ page }) => {
+  await staleDraftWithConflict(page);
+  await page.getByRole("radio", { name: /最新のデータを残す/ }).check();
+  await page.getByRole("button", { name: "下書きを復元する" }).click();
+  await expect(page.locator(".yn-me-banner")).toHaveCount(0);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
+  expect(readFileSync((await dl.path())!, "utf-8")).toBe(expectedRates(false));
+});
+
+test("影響ダイアログ: 所属チームだけ変える行の追加は「組織別の集計」と出し、原価・粗利は変わらないと明記。役職を変えると原価・粗利", async ({ page }) => {
+  await open(page);
+  await selectTab(page, "メンバー");
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  const first = page.locator("table.yn-me-table tbody tr.yn-me-row").first();
+  await first.getByRole("button", { name: /新しい適用開始月の行を追加/ }).click();
+  const team = d.locator("#yn-me-f-team_id");
+  const current = await team.inputValue();
+  const other = await team.locator("option").evaluateAll((opts, cur) => opts.map((o) => (o as HTMLOptionElement).value).find((v) => v !== "" && v !== cur)!, current);
+  await team.selectOption(other);
+  await d.locator("#yn-me-f-effective_from").fill("2026-04");
+  await d.locator('[data-role="submit"]').click();
+  const impact = d.locator(".yn-me-impact");
+  await expect(impact).toContainText("過去の計算結果が変わります（影響: 7 か月）");
+  await expect(impact).toContainText("所属チームによる組織別の集計");
+  await expect(impact).toContainText("原価・粗利・消化率・着地見込みは変わりません");
+  await expect(impact).toHaveAttribute("data-cost-changes", "false");
+  await d.getByRole("button", { name: "入力に戻る" }).click();
+  await team.selectOption(current);
+  await d.locator("#yn-me-f-title").fill("部長");
+  await d.locator('[data-role="submit"]').click();
+  await expect(impact).toContainText("時間単価と、原価・粗利・消化率・着地見込みが変わります");
+  await expect(impact).not.toContainText("組織別の集計");
+  await expect(impact).toHaveAttribute("data-cost-changes", "true");
 });
 
 test.describe("gitlab モード", () => {
@@ -328,6 +449,21 @@ test.describe("gitlab モード", () => {
     await expect(page.locator(".yn-me-diff-table")).toContainText("14000");
     expect(await page.evaluate((k) => localStorage.getItem(k), DRAFT_KEY)).toContain("14000");
     ignoreGitLabErrors(errors);
+  });
+
+  test("古い土台の下書きを当て直して保存すると、最新のコミット ID と最新の土台＋自分の変更を送る（古い土台は送らない）", async ({ page }) => {
+    await patchMasters(page, gitlabMode("mr"));
+    const mock = await mockGitLab(page, okResponder);
+    await staleDraftWithConflict(page);
+    await page.getByRole("radio", { name: /自分の下書きを残す/ }).check();
+    await page.getByRole("button", { name: "下書きを復元する" }).click();
+    await enterToken(page);
+    await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
+    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+    const commit = mock.calls[1]!.body as { actions: Array<{ content: string; last_commit_id?: string }> };
+    expect(commit.actions[0]!.content).toBe(expectedRates(true));
+    expect(commit.actions[0]!.last_commit_id).not.toBe("0".repeat(40));
+    if (PAYLOAD.files.rates.lastCommitId) expect(commit.actions[0]!.last_commit_id).toBe(PAYLOAD.files.rates.lastCommitId);
   });
 
   test("権限不足（403）: Developer 以上が必要と案内。編集は残る", async ({ page, errors }) => {

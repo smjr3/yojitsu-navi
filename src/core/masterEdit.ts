@@ -430,6 +430,11 @@ export interface Impact {
   months: YearMonth[];
   /** 関係したキー（"member_id" など keyColumns の値を "|" で連結） */
   keys: string[];
+  /**
+   * 変わる月に、計算・表示に使う値が変わる列（ヘッダ順）。確認ダイアログで「何が変わるか」を出し分ける（§19.1）。
+   * アサインは allocation（その月に掛かる配分の集合が変わる）
+   */
+  columns: string[];
 }
 
 type CellRow = readonly string[];
@@ -438,8 +443,8 @@ function keyOf(def: MasterFileDef, header: readonly string[], cells: CellRow): s
   return def.keyColumns.map((k) => (cells[header.indexOf(k)] ?? "").trim()).join("|");
 }
 
-/** 月 m に有効な行（§5: effective_from <= m で最大、同じなら後の行）のセルを "\u0001" で連結した署名 */
-function effectiveSignature(header: readonly string[], rows: readonly CellRow[], month: YearMonth): string | null {
+/** 月 m に有効な行（§5: effective_from <= m で最大、同じなら後の行）。無ければ null */
+function effectiveRowAt(header: readonly string[], rows: readonly CellRow[], month: YearMonth): CellRow | null {
   const ei = header.indexOf("effective_from");
   let best: CellRow | null = null;
   let bestFrom = "";
@@ -451,7 +456,23 @@ function effectiveSignature(header: readonly string[], rows: readonly CellRow[],
       bestFrom = from;
     }
   }
-  return best === null ? null : best.map((c) => c.trim()).join("\u0001");
+  return best;
+}
+
+/**
+ * 月 m の有効な行の、編集前後で値が違う列（effective_from は除く。値が同じなら適用開始月が違っても計算は同じ）。
+ * 片方にしか有効な行が無ければ、無い側は全列空として比べ、キー列も「変わった列」に含める（登録の有無が変わる）
+ */
+function effectiveDiffColumns(def: MasterFileDef, header: readonly string[], b: CellRow | null, a: CellRow | null): string[] {
+  if (b === null && a === null) return [];
+  const out: string[] = [];
+  header.forEach((h, i) => {
+    if (h === "effective_from") return;
+    const bv = b ? (b[i] ?? "").trim() : "";
+    const av = a ? (a[i] ?? "").trim() : "";
+    if (bv !== av || ((b === null) !== (a === null) && def.keyColumns.includes(h))) out.push(h);
+  });
+  return out;
 }
 
 /**
@@ -479,7 +500,7 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
  */
 export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
   const def = MASTER_FILES[fileId];
-  if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [] };
+  if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [], columns: [] };
   // 触れたキー: 片方にしか無い行（値まで含めて比べる）のキー
   const count = (rows: readonly CellRow[]) => {
     const m = new Map<string, number>();
@@ -513,7 +534,7 @@ export function impactOfChange(fileId: MasterFileId, header: readonly string[], 
     for (const [k, list] of ob) if ((oa.get(k) ?? []).join("\u0002") !== list.join("\u0002")) keys.add(k);
     for (const [k, list] of oa) if ((ob.get(k) ?? []).join("\u0002") !== list.join("\u0002")) keys.add(k);
   }
-  if (keys.size === 0) return { months: [], keys: [] };
+  if (keys.size === 0) return { months: [], keys: [], columns: [] };
   const group = (rows: readonly CellRow[]) => {
     const m = new Map<string, CellRow[]>();
     for (const r of rows) {
@@ -528,18 +549,26 @@ export function impactOfChange(fileId: MasterFileId, header: readonly string[], 
   const gb = group(before);
   const ga = group(after);
   const months: YearMonth[] = [];
+  const columns = new Set<string>();
   for (let m = range.fromMonth; m <= range.toMonth; m = addMonths(m, 1)) {
+    let differs = false;
     for (const k of keys) {
       const b = gb.get(k) ?? [];
       const a = ga.get(k) ?? [];
-      const differs = def.history === "effective" ? effectiveSignature(header, b, m) !== effectiveSignature(header, a, m) : periodSignature(header, b, m) !== periodSignature(header, a, m);
-      if (differs) {
-        months.push(m);
+      if (def.history === "effective") {
+        const cols = effectiveDiffColumns(def, header, effectiveRowAt(header, b, m), effectiveRowAt(header, a, m));
+        if (cols.length === 0) continue;
+        differs = true;
+        for (const c of cols) columns.add(c);
+      } else if (periodSignature(header, b, m) !== periodSignature(header, a, m)) {
+        differs = true;
+        columns.add("allocation");
         break;
       }
     }
+    if (differs) months.push(m);
   }
-  return { months, keys: [...keys].sort() };
+  return { months, keys: [...keys].sort(), columns: header.filter((h) => columns.has(h)) };
 }
 
 /** 文書 2 つ（編集前・編集後）の影響 */
@@ -551,6 +580,52 @@ export function impactBetween(before: MasterDoc, after: MasterDoc, range: Impact
     after.rows.map((r) => r.cells),
     range,
   );
+}
+
+export interface ImpactEffects {
+  /** 変わる内容（重要なものから。例「時間単価と、原価・粗利・消化率・着地見込み」） */
+  effects: string[];
+  /** 原価・粗利が変わるか */
+  costChanges: boolean;
+  /** 補足（原価・粗利が変わらないときの明記など）。無ければ null */
+  note: string | null;
+}
+
+/** 列ごとの「変わる内容」（ファイル → 列 → [順位, 文, 原価が変わるか]）。§19.1 */
+const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> = {
+  members: {
+    title: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
+    member_id: [1, "メンバーマスタへの登録の有無（未登録の扱い）", false],
+    team_id: [2, "所属チームによる組織別の集計（メンバー別の所属・チームでの絞り込み、チーム詳細の応援の区別）", false],
+    department: [3, "メンバー詳細の部署・課の表示", false],
+    section: [3, "メンバー詳細の部署・課の表示", false],
+    name: [4, "氏名の表示", false],
+    kind: [5, "区分（社員／パートナー）の表示", false],
+  },
+  rates: {
+    key: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
+    hourly_rate: [0, "時間単価と、原価・粗利・消化率・着地見込み", true],
+  },
+  teams: {
+    team_id: [0, "組織の木とチーム別の集計", false],
+    parent_team_id: [1, "組織の木と上位組織の合計（配下の合計）", false],
+    name: [2, "チーム名の表示", false],
+  },
+  assignments: {
+    allocation: [0, "着地見込み（アサイン方式）とメンバー別の計画（計画時間・計画原価）", false],
+  },
+};
+
+/** Impact.columns から、確認ダイアログに出す「何が変わるか」を作る（§19.1。一律に「原価・粗利など」と書かない） */
+export function describeImpactEffects(fileId: MasterFileId, columns: readonly string[]): ImpactEffects {
+  const table = EFFECTS[fileId];
+  const hits = columns.map((c) => table[c]).filter((e): e is [number, string, boolean] => e !== undefined);
+  hits.sort((a, b) => a[0] - b[0]);
+  const effects = [...new Set(hits.map((e) => e[1]))];
+  const costChanges = hits.some((e) => e[2]);
+  if (effects.length === 0) return { effects: ["その月の行の値"], costChanges: false, note: null };
+  const note = fileId === "members" && !costChanges ? "原価・粗利・消化率・着地見込みは変わりません（単価は役職で、契約の担当チームは契約で決まるため）。" : null;
+  return { effects, costChanges, note };
 }
 
 /** 影響の月を「2026-04〜2026-10（7か月）」のように短く言う（連続していない月は「ほか」） */
@@ -645,66 +720,131 @@ export function issueText(issue: Pick<ValidationIssue, "message">): string {
   return issue.message.replace(/^[^\s:]+\.csv \d+ 行目: /, "").replace(/^[^\s:]+\.csv: /, "");
 }
 
+
 // ---------------------------------------------------------------------------
-// 下書き（localStorage）
+// 下書き（localStorage）: 「土台 ＋ 差分」として持ち、復元時に最新の土台へ当て直す（§19.2）
 // ---------------------------------------------------------------------------
 
 export const DRAFT_STORAGE_KEY = "yojitsu-navi:masters-draft:v1";
 
+/**
+ * 1 ファイル分の下書き。差分は土台（baseText）に対して持つ。
+ * セルの並びは parseMasterDoc(baseText) のヘッダ順（ヘッダは baseText から決まるので保存しない）
+ */
 export interface DraftFile {
-  /** 編集の土台にした生テキスト（土台が更新されても、この土台に対する差分として復元できる） */
+  /** 編集の土台にした生テキスト */
   baseText: string;
   baseCommitId: string | null;
-  rows: MasterRow[];
-  nextId: number;
+  /** 変更した土台の行（baseIndex = 土台のデータ行の通し番号）と変更後のセル */
+  changed: Array<{ baseIndex: number; cells: string[] }>;
+  /** 削除した土台の行の通し番号（昇順） */
+  removed: number[];
+  /** 追加した行のセル（追加した順） */
+  added: string[][];
 }
 
 export interface MasterDraft {
-  version: 1;
+  version: 2;
   savedAt: string;
   files: Partial<Record<MasterFileId, DraftFile>>;
 }
 
+type Bases = Record<MasterFileId, { text: string; lastCommitId: string | null }>;
+
+/** 文書（土台 base から編集したもの）→ 下書きのファイル（土台に対する差分） */
+export function draftFileOf(doc: MasterDoc, base: { text: string; lastCommitId: string | null }): DraftFile {
+  const changed: DraftFile["changed"] = [];
+  const added: string[][] = [];
+  const present = new Set<string>();
+  for (const row of doc.rows) {
+    present.add(row.id);
+    const o = doc.originals[row.id];
+    if (!o) {
+      if (!isBlankRow(row.cells)) added.push(row.cells.slice());
+    } else if (!sameCells(o.cells, row.cells)) {
+      changed.push({ baseIndex: o.index, cells: row.cells.slice() });
+    }
+  }
+  changed.sort((a, b) => a.baseIndex - b.baseIndex);
+  const removed = Object.entries(doc.originals)
+    .filter(([id]) => !present.has(id))
+    .map(([, o]) => o.index)
+    .sort((a, b) => a - b);
+  return { baseText: base.text, baseCommitId: base.lastCommitId, changed, removed, added };
+}
+
+/** 下書きのファイルの変更件数（追加 + 変更 + 削除） */
+export function draftFileCount(f: DraftFile): number {
+  return f.changed.length + f.removed.length + f.added.length;
+}
+
 /** 編集のあるファイルだけを下書きにする（編集が無ければ null = 下書きを消す） */
-export function makeDraft(docs: Record<MasterFileId, MasterDoc>, bases: Record<MasterFileId, { text: string; lastCommitId: string | null }>, savedAt: string): MasterDraft | null {
+export function makeDraft(docs: Record<MasterFileId, MasterDoc>, bases: Bases, savedAt: string): MasterDraft | null {
   const files: MasterDraft["files"] = {};
   let any = false;
   for (const id of MASTER_FILE_IDS) {
-    const doc = docs[id];
-    if (diffMasterDoc(doc).count === 0) continue;
+    const f = draftFileOf(docs[id], bases[id]);
+    if (draftFileCount(f) === 0) continue;
     any = true;
-    files[id] = { baseText: bases[id].text, baseCommitId: bases[id].lastCommitId, rows: doc.rows.map((r) => ({ id: r.id, cells: r.cells.slice() })), nextId: doc.nextId };
+    files[id] = f;
   }
-  return any ? { version: 1, savedAt, files } : null;
+  return any ? { version: 2, savedAt, files } : null;
 }
 
-/** 下書きの JSON を読む（壊れていれば null） */
+const isCells = (v: unknown): v is string[] => Array.isArray(v) && v.every((c) => typeof c === "string");
+const isIndex = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+/**
+ * 下書きの JSON を読む（壊れていれば null）。
+ * 以前の形式（version 1: 土台 ＋ 編集後の全行）は差分の形（version 2）に直して返す
+ */
 export function parseDraft(json: string | null): MasterDraft | null {
   if (!json) return null;
   try {
-    const d = JSON.parse(json) as MasterDraft;
-    if (!d || d.version !== 1 || typeof d.files !== "object" || d.files === null) return null;
-    for (const id of Object.keys(d.files)) {
+    const d = JSON.parse(json) as { version?: unknown; savedAt?: unknown; files?: unknown };
+    if (!d || (d.version !== 1 && d.version !== 2) || typeof d.files !== "object" || d.files === null) return null;
+    const files: MasterDraft["files"] = {};
+    for (const [id, raw] of Object.entries(d.files as Record<string, unknown>)) {
       if (!MASTER_FILE_IDS.includes(id as MasterFileId)) return null;
-      const f = d.files[id as MasterFileId];
-      if (!f || typeof f.baseText !== "string" || !Array.isArray(f.rows)) return null;
-      if (!f.rows.every((r) => r && typeof r.id === "string" && Array.isArray(r.cells) && r.cells.every((c) => typeof c === "string"))) return null;
+      const fileId = id as MasterFileId;
+      const f = raw as Record<string, unknown> | null;
+      if (!f || typeof f.baseText !== "string") return null;
+      const baseCommitId = typeof f.baseCommitId === "string" ? f.baseCommitId : null;
+      if (d.version === 1) {
+        const rows = f.rows as unknown;
+        if (!Array.isArray(rows) || !rows.every((r) => r && typeof r.id === "string" && isCells(r.cells))) return null;
+        const base = parseMasterDoc(fileId, f.baseText);
+        const doc: MasterDoc = { ...base, rows: (rows as MasterRow[]).map((r) => ({ id: r.id, cells: padCells(r.cells, base.header.length) })) };
+        files[fileId] = draftFileOf(doc, { text: f.baseText, lastCommitId: baseCommitId });
+        continue;
+      }
+      const changed = f.changed as unknown;
+      const removed = f.removed as unknown;
+      const added = f.added as unknown;
+      if (!Array.isArray(changed) || !changed.every((c) => c && isIndex(c.baseIndex) && isCells(c.cells))) return null;
+      if (!Array.isArray(removed) || !removed.every(isIndex)) return null;
+      if (!Array.isArray(added) || !added.every(isCells)) return null;
+      files[fileId] = {
+        baseText: f.baseText,
+        baseCommitId,
+        changed: (changed as DraftFile["changed"]).map((c) => ({ baseIndex: c.baseIndex, cells: c.cells.slice() })),
+        removed: (removed as number[]).slice(),
+        added: (added as string[][]).map((c) => c.slice()),
+      };
     }
-    return d;
+    return { version: 2, savedAt: typeof d.savedAt === "string" ? d.savedAt : "", files };
   } catch {
     return null;
   }
 }
 
-/** 下書きのファイルを文書に戻す（土台は下書きに保存した baseText） */
+/** 下書きのファイルを、下書きの土台（baseText）に対する編集として文書に戻す */
 export function docFromDraft(fileId: MasterFileId, f: DraftFile): MasterDoc {
-  const base = parseMasterDoc(fileId, f.baseText);
-  const width = base.header.length;
-  return { ...base, rows: f.rows.map((r) => ({ id: r.id, cells: padCells(r.cells, width) })), nextId: Math.max(1, Number(f.nextId) || 1) };
+  return rebaseDraftFile(fileId, f, f.baseText).doc;
 }
 
 /** 下書きの土台が今のビルドと違うファイル（他の人が先に更新した） */
-export function staleDraftFiles(draft: MasterDraft, bases: Record<MasterFileId, { text: string; lastCommitId: string | null }>): MasterFileId[] {
+export function staleDraftFiles(draft: MasterDraft, bases: Bases): MasterFileId[] {
   const out: MasterFileId[] = [];
   for (const id of MASTER_FILE_IDS) {
     const f = draft.files[id];
@@ -714,4 +854,234 @@ export function staleDraftFiles(draft: MasterDraft, bases: Record<MasterFileId, 
     if (commitChanged || f.baseText !== b.text) out.push(id);
   }
   return out;
+}
+
+// ---- 当て直し（rebase） ----------------------------------------------------
+
+/**
+ * 衝突の種類
+ *  - both-changed:       下書きで変更した行を、最新側でも別の値に変更した
+ *  - changed-vs-deleted: 下書きで変更した行を、最新側では削除した
+ *  - deleted-vs-changed: 下書きで削除した行を、最新側では変更した
+ */
+export type RebaseConflictKind = "both-changed" | "changed-vs-deleted" | "deleted-vs-changed";
+export type ConflictChoice = "mine" | "theirs";
+
+export interface RebaseConflict {
+  /** 衝突の識別子（下書きの土台の行番号。同じ下書き・同じ最新の土台なら毎回同じ） */
+  id: string;
+  kind: RebaseConflictKind;
+  /** 下書きを作ったときの行（最新のヘッダの列名で） */
+  base: Record<string, string>;
+  /** 下書きの行（null = 下書きで削除） */
+  mine: Record<string, string> | null;
+  /** 最新のデータの行（null = 最新側で削除） */
+  theirs: Record<string, string> | null;
+  /** mine と theirs で値が違う列（片方が削除なら、もう片方の値のある列。最新のヘッダ順） */
+  columns: string[];
+}
+
+export interface RebaseResult {
+  /** 最新の土台に当て直した文書（衝突は choices に従う。選ばれていない衝突は最新のデータのまま） */
+  doc: MasterDoc;
+  /** 下書きの土台と最新の土台が違うか */
+  stale: boolean;
+  /** そのまま当て直せた変更の件数（両方が同じ値に変えた・両方が削除した行を含む） */
+  applied: number;
+  conflicts: RebaseConflict[];
+  /** まだ choices で選ばれていない衝突の id */
+  unresolved: string[];
+}
+
+/** a の各行に対応する b の行番号（無ければ -1）。同じ内容の行を順序を保って最長一致で対応させる */
+function alignRows(a: readonly string[], b: readonly string[]): number[] {
+  const map = new Array<number>(a.length).fill(-1);
+  let s = 0;
+  while (s < a.length && s < b.length && a[s] === b[s]) {
+    map[s] = s;
+    s++;
+  }
+  let ea = a.length;
+  let eb = b.length;
+  while (ea > s && eb > s && a[ea - 1] === b[eb - 1]) {
+    ea--;
+    eb--;
+    map[ea] = eb;
+  }
+  const n = ea - s;
+  const m = eb - s;
+  if (n === 0 || m === 0) return map;
+  if (n * m <= 4_000_000) {
+    // 最長共通部分列（LCS）
+    const w = m + 1;
+    const dp = new Uint32Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i * w + j] = a[s + i] === b[s + j] ? (dp[(i + 1) * w + j + 1] as number) + 1 : Math.max(dp[(i + 1) * w + j] as number, dp[i * w + j + 1] as number);
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (a[s + i] === b[s + j]) {
+        map[s + i] = s + j;
+        i++;
+        j++;
+      } else if ((dp[(i + 1) * w + j] as number) >= (dp[i * w + j + 1] as number)) i++;
+      else j++;
+    }
+    return map;
+  }
+  // 行数が非常に多いとき: 順序を保って、次に現れる同じ内容の行に対応させる（貪欲）
+  const positions = new Map<string, number[]>();
+  for (let j = s; j < eb; j++) {
+    const list = positions.get(b[j] as string) ?? [];
+    list.push(j);
+    positions.set(b[j] as string, list);
+  }
+  let last = s - 1;
+  for (let i = s; i < ea; i++) {
+    const list = positions.get(a[i] as string);
+    if (!list) continue;
+    let lo = 0;
+    let hi = list.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((list[mid] as number) <= last) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo < list.length) {
+      last = list[lo] as number;
+      map[i] = last;
+    }
+  }
+  return map;
+}
+
+/**
+ * 下書き（土台 f.baseText に対する差分）を、最新の土台 latestText に当て直す（純粋・決定的）。
+ *
+ * 1. 下書きの土台の行と最新の土台の行を、内容（最新のヘッダの列名で並べ、trim した値）で対応付ける（alignRows）
+ * 2. 対応しなかった土台の行は、同じ区間（前後の対応した行の間）にある最新側の対応しなかった行のうち、
+ *    キー列が同じもの（適用開始月／開始月も同じものを優先）と対にする（= 最新側で変更された行）。
+ *    対が無ければ最新側で削除された行
+ * 3. 下書きの変更・削除は、最新側で変わっていない行にはそのまま当てる。最新側でも変更・削除されていれば衝突
+ *    （両方が同じ値に変えた・両方が削除したなら衝突にしない）
+ * 4. 下書きで追加した行は末尾に足す（衝突で「自分の下書き」を選んだ、最新側で削除済みの行もその手前に足す）
+ *
+ * 当て直した結果を draftFileOf で下書きにし、同じ latestText にもう一度当て直しても結果は変わらない（冪等）
+ */
+export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: string, choices: Readonly<Record<string, ConflictChoice>> = {}): RebaseResult {
+  const def = MASTER_FILES[fileId];
+  const old = parseMasterDoc(fileId, f.baseText);
+  const latest = parseMasterDoc(fileId, latestText);
+  const header = latest.header;
+  const width = header.length;
+  const sameHeader = sameCells(old.header, header);
+  const colMap = header.map((h) => old.header.indexOf(h));
+  /** 下書き側のセル → 最新のヘッダ順（下書きの土台に無い列は fallback の値か空） */
+  const remap = (cells: readonly string[], fallback?: readonly string[]): string[] => {
+    if (sameHeader) return padCells(cells, width);
+    return header.map((_, i) => {
+      const at = colMap[i] as number;
+      return at < 0 ? (fallback?.[i] ?? "") : (cells[at] ?? "");
+    });
+  };
+  const sig = (cells: readonly string[]): string => header.map((_, i) => (cells[i] ?? "").trim()).join("\u0001");
+  const oldCells = old.rows.map((r) => remap(r.cells));
+  const latestCells = latest.rows.map((r) => r.cells);
+  const map = alignRows(oldCells.map(sig), latestCells.map(sig));
+
+  // 対応しなかった行を、同じ区間・同じキーの行と対にする
+  const pair = new Array<number>(old.rows.length).fill(-1);
+  const matchedB = new Set<number>(map.filter((j) => j >= 0));
+  const timeIndex = header.indexOf(def.history === "effective" ? "effective_from" : "start_month");
+  const keyAt = (cells: readonly string[]) => keyOf(def, header, cells);
+  const timeAt = (cells: readonly string[]) => (cells[timeIndex] ?? "").trim();
+  const bounds: Array<[number, number]> = [];
+  {
+    const nextMatched = new Array<number>(old.rows.length).fill(latest.rows.length);
+    let next = latest.rows.length;
+    for (let i = old.rows.length - 1; i >= 0; i--) {
+      nextMatched[i] = next;
+      if ((map[i] as number) >= 0) next = map[i] as number;
+    }
+    let prev = -1;
+    for (let i = 0; i < old.rows.length; i++) {
+      bounds.push([prev, nextMatched[i] as number]);
+      if ((map[i] as number) >= 0) prev = map[i] as number;
+    }
+  }
+  const usedB = new Set<number>();
+  for (const strict of [true, false]) {
+    for (let i = 0; i < old.rows.length; i++) {
+      if ((map[i] as number) >= 0 || (pair[i] as number) >= 0) continue;
+      const a = oldCells[i] as string[];
+      const [lo, hi] = bounds[i] as [number, number];
+      for (let j = lo + 1; j < hi; j++) {
+        if (matchedB.has(j) || usedB.has(j)) continue;
+        const b = latestCells[j] as string[];
+        if (keyAt(a) !== keyAt(b) || (strict && timeAt(a) !== timeAt(b))) continue;
+        pair[i] = j;
+        usedB.add(j);
+        break;
+      }
+    }
+  }
+
+  const rowsOut: Array<MasterRow | null> = latest.rows.map((r) => ({ id: r.id, cells: r.cells.slice() }));
+  const appended: string[][] = [];
+  const conflicts: RebaseConflict[] = [];
+  let applied = 0;
+  const record = (cells: readonly string[]) => rowRecord(latest, { cells: cells as string[] });
+  const diffCols = (x: readonly string[] | null, y: readonly string[] | null) => header.filter((_, i) => (x ? (x[i] ?? "").trim() : "") !== (y ? (y[i] ?? "").trim() : ""));
+  const touched = new Map<number, { kind: "changed"; cells: string[] } | { kind: "removed" }>();
+  for (const c of f.changed) if (c.baseIndex < old.rows.length) touched.set(c.baseIndex, { kind: "changed", cells: c.cells });
+  for (const i of f.removed) if (i < old.rows.length) touched.set(i, { kind: "removed" });
+  for (const i of [...touched.keys()].sort((x, y) => x - y)) {
+    const t = touched.get(i)!;
+    const j = map[i] as number;
+    const p = pair[i] as number;
+    const id = String(i);
+    const base = record(oldCells[i] as string[]);
+    if (t.kind === "changed") {
+      if (j >= 0) {
+        rowsOut[j] = { id: latest.rows[j]!.id, cells: remap(t.cells, latestCells[j]) };
+        applied++;
+      } else if (p >= 0) {
+        const theirs = latestCells[p] as string[];
+        const mine = remap(t.cells, theirs);
+        if (sig(mine) === sig(theirs)) {
+          applied++; // 両方が同じ値に変えた
+          continue;
+        }
+        conflicts.push({ id, kind: "both-changed", base, mine: record(mine), theirs: record(theirs), columns: diffCols(mine, theirs) });
+        if (choices[id] === "mine") rowsOut[p] = { id: latest.rows[p]!.id, cells: mine };
+      } else {
+        const mine = remap(t.cells);
+        conflicts.push({ id, kind: "changed-vs-deleted", base, mine: record(mine), theirs: null, columns: diffCols(mine, null) });
+        if (choices[id] === "mine") appended.push(mine);
+      }
+    } else if (j >= 0) {
+      rowsOut[j] = null;
+      applied++;
+    } else if (p >= 0) {
+      const theirs = latestCells[p] as string[];
+      conflicts.push({ id, kind: "deleted-vs-changed", base, mine: null, theirs: record(theirs), columns: diffCols(null, theirs) });
+      if (choices[id] === "mine") rowsOut[p] = null;
+    } else {
+      applied++; // 両方が削除
+    }
+  }
+  let nextId = 1;
+  const rows = rowsOut.filter((r): r is MasterRow => r !== null);
+  for (const cells of [...appended, ...f.added.map((c) => remap(c))]) rows.push({ id: `n${nextId++}`, cells: padCells(cells, width) });
+  applied += f.added.length;
+  return {
+    doc: { ...latest, rows, nextId },
+    stale: f.baseText !== latestText,
+    applied,
+    conflicts,
+    unresolved: conflicts.filter((c) => choices[c.id] !== "mine" && choices[c.id] !== "theirs").map((c) => c.id),
+  };
 }

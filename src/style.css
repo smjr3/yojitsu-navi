@@ -2019,6 +2019,43 @@ th[aria-sort="descending"] .yn-sort-icon {
     border-radius: var(--yn-radius-sm);
   }
 }
+/* 下書きの当て直しで衝突した行（どちらを残すか選ぶ） */
+.yn-me-conflicts {
+  margin: 8px 0;
+}
+.yn-me-conflict {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--yn-hairline);
+  border-radius: var(--yn-radius-sm);
+  background: var(--theme-background);
+}
+.yn-me-conflict.is-unresolved {
+  border-left: 3px solid var(--yn-warn-text);
+}
+.yn-me-conflict legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.yn-me-conflict-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.yn-me-conflict-opt input {
+  margin-top: 3px;
+  flex: none;
+}
+.yn-me-conflict-label {
+  font-weight: 600;
+}
+.yn-me-impact-safe {
+  display: block;
+  font-weight: 600;
+}
 
 /* ==== members ==== */
 /* メンバー別の KPI 4 枚: 幅が足りれば 4 列、足りなければ 2×2（3+1 に崩さない） */
