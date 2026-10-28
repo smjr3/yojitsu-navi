@@ -946,9 +946,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       <div class="yn-dialog-body">${form}</div>
     </div>`);
     if (!dialog.open) dialog.showModal();
-    // 最初の空欄にフォーカス（稼働計画でメンバーを入れて開いたときは契約から）。空欄が無ければ最初の欄
-    const fields = [...form.querySelectorAll("input:not([disabled]), select:not([disabled])")].filter((el) => el.name !== "__allocation_unit");
-    (fields.find((el) => el.value === "") ?? fields[0])?.focus();
+    // 最初の空の入力欄にフォーカス（稼働計画でメンバーを入れて開いたときは配分から）。無ければ最初の欄。
+    // 選択欄（select）は Space でリストが開き Esc がダイアログに届かないので、空でも最初には選ばない
+    const fields = [...form.querySelectorAll("input:not([disabled]), select:not([disabled])")];
+    (fields.find((el) => el.tagName === "INPUT" && el.value === "") ?? fields[0])?.focus();
   }
 
   function openDeleteDialog(fileId, rowId, focus) {
