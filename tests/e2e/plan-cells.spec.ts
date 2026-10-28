@@ -265,3 +265,23 @@ test("下書きの復元待ちのあいだは、セルをクリックしても�
   await expect(page.locator("#yn-plan-tip")).not.toContainText("クリックで修正");
   await expect(pop(page)).toHaveCount(0);
 });
+
+test("修正欄を開いたまま画面を狭く・広くしても、画面の中に収まり操作できる", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2027-02").click();
+  const p = pop(page);
+  await expect(p).toBeVisible();
+  const inView = async () => {
+    const r = (await p.boundingBox())!;
+    const vp = page.viewportSize()!;
+    return r.x >= -1 && r.x + r.width <= vp.width + 1;
+  };
+  for (const size of [{ width: 368, height: 944 }, { width: 1024, height: 768 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(inView).toBe(true);
+    await expect(p.locator(".yn-combo-toggle")).toBeInViewport();
+  }
+  await p.locator(".yn-combo-toggle").click();
+  await expect(p.locator("[role=listbox]")).toBeVisible();
+});
