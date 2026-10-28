@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { decodeAuto, type DetectedEncoding } from "../../scripts/lib/encoding.js";
 import { DATA_FILES, loadConfig } from "../../scripts/lib/load.js";
-import { MASTER_FILES, MASTER_FILE_IDS, type MasterFileId } from "../core/masterEdit.js";
+import { MASTER_FILES, MASTER_FILE_IDS, emptyMasterText, type MasterFileId } from "../core/masterEdit.js";
 import { resolveMasterEdit } from "../core/gitlab.js";
 import type { MasterEditConfig } from "../core/types.js";
 
@@ -67,7 +67,9 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
       const h = git(rootDir, ["log", "-1", "--format=%H", "--", path]);
       lastCommitId = h && /^[0-9a-f]{40}$/.test(h) ? h : null;
     }
-    files[id] = { path, repoPath: `${prefix}${path}`, text: r.text, lastCommitId, exists: r.exists, encoding: r.encoding, lineEnding: r.crlf ? "crlf" : "lf" };
+    // 省略可のファイル（§36）が無ければ見出しだけの空のファイルを土台にする（保存すると新しく作る）
+    const text = !r.exists && MASTER_FILES[id].optional ? emptyMasterText(id) : r.text;
+    files[id] = { path, repoPath: `${prefix}${path}`, text, lastCommitId, exists: r.exists, encoding: r.encoding, lineEnding: r.crlf ? "crlf" : "lf" };
   }
   const ctx = (p: string) => readText(join(rootDir, p)).text;
   const adapter = config.memberSource?.adapter;

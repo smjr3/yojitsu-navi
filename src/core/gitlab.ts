@@ -92,13 +92,15 @@ export interface CommitFile {
   content: string;
   /** 編集の土台にしたファイルの最終コミット ID（無ければ競合を検出できない） */
   lastCommitId: string | null;
+  /** リポジトリにまだ無いファイル（省略可のファイルを初めて保存する。§36） */
+  create?: boolean;
 }
 
 export interface CommitPayload {
   branch: string;
   commit_message: string;
   start_branch?: string;
-  actions: Array<{ action: "update"; file_path: string; content: string; encoding: "text"; last_commit_id?: string }>;
+  actions: Array<{ action: "update" | "create"; file_path: string; content: string; encoding: "text"; last_commit_id?: string }>;
 }
 
 /** commits API の本文 */
@@ -107,8 +109,8 @@ export function buildCommitPayload(args: { files: readonly CommitFile[]; message
     branch: args.branch,
     commit_message: args.message,
     actions: args.files.map((f) => {
-      const a: CommitPayload["actions"][number] = { action: "update", file_path: f.path, content: f.content, encoding: "text" };
-      if (f.lastCommitId) a.last_commit_id = f.lastCommitId;
+      const a: CommitPayload["actions"][number] = { action: f.create ? "create" : "update", file_path: f.path, content: f.content, encoding: "text" };
+      if (f.lastCommitId && !f.create) a.last_commit_id = f.lastCommitId;
       return a;
     }),
   };

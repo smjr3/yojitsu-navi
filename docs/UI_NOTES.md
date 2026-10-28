@@ -138,7 +138,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 YOJITSU_AS_OF=2026-10-27 npm run build      # 警告 0、dist/_npm が無いこと
 node serve.mjs dist 3000                     # 任意の静的サーバ（/contracts → contracts.html）
 ```
-Playwright のスモークテスト（全ページのコンソールエラー 0、KPI が core の `aggregate()` / `forecastTotals()` と一致、内訳パネル、チーム→契約→詳細の遷移、Excel ダウンロード、ダーク、390px 幅）は `tests/e2e/` に置く予定。ブラウザは `PLAYWRIGHT_BROWSERS_PATH` にある chromium を `executablePath` で指定すると、`playwright` のバージョンと同梱ブラウザの版がずれていても動く。
+Playwright のスモークテスト（全ページのコンソールエラー 0、KPI が core の `aggregate()` / `forecastTotals()` と一致、内訳パネル、チーム→契約→詳細の遷移、Excel ダウンロード、ダーク、390px 幅）は `tests/e2e/`（一覧は `tests/e2e/README.md`）。ブラウザは `PLAYWRIGHT_BROWSERS_PATH` にある chromium を `executablePath` で指定すると、`playwright` のバージョンと同梱ブラウザの版がずれていても動く。
 
 ## 計算コアに欲しいもの（API の隙間）
 
@@ -175,13 +175,15 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 ## マスタ編集 `/masters`（2 回目リリース、SPEC §19）
 
-問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 4 ファイルのタブ → 表 → 検証 → 変更内容（差分）→ 保存。
+問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 台帳のタブ（メンバー・単価・組織）→ 表（1 対象 1 行・開くと変更の履歴）→ 検証 → 変更内容（差分）→ 保存。
+アサイン・契約外予定は稼働計画 `/plan`（同じ `mastersEditor` を `views: PLAN_VIEWS` で開く）。台帳と稼働計画の持ち方は下の「台帳と稼働計画（SPEC §36）」。
 
 | ファイル | 役割 |
 |---|---|
 | `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
 | `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
-| `src/data/masters.json.ts`（`_masters.ts`） | 4 ファイルの生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
+| `src/core/ledger.ts` | 台帳のまとめ（`ledgerGroups`・`nextChangeOf`）、期間の行の履歴（`periodHistory`）・期間の置き換え（`replaceRange`）・月の値（`valueAt`） |
+| `src/data/masters.json.ts`（`_masters.ts`） | 5 ファイル（任意の outside-plans.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
 | `src/components/masters.js` | 画面（状態を持ち、変わった部分を描き直して `data-fk` でフォーカスを戻す） |
 | `src/masters.md` | ページ（model.json は計算基準月・データ最小月・config のためだけに読む） |
 
@@ -194,7 +196,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §19.1「過去月」 | どこまでが過去か | **データの最小月（`meta.minMonth`）〜計算基準月（`meta.asOfMonth`、速報月を含む）**。実績が画面に出ている月を過去とする |
 | §19.1 影響月数 | 何を比べるか | 履歴マスタはキー列（member_id / key / team_id）ごとに「月 m の有効レコード（§5、同じ適用開始月は後の行）」の値を、アサインはメンバー×契約ごとに「月 m に掛かる行の allocation の集合」を編集前後で比べ、違う月を数える。キーを変えたら旧・新の両方。その月に工数があって実績が本当に変わるかまでは見ない（画面に作業実績を持たないため） |
 | §19.1 確認ダイアログ | どの操作で出すか | 既存行の修正・削除は **常に** 確認（変わる値と影響月数）。追加は過去に影響するときだけ確認、未来の追加はそのまま反映。ブラウザ標準の `confirm()` は使わず `<dialog>`（Esc で閉じる・フォーカスが戻る） |
-| §19.1 追加の位置 | 行をどこに入れるか | ファイル末尾（同じキー・同じ適用開始月なら後の行が有効、の規則と一致し、差分も末尾の行だけになる）。「＋ 新しい月」は選んだ行を写し、適用開始月（アサインは開始月）を基準月の翌月にする |
+| §19.1 追加の位置 | 行をどこに入れるか | ファイル末尾（同じキー・同じ適用開始月なら後の行が有効、の規則と一致し、差分も末尾の行だけになる）。台帳の「＋ 変更」は対象の最新の行を写し、適用開始月を基準月の翌月（最新の履歴がそれより後ならその翌月）にする |
 | §19.1 書き出し | 未変更行の保持 | 元のレコードのテキスト（引用符の付け方・空白まで）をそのまま使う。変更・追加した行だけ「カンマ・`"`・改行を含むときだけ引用符」で書く。改行は LF、BOM なし、末尾改行 1 つ、列順は元ファイルのヘッダ順（必須列が無ければ末尾に足す）。空行・空白だけの行は書かない（読み込みでも捨てられる行）。元が CRLF / BOM 付き / Shift_JIS なら全行が変わるので画面で注記する |
 | §19.1 入力 | 値の正規化 | 入力値は前後の空白を除く（CSV 読み込みも trim するため）。数値・月の形式チェックはダイアログで止めず、`validateEdited`（§14 と同じ検証）のエラーとして行に出す（CI と同じ文言）。必須の未入力だけはダイアログで止める |
 | §19.1 検証 | 作業実績 | 画面には作業実績を持たないので `worklogs: []` で検証する（未紐付け・単価なしの警告は保存後の「データ確認」で見る）。編集対象外のファイル（contracts 等）のエラーも保存を止める |
@@ -216,6 +218,22 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 ### テスト
 
 単体 `tests/unit/masterEdit.test.ts`・`tests/unit/gitlab.test.ts`（モック fetch で全分岐）、プロパティ `tests/property/masterEdit.property.test.ts`（書き出し→再読み込みで同値、未変更行のバイト保持、任意の編集列で差分が正しい）・`tests/property/masterRebase.property.test.ts`（任意の土台の変更と下書きの差分で、衝突しない行は保たれ、衝突は両方が同じ行を違う結果にした行ちょうど。当て直しは決定的・冪等）、結合 `tests/integration/masters.test.ts`（ダミーデータの 4 ファイルで 編集→書き戻し→loadDataset / validate-data / buildModel）、E2E `tests/e2e/masters.spec.ts`（masters.json を `page.route` で書き換えて gitlab モード・取り込みモードを再現し、GitLab API を `page.route` でモック）、モンキー（`/masters` を対象に追加）。
+
+## 台帳と稼働計画（SPEC §36）— 決定事項
+
+| 箇所 | 曖昧点 | 決定 |
+|---|---|---|
+| 台帳の行 | どの値を出すか | 基準月（`asOfMonth`）に有効な履歴の値。基準月にまだ始まっていない対象は最初の履歴の値と「YYYY年M月から」。基準月より後の履歴は列ごとに「YYYY年M月〜 値」と「予定 n」 |
+| 台帳の履歴 | 並び | 適用開始月の順（同じ月はファイルの後の行）。月の誤りの行は最後に。前の履歴から変わった列だけ「前 → 後」、変わらない列は薄く |
+| 台帳の名前 | 先頭の列 | メンバー・組織は名前（下に ID を小さく）。履歴で名前が変わったら先頭のセルに「氏名: 前 → 後」。操作ボタンの名前も名前で呼ぶ（ID は出さない。§31.1） |
+| 稼働計画の行 | まとめる単位 | 人 → 案件（`projectKey` = 顧客 × 案件名。契約の更新で分かれていても 1 行）→ 契約外予定 1 行。人の行の月の値は保守の配分＋契約外予定 |
+| ＋ 変更 | 何を書き換えるか | `replaceRange`: 期間の外は変えない、中は指定の値（0 で外す）。分けた行の前後で同じ契約・同じ値の行とつなげ、消える行の ID を新しい区間に使い回す（差分が「期間の変更」になり、元に戻すと差分なし）。重なりのある期間は書き換えず案内 |
+| 行き来 | 下書きの扱い | sessionStorage に最後に書いた下書きの `savedAt` を置き、同じタブ・土台が同じなら黙って続きから（`DRAFT_SESSION_KEY`）。別のタブ・後日だけ「復元 / 破棄」を聞く |
+| 契約外予定 | ファイルが無い | 見出しだけの空ファイルとして扱い、保存時は GitLab に `create`。CSV 編集では 2 ファイル（アサイン・契約外予定）を並べる |
+
+## ドキュメントの更新（2026-10-28 shimaさん指示）
+
+画面・データ・操作を変える PR では、**同じ PR で** README・docs（SPEC・DATA・UI_NOTES・TEXTS・DEPLOY_GITLAB）と `tests/e2e/README.md` を直す。README のスクリーンショットは `npm run build && npm run screenshots`（`scripts/screenshots.mjs`）で撮り直す。スクリプトは一覧に無い古い PNG を消す。古い画像・古い説明を残さない。
 
 ## メンバー別（`/members`・`/member?id=`、SPEC §18.2）
 

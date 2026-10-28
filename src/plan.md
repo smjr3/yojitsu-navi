@@ -11,7 +11,7 @@ title: 稼働計画
 ```js
 import { T } from "./i18n/index.js";
 import { pageHeader, loadJson, errorState } from "./components/layout.js";
-import { mastersEditor } from "./components/masters.js";
+import { mastersEditor, PLAN_VIEWS } from "./components/masters.js";
 ```
 
 ```js
@@ -43,7 +43,7 @@ if (model && mastersData?.error) {
       config: model.config,
       asOfMonth: model.meta.asOfMonth,
       minMonth: model.meta.minMonth,
-      initialView: "plan",
+      views: PLAN_VIEWS,
       initialTeam: params.get("team") || null,
       initialMember: params.get("member") || null,
     }),

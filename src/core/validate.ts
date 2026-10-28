@@ -121,6 +121,40 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   }
 }
 
+/** 契約外予定（§36）: メンバー・月・人月の形式と、同じ人・同じ月の重複 */
+function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, push: IssueSink): void {
+  const file = "outside-plans.csv";
+  const seen = new Map<string, number[]>();
+  (dataset.outsidePlans ?? []).forEach((o, i) => {
+    const row = rowOf(i);
+    if (!memberIds.has(o.memberId)) push({ severity: "error", code: "OUTSIDE_UNKNOWN_MEMBER", message: fmt(T.checks.outsideUnknownMember, { file, row, memberId: o.memberId }), file, row, ref: { memberId: o.memberId } });
+    if (!isValidYearMonth(o.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "start_month", value: o.startMonth }), file, row });
+    if (!isValidYearMonth(o.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "end_month", value: o.endMonth }), file, row });
+    const monthsOk = isValidYearMonth(o.startMonth) && isValidYearMonth(o.endMonth);
+    if (monthsOk && o.startMonth > o.endMonth) push({ severity: "error", code: "OUTSIDE_PERIOD_INVERTED", message: fmt(T.checks.outsidePeriodInverted, { file, row, from: o.startMonth, to: o.endMonth }), file, row });
+    if (!Number.isFinite(o.personMonths) || o.personMonths < 0 || o.personMonths > 1) {
+      push({ severity: "error", code: "OUTSIDE_OUT_OF_RANGE", message: fmt(T.checks.outsideOutOfRange, { file, row, value: Number.isFinite(o.personMonths) ? String(o.personMonths) : T.checks.notANumber }), file, row, ref: { memberId: o.memberId } });
+    }
+    if (!monthsOk || o.startMonth > o.endMonth) return;
+    for (const month of monthRange(o.startMonth, o.endMonth)) {
+      const key = `${o.memberId}\u0000${month}`;
+      const list = seen.get(key);
+      if (list) list.push(row);
+      else seen.set(key, [row]);
+    }
+  });
+  // 重複は人ごとに最初の月だけ報告する（長い期間の重複で同じ文が並ばないように）
+  const reported = new Set<string>();
+  for (const [key, rows] of seen) {
+    if (rows.length < 2) continue;
+    const [memberId, month] = key.split("\u0000") as [string, string];
+    const sig = `${memberId}|${rows.join(",")}`;
+    if (reported.has(sig)) continue;
+    reported.add(sig);
+    push({ severity: "error", code: "OUTSIDE_OVERLAP", message: fmt(T.checks.outsideOverlap, { file, memberId, month, rows: rows.join(", ") }), file, row: rows[rows.length - 1] as number, ref: { memberId, month } });
+  }
+}
+
 function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "masters/teams.csv";
   dataset.teams.forEach((t, i) => {
@@ -339,6 +373,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateContracts(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
+  validateOutsidePlans(dataset, memberIds, push);
   validateTeams(dataset, teamIds, memberIds, push);
   validateMembers(dataset, teamIds, push);
   validateRates(dataset, push);

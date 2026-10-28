@@ -19,7 +19,7 @@ import { T, fmt } from "../i18n/index.js";
 // 対象ファイルの定義
 // ---------------------------------------------------------------------------
 
-export type MasterFileId = "members" | "rates" | "teams" | "assignments";
+export type MasterFileId = "members" | "rates" | "teams" | "assignments" | "outside";
 
 export interface MasterColumnDef {
   /** CSV の列名 */
@@ -48,6 +48,10 @@ export interface MasterFileDef {
   history: "effective" | "period";
   /** 影響範囲を判定するキー列 */
   keyColumns: string[];
+  /** period の値の列（人月。影響月の判定に使う） */
+  valueColumn?: string;
+  /** 省略可のファイル（無ければ見出しだけの空のファイルとして扱う。§36） */
+  optional?: boolean;
 }
 
 export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
@@ -107,6 +111,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     label: T.masterFiles.assignments,
     history: "period",
     keyColumns: ["member_id", "contract_id"],
+    valueColumn: "allocation",
     columns: [
       { name: "member_id", label: T.masterFiles.colMember, input: "member", required: true },
       { name: "contract_id", label: T.masterFiles.colProject, input: "project", required: true },
@@ -115,9 +120,31 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "allocation", label: T.masterFiles.colAllocation, input: "allocation", required: true },
     ],
   },
+  outside: {
+    id: "outside",
+    path: "data/outside-plans.csv",
+    issueFile: "outside-plans.csv",
+    label: T.masterFiles.outside,
+    history: "period",
+    keyColumns: ["member_id"],
+    valueColumn: "person_months",
+    optional: true,
+    columns: [
+      { name: "member_id", label: T.masterFiles.colMember, input: "member", required: true },
+      { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
+      { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
+      { name: "person_months", label: T.masterFiles.colPersonMonths, input: "allocation", required: true },
+      { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
+    ],
+  },
 };
 
-export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments"];
+export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments", "outside"];
+
+/** 省略可のファイルが無いときの中身（見出しだけ） */
+export function emptyMasterText(fileId: MasterFileId): string {
+  return `${MASTER_FILES[fileId].columns.map((c) => c.name).join(",")}\n`;
+}
 
 /** memberSource で取り込む列（§20.2。team_id は取り込まない） */
 export const MEMBER_IMPORTED_COLUMNS: readonly string[] = ["name", "kind", "title", "department", "section"];
@@ -485,10 +512,10 @@ function effectiveDiffColumns(def: MasterFileDef, header: readonly string[], b: 
  * 月 m に掛かるアサイン行の署名（その月の計算に使う allocation を並べ替えて連結。行の順序・期間の端は
  * その月の計算に影響しない。キー = メンバー×契約 でまとめてから呼ぶ）
  */
-function periodSignature(header: readonly string[], rows: readonly CellRow[], month: YearMonth): string {
+function periodSignature(header: readonly string[], rows: readonly CellRow[], month: YearMonth, valueColumn: string): string {
   const si = header.indexOf("start_month");
   const ei = header.indexOf("end_month");
-  const ai = header.indexOf("allocation");
+  const ai = header.indexOf(valueColumn);
   const hits: string[] = [];
   for (const cells of rows) {
     const s = (cells[si] ?? "").trim();
@@ -566,9 +593,9 @@ export function impactOfChange(fileId: MasterFileId, header: readonly string[], 
         if (cols.length === 0) continue;
         differs = true;
         for (const c of cols) columns.add(c);
-      } else if (periodSignature(header, b, m) !== periodSignature(header, a, m)) {
+      } else if (periodSignature(header, b, m, def.valueColumn ?? "allocation") !== periodSignature(header, a, m, def.valueColumn ?? "allocation")) {
         differs = true;
-        columns.add("allocation");
+        columns.add(def.valueColumn ?? "allocation");
         break;
       }
     }
@@ -621,6 +648,9 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
   },
   assignments: {
     allocation: [0, T.masterFiles.effectAllocation, false],
+  },
+  outside: {
+    person_months: [0, T.masterFiles.effectOutside, false],
   },
 };
 
@@ -690,11 +720,12 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     teams: ser.teams.text,
     members: ser.members.text,
     rates: ser.rates.text,
+    outsidePlans: ser.outside.text,
     worklogs: [],
   };
   const { issues } = parseDataset(files);
   const byFile = new Map<string, MasterFileId>(MASTER_FILE_IDS.map((id) => [MASTER_FILES[id].issueFile, id]));
-  const byRow = { members: {}, rates: {}, teams: {}, assignments: {} } as EditValidation["byRow"];
+  const byRow = { members: {}, rates: {}, teams: {}, assignments: {}, outside: {} } as EditValidation["byRow"];
   const general: RowIssue[] = [];
   const seen = new Set<string>();
   const out: RowIssue[] = [];
@@ -734,6 +765,8 @@ export function issueText(issue: Pick<ValidationIssue, "message">): string {
 // ---------------------------------------------------------------------------
 
 export const DRAFT_STORAGE_KEY = "yojitsu-navi:masters-draft:v1";
+/** このタブで最後に書いた下書きの savedAt（sessionStorage）。同じタブで開き直したときは聞かずに続きから */
+export const DRAFT_SESSION_KEY = "yojitsu-navi:masters-draft-session";
 
 /**
  * 1 ファイル分の下書き。差分は土台（baseText）に対して持つ。

@@ -1,5 +1,5 @@
 /**
- * 稼働計画 /plan（SPEC §23）と、組織の種別・リーダーの表示（§21・§22）
+ * 稼働計画 /plan（SPEC §23・§36）と、組織の種別・リーダーの表示（§21・§22）
  */
 import { test, expect, gotoPage, pickCombo } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
@@ -18,13 +18,21 @@ const docs = () => ({
   assignments: parseMasterDoc("assignments", PAYLOAD.files.assignments.text),
 });
 
+/** 契約外予定（outside-plans.csv）の人 × 月の人月 */
+function outsideAt(memberId: string, month: string): number {
+  const doc = parseMasterDoc("outside", PAYLOAD.files.outside.text);
+  const col = (r: { cells: string[] }, c: string) => r.cells[doc.header.indexOf(c)] ?? "";
+  return doc.rows.filter((r) => col(r, "member_id") === memberId && col(r, "start_month") <= month && month <= col(r, "end_month")).reduce((s, r) => s + Number(col(r, "person_months")), 0);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
 });
 
 test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
-  await expect(page.getByRole("tab", { name: /稼働計画/ })).toHaveAttribute("aria-selected", "true");
+  // 稼働計画は 1 画面（タブは出さない）
+  await expect(page.getByRole("tab")).toHaveCount(0);
   await expect(page.locator(".yn-tools a", { hasText: "稼働計画" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("#yn-me-plan-team")).toHaveValue("S11");
   await expect(page.locator(".yn-me-plan-unit")).toContainText("リーダー: 田中 さくら");
@@ -35,7 +43,11 @@ test("稼働計画: 組織（第1課）を指定して開くと、配下のメ�
     const row = rows.nth(i);
     await expect(row).toHaveAttribute("data-member", r.memberId);
     const cells = row.locator("td.yn-me-plan-cell");
-    for (const [m, v] of r.monthly.entries()) await expect(cells.nth(m)).toHaveText(v > 0 ? v.toFixed(2) : "—");
+    // 人の行 = 保守の配分 ＋ 契約外予定
+    for (const [m, v] of r.monthly.entries()) {
+      const total = v + outsideAt(r.memberId, FY[m]!);
+      await expect(cells.nth(m)).toHaveText(total > 0 ? total.toFixed(2) : "—");
+    }
   }
 });
 
@@ -61,7 +73,12 @@ test("稼働計画: 時間で入力すると人月に直して保存し、表示
   const cells = row.locator("td.yn-me-plan-cell");
   await expect(cells.nth(6)).toHaveText("0.90");
   await expect(cells.nth(7)).toHaveText("1.00");
-  await expect(page.locator(".yn-me-plan-item.is-added")).toContainText("0.10 人月/月");
+  // 追加した人は開いて案件の行が見える。案件の行に「追加」、変更の履歴に 11月からの 0.10 人月
+  await expect(page.locator('[data-fk="plan:toggle:M011"]')).toHaveAttribute("aria-expanded", "true");
+  const sub = page.locator('tr.yn-me-plan-sub.is-project[data-member="M011"]').filter({ hasText: "倉庫管理" });
+  await expect(sub).toContainText("追加");
+  await sub.locator('[data-fk^="plan:hist:"]').click();
+  await expect(page.locator("tr.yn-me-plan-hist li.yn-me-plan-entry.is-added")).toContainText("2026-11〜2027-03");
   // 保存されるのは人月
   const expected = addRow(parseMasterDoc("assignments", PAYLOAD.files.assignments.text), { member_id: "M011", contract_id: "C002", start_month: "2026-11", end_month: "2027-03", allocation: "0.1" }).doc;
   await expect(page.locator(".yn-me-diff-slot")).toContainText(/小林 玲奈 ・ 青葉物流 \/ 倉庫管理システム保守 ・ 2026-11 ・ 2027-03 ・ 0\.1/);
@@ -100,7 +117,7 @@ test("組織の種別とリーダー: チーム一覧の列、チーム詳細の
   await expect(page.locator("table.yn-me-table thead")).toContainText("種別（課・チーム・班など）");
   await expect(page.locator("table.yn-me-table thead")).toContainText("リーダー");
   // 班を新設（種別は自由入力）
-  await page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" }).click();
+  await page.getByRole("button", { name: "＋ 新しい組織" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await d.locator("#yn-me-f-team_id").fill("G1111");
   await d.locator("#yn-me-f-name").fill("監視班");
@@ -110,5 +127,8 @@ test("組織の種別とリーダー: チーム一覧の列、チーム詳細の
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
-  await expect(page.locator("tr.yn-me-row.is-added")).toContainText("小林 玲奈");
+  const g = page.locator('tr.yn-me-group[data-group="G1111"]');
+  await expect(g).toContainText("監視班");
+  await expect(g).toContainText("小林 玲奈");
+  await expect(g).toContainText("追加");
 });

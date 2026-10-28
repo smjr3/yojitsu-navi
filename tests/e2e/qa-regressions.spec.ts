@@ -102,15 +102,15 @@ test("スマホ幅のマスタ編集: 行を追加して表が右へスクロー
 
 test("稼働計画のセルの編集欄を開いたまま狭い画面に変えても、画面内に収まり操作できる（モンキーテストで発見）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
-  await page.locator('tr.yn-me-plan-row[data-member="M010"] [data-fk="plan:cell:M010:2027-01"]').click();
+  await page.locator('tr.yn-me-plan-row[data-member="M010"] [data-fk="plan:cell:M010:all:2027-01"]').click();
   const pop = page.locator("dialog.yn-plan-pop[open]");
   await expect(pop).toBeVisible();
   for (const width of [414, 1280, 390]) {
     await page.setViewportSize({ width, height: 800 });
-    const box = (await pop.boundingBox())!;
-    expect(box.x, `${width}px`).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width, `${width}px`).toBeLessThanOrEqual(width + 1);
-    expect(box.y + box.height, `${width}px`).toBeLessThanOrEqual(801);
+    await expect.poll(async () => {
+      const box = (await pop.boundingBox())!;
+      return box.x >= 0 && box.x + box.width <= width + 1 && box.y + box.height <= 801;
+    }, { message: `${width}px` }).toBe(true);
   }
   await pop.locator("#yn-plan-pop-new").click();
   await expect(pop.locator("#yn-plan-pop-new")).toBeFocused();
@@ -119,7 +119,7 @@ test("稼働計画のセルの編集欄を開いたまま狭い画面に変え�
 test("稼働計画のセルの編集欄を開いたまま画面の高さを縮めても、ボタンが画面内に残る（モンキーテストで発見）", async ({ page }) => {
   await page.setViewportSize({ width: 828, height: 985 });
   await gotoPage(page, "/plan?team=T111");
-  const btn = page.locator('[data-fk="plan:cell:M010:2027-01"]');
+  const btn = page.locator('[data-fk="plan:cell:M010:all:2027-01"]');
   await btn.scrollIntoViewIfNeeded();
   // セルが画面の下の方にある状態で開く
   await page.evaluate(() => window.scrollBy(0, -200));
@@ -128,9 +128,11 @@ test("稼働計画のセルの編集欄を開いたまま画面の高さを縮�
   await expect(pop).toBeVisible();
   for (const height of [626, 480, 985]) {
     await page.setViewportSize({ width: 828, height });
-    const box = (await pop.boundingBox())!;
-    expect(box.y, `${height}px`).toBeGreaterThanOrEqual(0);
-    expect(box.y + box.height, `${height}px`).toBeLessThanOrEqual(height + 1);
+    // 置き直しは resize イベントの後（次のフレーム）なので、収まるまで待つ
+    await expect.poll(async () => {
+      const box = (await pop.boundingBox())!;
+      return box.y >= 0 && box.y + box.height <= height + 1;
+    }, { message: `${height}px` }).toBe(true);
   }
   await expect(pop.getByRole("button", { name: "反映" })).toBeInViewport();
 });

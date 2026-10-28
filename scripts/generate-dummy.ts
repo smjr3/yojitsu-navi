@@ -85,6 +85,15 @@ export interface AssignmentRow {
   allocation: number;
 }
 
+/** 契約外予定（SPEC §36.4）: 人 × 期間 × 人月 */
+export interface OutsidePlanRow {
+  member_id: string;
+  start_month: YearMonth;
+  end_month: YearMonth;
+  person_months: number;
+  note: string;
+}
+
 /** 組織: 事業本部 > 事業部 > 課 > チーム（末端6チーム。種別・リーダーは組織ごと）。2026-10 にクラウド運用チームが第3課→第4課へ移動 */
 const TEAMS: TeamRow[] = [
   { team_id: "HQ", name: "ソリューション事業本部", parent_team_id: "", effective_from: "2025-04", level: "本部", leader_member_id: "M001" },
@@ -359,6 +368,14 @@ const ASSIGNMENTS: AssignmentRow[] = [
   { member_id: "M007", contract_id: "C011", start_month: "2026-04", end_month: "2027-03", allocation: 0.4 },
 ];
 
+/** 契約外予定: 保守の配分との合計が 1.0 を超える月がある人（M010・M013・M020）と、期間を変えた例（M013） */
+const OUTSIDE_PLANS: OutsidePlanRow[] = [
+  { member_id: "M010", start_month: "2026-11", end_month: "2027-01", person_months: 0.2, note: "次期更改の提案" },
+  { member_id: "M013", start_month: "2026-07", end_month: "2026-09", person_months: 0.1, note: "運用設計の支援" },
+  { member_id: "M013", start_month: "2026-10", end_month: "2027-03", person_months: 0.2, note: "運用設計の支援" },
+  { member_id: "M020", start_month: "2026-12", end_month: "2027-02", person_months: 0.3, note: "新規顧客の提案" },
+];
+
 const TASKS: ReadonlyArray<readonly [string, number]> = [
   ["定例", 3],
   ["問い合わせ対応", 5],
@@ -452,6 +469,7 @@ interface Generated {
   contracts: ContractRow[];
   mappings: MappingRow[];
   assignments: AssignmentRow[];
+  outsidePlans: OutsidePlanRow[];
   holidays: Array<{ date: string; name: string }>;
   taskTypes: Array<{ task: string; category: string; note: string }>;
   /** 月ごとの作業実績 */
@@ -613,7 +631,7 @@ export function generate(opts: GenOptions): Generated {
   }
 
   // 実運用規模の部分（別の乱数列・別のメンバーと契約。基本シナリオの数値は変わらない）
-  const out = { teams: [...TEAMS], members: [...MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], taskTypes: [...TASK_TYPES] };
+  const out = { teams: [...TEAMS], members: [...MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], outsidePlans: [...OUTSIDE_PLANS], taskTypes: [...TASK_TYPES] };
   if ((opts.scale ?? "full") === "full") {
     const x = generateScale({ seed: opts.seed, asOf: opts.asOf, days, baseRates: RATES });
     out.teams.push(...x.teams);
@@ -622,6 +640,7 @@ export function generate(opts: GenOptions): Generated {
     out.contracts.push(...x.contracts);
     out.mappings.push(...x.mappings);
     out.assignments.push(...x.assignments);
+    out.outsidePlans.push(...x.outsidePlans);
     out.taskTypes.push(...x.taskTypes);
     for (const w of x.worklogs) push(w);
   }
@@ -654,6 +673,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
   writeFileSync(join(out, "assignments.csv"), csv(g.assignments, ["member_id", "contract_id", "start_month", "end_month", "allocation"]));
+  writeFileSync(join(out, "outside-plans.csv"), csv(g.outsidePlans, ["member_id", "start_month", "end_month", "person_months", "note"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));

@@ -3,7 +3,7 @@
  *   ローダ（masters.json の中身）→ 編集 → 書き出し → data/ に書き戻し → loadDataset / validate-data / buildModel
  * の往復を確かめる。一時ディレクトリに生成するので、リポジトリの data/ は触らない
  */
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -19,6 +19,7 @@ import {
   cellOf,
   deleteRow,
   diffMasterDoc,
+  emptyMasterText,
   impactBetween,
   parseMasterDoc,
   serializeMasterDoc,
@@ -50,12 +51,17 @@ function writeBack(dir: string, texts: Record<MasterFileId, string>): void {
 }
 
 describe("ローダ（src/data/masters.json.ts の中身）", () => {
-  it("4 ファイルの生テキスト・パス・設定。git 管理外なら最終コミット ID は null", () => {
+  it("各ファイルの生テキスト・パス・設定。git 管理外なら最終コミット ID は null。省略可のファイルが無ければ見出しだけ", () => {
     const p = buildMastersPayload(root);
     for (const id of MASTER_FILE_IDS) {
       expect(p.files[id].path).toBe(MASTER_FILES[id].path);
-      expect(p.files[id].exists).toBe(true);
-      expect(p.files[id].text.length).toBeGreaterThan(20);
+      if (MASTER_FILES[id].optional && !existsSync(join(root, MASTER_FILES[id].path))) {
+        expect(p.files[id].exists).toBe(false);
+        expect(p.files[id].text).toBe(emptyMasterText(id));
+      } else {
+        expect(p.files[id].exists).toBe(true);
+        expect(p.files[id].text.length).toBeGreaterThan(20);
+      }
       expect(p.files[id].lastCommitId).toBeNull();
       expect(p.files[id].lineEnding).toBe("lf");
     }
@@ -104,6 +110,8 @@ describe("ダミーデータの 4 ファイルで往復", () => {
       // アサイン: 1 行削除
       const removed = docs.assignments.rows[0]!;
       docs.assignments = deleteRow(docs.assignments, removed.id);
+      // 契約外予定（§36）: 1 行追加（ファイルが無ければ新しく作る）
+      docs.outside = addRow(docs.outside, { member_id: memberId, start_month: "2026-11", end_month: "2027-01", person_months: "0.2", note: "提案, 準備" }).doc;
 
       const v = validateEdited(docs, p.context, loadDataset(dir).dataset.config);
       expect(v.issues.filter((i) => i.severity === "error")).toEqual([]);
@@ -116,6 +124,7 @@ describe("ダミーデータの 4 ファイルで往復", () => {
       expect(dataset.members.some((m) => m.memberId === memberId && m.name === '山田, "テスト"' && m.teamId === anyTeam)).toBe(true);
       expect(dataset.teams[0]!.name).toBe("改称した本部");
       expect(dataset.assignments).toHaveLength(docs.assignments.rows.length);
+      expect(dataset.outsidePlans?.some((o) => o.memberId === memberId && o.personMonths === 0.2 && o.note === "提案, 準備")).toBe(true);
       expect(runValidation(dir).errors).toEqual([]);
 
       // 書き戻したファイルをもう一度ローダで読むと、書き出しと同じテキスト（往復で安定）

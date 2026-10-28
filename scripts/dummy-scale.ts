@@ -15,7 +15,7 @@
  */
 import type { Worklog, YearMonth } from "../src/core/types.js";
 import { addMonths, monthCount, Rng, splitHours, ymOf } from "./lib/dummy-util.js";
-import type { AssignmentRow, ContractRow, MappingRow, MemberRow, RateRow, TeamRow } from "./generate-dummy.js";
+import type { AssignmentRow, ContractRow, MappingRow, MemberRow, OutsidePlanRow, RateRow, TeamRow } from "./generate-dummy.js";
 
 export interface ScaleInput {
   seed: number;
@@ -33,6 +33,7 @@ export interface ScaleOutput {
   contracts: ContractRow[];
   mappings: MappingRow[];
   assignments: AssignmentRow[];
+  outsidePlans: OutsidePlanRow[];
   taskTypes: Array<{ task: string; category: string; note: string }>;
   worklogs: Worklog[];
 }
@@ -552,6 +553,8 @@ export function generateScale(input: ScaleInput): ScaleOutput {
 
   // ---- アサイン（FY2026）: 1 人あたり 1〜3 区間。期中に配分を変える。月の合計は 1.0 以下（超えると検証エラー） ----
   const assignments: AssignmentRow[] = [];
+  /** 人 → 月 → 配分の合計（契約外予定を足す人を選ぶ） */
+  const peakOf = new Map<string, Map<YearMonth, number>>();
   const forgotten = retirees.find((p) => lastRow(p).effective_from === "2026-10");
   const fyFrom: YearMonth = "2026-04";
   const fyTo: YearMonth = "2027-03";
@@ -593,9 +596,24 @@ export function generateScale(input: ScaleInput): ScaleOutput {
         cur = addMonths(to, 1);
       }
     }
+    peakOf.set(p.id, used);
+  }
+
+  // ---- 契約外予定（§36.4）: 配分の多い人の一部に、提案・運用設計などの見込みを足す（合計が 1.0 を少し超える月が出る）。
+  // 乱数は他のデータを作り終えてから引く（ほかの行は変わらない）
+  const outsidePlans: OutsidePlanRow[] = [];
+  const NOTES = ["次期更改の提案", "運用設計の支援", "新規顧客の提案", "移行計画の作成"];
+  for (const p of people) {
+    const used = peakOf.get(p.id);
+    if (!used || used.size === 0) continue;
+    const busy = [...used.entries()].filter(([m, v]) => v >= 0.85 && m > asOfMonth).map(([m]) => m).sort();
+    if (busy.length === 0 || !rng.chance(0.12)) continue;
+    const from = busy[rng.int(0, Math.max(0, busy.length - 2))]!;
+    const to = addMonths(from, rng.int(1, 3));
+    outsidePlans.push({ member_id: p.id, start_month: from, end_month: to > fyTo ? fyTo : to, person_months: rng.pick([0.1, 0.2, 0.3]), note: rng.pick(NOTES) });
   }
 
   const members = people.flatMap((p) => p.rows);
   const contracts: ContractRow[] = drafts.map(({ account: _a, ratio: _r, weight: _w, ...c }) => c);
-  return { teams, members, rates, contracts, mappings, assignments, taskTypes: TASK_TYPES, worklogs };
+  return { teams, members, rates, contracts, mappings, assignments, outsidePlans, taskTypes: TASK_TYPES, worklogs };
 }
