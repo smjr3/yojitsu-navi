@@ -121,10 +121,8 @@ if (vm) {
   const { agg, unit, period, fullPeriod, fullAgg } = vm;
   const t = agg.total;
   const subtitle = `${vm.scope.teamLabel} ・ ${periodJa(period)}`;
-  const future = fullAgg.total.plannedCost - t.plannedCost;
+  // 期間全体の計画は KPI の補足に出す（経過月で比べる理由は見出しの「?」）
   if (vm.allFuture) display(note(fmt(T.members.futureOnly, { period: periodJa(fullPeriod) })));
-  else if (period.to !== fullPeriod.to)
-    display(note(fmt(T.members.elapsedNote, { period: periodJa(period), to: monthJa(fullPeriod.to), total: money(fullAgg.total.plannedCost, unit), asOf: monthJa(period.to), future: money(future, unit) })));
   display(
     memberKpiRow([
         statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.members.plannedSub, { hours: formatHours(t.plannedHours), n: t.memberCount, whole: period.to !== fullPeriod.to ? fmt(T.members.wholePeriodSuffix, { value: money(fullAgg.total.plannedCost, unit) }) : "" }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),

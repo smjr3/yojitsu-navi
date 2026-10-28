@@ -120,13 +120,8 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
   await expect(links.last()).toHaveText("マスタ編集");
   await expect(links.last()).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/]);
-  // 説明は折りたたみ（既定で閉じる）。開くと中身が見える
-  const intro = page.locator("details.yn-me-intro");
-  await expect(intro).not.toHaveAttribute("open", "");
-  await intro.locator("summary").click();
-  await expect(intro.getByText("実績 = 作業時間 × 単価")).toBeVisible();
-  // アサイン・契約外予定は稼働計画の画面で直す（リンク）
-  await expect(intro.getByRole("link", { name: /稼働計画/ })).toHaveAttribute("href", /plan/);
+  // 説明は本文に出さない（見出し横の「?」だけ。§37）
+  await expect(page.locator("details.yn-me-intro")).toHaveCount(0);
   for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"]] as const) {
     await selectTab(page, label);
     await expect(page.locator("table.yn-me-table tbody tr.yn-me-group")).toHaveCount(groupCount(id));
@@ -145,9 +140,10 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
   await expect(h.nth(1)).toContainText("2026-04 から");
   await expect(h.nth(1)).toContainText("いまの値");
   await expect(h.nth(1)).toContainText("8000 → 8500");
-  await expect(page.getByRole("heading", { name: "保存（CSV ダウンロード）" })).toBeVisible();
+  // 変更が無いうちは保存の欄を出さない
+  await expect(page.getByRole("heading", { name: "保存（CSV ダウンロード）" })).toHaveCount(0);
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
-  await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
 });
 
 test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", async ({ page }) => {
@@ -278,7 +274,7 @@ test("下書き: 再訪で復元を提案し、復元すると編集が戻る。
   await expect(page.getByRole("heading", { name: "保存していない編集内容（下書き）があります" })).toBeVisible();
   await expect(page.locator(".yn-me-banner")).toContainText("単価 1件");
   await expect(page.locator(".yn-me-stale")).toHaveCount(0);
-  await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
   await page.getByRole("button", { name: "下書きを復元する" }).click();
   await expect(page.locator(".yn-me-banner")).toHaveCount(0);
   await expect(page.locator(".yn-me-diff-table")).toContainText("部長 ・ 14000 ・ 2026-11");
@@ -359,7 +355,7 @@ test("下書きの当て直し: 土台が変わった後の復元で、同じ行
   await page.getByRole("button", { name: "下書きを復元する" }).click();
   await expect(banner.locator('[role="alert"].yn-me-form-msg')).toContainText("まだ選んでいない行が 1 件");
   await expect(conflict.getByRole("radio").first()).toBeFocused();
-  await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
   // キーボードで選ぶ（Space）→ 復元
   await page.keyboard.press("Space");
   await expect(conflict.getByRole("radio", { name: /自分の下書きを残す/ })).toBeChecked();
@@ -441,21 +437,30 @@ test.describe("gitlab モード", () => {
     return calls.slice(1);
   }
 
+  /** トークンは設定画面で登録する（§28）。ここでは登録済みの状態にして読み込み直す（同じタブの下書きは自動で戻る） */
   async function enterToken(page: Page) {
-    await page.locator("#yn-me-token").fill("glpat-secret-token");
-    await page.getByRole("button", { name: "このタブで使う" }).click();
-    await expect(page.locator(".yn-me-token-set")).toContainText("入力済み");
+    await expect(page.locator("#yn-me-token")).toHaveCount(0);
+    await page.evaluate(() => {
+      sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-secret-token");
+      sessionStorage.setItem("__e2e_keep_draft__", "1");
+    });
+    await page.reload();
+    await page.getByRole("button", { name: "下書きを復元する" }).click();
+    await expect(page.locator(".yn-me-diff-table")).toBeVisible();
   }
 
   test("mr: トークンは sessionStorage のみ・再表示しない。新ブランチにコミットして MR を作り、リンクを出す", async ({ page }) => {
     await patchMasters(page, gitlabMode("mr"));
     const mock = await mockGitLab(page, okResponder);
     await open(page);
-    await expect(page.getByRole("heading", { name: "保存（GitLab）" })).toBeVisible();
     await addRate(page, "部長", "14000", "2026-11");
+    await expect(page.getByRole("heading", { name: "保存（GitLab）" })).toBeVisible();
+    // トークンの入力欄は保存欄に無い（設定画面だけ。§28）
+    await expect(page.locator('.yn-me-save input[type="password"]')).toHaveCount(0);
     const save = page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" });
     await expect(save).toBeDisabled();
-    await expect(page.locator("#yn-me-save-reason")).toContainText("トークンを入力");
+    await expect(page.locator("#yn-me-save-reason")).toContainText("トークンが未登録");
+    await expect(page.locator("#yn-me-save-reason").getByRole("link", { name: "設定へ" })).toHaveAttribute("href", "./settings");
     await enterToken(page);
     expect(await page.evaluate(() => sessionStorage.getItem("yojitsu-navi:gitlab-token"))).toBe("glpat-secret-token");
     expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain("glpat-secret-token");
@@ -482,7 +487,7 @@ test.describe("gitlab モード", () => {
     expect(await page.evaluate((k) => localStorage.getItem(k), DRAFT_KEY)).toBeNull();
     await expect(page.getByRole("button", { name: "＋ 新しい単価" })).toBeDisabled();
     await page.getByRole("button", { name: "新しく編集を始める（元のデータから）" }).click();
-    await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+    await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
   });
 
   test("direct: targetBranch に直接コミット（MR は作らない）", async ({ page }) => {
@@ -575,7 +580,7 @@ test.describe("gitlab モード", () => {
     await page.getByRole("button", { name: /GitLab に保存/ }).click();
     await expect(page.locator(".yn-me-outcome.is-error")).toContainText("トークンが無効か期限切れ");
     expect(await page.evaluate(() => sessionStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
-    await expect(page.locator("#yn-me-token")).toBeVisible();
+    await expect(page.locator("#yn-me-save-reason")).toContainText("トークンが未登録");
     ignoreGitLabErrors(errors);
   });
 });

@@ -9,12 +9,9 @@ title: マスタ編集
 </div>
 
 ```js
-import { html } from "htl";
-import { T, fmt, rich } from "./i18n/index.js";
+import { T } from "./i18n/index.js";
 import { pageHeader, loadJson, errorState } from "./components/layout.js";
 import { mastersEditor, LEDGER_VIEWS } from "./components/masters.js";
-import { effectiveSaveMode } from "./core/gitlab.js";
-import { dateIso, monthJa } from "./components/format.js";
 ```
 
 ```js
@@ -44,29 +41,6 @@ if (model) {
       breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: T.app.pages.masters }],
     }),
   );
-}
-```
-
-```js
-if (model && mastersData && !mastersData.error) {
-  const mode = effectiveSaveMode(mastersData.masterEdit);
-  display(html`<details class="yn-me-intro">
-    <summary class="yn-me-intro-title">${T.mastersPage.introTitle}</summary>
-    <dl class="yn-me-intro-grid">
-      <div><dt>${T.masterFiles.members}</dt><dd>${rich(T.mastersPage.introMembers)}</dd></div>
-      <div><dt>${T.masterFiles.rates}</dt><dd>${rich(T.mastersPage.introRates)}</dd></div>
-      <div><dt>${T.masterFiles.teams}</dt><dd>${rich(T.mastersPage.introTeams)}</dd></div>
-      <div><dt>${T.mastersPage.introAssignmentsTitle}</dt><dd>${rich(T.mastersPage.introAssignments)} <a href="./plan">${T.mastersPage.introPlanLink}</a></dd></div>
-    </dl>
-    <p class="yn-me-intro-rule">${rich(T.mastersPage.introRule, { asOf: dateIso(model.meta.asOf), month: monthJa(model.meta.asOfMonth) })}</p>
-    <ol class="yn-me-flow" aria-label=${T.mastersPage.flowLabel}>
-      <li><span class="yn-me-flow-n" aria-hidden="true">1</span> ${T.mastersPage.flow1}</li>
-      <li><span class="yn-me-flow-n" aria-hidden="true">2</span> ${T.mastersPage.flow2}</li>
-      <li><span class="yn-me-flow-n" aria-hidden="true">3</span> ${T.mastersPage.flow3}</li>
-      <li><span class="yn-me-flow-n" aria-hidden="true">4</span> ${mode === "gitlab" ? T.mastersPage.flow4Gitlab : T.mastersPage.flow4Download}</li>
-    </ol>
-    <p class="yn-me-small">${T.mastersPage.draftNote}</p>
-  </details>`);
 }
 ```
 

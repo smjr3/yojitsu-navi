@@ -3083,11 +3083,6 @@ html:has(dialog.yn-dialog[open]) {
   color: #0b0b0b;
 }
 .yn-mr-empty,
-.yn-mr-demo {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: var(--yn-text-2);
-}
 .yn-mr-list {
   list-style: none;
   margin: 8px 0 0;

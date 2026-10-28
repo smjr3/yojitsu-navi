@@ -120,8 +120,8 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
   test("トークンが無ければ一覧の代わりに設定画面への案内。件数バッジも出ない", async ({ page }) => {
     await useDemo(page, { token: null });
     await gotoPage(page, "/masters");
-    await expect(page.locator(".yn-mr")).toContainText("トークンを登録すると");
-    await page.locator(".yn-mr").getByRole("link", { name: "設定画面でトークンを登録" }).click();
+    await expect(page.locator(".yn-mr")).toContainText("トークンが未登録");
+    await page.locator(".yn-mr").getByRole("link", { name: "設定へ" }).click();
     await expect(page).toHaveURL(/\/settings/);
     await expect(badge(page)).toBeHidden();
   });
@@ -140,7 +140,7 @@ test.describe("CSV で直接編集", () => {
     await expect(err).toBeFocused();
     await expect(err).toContainText("このファイルに無い列があります（rate）");
     await expect(err).toContainText("足りない列があります（hourly_rate）");
-    await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+    await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
     await expect(area).toHaveValue(original.replace("hourly_rate", "rate"));
     await area.fill(original + '"部長,1,2026-11\n');
     await page.getByRole("button", { name: "反映", exact: true }).click();
@@ -260,7 +260,7 @@ test.describe("設定画面とヘッダー", () => {
 
   test("接続先が未設定（既定の config.json）: 案内だけ出し、トークン欄は出さない", async ({ page }) => {
     await gotoPage(page, "/settings");
-    await expect(page.locator('[data-role="not-configured"]')).toContainText("接続先が設定されていません");
+    await expect(page.locator('[data-role="not-configured"]')).toContainText("接続先が未設定");
     await expect(page.locator("#yn-set-token")).toHaveCount(0);
   });
 

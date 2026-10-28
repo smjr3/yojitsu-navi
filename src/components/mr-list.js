@@ -227,10 +227,9 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date() }) {
       : null;
     el.replaceChildren(html`<section class="yn-me-section yn-mr" aria-labelledby="yn-mr-title">
       <div class="yn-mr-bar">
-        <div class="yn-title-with-tip"><h2 id="yn-mr-title" class="yn-section-title">${T.mr.title}${n ? html` <span class="yn-mr-count">${fmt(T.mr.countLabel, { n: integer(n) })}</span>` : null}</h2>${infoTip(T.mr.hint, { label: fmt(T.layout.aboutSection, { title: T.mr.title }) })}</div>
+        <div class="yn-title-with-tip"><h2 id="yn-mr-title" class="yn-section-title">${T.mr.title}${n ? html` <span class="yn-mr-count">${fmt(T.mr.countLabel, { n: integer(n) })}</span>` : null}</h2>${infoTip(cfg.mode === "demo" ? `${T.mr.hint} ${T.mr.demoNote}` : T.mr.hint, { label: fmt(T.layout.aboutSection, { title: T.mr.title }) })}</div>
         ${token !== "" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk="mr:refresh" disabled=${state.status === "loading"} onclick=${() => refresh()}>${state.status === "loading" ? T.mr.loading : T.mr.refresh}</button>` : null}
       </div>
-      ${cfg.mode === "demo" ? html`<p class="yn-me-small yn-mr-demo">${T.mr.demoNote}</p>` : null}
       ${notice}
       ${body}
     </section>`, dialog);

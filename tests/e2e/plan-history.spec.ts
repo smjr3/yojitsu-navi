@@ -99,7 +99,7 @@ test("＋ 変更: 「何月から何人月」で入れると期間を分けて�
   await d.locator("#yn-me-f-__value").fill("0.9");
   await d.getByRole("button", { name: "反映" }).click();
   await expect(entries).toHaveCount(1);
-  await expect(page.locator(".yn-me-diff-slot")).toContainText("まだ変更はありません");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
 });
 
 test("＋ 変更: 0 で計画を外すと「計画なし」。この月だけ・終わりの月の指定。過去の月は確認してから", async ({ page }) => {

@@ -98,13 +98,11 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
         byMonth: Object.fromEntries(shownMonths.map((m) => [m, sumOf(contract, (l) => l.byMonth[m])])),
       }
     : null;
-  const outsideHours = sumOf(outside, (l) => l.hours);
   const section = html`<section class="yn-work-section">
-    ${sectionTitle(title, hint)}
+    ${sectionTitle(title, outside.length ? `${hint ?? ""} ${T.work.outsideTip}`.trim() : hint)}
     ${all.length === 0
       ? note(emptyText)
       : html`${dataTable({ columns, rows: all, unit, caption: title, exportName, sort: null, summary, maxHeight: 520 })}
-          ${outside.length ? note(fmt(T.work.outsideSummary, { hours: formatHours(outsideHours), pm: pm(outsideHours, config) })) : null}
           ${months.length > shownMonths.length ? note(fmt(T.work.monthsTrimmed, { n: shownMonths.length })) : null}`}
   </section>`;
   return section;
