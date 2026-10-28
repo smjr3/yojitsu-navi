@@ -327,9 +327,10 @@ test.describe("契約一覧", () => {
       if (e.isDeficit) expect(status, `${id} 状態`).toContain("超過見込み");
       if (e.isOverBudget) expect(status, `${id} 状態`).toContain("消化率超過");
       if (!e.isDeficit && !e.isOverBudget && e.includesPreliminary) expect(status, `${id} 状態`).toContain("速報含む");
-      // 行の先頭セルに契約IDと顧客名
+      // 行の先頭セルに顧客名・案件名（ID は出さない。§31.1）
       const first = await cellText(row, 0);
-      expect(first).toContain(id);
+      expect(first).not.toContain(id);
+      expect(first).toContain(r.contract.projectName);
       expect(first).toContain(r.contract.customerName);
       // 赤字 or 超過の行は is-danger
       if (e.isDeficit || e.isOverBudget) await expect(row).toHaveClass(/is-danger/);
@@ -366,7 +367,7 @@ test.describe("契約詳細", () => {
     const r = contractResult("C008", model);
     const t = totalsFor(FY, ["C008"], model);
     const f = r.forecasts.recent3;
-    await expect(page.locator("h1")).toContainText("C008");
+    await expect(page.locator("h1")).toHaveText("こもれび出版 / 会員サイト保守");
     await expect(page.locator("h1")).toContainText(r.contract.customerName);
     await expect(kpiValue(page, 0)).toHaveText(yen(t.budget, unit));
     await expect(kpiValue(page, 1)).toHaveText(yen(t.cost, unit));

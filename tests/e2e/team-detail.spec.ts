@@ -15,7 +15,7 @@ const tree = treeAt(FY.to, model);
 
 test("T111: パンくず・見出し・KPI 5 枚が core の集計と一致する", async ({ page }) => {
   await gotoPage(page, "/team?id=T111&unit=yen");
-  await expect(page.locator("h1")).toContainText("T111");
+  await expect(page.locator("h1")).toHaveText("インフラ保守チーム");
   await expect(page.locator("h1")).toContainText(tree.T111!.name);
   const crumbs = page.locator('nav[aria-label="パンくず"] li');
   const chain = ["HQ", "D1", "S11", "T111"];
@@ -120,7 +120,7 @@ test("契約一覧: 期間内の契約だけ。列順は契約一覧と同じ。
   await expect(page).toHaveURL(/\/contract\?/);
   expect(query(page).get("id")).toBe(first);
   await page.goBack();
-  await expect(page.locator("h1")).toContainText("S21");
+  await expect(page.locator("h1")).toHaveText("第3課");
   // 契約一覧へ絞り込み
   await page.getByRole("link", { name: "契約一覧で絞り込む" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);

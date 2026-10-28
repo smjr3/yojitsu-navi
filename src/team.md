@@ -83,7 +83,7 @@ const vm = (() => {
 
 ```js
 if (model && vm) {
-  const title = vm.exists ? html`${vm.isUnassigned ? "" : html`<span class="yn-title-id">${vm.teamId}</span> `}${vm.name}` : T.team.pageTitle;
+  const title = vm.exists ? vm.name : T.team.pageTitle;
   const crumbs = [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.teams, href: store.href("./teams") }];
   if (!vm.exists) crumbs.push({ label: teamId || T.team.noIdCrumb });
   else if (vm.isUnassigned) crumbs.push({ label: vm.name });
@@ -199,7 +199,7 @@ if (vm?.exists) {
     display(emptyState({ title: T.team.noContractsTitle, text: fmt(T.team.noContractsText, { team: vm.name, period: periodJa(period) }), icon: "○" }));
   } else {
     const detailHref = (id) => store.href("./contract", {}, { id });
-    const sub = (r) => `${r.contractId} ${r.customerName} / ${r.projectName}`;
+    const sub = (r) => `${r.customerName} / ${r.projectName}`;
     const columns = [
       { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
       { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
@@ -246,7 +246,7 @@ if (vm?.exists) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
-        render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${r.isSupport ? html` ${statusChip("neutral", T.team.support, T.team.supportTitle)}` : ""}`,
+        render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${r.isSupport ? html` ${statusChip("neutral", T.team.support, T.team.supportTitle)}` : ""}`,
         sortValue: (r) => r.memberName,
       },
       { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },

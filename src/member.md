@@ -112,7 +112,7 @@ if (vm) {
   display(
     pageHeader({
       model,
-      title: html`<span class="yn-title-id">${memberId}</span> ${vm.name}`,
+      title: vm.name,
       breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.members, href: store.href("./members") }, { label: vm.name }],
       includesPreliminary: totals?.includesPreliminary ?? false,
       extra: html`<a class="yn-btn yn-btn-sm" id="yn-member-plan-link" href=${`./plan?member=${encodeURIComponent(memberId)}`}>${T.plan.toMemberPlan}</a>`,
@@ -239,11 +239,11 @@ if (vm) {
   const columns = [
     { key: "contractId", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => r.contractId, exportValue: (r) => r.contractId },
     { key: "contractName", label: T.breakdown.colCustomerProject, type: "text", exportOnly: true, get: (r) => `${r.customerName} / ${r.projectName}` },
-    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.contractId} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "moneyYen", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${r.contractId} ・ ${periodJa(period)}` }) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "moneyYen", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}` }) },
     { key: "status", label: T.breakdown.colAssignment, type: "status", get: chips, sortable: false, hideNarrow: true },
   ];
   if (rows.length === 0) display(emptyState({ title: T.member.noContractsTitle, text: T.member.noContractsText, icon: "○" }));
