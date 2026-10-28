@@ -14,7 +14,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, teamMemberCosts, teamOrgChanges, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
-import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor } from "./components/analysis.js";
+import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
@@ -98,7 +98,11 @@ if (model && vm) {
         : null,
       breadcrumbs: crumbs,
       includesPreliminary: vm.exists ? vm.totals.includesPreliminary : false,
-      extra: vm.exists ? html`<a class="yn-btn yn-btn-sm" id="yn-team-contracts-link" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.toContracts}</a>` : null,
+      extra: vm.exists
+        ? html`${!vm.isUnassigned && (vm.node.level || vm.node.leaderMemberId)
+            ? html`<p class="yn-team-org" id="yn-team-org">${vm.node.level ? html`<span class="yn-chip yn-chip-neutral">${vm.node.level}</span> ` : null}${T.team.leaderLabel}${vm.node.leaderMemberId ? html`<a href=${store.href("./member", {}, { id: vm.node.leaderMemberId })}>${memberNameAt(model, vm.node.leaderMemberId, vm.treeMonth)}</a>` : T.team.leaderUnset}</p>`
+            : null}<a class="yn-btn yn-btn-sm" id="yn-team-contracts-link" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.toContracts}</a>${!vm.isUnassigned ? html` <a class="yn-btn yn-btn-sm" id="yn-team-plan-link" href=${`./plan?team=${encodeURIComponent(vm.teamId)}`}>${T.team.toPlan}</a>` : null}`
+        : null,
     }),
   );
 }

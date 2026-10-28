@@ -210,6 +210,9 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     name: r.get("name"),
     parentTeamId: nullable(r.get("parent_team_id")),
     effectiveFrom: r.get("effective_from"),
+    // 省略可の列（§21・§22）。列が無ければ空
+    level: r.get("level"),
+    leaderMemberId: nullable(r.get("leader_member_id")),
   }));
 
   const members: MemberRecord[] = parseTable("masters/members.csv", files.members, REQUIRED_COLUMNS.members, issues).rows.map((r) => ({

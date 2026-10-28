@@ -44,7 +44,7 @@ if (model && mastersData && !mastersData.error) {
       <div><dt>${T.masterFiles.members}</dt><dd>${rich(T.mastersPage.introMembers)}</dd></div>
       <div><dt>${T.masterFiles.rates}</dt><dd>${rich(T.mastersPage.introRates)}</dd></div>
       <div><dt>${T.masterFiles.teams}</dt><dd>${rich(T.mastersPage.introTeams)}</dd></div>
-      <div><dt>${T.masterFiles.assignments}</dt><dd>${rich(T.mastersPage.introAssignments)}</dd></div>
+      <div><dt>${T.mastersPage.introAssignmentsTitle}</dt><dd>${rich(T.mastersPage.introAssignments)}</dd></div>
     </dl>
     <p class="yn-me-intro-rule">${rich(T.mastersPage.introRule, { asOf: dateIso(model.meta.asOf), month: monthJa(model.meta.asOfMonth) })}</p>
     <ol class="yn-me-flow" aria-label=${T.mastersPage.flowLabel}>
@@ -62,6 +62,7 @@ if (model && mastersData && !mastersData.error) {
 if (model && mastersData?.error) {
   display(errorState({ title: T.mastersPage.loadFailed, error: mastersData.error }));
 } else if (model && mastersData) {
-  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth }));
+  const params = new URLSearchParams(location.search);
+  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null }));
 }
 ```

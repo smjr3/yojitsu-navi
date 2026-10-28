@@ -36,6 +36,7 @@ const NAV = [
 const TOOLS = [
   { name: ja.app.nav.dataCheck, path: "/data-check" },
   { name: ja.app.nav.rules, path: "/rules" },
+  { name: ja.app.nav.plan, path: "/plan" },
   { name: ja.app.nav.masters, path: "/masters" },
 ];
 
@@ -67,6 +68,7 @@ export default {
     { name: ja.app.pages.members, path: "/members" },
     { name: ja.app.pages.rules, path: "/rules" },
     { name: ja.app.pages.dataCheck, path: "/data-check" },
+    { name: ja.app.pages.plan, path: "/plan" },
     { name: ja.app.pages.masters, path: "/masters" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する

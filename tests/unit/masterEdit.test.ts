@@ -114,8 +114,18 @@ describe("parseMasterDoc / serializeMasterDoc", () => {
   });
 
   it("空ファイル・ヘッダだけでも書き出せる", () => {
-    expect(serializeMasterDoc(parseMasterDoc("teams", "")).text).toBe("team_id,name,parent_team_id,effective_from\n");
-    expect(serializeMasterDoc(parseMasterDoc("teams", "team_id,name,parent_team_id,effective_from")).text).toBe("team_id,name,parent_team_id,effective_from\n");
+    const header = "team_id,name,parent_team_id,effective_from,level,leader_member_id";
+    expect(serializeMasterDoc(parseMasterDoc("teams", "")).text).toBe(`${header}\n`);
+    expect(serializeMasterDoc(parseMasterDoc("teams", header)).text).toBe(`${header}\n`);
+  });
+
+  it("種別・リーダーの列が無い古い組織ファイル: ヘッダの末尾に列を足し、既存の行はそのまま残す（§21・§22）", () => {
+    const old = "team_id,name,parent_team_id,effective_from\nROOT,全社,,2025-04\n";
+    const doc = parseMasterDoc("teams", old);
+    expect(doc.header).toEqual(["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]);
+    expect(serializeMasterDoc(doc).text).toBe("team_id,name,parent_team_id,effective_from,level,leader_member_id\nROOT,全社,,2025-04\n");
+    const edited = updateRow(doc, doc.rows[0]!.id, { level: "本部" });
+    expect(serializeMasterDoc(edited).text).toBe("team_id,name,parent_team_id,effective_from,level,leader_member_id\nROOT,全社,,2025-04,本部,\n");
   });
 
   it("すべて空の追加行は書き出さない", () => {

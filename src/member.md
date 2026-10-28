@@ -114,6 +114,7 @@ if (vm) {
       title: html`<span class="yn-title-id">${memberId}</span> ${vm.name}`,
       breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.members, href: store.href("./members") }, { label: vm.name }],
       includesPreliminary: totals?.includesPreliminary ?? false,
+      extra: html`<a class="yn-btn yn-btn-sm" id="yn-member-plan-link" href=${`./plan?member=${encodeURIComponent(memberId)}`}>${T.plan.toMemberPlan}</a>`,
     }),
   );
   const teamText = (id) => (id ? teamName(model, id, vm.tree) : T.members.noTeam);

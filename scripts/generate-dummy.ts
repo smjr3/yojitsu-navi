@@ -111,6 +111,10 @@ interface TeamRow {
   name: string;
   parent_team_id: string;
   effective_from: YearMonth;
+  /** 種別（SPEC §21） */
+  level: string;
+  /** リーダー（SPEC §22） */
+  leader_member_id: string;
 }
 
 interface MemberRow {
@@ -155,23 +159,23 @@ interface AssignmentRow {
   allocation: number;
 }
 
-/** 組織: 事業本部 > 事業部 > 課 > チーム（末端6チーム）。2026-10 にクラウド運用チームが第3課→第4課へ移動 */
+/** 組織: 事業本部 > 事業部 > 課 > チーム（末端6チーム。種別・リーダーは組織ごと）。2026-10 にクラウド運用チームが第3課→第4課へ移動 */
 const TEAMS: TeamRow[] = [
-  { team_id: "HQ", name: "ソリューション事業本部", parent_team_id: "", effective_from: "2025-04" },
-  { team_id: "D1", name: "第1事業部", parent_team_id: "HQ", effective_from: "2025-04" },
-  { team_id: "D2", name: "第2事業部", parent_team_id: "HQ", effective_from: "2025-04" },
-  { team_id: "S11", name: "第1課", parent_team_id: "D1", effective_from: "2025-04" },
-  { team_id: "S12", name: "第2課", parent_team_id: "D1", effective_from: "2025-04" },
-  { team_id: "S21", name: "第3課", parent_team_id: "D2", effective_from: "2025-04" },
-  { team_id: "S22", name: "第4課", parent_team_id: "D2", effective_from: "2025-04" },
-  { team_id: "T111", name: "インフラ保守チーム", parent_team_id: "S11", effective_from: "2025-04" },
-  { team_id: "T112", name: "ネットワーク保守チーム", parent_team_id: "S11", effective_from: "2025-04" },
-  { team_id: "T121", name: "業務システム保守チーム", parent_team_id: "S12", effective_from: "2025-04" },
-  { team_id: "T211", name: "Web保守チーム", parent_team_id: "S21", effective_from: "2025-04" },
-  { team_id: "T212", name: "クラウド運用チーム", parent_team_id: "S21", effective_from: "2025-04" },
-  { team_id: "T221", name: "データ基盤チーム", parent_team_id: "S22", effective_from: "2025-04" },
+  { team_id: "HQ", name: "ソリューション事業本部", parent_team_id: "", effective_from: "2025-04", level: "本部", leader_member_id: "M001" },
+  { team_id: "D1", name: "第1事業部", parent_team_id: "HQ", effective_from: "2025-04", level: "事業部", leader_member_id: "M002" },
+  { team_id: "D2", name: "第2事業部", parent_team_id: "HQ", effective_from: "2025-04", level: "事業部", leader_member_id: "M003" },
+  { team_id: "S11", name: "第1課", parent_team_id: "D1", effective_from: "2025-04", level: "課", leader_member_id: "M004" },
+  { team_id: "S12", name: "第2課", parent_team_id: "D1", effective_from: "2025-04", level: "課", leader_member_id: "M005" },
+  { team_id: "S21", name: "第3課", parent_team_id: "D2", effective_from: "2025-04", level: "課", leader_member_id: "M006" },
+  { team_id: "S22", name: "第4課", parent_team_id: "D2", effective_from: "2025-04", level: "課", leader_member_id: "M007" },
+  { team_id: "T111", name: "インフラ保守チーム", parent_team_id: "S11", effective_from: "2025-04", level: "チーム", leader_member_id: "M010" },
+  { team_id: "T112", name: "ネットワーク保守チーム", parent_team_id: "S11", effective_from: "2025-04", level: "チーム", leader_member_id: "M013" },
+  { team_id: "T121", name: "業務システム保守チーム", parent_team_id: "S12", effective_from: "2025-04", level: "チーム", leader_member_id: "M015" },
+  { team_id: "T211", name: "Web保守チーム", parent_team_id: "S21", effective_from: "2025-04", level: "チーム", leader_member_id: "M018" },
+  { team_id: "T212", name: "クラウド運用チーム", parent_team_id: "S21", effective_from: "2025-04", level: "チーム", leader_member_id: "M021" },
+  { team_id: "T221", name: "データ基盤チーム", parent_team_id: "S22", effective_from: "2025-04", level: "チーム", leader_member_id: "M023" },
   // 組織変更: クラウド運用チームを第4課の配下へ（2026-10〜）
-  { team_id: "T212", name: "クラウド運用チーム", parent_team_id: "S22", effective_from: "2026-10" },
+  { team_id: "T212", name: "クラウド運用チーム", parent_team_id: "S22", effective_from: "2026-10", level: "チーム", leader_member_id: "M021" },
 ];
 
 const DEPT: Record<string, { department: string; section: string }> = {
@@ -681,7 +685,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "assignments.csv"), csv(g.assignments, ["member_id", "contract_id", "start_month", "end_month", "allocation"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
-  writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from"]));
+  writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
   writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
 
