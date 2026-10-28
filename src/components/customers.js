@@ -5,6 +5,7 @@
 import { aggregate, forecastTotals, groupByCustomer } from "../core/index.js";
 import { standardColumns, rowStatus, statusSortValue, contractNameCell } from "./table.js";
 import * as bd from "./breakdown.js";
+import { T } from "../i18n/index.js";
 
 /** 画面が使う顧客グループ（全契約 → コアの groupByCustomer）。model ごとに 1 回だけ作る */
 export function customerGroups(model) {
@@ -81,11 +82,11 @@ export function contractBreakdowns({ model, store, period, unit }) {
 /** 顧客詳細の契約一覧の列（契約一覧 /contracts と同じ並び） */
 export function contractListColumns({ model, store, period, unit }) {
   return [
-    { key: "name", label: "契約", type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
-    { key: "contractId", label: "契約ID", type: "text", exportOnly: true },
-    { key: "teamName", label: "チーム", type: "text", exportOnly: true },
-    { key: "period", label: "契約期間", type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
+    { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+    { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
+    { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
+    { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
     ...standardColumns({ breakdowns: contractBreakdowns({ model, store, period, unit }) }),
-    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
+    { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
 }

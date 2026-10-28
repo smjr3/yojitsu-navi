@@ -2,6 +2,7 @@
  * 履歴マスタの有効レコード検索（SPEC §5）、時間単価（§6）、チーム階層（§11）
  */
 import type { Dataset, MemberRecord, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // §5 有効レコード（汎用）
@@ -177,7 +178,7 @@ export function teamTreeAt(dataset: Pick<Dataset, "teams">, month: YearMonth): T
     if (parent !== null && parent !== "" && !active.has(parent)) {
       warnings.push({
         code: "UNKNOWN_TEAM",
-        message: `チーム「${rec.name}」(${teamId}) の親チーム ${parent} が ${month} 時点で存在しないため最上位として扱います`,
+        message: fmt(T.calcWarnings.teamParentMissing, { name: rec.name, teamId, parentTeamId: parent, month }),
         ref: { teamId, parentTeamId: parent, month },
       });
       parent = null;
@@ -200,7 +201,7 @@ export function teamTreeAt(dataset: Pick<Dataset, "teams">, month: YearMonth): T
         const cutRec = active.get(cut) as TeamRecord;
         warnings.push({
           code: "UNKNOWN_TEAM",
-          message: `チームの親子関係が循環しています（${cycle.join(" → ")} → ${cur}）。${cut}「${cutRec.name}」を最上位として扱います`,
+          message: fmt(T.calcWarnings.teamCycle, { cycle: cycle.join(" → "), current: cur, cutId: cut, cutName: cutRec.name }),
           ref: { teamId: cut, cycle: cycle.join(">"), month },
         });
         parentOf.set(cut, null);

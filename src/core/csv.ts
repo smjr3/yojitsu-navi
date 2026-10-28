@@ -7,6 +7,7 @@
 import { normalizeName } from "./normalize.js";
 import type { Assignment, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TeamRecord, Worklog } from "./types.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
+import { T, fmt } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // 低レベル: テキスト → 行列
@@ -159,7 +160,7 @@ function checkColumns(file: string, table: CsvTable, required: readonly string[]
   const present = new Set(table.header);
   for (const col of required) {
     if (!present.has(col)) {
-      issues.push({ severity: "error", code: "MISSING_COLUMN", message: `${file}: 列 ${col} がありません`, file, row: 1, ref: { column: col } });
+      issues.push({ severity: "error", code: "MISSING_COLUMN", message: fmt(T.checks.missingColumn, { file, column: col }), file, row: 1, ref: { column: col } });
     }
   }
 }

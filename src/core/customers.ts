@@ -6,11 +6,12 @@
  *   groupByCustomer = 全契約をちょうど 1 つの顧客に振り分ける（順序・重複に依らず決定的）
  */
 import { normalizeName } from "./normalize.js";
+import { T } from "../i18n/index.js";
 import type { Contract } from "./types.js";
 
 /** 「顧客名なし」グループのキー */
 export const NONE_CUSTOMER_KEY = "__none__";
-export const NONE_CUSTOMER_LABEL = "顧客名なし";
+export const NONE_CUSTOMER_LABEL = T.numbers.noCustomerName;
 
 export interface CustomerGroup {
   /** URL に載せるキー（呼び出し側で encodeURIComponent する） */

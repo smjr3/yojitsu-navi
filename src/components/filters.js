@@ -4,15 +4,16 @@
  */
 import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, monthRange } from "../core/index.js";
-import { METHOD_DESCRIPTIONS, METHOD_LABELS, UNITS, monthJa } from "./format.js";
+import { METHOD_LABELS, UNITS, methodDescription, monthJa } from "./format.js";
 import { periodPresets } from "./state.js";
+import { T } from "../i18n/index.js";
 
 function monthOptions(model, selected) {
   return monthRange(model.meta.minMonth, model.meta.maxMonth).map((m) => html`<option value=${m} selected=${m === selected}>${monthJa(m)}</option>`);
 }
 
 function teamOptions(model, selected) {
-  const opts = [html`<option value="" selected=${selected === ""}>全体（すべてのチーム）</option>`];
+  const opts = [html`<option value="" selected=${selected === ""}>${T.filters.allTeams}</option>`];
   const seen = new Set();
   const visit = (id, depth) => {
     const node = model.teamTree[id];
@@ -25,9 +26,9 @@ function teamOptions(model, selected) {
   const past = [];
   for (const t of model.teams) if (!seen.has(t.teamId) && !past.some((p) => p.teamId === t.teamId)) past.push(t);
   if (past.length) {
-    opts.push(html`<optgroup label="過去の組織にのみ存在するチーム">${past.map((t) => html`<option value=${t.teamId} selected=${selected === t.teamId}>${t.name}</option>`)}</optgroup>`);
+    opts.push(html`<optgroup label=${T.filters.pastTeams}>${past.map((t) => html`<option value=${t.teamId} selected=${selected === t.teamId}>${t.name}</option>`)}</optgroup>`);
   }
-  opts.push(html`<option value=${UNASSIGNED_TEAM_ID} selected=${selected === UNASSIGNED_TEAM_ID}>${UNASSIGNED_TEAM_LABEL}（主担当チームなし）</option>`);
+  opts.push(html`<option value=${UNASSIGNED_TEAM_ID} selected=${selected === UNASSIGNED_TEAM_ID}>${UNASSIGNED_TEAM_LABEL}${T.filters.unassignedSuffix}</option>`);
   return opts;
 }
 
@@ -37,14 +38,14 @@ function teamOptions(model, selected) {
 export function filterBar(store, model, { show = ["period", "team", "method", "unit"], compact = false } = {}) {
   const state = () => store.get();
   const presets = periodPresets(model);
-  const form = html`<form class=${`yn-filters${compact ? " is-compact" : ""}`} aria-label="表示条件"></form>`;
+  const form = html`<form class=${`yn-filters${compact ? " is-compact" : ""}`} aria-label=${T.filters.formLabel}></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
 
   const syncers = [];
 
   if (show.includes("period")) {
-    const from = html`<select class="yn-select" id="yn-filter-from" aria-label="開始月">${monthOptions(model, state().from)}</select>`;
-    const to = html`<select class="yn-select" id="yn-filter-to" aria-label="終了月">${monthOptions(model, state().to)}</select>`;
+    const from = html`<select class="yn-select" id="yn-filter-from" aria-label=${T.filters.from}>${monthOptions(model, state().from)}</select>`;
+    const to = html`<select class="yn-select" id="yn-filter-to" aria-label=${T.filters.to}>${monthOptions(model, state().to)}</select>`;
     from.addEventListener("change", () => store.set({ from: from.value, to: from.value > state().to ? from.value : state().to }));
     to.addEventListener("change", () => store.set({ to: to.value, from: to.value < state().from ? to.value : state().from }));
     const presetBtns = presets.map((p) => {
@@ -53,10 +54,10 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       return b;
     });
     const group = html`<fieldset class="yn-filter yn-filter-period">
-      <legend>期間</legend>
+      <legend>${T.filters.period}</legend>
       <div class="yn-filter-row">
-        <label class="visually-hidden" for="yn-filter-from">開始月</label>${from}<span class="yn-filter-sep" aria-hidden="true">〜</span><label class="visually-hidden" for="yn-filter-to">終了月</label>${to}
-        <div class="yn-seg" role="group" aria-label="期間のプリセット">${presetBtns}</div>
+        <label class="visually-hidden" for="yn-filter-from">${T.filters.from}</label>${from}<span class="yn-filter-sep" aria-hidden="true">〜</span><label class="visually-hidden" for="yn-filter-to">${T.filters.to}</label>${to}
+        <div class="yn-seg" role="group" aria-label=${T.filters.presetsLabel}>${presetBtns}</div>
       </div>
     </fieldset>`;
     form.append(group);
@@ -74,8 +75,8 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   if (show.includes("team")) {
     const sel = html`<select class="yn-select" id="yn-filter-team">${teamOptions(model, state().team)}</select>`;
     sel.addEventListener("change", () => store.set({ team: sel.value }));
-    form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? "チーム"}</label>${sel}<small class="yn-filter-help visually-hidden">配下のチームを含めて集計</small></div>`);
-    sel.title = "配下のチームを含めて集計";
+    form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? T.filters.team}</label>${sel}<small class="yn-filter-help visually-hidden">${T.filters.teamHelp}</small></div>`);
+    sel.title = T.filters.teamHelp;
     syncers.push((s) => {
       sel.value = s.team;
     });
@@ -89,12 +90,12 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       return html`<label class="yn-radio" for=${`yn-method-${m}`}>${input}<span>${METHOD_LABELS[m]}</span></label>`;
     });
     const help = html`<small class="yn-filter-help visually-hidden" id="yn-method-help"></small>`;
-    form.append(html`<fieldset class="yn-filter yn-filter-method" aria-describedby="yn-method-help"><legend>着地見込み</legend><div class="yn-radio-group yn-seg" role="radiogroup">${radios}</div>${help}</fieldset>`);
+    form.append(html`<fieldset class="yn-filter yn-filter-method" aria-describedby="yn-method-help"><legend>${T.filters.method}</legend><div class="yn-radio-group yn-seg" role="radiogroup">${radios}</div>${help}</fieldset>`);
     syncers.push((s) => {
       for (const r of form.querySelectorAll('input[name="yn-method"]')) r.checked = r.value === s.method;
-      help.textContent = METHOD_DESCRIPTIONS[s.method].replace("N", String(model.config.forecastRecentMonths));
+      help.textContent = methodDescription(s.method, model.config.forecastRecentMonths);
       for (const r of form.querySelectorAll('input[name="yn-method"]')) {
-        r.closest("label").title = METHOD_DESCRIPTIONS[r.value].replace("N", String(model.config.forecastRecentMonths));
+        r.closest("label").title = methodDescription(r.value, model.config.forecastRecentMonths);
       }
     });
   }
@@ -105,7 +106,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
       b.addEventListener("click", () => store.set({ unit: u.id }));
       return b;
     });
-    form.append(html`<div class="yn-filter yn-filter-unit"><span class="yn-filter-label" id="yn-unit-label">単位</span><div class="yn-seg" role="group" aria-labelledby="yn-unit-label">${btns}</div></div>`);
+    form.append(html`<div class="yn-filter yn-filter-unit"><span class="yn-filter-label" id="yn-unit-label">${T.filters.unit}</span><div class="yn-seg" role="group" aria-labelledby="yn-unit-label">${btns}</div></div>`);
     syncers.push((s) => {
       for (const b of btns) b.setAttribute("aria-pressed", b.dataset.unit === s.unit ? "true" : "false");
     });

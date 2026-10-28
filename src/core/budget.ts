@@ -3,6 +3,7 @@
  */
 import { isValidYearMonth, monthRange, monthsBetween } from "./calendar.js";
 import type { BudgetBreakdown, Contract, Warning, YearMonth } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 export interface MonthlyBudget {
   budget: number;
@@ -39,12 +40,12 @@ export function budgetSchedule(contract: Contract): Array<{ month: YearMonth } &
 
 /** 契約が計算対象として妥当でない理由（妥当なら null） */
 export function contractInvalidReason(contract: Contract): string | null {
-  if (!isValidYearMonth(contract.startMonth)) return `開始月の形式が不正です: ${contract.startMonth}`;
-  if (!isValidYearMonth(contract.endMonth)) return `終了月の形式が不正です: ${contract.endMonth}`;
-  if (contract.startMonth > contract.endMonth) return `開始月 ${contract.startMonth} が終了月 ${contract.endMonth} より後です`;
-  if (typeof contract.totalAmount !== "number" || !Number.isFinite(contract.totalAmount)) return "契約総額が数値ではありません";
-  if (contract.totalAmount < 0) return `契約総額が負です: ${contract.totalAmount}`;
-  if (!Number.isInteger(contract.totalAmount)) return `契約総額が整数ではありません: ${contract.totalAmount}`;
+  if (!isValidYearMonth(contract.startMonth)) return fmt(T.calcWarnings.contractStartMonthInvalid, { value: contract.startMonth });
+  if (!isValidYearMonth(contract.endMonth)) return fmt(T.calcWarnings.contractEndMonthInvalid, { value: contract.endMonth });
+  if (contract.startMonth > contract.endMonth) return fmt(T.calcWarnings.contractPeriodInverted, { from: contract.startMonth, to: contract.endMonth });
+  if (typeof contract.totalAmount !== "number" || !Number.isFinite(contract.totalAmount)) return T.calcWarnings.contractAmountNotNumber;
+  if (contract.totalAmount < 0) return fmt(T.calcWarnings.contractAmountNegative, { value: contract.totalAmount });
+  if (!Number.isInteger(contract.totalAmount)) return fmt(T.calcWarnings.contractAmountNotInteger, { value: contract.totalAmount });
   return null;
 }
 
@@ -69,10 +70,10 @@ export function partitionContracts(contracts: readonly Contract[]): ContractPart
     if (seen.has(contract.contractId)) {
       warnings.push({
         code: "DUPLICATE_CONTRACT_ID",
-        message: `契約ID ${contract.contractId} が重複しています。最初の行のみ採用します`,
+        message: fmt(T.calcWarnings.duplicateContractId, { contractId: contract.contractId }),
         ref: { contractId: contract.contractId },
       });
-      excluded.push({ contract, reason: "契約IDの重複" });
+      excluded.push({ contract, reason: T.calcWarnings.duplicateReason });
       continue;
     }
     seen.add(contract.contractId);
@@ -80,7 +81,7 @@ export function partitionContracts(contracts: readonly Contract[]): ContractPart
     if (reason !== null) {
       warnings.push({
         code: "CONTRACT_INVALID",
-        message: `契約 ${contract.contractId} を計算から除外しました: ${reason}`,
+        message: fmt(T.calcWarnings.contractExcluded, { contractId: contract.contractId, reason }),
         ref: { contractId: contract.contractId },
       });
       excluded.push({ contract, reason });

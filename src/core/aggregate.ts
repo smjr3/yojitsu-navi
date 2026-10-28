@@ -4,6 +4,7 @@
 import { monthRange } from "./calendar.js";
 import { monthStatusFromMeta } from "./status.js";
 import { teamTreeAt } from "./masters.js";
+import { T } from "../i18n/index.js";
 import type {
   Contract,
   ContractMonth,
@@ -28,7 +29,7 @@ export interface AggregateScope {
 
 /** 主担当チームが空・未知の契約を入れる仮想グループのID */
 export const UNASSIGNED_TEAM_ID = "__unassigned__";
-export const UNASSIGNED_TEAM_LABEL = "未設定";
+export const UNASSIGNED_TEAM_LABEL = T.numbers.unassignedTeam;
 
 function emptyCosts(model: Model): Record<CostTypeId, number> {
   const costs: Record<CostTypeId, number> = {};

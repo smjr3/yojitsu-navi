@@ -13,6 +13,7 @@ import { createMasterIndex, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
+import { T, fmt } from "../i18n/index.js";
 
 export interface BuildModelOptions {
   /** 計算基準日 */
@@ -166,7 +167,7 @@ function collectRateWarnings(results: readonly ContractResult[], masters: Master
   for (const [memberId, u] of unknown) {
     warnings.push({
       code: "UNKNOWN_MEMBER",
-      message: `メンバー ${memberId}（${u.memberName}）はメンバーマスタに存在しません。個人単価が無ければ単価 0 で計算しています（${u.hours} 時間）`,
+      message: fmt(T.calcWarnings.unknownMember, { memberId, memberName: u.memberName, hours: u.hours }),
       ref: { memberId },
       hours: u.hours,
       count: u.count,
@@ -175,7 +176,7 @@ function collectRateWarnings(results: readonly ContractResult[], masters: Master
   for (const m of [...missing.values()].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : a.memberId < b.memberId ? -1 : 1))) {
     warnings.push({
       code: "RATE_MISSING",
-      message: `${m.month} のメンバー ${m.memberId}（${m.memberName}）の時間単価が見つからないため 0 円で計算しています（${m.hours} 時間）`,
+      message: fmt(T.calcWarnings.rateMissing, { month: m.month, memberId: m.memberId, memberName: m.memberName, hours: m.hours }),
       ref: { memberId: m.memberId, month: m.month },
       hours: m.hours,
     });

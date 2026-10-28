@@ -7,6 +7,7 @@
 - 静的サイト（[Observable Framework](https://observablehq.com/framework/)）。サーバ不要、社内 GitLab Pages に公開
 - データは CSV（`data/`）。Git で履歴管理し、CI で検証してから公開
 - 計算仕様は [docs/SPEC.md](docs/SPEC.md)、データ定義は [docs/DATA.md](docs/DATA.md)
+- 画面の文言（説明・見出し・警告・Excel の列名）は `src/i18n/` にまとめてあり、プログラムを触らずに書き換えられます（[docs/TEXTS.md](docs/TEXTS.md)）
 
 ## 画面
 
@@ -91,6 +92,9 @@ Node 22 以上。
 2. 既定ブランチでは `pages` ジョブが `dist/` を `public/` として公開する
 3. 公開 URL は `https://<group>.pages.<社内ドメイン>/<project>/`（サブパス配信を前提に相対パスでビルド）
 
+初回の設定（閲覧制限・メンバー・Runner・社内ミラー）と、困ったときの対処は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)。
+画面もビルドも外部 CDN・外部サイトに接続しません（`npm ci` とイメージ取得だけは社内ミラーに向けられます）。
+
 必要な CI/CD 変数（Settings > CI/CD > Variables）:
 
 | 変数 | 用途 |
@@ -100,6 +104,7 @@ Node 22 以上。
 | `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Masked にする |
 | `GIT_PUSH_TOKEN` | スケジュール実行で `data/worklogs` を書き戻すための Project Access Token（Developer / `write_repository`） |
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL |
+| `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
@@ -253,7 +258,7 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 ```
 config.json              計算・表示・取得元の設定
 data/                    CSV データ（docs/DATA.md）
-docs/                    SPEC.md（計算仕様）, DATA.md（列定義）, DUMMY_DATA.md（ダミーデータのシナリオ）
+docs/                    SPEC.md（計算仕様）, DATA.md（列定義）, DUMMY_DATA.md（ダミーデータのシナリオ）, TEXTS.md（文言の書き換え方）
 scripts/
   generate-dummy.ts      ダミーデータ生成（決定的）
   fetch-worklogs.ts      作業実績の取得（直近 N か月を書き換え）
@@ -264,6 +269,7 @@ scripts/
 src/core/                計算コア（純粋関数。画面に依存しない）
 src/*.md                 画面（Observable Framework）
 src/components/          画面の部品（KPI・表・グラフ・内訳パネル・フィルタ・状態管理）
+src/i18n/                画面の文言（ja.js）と計算ルール画面の本文（rules.txt）。書き換え方は docs/TEXTS.md
 src/data/                データローダ（model.json / worklogs/[contractId].json / dataset-issues.json）
 src/style.css            デザイントークンとスタイル（ライト／ダーク）
 tests/                   unit / property / integration / e2e
