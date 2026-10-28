@@ -26,7 +26,20 @@ function rowOf(index: number): number {
   return index + 2;
 }
 
-function validateContracts(dataset: Dataset, push: IssueSink): void {
+/** 同じキーで effective_from も同じ行が複数ある（どちらが効くか分からない）→ error。2 行目以降を報告する */
+function pushDuplicates<T extends { effectiveFrom: string }>(rows: readonly T[], keyOf: (r: T) => string, file: string, code: string, column: string, push: IssueSink): void {
+  const first = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const k = keyOf(r);
+    if (k === "") return;
+    const id = `${k}\u0000${r.effectiveFrom}`;
+    const prev = first.get(id);
+    if (prev === undefined) first.set(id, rowOf(i));
+    else push({ severity: "error", code, message: `${file} ${rowOf(i)} 行目: ${column} ${k}・effective_from ${r.effectiveFrom} の行が ${prev} 行目と重複しています（どちらか一方にしてください）`, file, row: rowOf(i), ref: { key: k, effectiveFrom: r.effectiveFrom } });
+  });
+}
+
+function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
   const seen = new Set<string>();
   dataset.contracts.forEach((c, i) => {
     const file = "contracts.csv";
@@ -47,6 +60,12 @@ function validateContracts(dataset: Dataset, push: IssueSink): void {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が負です: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
     } else if (!Number.isInteger(c.totalAmount)) {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount は円の整数で入力してください: ${c.totalAmount}`, file, row, ref: { contractId: c.contractId } });
+    } else if (!Number.isSafeInteger(c.totalAmount)) {
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: `${file} ${row} 行目: 契約 ${c.contractId} の total_amount が大きすぎて正確に計算できません（9,007,199,254,740,991 円まで）`, file, row, ref: { contractId: c.contractId } });
+    }
+    // 主担当チームが teams.csv に無い: 打ち間違いのまま「未設定」に集計されるのを防ぐ（メンバーの MEMBER_UNKNOWN_TEAM と同じ扱い）
+    if (c.teamId !== null && c.teamId !== "" && !teamIds.has(c.teamId)) {
+      push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: `${file} ${row} 行目: 契約 ${c.contractId} のチーム ${c.teamId} は masters/teams.csv に存在しません`, file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
     }
   });
 }
@@ -104,6 +123,7 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: Iss
       push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: `${file} ${row} 行目: 親チーム ${t.parentTeamId} は存在しません`, file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
     }
   });
+  pushDuplicates(dataset.teams, (t) => t.teamId, file, "DUPLICATE_TEAM_ROW", "team_id", push);
   // 循環: effective_from の各時点の組織で検出する
   const snapshots = [...new Set(dataset.teams.map((t) => t.effectiveFrom).filter(isValidYearMonth))].sort();
   const reported = new Set<string>();
@@ -119,6 +139,7 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: Iss
 
 function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "masters/members.csv";
+  pushDuplicates(dataset.members, (m) => m.memberId, file, "DUPLICATE_MEMBER_ROW", "member_id", push);
   dataset.members.forEach((m, i) => {
     const row = rowOf(i);
     if (m.memberId === "") push({ severity: "error", code: "MEMBER_ID_EMPTY", message: `${file} ${row} 行目: member_id が空です`, file, row });
@@ -134,6 +155,7 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
 
 function validateRates(dataset: Dataset, push: IssueSink): void {
   const file = "masters/rates.csv";
+  pushDuplicates(dataset.rates, (r) => r.key, file, "DUPLICATE_RATE_ROW", "key", push);
   dataset.rates.forEach((r, i) => {
     const row = rowOf(i);
     if (r.key === "") push({ severity: "error", code: "RATE_KEY_EMPTY", message: `${file} ${row} 行目: key が空です`, file, row });
@@ -209,7 +231,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   const memberIds = new Set(dataset.members.map((m) => m.memberId));
   const teamIds = new Set(dataset.teams.map((t) => t.teamId));
 
-  validateContracts(dataset, push);
+  validateContracts(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
   validateTeams(dataset, teamIds, push);

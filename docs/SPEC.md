@@ -173,12 +173,13 @@ isDeficit           = forecastGrossProfit < 0
 ## 14. データ検証（CI で止める）
 
 `scripts/validate-data.ts` は以下で非0終了する:
-- 契約: ID重複、期間逆転、金額が数値でない／負
+- 契約: ID重複、期間逆転、金額が数値でない／負／円の整数でない／9,007,199,254,740,991 円超、主担当チームが teams.csv に無い（`CONTRACT_UNKNOWN_TEAM`）
 - マッピング: 存在しない契約ID
 - アサイン: 未知のメンバーID／契約ID、1人の月合計 allocation > 1.0、allocation が 0〜1 の外
-- チーム: 未知の親ID、循環
-- メンバー: 未知のチームID、区分が employee/partner 以外
-- 単価: 数値でない／負
+- チーム: 未知の親ID、循環、同じ team_id・effective_from の重複行（`DUPLICATE_TEAM_ROW`）
+- メンバー: 未知のチームID、区分が employee/partner 以外、同じ member_id・effective_from の重複行（`DUPLICATE_MEMBER_ROW`）
+- 単価: 数値でない／負、同じ key・effective_from の重複行（`DUPLICATE_RATE_ROW`）
+- CSV: 引用符（"）の閉じ忘れ（`UNCLOSED_QUOTE`。開始行を示す）
 - 日付・年月の形式不正
 警告（未紐付け工数、単価なし）は止めずに表示する。
 
@@ -187,6 +188,7 @@ isDeficit           = forecastGrossProfit < 0
 - UTF-8（BOM あり可）。Shift_JIS も読み込み時に自動判定（`scripts/` で対応）。
 - 1行目はヘッダ。列名は英語（`contract_id` など）で、`docs/DATA.md` に列定義を置く。
 - 空行・空白だけの行は無視。
+- 数値セルのカンマは 3 桁区切り（`1,234`）としてだけ受け付ける。`1,5` のような形は不正値（小数のつもりの入力を 10 倍に読まないため）。
 
 ---
 

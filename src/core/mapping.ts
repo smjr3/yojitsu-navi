@@ -58,8 +58,8 @@ function buildRuleIndex(
       target.hasUnknownContract = true;
       warnings.push({
         code: "MAPPING_UNKNOWN_CONTRACT",
-        message: `マッピング ${i + 1} 行目（${rule.worklogCustomerName} / ${rule.worklogProjectName}）の契約ID ${rule.contractId} は存在しません`,
-        ref: { row: i + 1, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
+        message: `マッピング ${i + 2} 行目（${rule.worklogCustomerName} / ${rule.worklogProjectName}）の契約ID ${rule.contractId} は存在しません`,
+        ref: { row: i + 2, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
       });
       return;
     }

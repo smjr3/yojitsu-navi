@@ -110,7 +110,10 @@ export function parseCsvTable(text: string): CsvTable {
  * 空・"abc"・"1,0,0" のような不正値は NaN（検証でエラーにする）。
  */
 export function parseNumberCell(cell: string): number {
-  const s = cell.normalize("NFKC").replace(/,/g, "").trim();
+  const t = cell.normalize("NFKC").trim();
+  // カンマは 3 桁区切りとしてだけ受け付ける（"1,5" を 15 と読まない。小数のつもりの入力を 10 倍にしないため）
+  if (t.includes(",") && !/^[+-]?\d{1,3}(,\d{3})+(\.\d*)?$/.test(t)) return Number.NaN;
+  const s = t.replace(/,/g, "");
   if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return Number.NaN;
   return Number(s);
 }
@@ -164,8 +167,29 @@ function checkColumns(file: string, table: CsvTable, required: readonly string[]
   }
 }
 
+/** 引用符が閉じないまま終わる CSV なら、その引用符が始まった物理行（1 始まり）。閉じていれば null */
+export function unclosedQuoteLine(text: string): number | null {
+  let line = 1;
+  let openedAt: number | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\n") line++;
+    else if (ch === '"') {
+      if (openedAt === null) openedAt = line;
+      else if (text[i + 1] === '"') i++;
+      else openedAt = null;
+    }
+  }
+  return openedAt;
+}
+
 function parseTable(file: string, text: string, required: readonly string[], issues: ValidationIssue[]): CsvTable {
   const table = parseCsvTable(text);
+  // 引用符の閉じ忘れは以降の行がすべて 1 セルに飲み込まれ、別の行のエラーとして現れるので、原因の行を示す
+  const unclosed = unclosedQuoteLine(text);
+  if (unclosed !== null) {
+    issues.push({ severity: "error", code: "UNCLOSED_QUOTE", message: `${file} ${unclosed} 行目: ダブルクォート（"）が閉じていません。この行以降が正しく読めません`, file, row: unclosed });
+  }
   // 空ファイルはヘッダ無しとみなし、列の欠落を報告する
   checkColumns(file, table, required, issues);
   return table;

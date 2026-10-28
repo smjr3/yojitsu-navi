@@ -4,10 +4,11 @@
  *   npx tsx 'src/data/worklogs/[contractId].json.ts' --contractId=C001
  */
 import { argValue, buildModelFromData } from "../_shared.js";
+import { contractIdFromWorklogKey } from "../../components/worklog-key.js";
 
 const rawId = argValue("contractId");
-// observablehq.config.js の dynamicPaths は encodeURIComponent 済みの ID でパスを作る
-const contractId = rawId === undefined ? undefined : decodeURIComponent(rawId);
+// observablehq.config.js の dynamicPaths は worklogKey(id) でパスを作る
+const contractId = rawId === undefined ? undefined : contractIdFromWorklogKey(rawId);
 if (!contractId) {
   console.error("--contractId=... が必要です");
   process.exit(1);
