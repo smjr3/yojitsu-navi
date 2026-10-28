@@ -1,5 +1,5 @@
 /**
- * 稼働計画のセル（SPEC §24.4）の吹き出しと、その場で修正する小さな編集欄の置き場所
+ * 稼働計画のセル（SPEC §31.4）の吹き出しと、その場で修正する小さな編集欄の置き場所
  *
  *   planCellTooltip() → { el, show(anchor, content), hide() }
  *   planCellEditor() → { el, open(anchor, content, { onClose }), close() }

@@ -94,7 +94,7 @@ test.beforeEach(async ({ page }) => {
 
 test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、4 つのファイルのタブ＋稼働計画、説明文（折りたたみ）、行数は CSV と一致、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
-  const links = page.locator(".yn-tools a");
+  const links = page.locator(".yn-tools a.yn-tool");
   await expect(links.last()).toHaveText("マスタ編集");
   await expect(links.last()).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /アサイン/, /稼働計画/]);
@@ -376,11 +376,19 @@ test("影響ダイアログ: 所属チームだけ変える行の追加は「組
 
 test.describe("gitlab モード", () => {
   const okResponder = (req: Request) => {
+    // マージ待ちの変更（§26）の一覧
+    if (req.method() === "GET" && req.url().includes("/merge_requests?")) return { status: 200, body: [] };
     if (req.url().endsWith("/user")) return { status: 200, body: { username: "taro" } };
     if (req.url().endsWith("/repository/commits")) return { status: 201, body: { id: "c0ffee00aa", web_url: "https://gitlab.test/grp/yojitsu-navi/-/commit/c0ffee00aa" } };
     if (req.url().endsWith("/merge_requests")) return { status: 201, body: { iid: 12, web_url: "https://gitlab.test/grp/yojitsu-navi/-/merge_requests/12" } };
     return { status: 404, body: { message: "404" } };
   };
+
+  /** 保存の呼び出しだけ（トークンを入れた直後の「マージ待ちの変更」の読み込み = 最初の GET /user と一覧の GET を除く） */
+  function saveCalls(mock: GitLabMock) {
+    const calls = mock.calls.filter((c) => !(c.method === "GET" && c.url.includes("/merge_requests?")));
+    return calls.slice(1);
+  }
 
   async function enterToken(page: Page) {
     await page.locator("#yn-me-token").fill("glpat-secret-token");
@@ -407,9 +415,10 @@ test.describe("gitlab モード", () => {
     await expect(outcome).toContainText("マージリクエストを作成しました");
     await expect(outcome.getByRole("link", { name: /!12/ })).toHaveAttribute("href", "https://gitlab.test/grp/yojitsu-navi/-/merge_requests/12");
     await expect(outcome).toContainText(/masters\/\d{8}-\d{6}-taro/);
-    expect(mock.calls.map((c) => `${c.method} ${c.url.replace(GITLAB, "")}`)).toEqual(["GET /user", "POST /projects/grp%2Fyojitsu-navi/repository/commits", "POST /projects/grp%2Fyojitsu-navi/merge_requests"]);
+    const calls = saveCalls(mock);
+    expect(calls.map((c) => `${c.method} ${c.url.replace(GITLAB, "")}`)).toEqual(["GET /user", "POST /projects/grp%2Fyojitsu-navi/repository/commits", "POST /projects/grp%2Fyojitsu-navi/merge_requests"]);
     expect(mock.calls.every((c) => c.headers["private-token"] === "glpat-secret-token")).toBe(true);
-    const commit = mock.calls[1]!.body as { branch: string; start_branch: string; commit_message: string; actions: Array<{ action: string; file_path: string; content: string; last_commit_id?: string }> };
+    const commit = calls[1]!.body as { branch: string; start_branch: string; commit_message: string; actions: Array<{ action: string; file_path: string; content: string; last_commit_id?: string }> };
     expect(commit.branch).toMatch(/^masters\/\d{8}-\d{6}-taro$/);
     expect(commit.start_branch).toBe("main");
     expect(commit.commit_message).toBe("2026年11月の部長単価改定");
@@ -417,7 +426,7 @@ test.describe("gitlab モード", () => {
     expect(commit.actions[0]).toMatchObject({ action: "update", file_path: PAYLOAD.files.rates.repoPath });
     expect(commit.actions[0]!.content).toBe(RATES_TEXT + "部長,14000,2026-11\n");
     if (PAYLOAD.files.rates.lastCommitId) expect(commit.actions[0]!.last_commit_id).toBe(PAYLOAD.files.rates.lastCommitId);
-    expect(mock.calls[2]!.body).toMatchObject({ source_branch: commit.branch, target_branch: "main", title: "2026年11月の部長単価改定" });
+    expect(calls[2]!.body).toMatchObject({ source_branch: commit.branch, target_branch: "main", title: "2026年11月の部長単価改定" });
     // 保存後は下書きを消し、編集をロック
     expect(await page.evaluate((k) => localStorage.getItem(k), DRAFT_KEY)).toBeNull();
     await expect(page.getByRole("button", { name: "＋ 新しい適用開始月の行を追加" })).toBeDisabled();
@@ -433,9 +442,10 @@ test.describe("gitlab モード", () => {
     await enterToken(page);
     await page.getByRole("button", { name: "GitLab に保存（直接コミット）" }).click();
     await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("main にコミットしました");
-    expect(mock.calls).toHaveLength(2);
-    expect((mock.calls[1]!.body as { branch: string }).branch).toBe("main");
-    expect(mock.calls[1]!.body).not.toHaveProperty("start_branch");
+    const calls = saveCalls(mock);
+    expect(calls).toHaveLength(2);
+    expect((calls[1]!.body as { branch: string }).branch).toBe("main");
+    expect(calls[1]!.body).not.toHaveProperty("start_branch");
   });
 
   test("競合（400 last_commit_id 不一致）: 人が読める案内を出し、編集内容と下書きは残る", async ({ page, errors }) => {
@@ -464,7 +474,7 @@ test.describe("gitlab モード", () => {
     await enterToken(page);
     await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
     await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
-    const commit = mock.calls[1]!.body as { actions: Array<{ content: string; last_commit_id?: string }> };
+    const commit = saveCalls(mock)[1]!.body as { actions: Array<{ content: string; last_commit_id?: string }> };
     expect(commit.actions[0]!.content).toBe(expectedRates(true));
     expect(commit.actions[0]!.last_commit_id).not.toBe("0".repeat(40));
     if (PAYLOAD.files.rates.lastCommitId) expect(commit.actions[0]!.last_commit_id).toBe(PAYLOAD.files.rates.lastCommitId);

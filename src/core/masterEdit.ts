@@ -900,7 +900,7 @@ export interface RebaseResult {
 }
 
 /** a の各行に対応する b の行番号（無ければ -1）。同じ内容の行を順序を保って最長一致で対応させる */
-function alignRows(a: readonly string[], b: readonly string[]): number[] {
+export function alignRows(a: readonly string[], b: readonly string[]): number[] {
   const map = new Array<number>(a.length).fill(-1);
   let s = 0;
   while (s < a.length && s < b.length && a[s] === b[s]) {

@@ -48,7 +48,7 @@
     { "id": "labor", "label": "工数" }
   ],
   "masterEdit": {
-    "mode": "download",
+    "mode": "gitlab",
     "gitlab": {
       "apiBaseUrl": "",
       "projectId": "",

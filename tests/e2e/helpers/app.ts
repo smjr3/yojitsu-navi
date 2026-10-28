@@ -156,7 +156,7 @@ export function query(page: Page): URLSearchParams {
 }
 
 /**
- * 候補から選ぶ入力欄（SPEC §24.2）で、text を打って候補 option（省略時は最初の候補）を選ぶ。
+ * 候補から選ぶ入力欄（SPEC §31.2）で、text を打って候補 option（省略時は最初の候補）を選ぶ。
  * input は欄の id のロケータ（例 dialog.locator("#yn-me-f-member_id")）
  */
 export async function pickCombo(input: Locator, text: string, option?: string | RegExp): Promise<void> {

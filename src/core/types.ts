@@ -51,8 +51,11 @@ export interface Config {
 
 /** マスタ編集の保存方式（SPEC §19.2） */
 export interface MasterEditConfig {
-  /** gitlab = API でコミット／MR、download = CSV をダウンロードして GitLab 画面でアップロード */
-  mode: "gitlab" | "download";
+  /**
+   * gitlab = API でブランチにコミットして MR を作る（既定。§24）、download = CSV をダウンロードして GitLab 画面でアップロード、
+   * demo = GitLab の代わりにブラウザ内の模擬を使う（試用。§29）
+   */
+  mode: "gitlab" | "download" | "demo";
   gitlab: {
     /** 例 https://gitlab.example.local/api/v4。空なら download に落とす */
     apiBaseUrl: string;

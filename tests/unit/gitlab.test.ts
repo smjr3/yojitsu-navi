@@ -53,7 +53,7 @@ const files = [
 const NOW = new Date("2026-10-27T01:02:03Z"); // JST 10:02:03
 
 describe("設定", () => {
-  it("resolveMasterEdit: 無い・壊れた項目は既定値（download / main / mr）。末尾の / を外す", () => {
+  it("resolveMasterEdit: 無い・壊れた項目は既定値（gitlab / main / mr）。末尾の / を外す", () => {
     expect(resolveMasterEdit(undefined)).toEqual(DEFAULT_MASTER_EDIT);
     expect(resolveMasterEdit({ mode: "x" as never })).toEqual(DEFAULT_MASTER_EDIT);
     expect(resolveMasterEdit({ mode: "gitlab", gitlab: { apiBaseUrl: " https://g/api/v4/ ", projectId: 42 as never, targetBranch: "", commitMode: "direct" } })).toEqual({

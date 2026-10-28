@@ -5,7 +5,7 @@ import { addMonths, monthRange } from "../../src/core/calendar.js";
 
 const C = (contractId: string, startMonth: string, endMonth: string) => ({ contractId, startMonth, endMonth });
 
-describe("contractSegments（§24.3 案件 → 契約）", () => {
+describe("contractSegments（§31.3 案件 → 契約）", () => {
   const renewal = [C("C001", "2025-04", "2026-03"), C("C002", "2026-04", "2027-03")];
 
   it("1 つの契約に収まる期間は 1 行", () => {
@@ -50,7 +50,7 @@ describe("contractSegments（§24.3 案件 → 契約）", () => {
   });
 });
 
-describe("editMonthAllocation（§24.4 月ごとの修正）", () => {
+describe("editMonthAllocation（§31.4 月ごとの修正）", () => {
   const row = { startMonth: "2026-04", endMonth: "2027-03", allocation: "0.5" };
   it("この月だけ: 前・その月・後の 3 行に分ける", () => {
     expect(editMonthAllocation(row, "2026-06", "0.3", "month")).toEqual([
@@ -84,7 +84,7 @@ describe("editMonthAllocation（§24.4 月ごとの修正）", () => {
   });
 });
 
-describe("mergeAdjacent（§24.4 行のまとめ直し）", () => {
+describe("mergeAdjacent（§31.4 行のまとめ直し）", () => {
   const r = (id: string, startMonth: string, endMonth: string, allocation: string) => ({ id, startMonth, endMonth, allocation });
   it("隣り合って同じ配分の行を 1 行に", () => {
     const out = mergeAdjacent([r("n1", "2026-06", "2026-06", "0.5"), r("o1", "2026-04", "2026-05", "0.5"), r("n2", "2026-07", "2027-03", "0.50")], new Set(["o1"]));

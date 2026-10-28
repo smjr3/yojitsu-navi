@@ -43,7 +43,7 @@ test("チーム一覧 → 末端チーム詳細 → 契約一覧（team=）→ �
   expect(query(page).get("id")).toBe(firstKey);
   expect(query(page).get("team")).toBe(leaf);
   const r = contractResult(firstKey, model);
-  // 見出しは 顧客 / 案件（ID は出さない。§24.1）
+  // 見出しは 顧客 / 案件（ID は出さない。§31.1）
   await expect(page.locator("h1")).toHaveText(`${r.contract.customerName} / ${r.contract.projectName}`);
   await expect(page.locator("h1")).toContainText(r.contract.customerName);
   // パンくず

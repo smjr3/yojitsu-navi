@@ -1,12 +1,12 @@
 /**
- * 稼働計画のセル（SPEC §24.4）・案件で選ぶアサイン（§24.3）・候補から選ぶ入力欄（§24.2）・ID を出さない表示（§24.1）
+ * 稼働計画のセル（SPEC §31.4）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
  */
 import type { Page } from "@playwright/test";
 import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.removeItem("yojitsu-navi:masters-draft:v1");
+    if (sessionStorage.getItem("yn-e2e-keep-draft") !== "1") localStorage.removeItem("yojitsu-navi:masters-draft:v1");
     sessionStorage.removeItem("yojitsu-navi:plan-cell-scope");
   });
 });
@@ -249,3 +249,19 @@ for (const width of [1280, 1024, 768, 390]) {
     }
   });
 }
+
+test("下書きの復元待ちのあいだは、セルをクリックしても内訳を見せるだけ（編集欄は開かない）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2027-02").click();
+  await pop(page).locator("#yn-plan-pop-0").fill("0.4");
+  await pop(page).locator("#yn-plan-pop-0").press("Enter");
+  await expect(cell(page, "M010", "2027-02")).toHaveText("0.40");
+  // 下書きが残った状態で開き直す（beforeEach の削除は最初の読み込みだけに効かせる）
+  await page.evaluate(() => sessionStorage.setItem("yn-e2e-keep-draft", "1"));
+  await page.reload();
+  await expect(page.locator("#yn-me-draft-title")).toBeVisible();
+  await cell(page, "M010", "2027-02").click();
+  await expect(page.locator("#yn-plan-tip")).toBeVisible();
+  await expect(page.locator("#yn-plan-tip")).not.toContainText("クリックで修正");
+  await expect(pop(page)).toHaveCount(0);
+});

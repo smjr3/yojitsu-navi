@@ -327,7 +327,7 @@ test.describe("契約一覧", () => {
       if (e.isDeficit) expect(status, `${id} 状態`).toContain("超過見込み");
       if (e.isOverBudget) expect(status, `${id} 状態`).toContain("消化率超過");
       if (!e.isDeficit && !e.isOverBudget && e.includesPreliminary) expect(status, `${id} 状態`).toContain("速報含む");
-      // 行の先頭セルに顧客名・案件名（ID は出さない。§24.1）
+      // 行の先頭セルに顧客名・案件名（ID は出さない。§31.1）
       const first = await cellText(row, 0);
       expect(first).not.toContain(id);
       expect(first).toContain(r.contract.projectName);

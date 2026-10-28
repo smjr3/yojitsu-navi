@@ -1,4 +1,4 @@
-/** 候補の絞り込み（SPEC §24.2） */
+/** 候補の絞り込み（SPEC §31.2） */
 import { describe, expect, it } from "vitest";
 import { filterOptions, normalizeQuery } from "../../src/components/combobox.js";
 

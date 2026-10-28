@@ -28,6 +28,7 @@ import {
   parseMasterDoc,
   restoreRow,
   revertRow,
+  serializeMasterDoc,
   rebaseDraftFile,
   rowRecord,
   rowState,
@@ -39,15 +40,18 @@ import {
 import { allocationFromInput, contractSegments, editMonthAllocation, flattenTeamTree, hoursFromAllocation, memberTeamAt, mergeAdjacent, planView, projectKey } from "../core/plan.js";
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
+import { docFromCsvText } from "../core/csvEdit.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 import { infoTip } from "./layout.js";
+import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch, setToken as storeToken, tokenRemembered } from "./gitlab-client.js";
+import { mergeRequestsPanel } from "./mr-list.js";
 import { combobox } from "./combobox.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
 
 /** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
 const PROJECT_FIELD = "__project";
 
-export const TOKEN_STORAGE_KEY = "yojitsu-navi:gitlab-token";
+export { TOKEN_STORAGE_KEY };
 
 /** 各ファイルの説明（何を編集すると何が変わるか） */
 export const FILE_HELP = {
@@ -154,16 +158,18 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, initialView = null, initialTeam = null, initialMember = null, fetchImpl = (url, init) => window.fetch(url, init), now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, initialView = null, initialTeam = null, initialMember = null, fetchImpl = null, now = () => new Date() }) {
   const local = safeStorage("local");
-  const session = safeStorage("session");
+  // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
+  const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   const contracts = parseCsvTable(data.context.contracts)
     .rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name"), startMonth: r.get("start_month"), endMonth: r.get("end_month") }))
     .filter((c) => c.id !== "");
   const contractById = new Map(contracts.map((c) => [c.id, c]));
-  // 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§24.3）
+  // 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§31.3）
   const projects = new Map();
   for (const c of contracts) {
     const key = projectKey(c.customer, c.project);
@@ -171,7 +177,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     if (p) p.contracts.push({ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth });
     else projects.set(key, { key, customer: c.customer, project: c.project, contracts: [{ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth }] });
   }
-  /** 契約 → 「顧客 / 案件名」（ID は出さない。§24.1） */
+  /** 契約 → 「顧客 / 案件名」（ID は出さない。§31.1） */
   const contractText = (id) => {
     const c = contractById.get(id);
     return c ? `${c.customer} / ${c.project}` : fmt(T.masters.unknownContractValue, { id });
@@ -193,6 +199,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     open: new Set(initialMember ? [initialMember] : []),
   };
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
+  /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
+  const csvEdit = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { on: false, text: null, result: null }]));
   let mode = effectiveSaveMode(data.masterEdit);
   const configuredMode = mode;
   let saving = false;
@@ -262,7 +270,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   function projectOptions() {
     return [...projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
   }
-  /** ID の列を画面に出す文字（名前）にする。名前が無いものは ID のまま（§24.1） */
+  /** ID の列を画面に出す文字（名前）にする。名前が無いものは ID のまま（§31.1） */
   function displayValue(fileId, column, value) {
     if (value === "") return value;
     if (column === "team_id" && fileId !== "teams") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
@@ -598,17 +606,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     });
 
     const removed = diffMasterDoc(doc).removed;
-    parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel" role="tabpanel" aria-labelledby=${`yn-me-tab-${fileId}`}>
-      <div class="yn-me-panel-head">
-        <div>
-          <div class="yn-title-with-tip"><h2 class="yn-section-title">${def.label}<span class="yn-me-path"> ${meta.path}</span></h2>${infoTip(
-            html`<span class="yn-me-help"><strong>${T.masters.helpWhat}</strong> ${help.what}</span><span class="yn-me-help"><strong>${T.masters.helpEffect}</strong> ${help.effect}</span><span class="yn-me-help"><strong>${T.masters.helpHowto}</strong> ${help.howto}</span>`,
-            { label: fmt(T.layout.aboutSection, { title: def.label }) },
-          )}</div>
-        </div>
-      </div>
-      ${notes.map((n) => html`<p class="yn-note yn-note-warn">${n}</p>`)}
-      <div class="yn-me-toolbar">
+    const csv = csvEdit[fileId];
+    const csvBlocked = fileId === "members" && importMode;
+    const modeBtn = (on, label) =>
+      html`<button type="button" class="yn-seg-btn" aria-pressed=${String(csv.on === on)} data-fk=${`csvmode:${fileId}:${on ? "csv" : "table"}`} disabled=${on && csvBlocked} onclick=${() => {
+        csv.on = on;
+        renderPanel();
+        focusKey(on ? `csv:text:${fileId}` : `csvmode:${fileId}:table`);
+      }}>${label}</button>`;
+    const modeSwitch = html`<div class="yn-seg yn-me-editmode" role="group" aria-label=${T.csvEdit.modeLabel}>${modeBtn(false, T.csvEdit.modeTable)}${modeBtn(true, T.csvEdit.modeCsv)}</div>`;
+    const tableBody = html`<div class="yn-me-toolbar">
         <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${locked || !!pendingDraft} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>${T.masters.onlyChanged}</span></label>
@@ -629,8 +636,91 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         ? html`<div class="yn-me-removed"><h3 class="yn-me-subtitle">${T.masters.removedTitle}${integer(removed.length)}${T.masters.countSuffixParen}</h3><ul>${removed.map(
             (r) => html`<li><span class="yn-chip yn-chip-neutral">${T.masters.removedChip}</span> <span class="yn-me-removed-text">${columns.map((c) => displayValue(fileId, c.name, (r.before[c.name] ?? "").trim())).join(" ・ ")}</span> <button type="button" class="yn-btn yn-btn-sm" data-fk=${`restore:${r.rowId}`} onclick=${() => commit(fileId, restoreRow(docs[fileId], r.rowId), `edit:${r.rowId}`)}>${T.masters.undoDelete}</button></li>`,
           )}</ul></div>`
-        : null}
+        : null}`;
+    parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel" role="tabpanel" aria-labelledby=${`yn-me-tab-${fileId}`}>
+      <div class="yn-me-panel-head">
+        <div>
+          <div class="yn-title-with-tip"><h2 class="yn-section-title">${def.label}<span class="yn-me-path"> ${meta.path}</span></h2>${infoTip(
+            html`<span class="yn-me-help"><strong>${T.masters.helpWhat}</strong> ${help.what}</span><span class="yn-me-help"><strong>${T.masters.helpEffect}</strong> ${help.effect}</span><span class="yn-me-help"><strong>${T.masters.helpHowto}</strong> ${help.howto}</span>`,
+            { label: fmt(T.layout.aboutSection, { title: def.label }) },
+          )}</div>
+        </div>
+      </div>
+      ${notes.map((n) => html`<p class="yn-note yn-note-warn">${n}</p>`)}
+      ${csvBlocked ? null : modeSwitch}
+      ${csv.on && !csvBlocked ? renderCsvEditor(fileId) : tableBody}
     </section>`);
+  }
+
+  // ---- CSV で直接編集（§25） ---------------------------------------------------
+  function renderCsvEditor(fileId) {
+    const def = MASTER_FILES[fileId];
+    const csv = csvEdit[fileId];
+    const current = serializeMasterDoc(docs[fileId]).text;
+    const text = csv.text ?? current;
+    const disabled = locked || !!pendingDraft;
+    const lines = text.split("\n").length;
+    const area = html`<textarea id=${`yn-me-csv-${fileId}`} class="yn-input yn-me-csv-text" rows=${Math.min(24, Math.max(8, lines + 1))} spellcheck="false" wrap="off" autocomplete="off" aria-describedby=${`yn-me-csv-lead-${fileId} yn-me-csv-status-${fileId}`} readonly=${disabled}></textarea>`;
+    area.value = text;
+    area.dataset.fk = `csv:text:${fileId}`;
+    const status = html`<span class="yn-me-small" id=${`yn-me-csv-status-${fileId}`} aria-live="polite"></span>`;
+    const pendingText = () => (csv.text !== null && csv.text !== serializeMasterDoc(docs[fileId]).text ? T.csvEdit.unapplied : "");
+    status.textContent = pendingText();
+    area.addEventListener("input", () => {
+      csv.text = area.value;
+      csv.result = null;
+      status.textContent = pendingText();
+      resultSlot.replaceChildren();
+    });
+    const apply = () => {
+      const r = docFromCsvText(docs[fileId], area.value);
+      if (!r.doc) {
+        csv.text = area.value;
+        csv.result = { errors: r.errors };
+        renderPanel();
+        focusKey(`csv:result:${fileId}`);
+        return;
+      }
+      csv.text = null;
+      csv.result = { stats: r.stats, tsv: r.delimiter === "\t" };
+      commit(fileId, r.doc, `csv:result:${fileId}`);
+    };
+    area.addEventListener("keydown", (e) => {
+      // Ctrl/⌘ + Enter で反映
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        apply();
+      }
+    });
+    const res = csv.result;
+    const resultSlot = html`<div class="yn-me-csv-result"></div>`;
+    if (res?.errors) {
+      resultSlot.append(html`<div class="yn-me-outcome is-error" role="alert" tabindex="-1" data-fk=${`csv:result:${fileId}`}>
+        <p class="yn-me-outcome-title"><span aria-hidden="true">!</span> ${T.csvEdit.errorsTitle}</p>
+        <ul>${res.errors.map((e) => html`<li>${e.line ? fmt(T.csvEdit.lineN, { line: e.line }) : ""}${e.message}</li>`)}</ul>
+      </div>`);
+    } else if (res?.stats) {
+      const st = res.stats;
+      resultSlot.append(html`<div class="yn-me-outcome is-ok" role="status" tabindex="-1" data-fk=${`csv:result:${fileId}`}>
+        <p>${st.added + st.changed + st.removed === 0 ? T.csvEdit.noChange : fmt(T.csvEdit.applied, { added: integer(st.added), changed: integer(st.changed), removed: integer(st.removed) })}${res.tsv ? ` ${T.csvEdit.tsvNote}` : ""}</p>
+      </div>`);
+    }
+    return html`<div class="yn-me-csv">
+      <p class="yn-me-small" id=${`yn-me-csv-lead-${fileId}`}>${disabled ? T.csvEdit.lockedNote : T.csvEdit.lead}</p>
+      <label class="visually-hidden" for=${`yn-me-csv-${fileId}`}>${fmt(T.csvEdit.textareaLabel, { file: def.label })}</label>
+      ${area}
+      <p class="yn-me-actions">
+        <button type="button" class="yn-btn yn-btn-primary" data-fk=${`csv:apply:${fileId}`} disabled=${disabled} onclick=${apply}>${T.csvEdit.apply}</button>
+        <button type="button" class="yn-btn" data-fk=${`csv:reset:${fileId}`} disabled=${disabled} onclick=${() => {
+          csv.text = null;
+          csv.result = null;
+          renderPanel();
+          focusKey(`csv:text:${fileId}`);
+        }}>${T.csvEdit.reset}</button>
+        ${status}
+      </p>
+      ${resultSlot}
+    </div>`;
   }
 
   // ---- 稼働計画（§23） -------------------------------------------------------
@@ -692,15 +782,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const cells = r.monthly.map((v, i) => {
         const m = months[i];
-        const btn = html`<button type="button" class="yn-plan-cell-btn" data-fk=${`plan:cell:${r.memberId}:${m}`} aria-label=${fmt(T.plan.cellAria, { name, month: monthJa(m), pm: pm(v) })} aria-haspopup="dialog" aria-disabled=${editable ? null : "true"}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-hidden="true">—</span>`}</button>`;
+        const btn = html`<button type="button" class=${editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly"} data-fk=${`plan:cell:${r.memberId}:${m}`} aria-label=${fmt(T.plan.cellAria, { name, month: monthJa(m), pm: pm(v) })} aria-haspopup=${editable ? "dialog" : null}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-hidden="true">—</span>`}</button>`;
         const tip = () => tooltip.show(btn, cellTip(r, m, v));
         btn.addEventListener("mouseenter", tip);
         btn.addEventListener("mouseleave", tooltip.hide);
         btn.addEventListener("focus", tip);
         btn.addEventListener("blur", tooltip.hide);
+        // 下書きの復元待ち・保存後は修正できない。クリックしても内訳を見せるだけ
         btn.addEventListener("click", () => {
+          if (!editable) return tip();
           tooltip.hide();
-          if (editable) openCellEditor(r, m, btn);
+          openCellEditor(r, m, btn);
         });
         return html`<td class=${`num yn-me-plan-cell${v > 1 + 1e-9 ? " is-over" : v > 0 ? " is-set" : ""}`}>${btn}</td>`;
       });
@@ -791,7 +883,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     </section>`);
   }
 
-  // ---- 稼働計画のセル: その場で修正（§24.4） -----------------------------------
+  // ---- 稼働計画のセル: その場で修正（§31.4） -----------------------------------
   /** 表の中の矢印キーで隣のセルへ */
   function gridKeys(ev) {
     const btn = ev.target.closest?.(".yn-plan-cell-btn");
@@ -985,7 +1077,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </select>`;
     }
     if (col.input === "project") {
-      // 案件で選ぶ（値は案件のキー）。ファイルに無い契約を指す既存の行は "c:<ID>" のまま持つ（§24.3）
+      // 案件で選ぶ（値は案件のキー）。ファイルに無い契約を指す既存の行は "c:<ID>" のまま持つ（§31.3）
       const c = contractById.get(value);
       const v = value === "" ? "" : c ? projectKey(c.customer, c.project) : `c:${value}`;
       return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
@@ -1061,7 +1153,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   };
 
   /**
-   * フォームの値（アサインの contract_id 欄は案件のキー）を、書き込む行の値の配列にする（§24.3）
+   * フォームの値（アサインの contract_id 欄は案件のキー）を、書き込む行の値の配列にする（§31.3）
    * 案件の契約へ期間の月ごとに割り当て、契約が切り替わる所で行を分ける。アサイン以外はそのまま 1 行
    */
   function resolveProjectRows(fileId, values) {
@@ -1181,7 +1273,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const before = docs[fileId];
       let next;
       let focusAfter;
-      // アサインは案件 → 期間の月ごとに契約へ割り当て、切り替わりで行を分ける（§24.3）
+      // アサインは案件 → 期間の月ごとに契約へ割り当て、切り替わりで行を分ける（§31.3）
       const pieces = resolveProjectRows(fileId, values);
       if (mode === "edit") {
         next = updateRow(before, rowId, pieces[0]);
@@ -1366,21 +1458,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
 
   async function doSave(messageInput) {
     if (saving || blockedReason()) return;
-    const token = session.get(TOKEN_STORAGE_KEY) ?? "";
+    const token = getToken();
     saving = true;
     outcome = null;
     renderSave();
     const files = changedFiles().map((id) => ({ path: data.files[id].repoPath ?? MASTER_FILES[id].path, content: validation.texts[id], lastCommitId: bases[id].lastCommitId }));
     try {
-      const result = await saveToGitLab(fetchImpl, { config: data.masterEdit, token, files, message: (messageInput || "").trim() || commitMessage(), description: mrDescription(), now: now() });
+      const result = await saveToGitLab(gitlab, { config: data.masterEdit, token, files, message: (messageInput || "").trim() || commitMessage(), description: mrDescription(), now: now() });
       outcome = { kind: "ok", result };
       locked = true;
       // 保存できたら下書きは不要
       local.remove(DRAFT_STORAGE_KEY);
       draftSavedAt = null;
+      for (const c of Object.values(csvEdit)) c.result = null;
+      // 作った MR を「マージ待ちの変更」とヘッダーの件数に出す
+      if (result.commitMode === "mr") mrPanel.refresh();
     } catch (e) {
       outcome = { kind: "error", error: { kind: e?.kind ?? "other", message: e?.message ?? String(e), detail: e?.detail ?? "", status: e?.status ?? null, partial: e?.partial ?? null } };
-      if (outcome.error.kind === "permission" && outcome.error.status === 401) session.remove(TOKEN_STORAGE_KEY);
+      if (outcome.error.kind === "permission" && outcome.error.status === 401) clearToken();
       // コミットまでは済んだ（MR だけ失敗）: もう一度保存すると別ブランチに同じ変更が重複するので止める
       if (outcome.error.partial) {
         locked = true;
@@ -1412,6 +1507,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   function resetAll(focus = "add:" + active) {
     docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
     rebasedInfo = {};
+    for (const c of Object.values(csvEdit)) Object.assign(c, { text: null, result: null });
     locked = false;
     outcome = null;
     typedMessage = null;
@@ -1489,14 +1585,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     const cfg = data.masterEdit;
     let body;
     if (mode === "gitlab") {
-      const hasToken = (session.get(TOKEN_STORAGE_KEY) ?? "") !== "";
+      const hasToken = getToken() !== "";
       const tokenInput = html`<input type="password" id="yn-me-token" class="yn-input" autocomplete="off" aria-labelledby="yn-me-token-label" spellcheck="false" aria-describedby="yn-me-token-hint" placeholder="glpat-…">`;
       const setToken = () => {
         const v = tokenInput.value.trim();
         if (v === "") return;
-        session.set(TOKEN_STORAGE_KEY, v);
+        storeToken(v);
         tokenInput.value = "";
         renderSave();
+        mrPanel.refresh();
         focusKey("save:token-clear");
       };
       tokenInput.addEventListener("keydown", (ev) => {
@@ -1517,9 +1614,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         <div class="yn-me-field">
           <span class="yn-me-label" id="yn-me-token-label">${T.masters.tokenLabel}</span>
           ${hasToken
-            ? html`<p class="yn-me-token-set"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.masters.tokenSet}</span> ${T.masters.tokenSetNote} <button type="button" class="yn-btn yn-btn-sm" data-fk="save:token-clear" onclick=${() => {
-                session.remove(TOKEN_STORAGE_KEY);
+            ? html`<p class="yn-me-token-set"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.masters.tokenSet}</span> ${tokenRemembered() ? T.settings.tokenWhereLocal : T.masters.tokenSetNote} <button type="button" class="yn-btn yn-btn-sm" data-fk="save:token-clear" onclick=${() => {
+                clearToken();
                 renderSave();
+                mrPanel.refresh();
                 document.getElementById("yn-me-token")?.focus();
               }}>${T.masters.tokenClear}</button></p>`
             : html`<div class="yn-me-inline">${tokenInput}<button type="button" class="yn-btn" data-fk="save:token-set" onclick=${setToken}>${T.masters.tokenUse}</button></div>`}
@@ -1537,8 +1635,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </div>`;
     } else {
       body = html`<div class="yn-me-save-body">
-        ${configuredMode === "gitlab" ? html`<p class="yn-note yn-note-warn">${T.masters.fallbackDownload}</p>` : null}
-        <p>${T.masters.downloadLead}</p>
+        ${configuredMode === "gitlab" ? html`<p class="yn-note yn-note-warn">${T.masters.fallbackDownload}</p>` : data.masterEdit.mode !== "download" ? html`<p class="yn-note yn-note-warn" data-role="not-configured">${T.settings.notConfigured}</p>` : null}
+        <p>${configuredMode === "gitlab" || data.masterEdit.mode !== "download" ? T.masters.downloadLeadFallback : T.masters.downloadLead}</p>
         <ol class="yn-me-steps">
           <li>${T.masters.step1}</li>
           <li>${T.masters.step2a}${files.length ? files.map((id, i) => html`${i > 0 ? "、" : ""}<code>${MASTER_FILES[id].path}</code>`) : html`<code>data/masters/…</code>`}${T.masters.step2b}</li>
@@ -1586,7 +1684,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     renderSave();
   }
 
-  root.append(parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
+  root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
+  mrPanel.refresh();
   return root;
 }

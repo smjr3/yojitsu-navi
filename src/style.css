@@ -273,18 +273,6 @@ body {
   text-decoration: none;
   white-space: nowrap;
 }
-.yn-theme-toggle {
-  align-self: center;
-  background: transparent;
-  font-family: inherit;
-  line-height: inherit;
-  cursor: pointer;
-}
-.yn-theme-toggle[aria-pressed="true"] {
-  background: var(--yn-accent-bg);
-  border-color: var(--yn-focus);
-  color: var(--yn-text-1) !important;
-}
 .yn-tool:hover {
   background: var(--yn-wash);
 }
@@ -2606,7 +2594,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 
 /* ---------------------------------------------------------------------------
- * 稼働計画: 行を詰める・セルの吹き出しと編集欄（SPEC §24.4）
+ * 稼働計画: 行を詰める・セルの吹き出しと編集欄（SPEC §31.4）
  * ------------------------------------------------------------------------- */
 .yn-me-plan-table th,
 .yn-me-plan-table td {
@@ -2671,10 +2659,10 @@ html:has(dialog.yn-dialog[open]) {
   outline: 2px solid var(--yn-focus);
   outline-offset: -2px;
 }
-.yn-plan-cell-btn[aria-disabled="true"] {
+.yn-plan-cell-btn.is-readonly {
   cursor: default;
 }
-.yn-plan-cell-btn[aria-disabled="true"]:hover {
+.yn-plan-cell-btn.is-readonly:hover {
   background: transparent;
   box-shadow: none;
 }
@@ -2864,7 +2852,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 
 /* ---------------------------------------------------------------------------
- * 候補から選ぶ入力欄（SPEC §24.2）
+ * 候補から選ぶ入力欄（SPEC §31.2）
  * ------------------------------------------------------------------------- */
 .yn-combo {
   position: relative;
@@ -2944,4 +2932,329 @@ html:has(dialog.yn-dialog[open]) {
 /* 編集欄の中では候補を短めに（画面下のシートからはみ出さない） */
 .yn-plan-pop .yn-combo-list {
   max-height: 180px;
+}
+
+/* ---------------------------------------------------------------------------
+ * ヘッダー: マージ待ち件数バッジ・アイコンボタン（テーマ切替・設定）（§27・§28）
+ * ------------------------------------------------------------------------- */
+.yn-tool {
+  position: relative;
+}
+.yn-mr-badge:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--yn-link);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+}
+:root[data-theme="dark"] .yn-mr-badge:not([hidden]) {
+  color: #0b0b0b;
+}
+.yn-icon-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--yn-hairline-strong);
+}
+.yn-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yn-text-2) !important;
+  cursor: pointer;
+  text-decoration: none;
+}
+.yn-icon-btn:hover {
+  background: var(--yn-wash-strong);
+  color: var(--yn-text-1) !important;
+}
+.yn-icon-btn:focus-visible {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 1px;
+}
+.yn-icon-btn[aria-current="page"] {
+  background: var(--yn-accent-bg);
+  color: var(--yn-text-1) !important;
+}
+.yn-theme-toggle .yn-icon-sun {
+  display: none;
+}
+:root[data-theme="dark"] .yn-theme-toggle .yn-icon-moon {
+  display: none;
+}
+:root[data-theme="dark"] .yn-theme-toggle .yn-icon-sun {
+  display: block;
+}
+@media (max-width: 959px) {
+  .yn-icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * マスタ編集: 表／CSV の切替・CSV 編集欄（§25）
+ * ------------------------------------------------------------------------- */
+.yn-me-editmode {
+  margin: 4px 0 4px;
+}
+.yn-me-csv-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  min-height: 160px;
+  font: 13px/1.5 var(--monospace);
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  tab-size: 8;
+}
+.yn-me-csv-text[readonly] {
+  background: var(--yn-wash);
+}
+.yn-me-csv .yn-me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * マージ待ちの変更（§26）
+ * ------------------------------------------------------------------------- */
+.yn-mr {
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+}
+.yn-mr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.yn-mr-bar .yn-section-title {
+  margin: 0;
+}
+.yn-mr-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--yn-link);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+:root[data-theme="dark"] .yn-mr-count {
+  color: #0b0b0b;
+}
+.yn-mr-empty,
+.yn-mr-demo {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--yn-text-2);
+}
+.yn-mr-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.yn-mr-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--yn-hairline);
+}
+.yn-mr-item:first-child {
+  border-top: 0;
+}
+.yn-mr-title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  max-width: none;
+}
+.yn-mr-iid {
+  color: var(--yn-text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.yn-mr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--yn-text-2);
+  max-width: none;
+}
+.yn-mr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.yn-mr-changes {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-wash);
+}
+.yn-mr-file + .yn-mr-file {
+  margin-top: 8px;
+}
+.yn-mr-file-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.yn-mr-rows,
+.yn-mr-summary {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.yn-mr-summary {
+  padding-left: 20px;
+  list-style: disc;
+}
+.yn-mr-rows li {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.yn-mr-key {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.yn-mr-text {
+  color: var(--yn-text-2);
+}
+
+/* ---------------------------------------------------------------------------
+ * 設定画面（§28）
+ * ------------------------------------------------------------------------- */
+.yn-settings {
+  max-width: 880px;
+}
+.yn-settings-section {
+  margin: 0 0 32px;
+}
+.yn-settings-target {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+.yn-settings-target div {
+  display: contents;
+}
+.yn-settings-target dt {
+  color: var(--yn-text-2);
+}
+.yn-settings-target dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.yn-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.yn-settings-check-label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.yn-settings-check-label input {
+  margin-top: 3px;
+}
+.yn-settings .yn-me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.yn-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.yn-settings-theme {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+.yn-settings-theme legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.yn-seg-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-card);
+  font-size: 14px;
+  cursor: pointer;
+}
+.yn-seg-radio:has(input:checked) {
+  background: var(--yn-accent-bg);
+  border-color: var(--yn-focus);
+  font-weight: 700;
+}
+.yn-settings-demo {
+  padding: 8px 12px;
+  border: 1px dashed var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+}
+@media (max-width: 480px) {
+  .yn-mr {
+    padding: 12px;
+  }
+  .yn-settings .yn-me-inline .yn-input {
+    flex: 1 1 100%;
+  }
+}
+/* スマホ幅: 補助リンクの後ろに折り返すので、区切り線は付けない */
+@media (max-width: 639px) {
+  .yn-icon-tools {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
 }
