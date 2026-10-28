@@ -320,7 +320,7 @@ test.describe("L4 / L9 メンバー一覧", () => {
       await expect(dataRows(tableByCaption(page, "メンバー別の計画と実績"))).toHaveCount(
         aggregateMembers(model, { period: { from: FY.from, to: FY.to < ASOF ? FY.to : ASOF }, memberIds: ids }).members.length,
       );
-      const noteText = (await page.locator(".yn-note", { hasText: "期間全体の計画" }).first().textContent()) ?? "";
+      const noteText = (await page.locator(".yn-kpi-sub", { hasText: "期間全体" }).first().textContent()) ?? "";
       expect(noteText).toContain(yen(expected.total.plannedCost));
     }
   });

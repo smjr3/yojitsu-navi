@@ -44,7 +44,7 @@ import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 import { infoTip } from "./layout.js";
-import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch, setToken as storeToken, tokenRemembered } from "./gitlab-client.js";
+import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
 import { combobox } from "./combobox.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
@@ -251,6 +251,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     draftSavedAt = d.savedAt;
     pendingDraft = null;
     validation = validateEdited(docs, data.context, config);
+    // 設定画面などから戻ったときは、変更のあるタブを開く（URL でタブを指定したときを除く）
+    if (!VIEW_IDS.includes(initialView) && docs[active] && diffMasterDoc(docs[active]).count === 0) active = VIEW_IDS.find((id) => docs[id] && diffMasterDoc(docs[id]).count > 0) ?? active;
   }
   /** 下書きの衝突の選択: fileId → 衝突 id → "mine" | "theirs" */
   let draftChoices = {};
@@ -485,6 +487,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       draftChoices = {};
       draftMsg = "";
       validation = validateEdited(docs, data.context, config);
+      // 戻した変更のあるタブを開く（今のタブに変更が無いとき）
+      if (docs[active] && diffMasterDoc(docs[active]).count === 0) active = VIEW_IDS.find((id) => docs[id] && diffMasterDoc(docs[id]).count > 0) ?? active;
       persistDraft();
       renderAll();
       focusKey(`tab:${active}`);
@@ -828,7 +832,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         rerender();
         focusKey(on ? `csv:text:${fileId}` : `csvmode:${fileId}:table`);
       }}>${label}</button>`;
-    return html`<div class="yn-seg yn-me-editmode" role="group" aria-label=${T.csvEdit.modeLabel}>${btn(false, T.csvEdit.modeTable)}${btn(true, T.csvEdit.modeCsv)}</div>`;
+    return html`<div class="yn-title-with-tip yn-me-editmode-row"><div class="yn-seg yn-me-editmode" role="group" aria-label=${T.csvEdit.modeLabel}>${btn(false, T.csvEdit.modeTable)}${btn(true, T.csvEdit.modeCsv)}</div>${infoTip(T.csvEdit.lead, { label: T.csvEdit.tipLabel })}</div>`;
   }
 
   // ---- CSV で直接編集（§25） ---------------------------------------------------
@@ -885,7 +889,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       </div>`);
     }
     return html`<div class="yn-me-csv">
-      <p class="yn-me-small" id=${`yn-me-csv-lead-${fileId}`}>${disabled ? T.csvEdit.lockedNote : T.csvEdit.lead}</p>
+      <p class=${disabled ? "yn-me-small" : "visually-hidden"} id=${`yn-me-csv-lead-${fileId}`}>${disabled ? T.csvEdit.lockedNote : T.csvEdit.lead}</p>
       <label class="visually-hidden" for=${`yn-me-csv-${fileId}`}>${fmt(T.csvEdit.textareaLabel, { file: def.label })}</label>
       ${area}
       <p class="yn-me-actions">
@@ -1170,7 +1174,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}<span class="yn-me-path"> ${data.files.assignments.path} ・ ${data.files.outside.path}</span></h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -1208,7 +1212,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
             : null}
         </table>
       </div>
-      <p class="yn-me-small">${T.planEdit.legend}</p>
       ${removedList("assignments", diffMasterDoc(docs.assignments).removed, MASTER_FILES.assignments.columns)}
       ${removedList("outside", diffMasterDoc(docs.outside).removed, MASTER_FILES.outside.columns)}
     </section>`);
@@ -2001,7 +2004,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const status =
       v.errors > 0
         ? html`<p class="yn-me-check is-error" role="status"><span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(v.errors)}${T.masters.countSuffix}</span> ${T.masters.cannotSave}${v.warnings ? fmt(T.masters.warningsNotBlocking, { n: integer(v.warnings) }) : ""}</p>`
-        : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span> ${T.masters.validationOk}${v.warnings ? fmt(T.masters.warningsNotBlocking2, { n: integer(v.warnings) }) : ""}</p>`;
+        : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span>${v.warnings ? fmt(T.masters.warningsNotBlocking2, { n: integer(v.warnings) }) : ""}</p>`;
     const byTab = MASTER_FILE_IDS.filter((id) => errorCount(id) > 0);
     // 行に付いた警告は下の一覧に出ないため、件数の内訳としてファイルへの移動ボタンを出す
     const warnTabs = MASTER_FILE_IDS.filter((id) => errorCount(id, "warning") > 0);
@@ -2017,14 +2020,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       }}>${text}</button>`;
     };
     parts.check.replaceChildren(html`<section class="yn-me-section" aria-labelledby="yn-me-check-title">
-      <h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>
+      <div class="yn-title-with-tip"><h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>${infoTip(html`<span class="yn-me-help">${T.masters.validationOk}</span><span class="yn-me-help">${T.masters.worklogWarningsNote}</span>`, { label: fmt(T.layout.aboutSection, { title: T.masters.validationTitle }) })}</div>
       ${status}
       ${byTab.length ? html`<p class="yn-me-small">${T.masters.filesWithErrors} ${byTab.map((id, i) => fileLink(id, i, errorCount(id), "goto"))}</p>` : null}
       ${warnTabs.length ? html`<p class="yn-me-small">${T.masters.filesWithRowWarnings} ${warnTabs.map((id, i) => fileLink(id, i, errorCount(id, "warning"), "gotow"))}</p>` : null}
       ${general.length
         ? html`<ul class="yn-me-issues yn-me-general">${general.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${i.message}</li>`)}</ul>`
         : null}
-      <p class="yn-me-small">${T.masters.worklogWarningsNote}</p>
     </section>`);
   }
 
@@ -2053,8 +2055,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         })
       : html`<p class="yn-me-empty">${T.masters.noDiff}</p>`;
     parts.diff.replaceChildren(html`<section class="yn-me-section" aria-labelledby="yn-me-diff-title">
-      <h2 id="yn-me-diff-title" class="yn-section-title">${T.masters.diffTitle}</h2>
-      <p class="yn-section-hint">${T.masters.diffNote}</p>
+      <div class="yn-title-with-tip"><h2 id="yn-me-diff-title" class="yn-section-title">${T.masters.diffTitle}</h2>${infoTip(T.masters.diffNote, { label: fmt(T.layout.aboutSection, { title: T.masters.diffTitle }) })}</div>
       ${body}
     </section>`);
   }
@@ -2221,60 +2222,36 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const reason = blockedReason();
     const files = changedFiles();
     const cfg = data.masterEdit;
+    // 変更が無いうちは保存の欄を出さない（保存の結果を表示中は除く）
+    if (files.length === 0 && !outcome && !saving) {
+      parts.save.replaceChildren();
+      return;
+    }
     let body;
+    let help;
     if (mode === "gitlab") {
+      // トークンの登録・接続の確認は設定画面だけで行う（SPEC §28）。ここは未登録のときに設定へのリンクを出すだけ
       const hasToken = getToken() !== "";
-      const tokenInput = html`<input type="password" id="yn-me-token" class="yn-input" autocomplete="off" aria-labelledby="yn-me-token-label" spellcheck="false" aria-describedby="yn-me-token-hint" placeholder="glpat-…">`;
-      const setToken = () => {
-        const v = tokenInput.value.trim();
-        if (v === "") return;
-        storeToken(v);
-        tokenInput.value = "";
-        renderSave();
-        mrPanel.refresh();
-        focusKey("save:token-clear");
-      };
-      tokenInput.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          setToken();
-        }
-      });
-      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${typedMessage ?? commitMessage()} aria-describedby="yn-me-message-hint">`;
+      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${typedMessage ?? commitMessage()}>`;
       msgInput.addEventListener("input", () => {
         typedMessage = msgInput.value.trim() === "" ? null : msgInput.value;
       });
-      const tokenReason = hasToken ? null : T.gitlab.noToken;
+      const tokenReason = hasToken ? null : T.masters.noTokenSave;
       const disabled = saving || !!reason || !!tokenReason;
+      help = html`<span class="yn-me-help">${fmt(T.masters.saveTargetTip, { project: cfg.gitlab.projectId, branch: cfg.gitlab.targetBranch })}${cfg.gitlab.commitMode === "mr" ? T.masters.modeMr : fmt(T.masters.modeDirect, { branch: cfg.gitlab.targetBranch })}</span><span class="yn-me-help">${T.masters.saveWho}</span><span class="yn-me-help">${T.masters.commitMessageHelp}</span>`;
       body = html`<div class="yn-me-save-body">
-        <p>${T.masters.saveTarget1} <code>${cfg.gitlab.projectId}</code> ${T.masters.particleNo} <code>${cfg.gitlab.targetBranch}</code> ${T.masters.saveTarget2}${cfg.gitlab.commitMode === "mr" ? T.masters.modeMr : fmt(T.masters.modeDirect, { branch: cfg.gitlab.targetBranch })}${T.masters.saveWho}</p>
         ${data.gitAvailable ? null : html`<p class="yn-note yn-note-warn">${T.masters.noBaseWarning}</p>`}
-        <div class="yn-me-field">
-          <span class="yn-me-label" id="yn-me-token-label">${T.masters.tokenLabel}</span>
-          ${hasToken
-            ? html`<p class="yn-me-token-set"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.masters.tokenSet}</span> ${tokenRemembered() ? T.settings.tokenWhereLocal : T.masters.tokenSetNote} <button type="button" class="yn-btn yn-btn-sm" data-fk="save:token-clear" onclick=${() => {
-                clearToken();
-                renderSave();
-                mrPanel.refresh();
-                document.getElementById("yn-me-token")?.focus();
-              }}>${T.masters.tokenClear}</button></p>`
-            : html`<div class="yn-me-inline">${tokenInput}<button type="button" class="yn-btn" data-fk="save:token-set" onclick=${setToken}>${T.masters.tokenUse}</button></div>`}
-          <span class="yn-me-field-hint" id="yn-me-token-hint">${T.masters.tokenHelp}</span>
-        </div>
         <div class="yn-me-field">
           <label for="yn-me-message">${T.masters.commitMessage}${cfg.gitlab.commitMode === "mr" ? T.masters.mrTitleSuffix : ""}</label>
           ${msgInput}
-          <span class="yn-me-field-hint" id="yn-me-message-hint">${T.masters.commitMessageHelp}</span>
         </div>
         <p class="yn-me-actions">
           <button type="button" class="yn-btn yn-btn-primary" data-fk="save:submit" disabled=${disabled} aria-describedby="yn-me-save-reason" onclick=${() => doSave(msgInput.value)}>${cfg.gitlab.commitMode === "mr" ? T.masters.saveMr : T.masters.saveDirect}</button>
+          <span id="yn-me-save-reason" class="yn-me-small">${reason ?? tokenReason ?? ""}${!reason && tokenReason ? html` <a href="./settings" data-fk="save:to-settings">${T.masters.toSettings}</a>` : null}</span>
         </p>
-        <p id="yn-me-save-reason" class="yn-me-small">${reason ?? tokenReason ?? fmt(T.masters.oneCommit, { files: files.map((id) => fileName(MASTER_FILES[id].path)).join("・") })}</p>
       </div>`;
     } else {
-      body = html`<div class="yn-me-save-body">
-        ${configuredMode === "gitlab" ? html`<p class="yn-note yn-note-warn">${T.masters.fallbackDownload}</p>` : data.masterEdit.mode !== "download" ? html`<p class="yn-note yn-note-warn" data-role="not-configured">${T.settings.notConfigured}</p>` : null}
-        <p>${configuredMode === "gitlab" || data.masterEdit.mode !== "download" ? T.masters.downloadLeadFallback : T.masters.downloadLead}</p>
+      help = html`<span class="yn-me-help">${configuredMode === "gitlab" || data.masterEdit.mode !== "download" ? T.masters.downloadLeadFallback : T.masters.downloadLead}</span>
         <ol class="yn-me-steps">
           <li>${T.masters.step1}</li>
           <li>${T.masters.step2a}${files.length ? files.map((id, i) => html`${i > 0 ? "、" : ""}<code>${MASTER_FILES[id].path}</code>`) : html`<code>data/masters/…</code>`}${T.masters.step2b}</li>
@@ -2283,30 +2260,32 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           <li>${T.masters.step5}</li>
           <li>${T.masters.step6}</li>
         </ol>
+        <span class="yn-me-help">${T.masters.downloadNote}</span>`;
+      body = html`<div class="yn-me-save-body">
+        ${configuredMode === "gitlab" ? html`<p class="yn-note yn-note-warn">${T.masters.fallbackDownload}</p>` : null}
         <div class="yn-me-downloads">
-          ${files.length
-            ? files.map((id) => {
-                const link = webFileUrl(cfg, data.files[id].repoPath ?? MASTER_FILES[id].path);
-                return html`<p class="yn-me-dl-row">
-                  <button type="button" class="yn-btn yn-btn-primary yn-export" data-fk=${`dl:${id}`} disabled=${!!reason} onclick=${() => download(id)}>⤓ ${fileName(MASTER_FILES[id].path)} ${T.masters.downloadSuffix}</button>
-                  <span class="yn-me-small">${MASTER_FILES[id].label}: ${integer(diffMasterDoc(docs[id]).count)}${T.masters.changesSuffix}${downloaded.has(id) ? T.masters.downloaded : ""}</span>
-                  <span class="yn-me-small" data-base-commit=${id}>${bases[id].lastCommitId ? html`${T.masters.baseCommit} <code>${bases[id].lastCommitId.slice(0, 8)}</code>` : T.masters.noBaseCommit}</span>
-                  ${link ? html`<a href=${link} target="_blank" rel="noopener" class="yn-me-small">${T.masters.openInGitlab}</a>` : null}
-                </p>`;
-              })
-            : null}
+          ${files.map((id) => {
+            const link = webFileUrl(cfg, data.files[id].repoPath ?? MASTER_FILES[id].path);
+            return html`<p class="yn-me-dl-row">
+              <button type="button" class="yn-btn yn-btn-primary yn-export" data-fk=${`dl:${id}`} disabled=${!!reason} onclick=${() => download(id)}>⤓ ${fileName(MASTER_FILES[id].path)} ${T.masters.downloadSuffix}</button>
+              <span class="yn-me-small">${MASTER_FILES[id].label}: ${integer(diffMasterDoc(docs[id]).count)}${T.masters.changesSuffix}${downloaded.has(id) ? T.masters.downloaded : ""}</span>
+              <span class="yn-me-small" data-base-commit=${id}>${bases[id].lastCommitId ? html`${T.masters.baseCommit} <code>${bases[id].lastCommitId.slice(0, 8)}</code>` : T.masters.noBaseCommit}</span>
+              ${link ? html`<a href=${link} target="_blank" rel="noopener" class="yn-me-small">${T.masters.openInGitlab}</a>` : null}
+            </p>`;
+          })}
         </div>
-        <p id="yn-me-save-reason" class="yn-me-small">${reason ?? T.masters.downloadNote}</p>
+        <p id="yn-me-save-reason" class="yn-me-small">${reason ?? ""}</p>
       </div>`;
     }
+    const saveTitle = `${T.masters.saveTitle1}${mode === "gitlab" ? "GitLab" : T.masters.csvDownload}）`;
     parts.save.replaceChildren(html`<section class="yn-me-section yn-me-save" aria-labelledby="yn-me-save-title">
-      <h2 id="yn-me-save-title" class="yn-section-title" tabindex="-1" data-fk="save:heading">${T.masters.saveTitle1}${mode === "gitlab" ? "GitLab" : T.masters.csvDownload}）</h2>
+      <div class="yn-title-with-tip"><h2 id="yn-me-save-title" class="yn-section-title" tabindex="-1" data-fk="save:heading">${saveTitle}</h2>${infoTip(help, { label: fmt(T.layout.aboutSection, { title: saveTitle }) })}</div>
       ${otherPageNote()}
       ${body}
       ${renderOutcome()}
       <p class="yn-me-actions yn-me-discard">
         <button type="button" class="yn-btn" data-fk="save:discard" disabled=${totalChanges() === 0 || saving} onclick=${openDiscardDialog}>${T.masters.discardAllButton}</button>
-        ${draftSavedAt ? html`<span class="yn-me-small">${T.masters.autosaved1}${dateTimeJst(draftSavedAt)}${T.masters.autosaved2}</span>` : null}
+        ${draftSavedAt ? html`<span class="yn-me-small">${T.masters.autosaved1}${dateTimeJst(draftSavedAt)}</span>` : null}
       </p>
     </section>`);
   }
@@ -2323,6 +2302,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     renderSave();
   }
 
+  // 設定画面でトークンを登録して「戻る」で戻ったとき（ページがキャッシュから復元されたとき）は、保存の欄とマージ待ちを読み直す
+  addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    renderSave();
+    mrPanel.refresh();
+  });
   root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   mrPanel.refresh();

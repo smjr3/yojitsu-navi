@@ -31,7 +31,7 @@ async function rowByKey(page: import("@playwright/test").Page, caption: string, 
 }
 
 test.describe("メンバー一覧 /members", () => {
-  test("KPI・全行・合計行が core の aggregateMembers（経過月）と一致し、経過月の注記が出る", async ({ page }) => {
+  test("KPI・全行・合計行が core の aggregateMembers（経過月）と一致し、期間全体の計画は KPI の補足に出る", async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     const agg = aggregateMembers(model, { period: CMP });
     const full = aggregateMembers(model, { period: FY });
@@ -39,7 +39,7 @@ test.describe("メンバー一覧 /members", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(agg.total.actualCost));
     await expect(kpiValue(page, 2)).toHaveText(signed(agg.total.variance));
     await expect(kpiValue(page, 3)).toHaveText(formatPercent(agg.total.utilization));
-    await expect(page.locator(".yn-note").filter({ hasText: "経過月" }).first()).toContainText(yen(full.total.plannedCost));
+    await expect(page.locator(".yn-kpi-sub").filter({ hasText: "期間全体" }).first()).toContainText(yen(full.total.plannedCost));
 
     const table = tableByCaption(page, "メンバー別の計画と実績");
     const h = await headerIndex(table);

@@ -157,15 +157,13 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   display(
     memberKpiRow([
-        statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.member.plannedSub, { hours: formatHours(t.plannedHours) }), breakdown: () => bd.memberPlanSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
+        statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.member.plannedSub, { hours: formatHours(t.plannedHours), whole: period.to !== vm.fullPeriod.to && vm.fullTotals ? fmt(T.members.wholePeriodSuffix, { value: money(vm.fullTotals.plannedCost, unit) }) : "" }), breakdown: () => bd.memberPlanSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
         statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.member.actualSub, { hours: formatHours(t.actualHours), unplanned: t.unplannedHours > 0 ? fmt(T.member.unplannedSuffix, { hours: formatHours(t.unplannedHours) }) : "" }), breakdown: () => bd.memberActualSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
         statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: T.members.utilizationTile, value: formatPercent(t.utilization), sub: t.utilization === null ? T.breakdown.utilZero : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
   );
   if (vm.allFuture) display(note(fmt(T.members.futureOnly, { period: periodJa(vm.fullPeriod) })));
-  else if (period.to !== vm.fullPeriod.to && vm.fullTotals)
-    display(note(fmt(T.member.elapsedNote, { period: periodJa(period), to: monthJa(vm.fullPeriod.to), total: money(vm.fullTotals.plannedCost, unit), hours: formatHours(vm.fullTotals.plannedHours) })));
   if (!totals) display(note(fmt(T.member.noData, { period: periodJa(period) })));
   if (totals?.rateMissing) display(note(T.member.rateMissingNote, "warn"));
 }

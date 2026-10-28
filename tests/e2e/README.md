@@ -46,6 +46,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄） |
 | `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
+| `screen-text.spec.ts` | 画面の説明文の量（各画面の本文の文章は合計 120 文字・1 段落 70 文字まで。説明は「?」へ）と、GitLab のトークン入力が設定画面だけにあること。SPEC §37 |
 | `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
 | `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |

@@ -7,7 +7,7 @@ import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import { ACCESS_LEVELS, checkConnection, effectiveSaveMode } from "../core/gitlab.js";
 import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
-import { sectionTitle } from "./layout.js";
+import { infoTip, sectionTitle } from "./layout.js";
 
 export function settingsPanel({ masterEdit, fetchImpl = null }) {
   const cfg = masterEdit;
@@ -81,7 +81,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
           }}>${T.settings.tokenClear}</button></p>
       </div>`;
     }
-    const input = html`<input type="password" id="yn-set-token" class="yn-input" autocomplete="off" spellcheck="false" placeholder=${demo ? "demo" : T.settings.tokenPlaceholder} aria-describedby="yn-set-token-help">`;
+    const input = html`<input type="password" id="yn-set-token" class="yn-input" autocomplete="off" spellcheck="false" placeholder=${demo ? "demo" : T.settings.tokenPlaceholder}>`;
     const remember = html`<input type="checkbox" id="yn-set-remember">`;
     const save = () => {
       if (input.value.trim() === "") return input.focus();
@@ -98,10 +98,9 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
       }
     });
     return html`<div class="yn-settings-field">
-      <label class="yn-me-label" for="yn-set-token">${T.settings.tokenLabel}</label>
+      <div class="yn-title-with-tip"><label class="yn-me-label" for="yn-set-token">${T.settings.tokenLabel}</label>${infoTip(`${demo ? T.settings.tokenDemoHelp : T.settings.tokenHelp} ${T.settings.rememberHint}`, { label: T.settings.tokenTipLabel })}</div>
       <div class="yn-me-inline">${input}<button type="button" class="yn-btn yn-btn-primary" data-role="token-save" onclick=${save}>${T.settings.tokenSave}</button></div>
       <label class="yn-settings-check-label" for="yn-set-remember">${remember} ${T.settings.remember}</label>
-      <span class="yn-me-field-hint" id="yn-set-token-help">${demo ? T.settings.tokenDemoHelp : T.settings.tokenHelp} ${T.settings.rememberHint}</span>
     </div>`;
   }
 
@@ -115,8 +114,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
       focus("#yn-set-demo-role");
     });
     return html`<div class="yn-settings-field yn-settings-demo">
-      <label class="yn-settings-check-label" for="yn-set-demo-role">${role} ${T.settings.demoRole}</label>
-      <span class="yn-me-field-hint">${T.settings.demoRoleHint}</span>
+      <div class="yn-title-with-tip"><label class="yn-settings-check-label" for="yn-set-demo-role">${role} ${T.settings.demoRole}</label>${infoTip(T.settings.demoRoleHint, { label: T.settings.demoRoleTipLabel })}</div>
       <p><button type="button" class="yn-btn yn-btn-sm" data-role="demo-reset" onclick=${() => {
         resetDemo();
         notice = T.settings.demoResetDone;

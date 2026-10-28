@@ -286,7 +286,13 @@ if (vm && workRows) {
 ```js
 if (vm) {
   const { contract: c, unit } = vm;
-  display(sectionTitle(T.contract.forecastCompareTitle, fmt(T.contract.forecastCompareHint, { fy: fiscalYearLabel(model.meta.fiscalYear), method: METHOD_LABELS[vm.method] })));
+  // 方式の説明はカードに出さず、見出しの「?」にまとめる
+  display(
+    sectionTitle(
+      T.contract.forecastCompareTitle,
+      html`${fmt(T.contract.forecastCompareHint, { fy: fiscalYearLabel(model.meta.fiscalYear), method: METHOD_LABELS[vm.method] })}${FORECAST_METHODS.map((m) => html`<span class="yn-me-help"><strong>${METHOD_LABELS[m]}</strong> ${methodDescription(m, model.config.forecastRecentMonths)}</span>`)}`,
+    ),
+  );
   const cards = FORECAST_METHODS.map((m) => {
     const f = result.forecasts[m];
     const b = f.breakdown;
@@ -297,7 +303,6 @@ if (vm) {
     btn.addEventListener("click", () => store.set({ method: m }));
     return html`<article class=${`yn-card yn-forecast-card${selected ? " is-selected" : ""}${f.isDeficit && inFY ? " is-danger" : ""}`} aria-current=${selected ? "true" : null}>
       <h3 class="yn-forecast-title">${METHOD_LABELS[m]}</h3>
-      <p class="yn-forecast-desc">${methodDescription(m, model.config.forecastRecentMonths)}</p>
       <div class="yn-forecast-value">${inFY ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config }), { className: "yn-kpi-value", ariaLabel: fmt(T.contract.forecastAria, { method: METHOD_LABELS[m] }) }) : html`<span class="yn-kpi-value">—</span>`}
         ${inFY ? statusChip(f.isDeficit ? "danger" : "ok", f.isDeficit ? T.breakdown.deficitForecast : T.breakdown.surplusForecast) : statusChip("neutral", T.contract.notInFyChip)}</div>
       <dl class="yn-forecast-facts">

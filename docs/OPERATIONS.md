@@ -128,7 +128,7 @@ npm run fetch:members                           # members.csv を更新
 ```
 
 1. `apiBaseUrl` と `projectId` を入れてコミットする（どちらかが空なら自動で CSV ダウンロードになる）。
-2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面かマスタ編集の保存欄で登録する。
+2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面（右上の歯車）で登録する。マスタ編集・稼働計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
    既定はそのタブの `sessionStorage` だけ（タブを閉じると消える）。設定画面で「このブラウザに記憶する」を選ぶと `localStorage`。画面に再表示しない・サーバーやリポジトリには保存しない。
 3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)「3. メンバーを追加する」）。
    画面は GitLab が返す `can_merge` を見て、マージできる人にだけ「マージ」ボタンを出す（強制は GitLab 側）。

@@ -148,7 +148,9 @@ test.describe("詳細画面の作業種別の内訳", () => {
     expect(await cellText(foot, col(h, "実績"))).toBe(`${new Intl.NumberFormat("ja-JP").format(t.cost)}円`);
     const outside = filterWorkRows(rows, { period: FY, contractIds: [id] }).filter((r) => r.category === "outside");
     expect(outside.length).toBeGreaterThan(0);
-    await expect(page.locator(".yn-note").filter({ hasText: "契約外の合計" })).toContainText(hoursText(outside.reduce((s, r) => s + r.hours, 0)));
+    // 契約外を実績に含めない旨は本文に出さず、見出しの「?」（§37）
+    await expect(page.locator(".yn-note").filter({ hasText: "契約外の合計" })).toHaveCount(0);
+    await expect(page.locator(".yn-work-section .yn-tip-pop").first()).toContainText("契約外は案件の実績");
   });
 
   test("メンバー・チーム・顧客の詳細にも出る", async ({ page }) => {
