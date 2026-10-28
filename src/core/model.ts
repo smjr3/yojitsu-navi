@@ -12,6 +12,7 @@ import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, memberAt, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
+import { buildWorkRows, createTaskClassifier, isOutsideWorklog, outsideInputs, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -40,9 +41,17 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   warnings.push(...partition.warnings);
   const contracts = partition.valid;
 
+  // 作業種別の分類（§30）: 契約外は契約の実績に入れない（関連契約だけ調べ、警告は出さない）
+  const classifier = createTaskClassifier(dataset.taskTypes);
+  const inScopeLogs = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
+  const outsideLogs = classifier.enabled ? dataset.worklogs.filter((w) => isOutsideWorklog(w, classifier)) : [];
+  const excludedContracts = new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason]));
+
   // 紐付け（§4）
-  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, contracts, new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason])));
+  const mapping = mapWorklogs(inScopeLogs, dataset.mappings, contracts, excludedContracts);
   warnings.push(...mapping.warnings);
+  warnings.push(...unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier));
+  const outsideMapping = outsideLogs.length > 0 ? mapWorklogs(outsideLogs, dataset.mappings, contracts, excludedContracts).mappings : [];
   const worklogIndex = indexWorklogs(mapping.assigned);
 
   // 原価プロバイダ（§7）
@@ -133,6 +142,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth),
+    // 工数の明細（§30.2）
+    workRows: buildWorkRows(results, outsideInputs(outsideMapping), classifier, masters),
   };
 }
 

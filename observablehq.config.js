@@ -82,6 +82,7 @@ const NAV = [
   { name: ja.app.nav.customers, path: "/customers", match: ["/customers", "/customer"] },
   { name: ja.app.nav.contracts, path: "/contracts", match: ["/contracts", "/contract"] },
   { name: ja.app.nav.members, path: "/members", match: ["/members", "/member"] },
+  { name: ja.app.nav.workload, path: "/workload", match: ["/workload"] },
 ];
 const TOOLS = [
   { name: ja.app.nav.dataCheck, path: "/data-check" },
@@ -152,6 +153,7 @@ export default {
     { name: ja.app.pages.customers, path: "/customers" },
     { name: ja.app.pages.contracts, path: "/contracts" },
     { name: ja.app.pages.members, path: "/members" },
+    { name: ja.app.pages.workload, path: "/workload" },
     { name: ja.app.pages.rules, path: "/rules" },
     { name: ja.app.pages.dataCheck, path: "/data-check" },
     { name: ja.app.pages.plan, path: "/plan" },

@@ -290,3 +290,28 @@ if (vm) {
   }
 }
 ```
+
+```js
+// 工数の明細（SPEC §30）。この表だけが使うので、他の表示を待たせずに後から読む
+import { decodeWorkRows, filterWorkRows, monthRange } from "./core/index.js";
+import { workTaskSection } from "./components/work.js";
+const workRows = FileAttachment("./data/work-hours.json").json().then((d) => decodeWorkRows(d)).catch(() => null);
+```
+
+```js
+if (vm && workRows) {
+  // チームで絞っているときは、契約内はその契約だけ（契約外は顧客の行をそのまま）
+  const ids = new Set(vm.scope.contractIds);
+  const rows = filterWorkRows(workRows, { period: vm.scope.period, customerKeys: [group.key] }).filter((r) => r.category === "outside" || ids.has(r.contractId));
+  display(
+    workTaskSection({
+      rows,
+      months: monthRange(vm.scope.period.from, vm.scope.period.to).filter((m) => m <= model.meta.asOfMonth),
+      unit: vm.unit,
+      config: model.config,
+      hint: fmt(T.work.sectionHintScope, { period: periodJa(vm.scope.period), name: group.label }),
+      exportName: `customer_tasks_${vm.scope.period.from}_${vm.scope.period.to}`,
+    }),
+  );
+}
+```
