@@ -7,15 +7,16 @@
  * クエリ:  ?from=2026-04&to=2027-03&team=T111&unit=k&method=recent3
  *   from/to  YYYY-MM（meta.minMonth〜maxMonth に収める）
  *   team     チームID / "" = 全体 / "__unassigned__" = 未設定
- *   unit     yen | k
+ *   unit     m | k | yen
  *   method   recent3 | all | assignment
  */
+import { UNITS, fromCoreUnit } from "./format.js";
 import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fiscalYearOf } from "../core/index.js";
 
 export const STATE_KEYS = ["from", "to", "team", "unit", "method"];
 export const STORAGE_KEY = "yojitsu-navi:state:v1";
 const METHODS = ["recent3", "all", "assignment"];
-const UNIT_IDS = ["yen", "k"];
+const UNIT_IDS = UNITS.map((u) => u.id);
 
 function clampMonth(m, min, max) {
   if (m < min) return min;
@@ -38,7 +39,7 @@ export function defaultState(model) {
     from: p.from,
     to: p.to,
     team: "",
-    unit: model.config.currency?.defaultUnit === "thousandYen" ? "k" : "yen",
+    unit: fromCoreUnit(model.config.currency?.defaultUnit ?? "yen"),
     method: METHODS.includes(model.config.forecastMethodDefault) ? model.config.forecastMethodDefault : "recent3",
   };
 }
@@ -57,8 +58,8 @@ export function periodPresets(model) {
   const prevFy = fiscalYearMonths(fy - 1, start);
   const recent = (n) => [addMonths(meta.asOfMonth, -(n - 1)), meta.asOfMonth];
   return [
-    { id: "fy", label: `今年度（FY${fy}）`, period: clip(thisFy) },
-    { id: "prevFy", label: `前年度（FY${fy - 1}）`, period: clip(prevFy) },
+    { id: "fy", label: `今年度（FY${fy}）`, short: "今年度", period: clip(thisFy) },
+    { id: "prevFy", label: `前年度（FY${fy - 1}）`, short: "前年度", period: clip(prevFy) },
     { id: "recent3", label: "直近3か月", period: clip(recent(3)) },
     { id: "recent12", label: "直近12か月", period: clip(recent(12)) },
   ];

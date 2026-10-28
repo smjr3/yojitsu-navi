@@ -17,7 +17,8 @@ export function preliminaryBadge(includes) {
  */
 export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreliminary = false, extra = null }) {
   const meta = model?.meta;
-  const crumbs = breadcrumbs.length
+  // 1 段だけのパンくずは上部タブと重複するので出さない
+  const crumbs = breadcrumbs.length > 1
     ? html`<nav class="yn-crumbs" aria-label="パンくず"><ol>${breadcrumbs.map(
         (c, i) =>
           html`<li>${c.href && i < breadcrumbs.length - 1 ? html`<a href=${c.href}>${c.label}</a>` : html`<span aria-current="page">${c.label}</span>`}</li>`,

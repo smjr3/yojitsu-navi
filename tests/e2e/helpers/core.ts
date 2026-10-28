@@ -20,13 +20,18 @@ import {
   type TeamNode,
   type Totals,
 } from "../../../src/core/index.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadDataset } from "../../../scripts/lib/load.js";
 import { AS_OF, ROOT_DIR } from "../constants.js";
 
 export { UNASSIGNED_TEAM_ID, aggregate, forecastTotals, formatPercent, formatYen };
 export type { ContractResult, ForecastMethod, Model, Period, Totals };
 
-export type Unit = "yen" | "k";
+export type Unit = "m" | "k" | "yen";
+const CORE_UNITS = { m: "millionYen", k: "thousandYen", yen: "yen" } as const;
+/** 画面の既定単位（config.json の currency.defaultUnit） */
+export const DEFAULT_UNIT: Unit = (Object.keys(CORE_UNITS) as Unit[]).find((u) => CORE_UNITS[u] === JSON.parse(readFileSync(join(ROOT_DIR, "config.json"), "utf-8")).currency.defaultUnit) ?? "yen";
 
 let cached: Model | null = null;
 
@@ -62,9 +67,9 @@ export function presetPeriod(id: "fy" | "prevFy" | "recent3" | "recent12", model
   }
 }
 
-/** 画面と同じ金額書式（unit: "yen" | "k"） */
-export function yen(value: number | null | undefined, unit: Unit = "yen"): string {
-  return formatYen(value, unit === "k" ? "thousandYen" : "yen");
+/** 画面と同じ金額書式（unit: "m" | "k" | "yen"。省略時は画面の既定単位） */
+export function yen(value: number | null | undefined, unit: Unit = DEFAULT_UNIT): string {
+  return formatYen(value, CORE_UNITS[unit]);
 }
 
 /** 期間の終了月時点の組織木（analysis.treeAt と同じ） */

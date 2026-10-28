@@ -6,7 +6,7 @@
   "closingBusinessDay": 3,
   "forecastMethodDefault": "recent3",
   "forecastRecentMonths": 3,
-  "currency": { "code": "JPY", "defaultUnit": "yen" },
+  "currency": { "code": "JPY", "defaultUnit": "millionYen" },
   "labels": {
     "customer": "顧客",
     "project": "案件",

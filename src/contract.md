@@ -15,7 +15,7 @@ import { aggregate, FORECAST_METHODS } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
-import { filterBar } from "./components/filters.js";
+import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
@@ -102,7 +102,7 @@ if (vm) {
 ```
 
 ```js
-if (store && result) display(filterBar(store, model, { show: ["period", "method", "unit"] }));
+if (store && result) mountFilterBar(store, model, { show: ["period", "method", "unit"] });
 ```
 
 ```js
