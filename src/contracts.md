@@ -1,5 +1,5 @@
 ---
-title: 契約一覧
+title: 案件一覧
 ---
 
 <div id="page-skeleton" class="yn-skeleton" aria-busy="true" aria-label="読み込み中">

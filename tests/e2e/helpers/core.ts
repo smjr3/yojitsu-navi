@@ -53,7 +53,7 @@ export function fiscalPeriod(model: Model = getModel()): Period {
 }
 
 /** 期間プリセット（filters.js と同じ定義） */
-export function presetPeriod(id: "fy" | "prevFy" | "thisMonth" | "recent3" | "recent12", model: Model = getModel()): Period {
+export function presetPeriod(id: "fy" | "prevFy" | "thisMonth" | "lastMonth" | "recent3" | "recent12", model: Model = getModel()): Period {
   const { meta, config } = model;
   const clamp = (m: string) => (m < meta.minMonth ? meta.minMonth : m > meta.maxMonth ? meta.maxMonth : m);
   const clip = (months: readonly string[]): Period => ({ from: clamp(months[0]!), to: clamp(months[months.length - 1]!) });
@@ -64,6 +64,8 @@ export function presetPeriod(id: "fy" | "prevFy" | "thisMonth" | "recent3" | "re
       return clip(fiscalYearMonths(meta.fiscalYear - 1, config.fiscalYearStartMonth));
     case "thisMonth":
       return clip([meta.asOfMonth, meta.asOfMonth]);
+    case "lastMonth":
+      return clip([addMonths(meta.asOfMonth, -1), addMonths(meta.asOfMonth, -1)]);
     case "recent3":
       return clip([addMonths(meta.asOfMonth, -2), meta.asOfMonth]);
     case "recent12":
@@ -90,7 +92,7 @@ export function treeAt(month: string, model: Model = getModel()): Record<string,
   return teamTreeForMonth({ teams: model.teams }, month);
 }
 
-/** チーム（配下含む）の契約ID。teamId が空なら undefined（= 全契約） */
+/** チーム（配下含む）の契約ID。teamId が空なら undefined（= 全案件） */
 export function teamContractIds(teamId: string, period: Period, model: Model = getModel()): string[] | undefined {
   if (!teamId) return undefined;
   return contractsForTeam(model, teamId, treeAt(period.to, model)).map((c) => c.contractId);
@@ -110,13 +112,13 @@ export function contractResult(id: string, model: Model = getModel()): ContractR
   return r;
 }
 
-/** 契約一覧に出る契約（期間に 1 か月以上掛かるもの）。並びは model 順 */
+/** 案件一覧に出る案件（期間に 1 か月以上掛かるもの）。並びは model 順 */
 export function contractsInPeriod(period: Period, contractIds?: readonly string[], model: Model = getModel()): ContractResult[] {
   const set = contractIds ? new Set(contractIds) : null;
   return model.contracts.filter((r) => (!set || set.has(r.contract.contractId)) && r.months.some((m) => period.from <= m.month && m.month <= period.to));
 }
 
-/** 契約一覧の 1 行の期待値（analysis.contractRow と同じ定義） */
+/** 案件一覧の 1 行の期待値（analysis.contractRow と同じ定義） */
 export function contractRowExpected(r: ContractResult, period: Period, method: ForecastMethod, model: Model = getModel()) {
   const totals = aggregate(model, { period, contractIds: [r.contract.contractId] });
   const f = r.forecasts[method];

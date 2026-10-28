@@ -1,5 +1,5 @@
 /**
- * 期間プリセット（今年度・前年度・今月・直近3/12か月）と、期間の値の検証（範囲外・逆順）
+ * 期間プリセット（今年度・今月・先月・直近3/12か月・前年度）と、期間の値の検証（範囲外・逆順）
  * カレンダーで選んだ日付も、URL で渡された期間も、最後は sanitize でデータ範囲に収まる
  */
 import { describe, it, expect } from "vitest";
@@ -26,8 +26,17 @@ describe("periodPresets", () => {
     expect(byId(makeModel()).thisMonth).toEqual({ from: "2026-10", to: "2026-10" });
   });
 
-  it("並びは 今年度・前年度・今月・直近3か月・直近12か月", () => {
-    expect(periodPresets(makeModel()).map((p: { id: string }) => p.id)).toEqual(["fy", "prevFy", "thisMonth", "recent3", "recent12"]);
+  it("並びは 今年度・今月・先月・直近3か月・直近12か月・前年度（前年度は右端）", () => {
+    expect(periodPresets(makeModel()).map((p: { id: string }) => p.id)).toEqual(["fy", "thisMonth", "lastMonth", "recent3", "recent12", "prevFy"]);
+  });
+
+  it("先月は基準月の前の 1 か月だけ（年またぎも）", () => {
+    expect(byId(makeModel()).lastMonth).toEqual({ from: "2026-09", to: "2026-09" });
+    expect(byId(makeModel({ asOfMonth: "2027-01" })).lastMonth).toEqual({ from: "2026-12", to: "2026-12" });
+  });
+
+  it("基準月がデータの最初の月なら、先月はデータの最初の月に収まる", () => {
+    expect(byId(makeModel({ asOfMonth: "2025-04" })).lastMonth).toEqual({ from: "2025-04", to: "2025-04" });
   });
 
   it("基準月がデータ範囲より後なら、今月はデータの最終月に収まる", () => {

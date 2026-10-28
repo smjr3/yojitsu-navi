@@ -1,7 +1,7 @@
 /**
  * 工数（SPEC §30）: /workload と詳細画面の「作業種別の内訳」
  *   - KPI・軸ごとの表・作業種別の表が core（workTotals / aggregateWork / workByTask）と一致
- *   - 契約外は契約の実績に入らない（契約詳細の内訳の合計 = 契約の実績）
+ *   - 契約外は案件の実績に入らない（案件詳細の内訳の合計 = 案件の実績）
  *   - 軸の切替が URL に残る、内訳パネル、チーム絞り込み、Excel、ダーク・390px で横スクロールなし
  */
 import { aggregateWork, elapsedMonthCount, filterWorkRows, memberTeamsAt, personMonths, workByTask, workTotals, type WorkRow } from "../../src/core/index.js";
@@ -68,7 +68,7 @@ test.describe("工数 /workload", () => {
     const byCustomer = aggregateWork(model, inFy, { period: FY, axis: "customer", unassignedLabel: "-" });
     const table = tableByCaption(page, "顧客ごとの工数");
     await expect(dataRows(table)).toHaveCount(byCustomer.length);
-    // 契約の無い顧客（契約外だけ）は詳細へのリンクにしない
+    // 案件の無い顧客（契約外だけ）は詳細へのリンクにしない
     const onlyOutside = byCustomer.find((g) => g.totals.contractHours === 0);
     expect(onlyOutside).toBeTruthy();
     await expect(table.locator(`tbody tr[data-key="${onlyOutside!.key}"]`)).not.toHaveClass(/is-clickable/);
@@ -100,7 +100,7 @@ test.describe("工数 /workload", () => {
     await expect(kpiValue(page, 1)).toHaveText(pmText(t.outsideHours));
   });
 
-  test("作業種別の表: 契約内の実績の合計 = 全契約の実績、契約外は「対象外」", async ({ page }) => {
+  test("作業種別の表: 契約内の実績の合計 = 全案件の実績、契約外は「対象外」", async ({ page }) => {
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}&unit=yen`);
     const table = tableByCaption(page, "作業種別の内訳");
     const h = await headerIndex(table);
@@ -125,7 +125,7 @@ test.describe("工数 /workload", () => {
 });
 
 test.describe("詳細画面の作業種別の内訳", () => {
-  test("契約詳細: 契約内の合計 = 契約の実績・時間、契約外は合計に入らない", async ({ page }) => {
+  test("案件詳細: 契約内の合計 = 案件の実績・時間、契約外は合計に入らない", async ({ page }) => {
     const id = "C002";
     await gotoPage(page, `/contract?id=${id}&from=${FY.from}&to=${FY.to}&unit=yen`);
     const table = tableByCaption(page, "作業種別の内訳");
