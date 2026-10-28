@@ -10,6 +10,7 @@ title: 契約一覧
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { UNASSIGNED_TEAM_ID } from "./core/index.js";
 import { customerGroups } from "./components/customers.js";
@@ -85,9 +86,9 @@ if (model) {
   display(
     pageHeader({
       model,
-      title: "契約一覧",
-      lead: "契約ごとの予算・原価・粗利・消化率と年度末の着地見込み。赤い表示は「消化率が基準を超えた」か「赤字で着地する見込み」のどちらかです。行をクリックすると契約詳細へ移動します。",
-      breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "契約一覧" }],
+      title: T.app.pages.contracts,
+      lead: T.contracts.lead,
+      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.contracts }],
       includesPreliminary: vm?.includesPreliminary ?? false,
     }),
   );
@@ -100,7 +101,7 @@ if (store) mountFilterBar(store, model);
 
 ```js
 if (vm?.scope.teamMissing) {
-  display(note(`選択したチーム「${vm.scope.teamLabel}」は ${monthJa(vm.scope.treeMonth)} 時点の組織に存在しません（期間の終了月か基準月より後に発効する組織です）。契約は 0 件になります。`, "warn"));
+  display(note(fmt(T.contracts.teamMissing, { team: vm.scope.teamLabel, month: monthJa(vm.scope.treeMonth) }), "warn"));
 }
 ```
 
@@ -110,8 +111,8 @@ if (vm && customerParam.key) {
   const clear = store.href("./contracts");
   display(
     vm.customerGroup
-      ? note(html`顧客「${vm.customerGroup.label}」の契約だけを表示しています${customerParam.direct && state.team ? `（主担当チームが「${vm.scope.teamLabel}」の契約のみ。配下のチームは含みません）` : ""}。 <a href=${clear}>絞り込みを解除</a>`)
-      : note(html`顧客「${customerParam.key}」は見つかりません（顧客名が変わったか、データから無くなった可能性があります）。契約は 0 件になります。 <a href=${clear}>絞り込みを解除</a>`, "warn"),
+      ? note(html`${fmt(T.contracts.customerFiltered, { customer: vm.customerGroup.label, direct: customerParam.direct && state.team ? fmt(T.contracts.customerFilteredDirect, { team: vm.scope.teamLabel }) : "" })} <a href=${clear}>${T.contracts.clearFilter}</a>`)
+      : note(html`${fmt(T.contracts.customerNotFound, { customer: customerParam.key })} <a href=${clear}>${T.contracts.clearFilter}</a>`, "warn"),
   );
 }
 ```
@@ -120,7 +121,7 @@ if (vm && customerParam.key) {
 // 絞り込みフォームは model だけに依存し 1 回だけ描く（期間・単位を変えても検索欄を作り直さない）
 const chips = (() => {
   if (!model) return null;
-  const form = html`<form class="yn-chip-filters" role="group" aria-label="契約の絞り込み"></form>`;
+  const form = html`<form class="yn-chip-filters" role="group" aria-label=${T.contracts.filterLabel}></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
   const mk = (key, label, title) => {
     const input = html`<input type="checkbox" id=${`yn-f-${key}`} checked=${listFilter[key]}>`;
@@ -130,7 +131,7 @@ const chips = (() => {
     });
     return html`<label class="yn-toggle-chip" for=${`yn-f-${key}`} title=${title}>${input}<span>${label}</span></label>`;
   };
-  const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder="顧客・案件・契約IDで検索" value=${listFilter.text} aria-label="顧客・案件・契約IDで検索（全角・半角、大文字・小文字は区別しません）">`;
+  const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder=${T.contracts.searchPlaceholder} value=${listFilter.text} aria-label=${T.contracts.searchAria}>`;
   let timer = null;
   text.addEventListener("input", () => {
     // 150ms デバウンス（1 文字ごとに表を作り直さない）
@@ -141,11 +142,11 @@ const chips = (() => {
     }, 150);
   });
   form.append(
-    html`<span class="yn-filter-label">絞り込み</span>`,
-    mk("deficit", "赤字見込み", "年度末に赤字で着地する見込みの契約"),
-    mk("over", "消化率超過", `消化率が ${Math.round(model.config.burnRateDangerThreshold * 100)}% を超えた契約`),
-    mk("prelim", "速報含む", "確定前の月を含む契約"),
-    mk("showOutside", "期間外の契約も表示", "選択した期間に 1 か月も掛からない契約も表示"),
+    html`<span class="yn-filter-label">${T.customers.filterHead}</span>`,
+    mk("deficit", T.contracts.chipDeficit, T.contracts.chipDeficitTitle),
+    mk("over", T.contracts.chipOver, fmt(T.contracts.chipOverTitle, { percent: Math.round(model.config.burnRateDangerThreshold * 100) })),
+    mk("prelim", T.contracts.chipPrelim, T.contracts.chipPrelimTitle),
+    mk("showOutside", T.contracts.chipOutside, T.contracts.chipOutsideTitle),
     text,
   );
   form.value = { ...listFilter };
@@ -182,17 +183,17 @@ if (vm) {
   const outside = all.filter((r) => !r.inPeriod).length;
   display(
     sectionTitle(
-      "契約ごとの予実",
-      `${periodJa(scope.period)} ・ ${scope.teamLabel} ・ 着地: ${METHOD_LABELS[vm.method]}（${model.meta.fiscalYear}年度）。契約列は 顧客 / 案件 と ID・チーム・期間（YY/MM）。既定の並び: 赤字見込み・予算超過の契約を先頭に、消化率の高い順。${outside > 0 && !f.showOutside ? `選択期間に掛からない契約 ${outside}件は非表示（表示する → 「期間外の契約も表示」をチェック）。` : ""}`,
+      T.contracts.sectionTitle,
+      fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear, hidden: outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : "" }),
     ),
   );
   const columns = [
-    { key: "name", label: "契約", type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
-    { key: "contractId", label: "契約ID", type: "text", exportOnly: true },
-    { key: "customerName", label: "顧客", type: "text", exportOnly: true },
-    { key: "projectName", label: "案件", type: "text", exportOnly: true },
-    { key: "teamName", label: "チーム", type: "text", exportOnly: true },
-    { key: "period", label: "契約期間", type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
+    { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+    { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
+    { key: "customerName", label: T.customers.colCustomer, type: "text", exportOnly: true },
+    { key: "projectName", label: T.contracts.colProject, type: "text", exportOnly: true },
+    { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
+    { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
     ...standardColumns({
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
@@ -203,15 +204,15 @@ if (vm) {
         forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
       },
     }),
-    { key: "status", label: "状態", type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
+    { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
   // 合計行はコアの aggregate() / forecastTotals() の結果（表示中の契約だけを母集団に 1 回の走査）
   const shownIds = rows.map((r) => r.contractId);
   const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });
   const sumForecast = forecastTotals(model, shownIds, vm.method);
-  const sumSubtitle = `表示中の ${rows.length} 件 ・ ${periodJa(scope.period)}`;
+  const sumSubtitle = fmt(T.contracts.totalSubtitle, { n: rows.length, period: periodJa(scope.period) });
   const summary = {
-    name: `合計（${rows.length}件）`,
+    name: fmt(T.contracts.totalRow, { n: rows.length }),
     customerName: null,
     projectName: null,
     teamName: null,
@@ -247,14 +248,14 @@ if (vm) {
     }
   };
   if (rows.length === 0) {
-    display(emptyState({ title: "該当する契約がありません", text: "絞り込み条件か期間・チームを変えてください。", icon: "○" }));
+    display(emptyState({ title: T.contracts.emptyTitle, text: T.contracts.emptyText, icon: "○" }));
   } else {
     display(
       dataTable({
         columns,
         rows,
         unit,
-        caption: "契約一覧",
+        caption: T.app.pages.contracts,
         exportName: `contracts_${scope.period.from}_${scope.period.to}`,
         sort: { key: "status", dir: "asc" },
         rowHref: (r) => store.href("./contract", {}, { id: r.contractId }),

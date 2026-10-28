@@ -18,6 +18,7 @@ import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
 import { statusChip } from "./kpi.js";
+import { T, fmt } from "../i18n/index.js";
 
 const NUMERIC_TYPES = new Set(["money", "moneyYen", "percent", "hours", "int"]);
 
@@ -26,7 +27,7 @@ const NUMERIC_TYPES = new Set(["money", "moneyYen", "percent", "hours", "int"]);
  * 集計行・KPI は従来どおり type "money"（選択単位に従う）。
  */
 function headLabel(col) {
-  return col.type === "moneyYen" ? `${col.label}（円）` : col.label;
+  return col.type === "moneyYen" ? fmt(T.table.exportYen, { label: col.label }) : col.label;
 }
 
 function isNumeric(col) {
@@ -79,11 +80,11 @@ function exportLabel(col, unit) {
   switch (col.type) {
     case "money":
     case "moneyYen":
-      return `${col.label}（円）`;
+      return fmt(T.table.exportYen, { label: col.label });
     case "percent":
-      return `${col.label}（%）`;
+      return fmt(T.table.exportPercent, { label: col.label });
     case "hours":
-      return `${col.label}（h）`;
+      return fmt(T.table.exportHours, { label: col.label });
     default:
       return col.label;
   }
@@ -123,7 +124,7 @@ export function safeFileName(name) {
   return String(name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "export";
 }
 
-export const EXPORT_UNIT_NOTE = "単位: 円（金額は選択中の表示単位に関係なく円の整数）・割合は %・時間は h";
+export const EXPORT_UNIT_NOTE = T.table.exportUnitNote;
 
 /** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存。金額は常に円の整数 */
 export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1" }) {
@@ -137,7 +138,7 @@ export async function exportXlsx({ columns, rows, unit = "yen", name = "export",
   XLSX.writeFile(wb, `${safeFileName(name)}.xlsx`);
 }
 
-export function exportButton(getPayload, label = "Excel出力") {
+export function exportButton(getPayload, label = T.table.exportButton) {
   const btn = html`<button type="button" class="yn-btn yn-btn-sm yn-export"><span aria-hidden="true">⤓</span> ${label}</button>`;
   btn.addEventListener("click", async () => {
     btn.disabled = true;
@@ -145,7 +146,7 @@ export function exportButton(getPayload, label = "Excel出力") {
       await exportXlsx(getPayload());
     } catch (error) {
       console.error(error);
-      alert(`Excel 出力に失敗しました: ${error?.message ?? error}`);
+      alert(fmt(T.table.exportFailed, { error: error?.message ?? error }));
     } finally {
       btn.disabled = false;
     }
@@ -162,7 +163,7 @@ export function dataTable({
   rowHref = null,
   caption = null,
   exportName = null,
-  emptyText = "該当するデータがありません",
+  emptyText = T.table.empty,
   tree = false,
   summary = null,
   summaryBreakdown = null,
@@ -221,7 +222,7 @@ export function dataTable({
         const active = sortState && sortState.key === col.key;
         const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`} style=${col.width ? `width:${col.width}` : null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
-          const btn = html`<button type="button" class="yn-sort" title=${`${col.label}で並べ替え`}>${headLabel(col)}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
+          const btn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label: col.label })}>${headLabel(col)}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
           btn.addEventListener("click", () => {
             const first = numeric ? "desc" : "asc";
             sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
@@ -249,11 +250,11 @@ export function dataTable({
     if (isSummary) {
       // 合計行は行用の breakdown(row) を使わない（契約IDなどを持たないため）。summaryBreakdown(col) があればそれを開く
       const spec = summaryBreakdown ? summaryBreakdown(col, row) : null;
-      return spec ? numberButton(text, spec, { ariaLabel: `合計の${col.label} ${typeof text === "string" ? text : ""} の計算根拠を表示` }) : text;
+      return spec ? numberButton(text, spec, { ariaLabel: fmt(T.table.totalBreakdownAria, { label: col.label, value: typeof text === "string" ? text : "" }) }) : text;
     }
     if (col.breakdown) {
       const spec = () => col.breakdown(row);
-      return numberButton(text, spec, { ariaLabel: `${col.label} ${typeof text === "string" ? text : ""} の計算根拠を表示` });
+      return numberButton(text, spec, { ariaLabel: fmt(T.table.cellBreakdownAria, { label: col.label, value: typeof text === "string" ? text : "" }) });
     }
     return text;
   }
@@ -273,7 +274,7 @@ export function dataTable({
           cell.append(indent);
           if (row.hasChildren) {
             const open = !collapsed.has(row.key);
-            const toggle = html`<button type="button" class="yn-tree-toggle" aria-expanded=${open ? "true" : "false"} aria-label=${`${row.name ?? ""} の配下を${open ? "閉じる" : "開く"}`}><span aria-hidden="true">${open ? "▾" : "▸"}</span></button>`;
+            const toggle = html`<button type="button" class="yn-tree-toggle" aria-expanded=${open ? "true" : "false"} aria-label=${fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" })}><span aria-hidden="true">${open ? "▾" : "▸"}</span></button>`;
             toggle.addEventListener("click", (ev) => {
               ev.stopPropagation();
               if (collapsed.has(row.key)) collapsed.delete(row.key);
@@ -308,7 +309,7 @@ export function dataTable({
     } else {
       tbody.replaceChildren(...currentRows.map(renderRow));
     }
-    if (count) count.textContent = tree ? (currentRows.length < rows.length ? `表示 ${integer(currentRows.length)} 行 / 全 ${integer(rows.length)} 行` : `${integer(rows.length)} 行`) : `${integer(rows.length)} 件`;
+    if (count) count.textContent = tree && currentRows.length < rows.length ? fmt(T.table.rowCountTreeCollapsed, { shown: integer(currentRows.length), n: integer(rows.length) }) : fmt(tree ? T.table.rowCountTree : T.table.rowCount, { n: integer(rows.length) });
   }
 
   renderHead();
@@ -319,7 +320,7 @@ export function dataTable({
     const tfoot = html`<tfoot><tr class="yn-summary-row">${visibleCols.map((col, ci) => {
       const numeric = isNumeric(col);
       const has = summary[col.key] !== undefined && summary[col.key] !== null;
-      const content = ci === 0 ? (summary.name ?? "合計") : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, summary, true);
+      const content = ci === 0 ? (summary.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, summary, true);
       return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}`}>${content}</td>`;
     })}</tr></tfoot>`;
     table.append(tfoot);
@@ -335,8 +336,8 @@ export function dataTable({
       }))
     : null;
 
-  const scrollHint = html`<span class="yn-scroll-hint" aria-live="polite" hidden>横にスクロールできます <span aria-hidden="true">→</span></span>`;
-  const wrapEl = html`<div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? "一覧"}>${table}</div>`;
+  const scrollHint = html`<span class="yn-scroll-hint" aria-live="polite" hidden>${T.table.scrollHint} <span aria-hidden="true">→</span></span>`;
+  const wrapEl = html`<div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? T.table.regionLabel}>${table}</div>`;
   const scroller = html`<div class="yn-table-scroll">${wrapEl}</div>`;
   const wrap = html`<div class="yn-table-block">
     <div class="yn-table-toolbar">${count}${scrollHint}${toolbar}${exportBtn}</div>
@@ -360,7 +361,7 @@ export function dataTable({
 
 /** 契約名のセル: 1 行目 顧客 / 案件、2 行目 ID・チーム・期間（幅を節約し、title に正式表記） */
 export function contractNameCell(r) {
-  const full = `${r.contractId} ${r.customerName} / ${r.projectName}（${r.teamName}、${r.startMonth}〜${r.endMonth}）`;
+  const full = fmt(T.table.contractTitle, { id: r.contractId, customer: r.customerName, project: r.projectName, team: r.teamName, from: r.startMonth, to: r.endMonth });
   return html`<span class="yn-cell-2line" title=${full}><span class="yn-cell-main">${r.customerName} / ${r.projectName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.contractId}</span> ・ ${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}</span></span>`;
 }
 
@@ -368,15 +369,15 @@ export function contractNameCell(r) {
  * 全一覧で共通の数値列（予算・原価・粗利・粗利率・消化率・着地）。
  * breakdowns: {budget(row), cost(row), grossProfit(row), margin(row), burnRate(row), forecast(row)} を渡すと各セルが根拠ボタンになる
  */
-export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利", includeHours = false } = {}) {
+export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.forecastGrossProfit, includeHours = false } = {}) {
   const cols = [
-    { key: "budget", label: "予算", type: "money", breakdown: breakdowns.budget },
-    { key: "cost", label: "原価", type: "money", breakdown: breakdowns.cost },
-    { key: "grossProfit", label: "粗利", type: "money", breakdown: breakdowns.grossProfit },
-    { key: "grossMargin", label: "粗利率", type: "percent", breakdown: breakdowns.margin },
+    { key: "budget", label: T.columns.budget, type: "money", breakdown: breakdowns.budget },
+    { key: "cost", label: T.columns.cost, type: "money", breakdown: breakdowns.cost },
+    { key: "grossProfit", label: T.columns.grossProfit, type: "money", breakdown: breakdowns.grossProfit },
+    { key: "grossMargin", label: T.columns.grossMargin, type: "percent", breakdown: breakdowns.margin },
     {
       key: "burnRate",
-      label: "消化率",
+      label: T.columns.burnRate,
       type: "percent",
       breakdown: breakdowns.burnRate,
       render: (row) => {
@@ -397,15 +398,15 @@ export function standardColumns({ breakdowns = {}, forecastLabel = "着地粗利
       },
     },
   ];
-  if (includeHours) cols.splice(2, 0, { key: "hours", label: "時間", type: "hours", hideOnPhone: true });
+  if (includeHours) cols.splice(2, 0, { key: "hours", label: T.columns.hours, type: "hours", hideOnPhone: true });
   return cols;
 }
 
 /** チーム行の契約数列: 「契約数（期間内）」。年度内の契約数は Excel に別列で出す */
 export function teamCountColumns() {
   return [
-    { key: "contractCount", label: "契約数", sublabel: "（期間内）", type: "int", hideOnPhone: true, hideNarrow: true, exportLabel: "契約数（期間内）" },
-    { key: "fyContractCount", label: "契約数（年度内）", type: "int", exportOnly: true },
+    { key: "contractCount", label: T.columns.contractCount, sublabel: T.columns.inPeriodSub, type: "int", hideOnPhone: true, hideNarrow: true, exportLabel: T.columns.contractCountInPeriod },
+    { key: "fyContractCount", label: T.columns.contractCountFy, type: "int", exportOnly: true },
   ];
 }
 
@@ -415,12 +416,12 @@ export function withForecastCount(col) {
   const base = col.render;
   return {
     ...col,
-    sublabel: "（年度内）",
-    exportLabel: "着地粗利（年度内）（円）",
+    sublabel: T.columns.inFySub,
+    exportLabel: T.columns.forecastGrossProfitFyExport,
     render: (row, unit) => {
       const t = base(row, unit);
       if (t === EMPTY_VALUE || typeof row.fyContractCount !== "number") return t;
-      return html`<span class="yn-cell-stack">${t}<span class="yn-muted yn-cell-count" title="年度に掛かる契約の件数">${integer(row.fyContractCount)}件</span></span>`;
+      return html`<span class="yn-cell-stack">${t}<span class="yn-muted yn-cell-count" title=${T.table.fyContractCountTitle}>${fmt(T.table.fyContractCount, { n: integer(row.fyContractCount) })}</span></span>`;
     },
   };
 }
@@ -433,12 +434,12 @@ export function rowStatus(row) {
   const chips = [];
   const isTeam = typeof row.deficitCount === "number";
   if (isTeam ? row.deficitCount > 0 : row.isDeficit) {
-    chips.push(isTeam ? { kind: "danger", text: `赤字 ${row.deficitCount}件`, title: `配下の契約のうち、年度末に赤字で着地する見込みの契約が ${row.deficitCount} 件あります` } : { kind: "danger", text: "赤字見込み", title: "年度末に赤字で着地する見込み" });
+    chips.push(isTeam ? { kind: "danger", text: fmt(T.table.chipTeamDeficit, { n: row.deficitCount }), title: fmt(T.table.chipTeamDeficitTitle, { n: row.deficitCount }) } : { kind: "danger", text: T.table.chipDeficit, title: T.table.chipDeficitTitle });
   }
-  if (row.isOverBudget) chips.push({ kind: "danger", text: "予算超過", title: "経過月の累計原価が累計予算を超えています（消化率が基準超）" });
+  if (row.isOverBudget) chips.push({ kind: "danger", text: T.table.chipOverBudget, title: T.table.chipOverBudgetTitle });
   if (chips.length) return chips;
-  if (row.includesPreliminary) return [{ kind: "prelim", text: "速報含む", title: "確定前の月を含みます" }];
-  return [{ kind: "ok", text: "問題なし" }];
+  if (row.includesPreliminary) return [{ kind: "prelim", text: T.table.chipPrelim, title: T.table.chipPrelimTitle }];
+  return [{ kind: "ok", text: T.table.chipOk }];
 }
 
 /** 状態列の並び順: 赤（赤字・予算超過）を先頭、その中は消化率の高い順 */

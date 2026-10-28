@@ -4,13 +4,14 @@
  * 画面側の単位は "m"（百万円・既定）| "k"（千円）| "yen"。計算コアの MoneyUnit へ変換する。
  */
 import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../core/index.js";
+import { T, fmt } from "../i18n/index.js";
 
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths };
 
 export const UNITS = [
-  { id: "m", label: "百万円", coreUnit: "millionYen" },
-  { id: "k", label: "千円", coreUnit: "thousandYen" },
-  { id: "yen", label: "円", coreUnit: "yen" },
+  { id: "m", label: T.format.units.m, coreUnit: "millionYen" },
+  { id: "k", label: T.format.units.k, coreUnit: "thousandYen" },
+  { id: "yen", label: T.format.units.yen, coreUnit: "yen" },
 ];
 
 export function toCoreUnit(unit) {
@@ -45,7 +46,7 @@ export function moneySigned(yen, unit = "yen") {
 export function varianceNote(yen, unit = "yen") {
   if (typeof yen !== "number" || !Number.isFinite(yen)) return "";
   const r = roundToUnit(yen, toCoreUnit(unit));
-  return r > 0 ? "計画より原価が少ない" : r < 0 ? "計画より原価が多い" : "計画どおり";
+  return r > 0 ? T.format.varianceLess : r < 0 ? T.format.varianceMore : T.format.varianceEven;
 }
 
 /** 割合の差（ポイント）。0.012 → "+1.2pt"。マイナスは formatPercent と同じ記号 */
@@ -77,14 +78,14 @@ export function decimal(n, digits = 2) {
 /** "2026-10" → "2026年10月" */
 export function monthJa(ym) {
   if (typeof ym !== "string" || !/^\d{4}-\d{2}$/.test(ym)) return EMPTY_VALUE;
-  return `${ym.slice(0, 4)}年${Number(ym.slice(5, 7))}月`;
+  return fmt(T.format.month, { year: ym.slice(0, 4), month: Number(ym.slice(5, 7)) });
 }
 
 /** "2026-10" → "10月"（軸などの短い表示。1月と最初の点には年を付ける） */
 export function monthShort(ym, withYear = false) {
   if (typeof ym !== "string" || !/^\d{4}-\d{2}$/.test(ym)) return "";
   const m = Number(ym.slice(5, 7));
-  return withYear || m === 1 ? `${ym.slice(2, 4)}/${m}` : `${m}月`;
+  return withYear || m === 1 ? `${ym.slice(2, 4)}/${m}` : fmt(T.format.monthOnly, { month: m });
 }
 
 /** 契約期間の短い表記 "26/04–27/03"（title に正式表記を入れて使う） */
@@ -95,18 +96,18 @@ export function periodCompact(from, to) {
 
 /** 月の並び "2026-04".."2026-10" を "2026年4月〜10月"（年が同じなら年は1回）で */
 export function monthSpanJa(months) {
-  if (!months || months.length === 0) return "なし";
+  if (!months || months.length === 0) return T.common.none;
   const a = months[0];
   const b = months[months.length - 1];
   if (a === b) return monthJa(a);
-  if (a.slice(0, 4) === b.slice(0, 4)) return `${monthJa(a)}〜${Number(b.slice(5, 7))}月`;
-  return `${monthJa(a)}〜${monthJa(b)}`;
+  if (a.slice(0, 4) === b.slice(0, 4)) return fmt(T.format.monthRangeSameYear, { from: monthJa(a), toMonth: Number(b.slice(5, 7)) });
+  return fmt(T.format.monthRange, { from: monthJa(a), to: monthJa(b) });
 }
 
 /** 期間 "2026-04〜2027-03" を "2026年4月〜2027年3月" で */
 export function periodJa(period) {
   if (!period) return EMPTY_VALUE;
-  return `${monthJa(period.from)}〜${monthJa(period.to)}`;
+  return fmt(T.format.monthRange, { from: monthJa(period.from), to: monthJa(period.to) });
 }
 
 /** "2026-10-27" はそのまま（UI でも ISO 日付を使う） */
@@ -136,47 +137,23 @@ export function fiscalYearLabel(fy) {
   return `FY${fy}`;
 }
 
-export const METHOD_LABELS = {
-  recent3: "直近実績",
-  all: "全期間平均",
-  assignment: "アサイン計画",
-};
+export const METHOD_LABELS = T.methods.labels;
 
-export const METHOD_DESCRIPTIONS = {
-  recent3: "直近 N か月の原価平均 × 残り月数（N は計算ルール参照）",
-  all: "契約開始から前月までの原価平均 × 残り月数",
-  assignment: "残り月のアサイン配分 × 標準時間 × 単価",
-};
+/** 文言の {n} は直近何か月で平均するか。methodDescription(m, n) で差し込む */
+export const METHOD_DESCRIPTIONS = T.methods.descriptions;
 
-export const STATUS_LABELS = {
-  final: "確定",
-  preliminary: "速報",
-  future: "予定",
-  outside: "期間外",
-};
+export function methodDescription(method, recentMonths) {
+  return fmt(METHOD_DESCRIPTIONS[method], { n: recentMonths });
+}
 
-export const WARNING_LABELS = {
-  UNMAPPED_WORKLOG: "未紐付け工数",
-  WORKLOG_OUT_OF_CONTRACT_PERIOD: "契約期間外の工数",
-  RATE_MISSING: "単価なし",
-  UNKNOWN_MEMBER: "不明メンバー",
-  UNKNOWN_TEAM: "チーム階層の問題",
-  ALLOCATION_OVER_1: "配分の超過",
-  CONTRACT_INVALID: "契約の不備",
-  DUPLICATE_CONTRACT_ID: "契約IDの重複",
-  MAPPING_UNKNOWN_CONTRACT: "紐付け先の契約がない",
-  MAPPING_AMBIGUOUS: "紐付け先が複数",
-  EXCLUDED_NO_CUSTOMER: "顧客名なしで除外",
-};
+export const STATUS_LABELS = T.monthStatus;
 
-export const UNMAPPED_REASON_LABELS = {
-  NO_RULE: "紐付けルールなし",
-  OUT_OF_PERIOD: "契約期間外",
-  UNKNOWN_CONTRACT: "契約IDが存在しない",
-};
+export const WARNING_LABELS = T.warnings;
+
+export const UNMAPPED_REASON_LABELS = T.unmappedReasons;
 
 /** 粗利の黒字/赤字 */
 export function profitLabel(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return EMPTY_VALUE;
-  return value < 0 ? "赤字" : "黒字";
+  return value < 0 ? T.common.deficit : T.common.surplus;
 }

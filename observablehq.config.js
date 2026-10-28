@@ -42,6 +42,7 @@ function parseCsv(text) {
   if (row.some((c) => c.trim() !== "")) rows.push(row);
   return rows;
 }
+import ja from "./src/i18n/ja.js";
 
 /** data/contracts.csv の契約ID（作業ログ明細の動的パス用）。読めなければ空 */
 function contractIds() {
@@ -66,16 +67,16 @@ function contractIds() {
  * 新しい画面はここに足す。href は "/" 始まりで書けば Framework がページごとの相対パスに書き換える。
  */
 const NAV = [
-  { name: "全体", path: "/", match: ["/", "/index"] },
-  { name: "チーム", path: "/teams", match: ["/teams", "/team"] },
-  { name: "顧客", path: "/customers", match: ["/customers", "/customer"] },
-  { name: "契約", path: "/contracts", match: ["/contracts", "/contract"] },
-  { name: "メンバー", path: "/members", match: ["/members", "/member"] },
+  { name: ja.app.nav.index, path: "/", match: ["/", "/index"] },
+  { name: ja.app.nav.teams, path: "/teams", match: ["/teams", "/team"] },
+  { name: ja.app.nav.customers, path: "/customers", match: ["/customers", "/customer"] },
+  { name: ja.app.nav.contracts, path: "/contracts", match: ["/contracts", "/contract"] },
+  { name: ja.app.nav.members, path: "/members", match: ["/members", "/member"] },
 ];
 const TOOLS = [
-  { name: "データ確認", path: "/data-check" },
-  { name: "計算ルール", path: "/rules" },
-  { name: "マスタ編集", path: "/masters" },
+  { name: ja.app.nav.dataCheck, path: "/data-check" },
+  { name: ja.app.nav.rules, path: "/rules" },
+  { name: ja.app.nav.masters, path: "/masters" },
 ];
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -86,27 +87,27 @@ function header({ path }) {
   const link = (item, cls) =>
     `<a class="${cls}" href="${item.path}"${isOn(item) ? ' aria-current="page"' : ""}>${escapeHtml(item.name)}</a>`;
   return `<div class="yn-topbar">
-  <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>予実ナビ</a>
-  <nav class="yn-tabs" aria-label="画面">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
+  <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
+  <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
-  <nav class="yn-tools" aria-label="補助">${TOOLS.map((i) => link(i, "yn-tool")).join("")}</nav>
+  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}</nav>
 </div>
 <div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
 }
 
 export default {
-  title: "予実ナビ",
+  title: ja.app.name,
   root: "src",
   output: "dist",
   pages: [
-    { name: "全体サマリー", path: "/" },
-    { name: "チーム一覧", path: "/teams" },
-    { name: "顧客別", path: "/customers" },
-    { name: "契約一覧", path: "/contracts" },
-    { name: "メンバー別", path: "/members" },
-    { name: "計算ルール", path: "/rules" },
-    { name: "データ確認", path: "/data-check" },
-    { name: "マスタ編集", path: "/masters" },
+    { name: ja.app.pages.index, path: "/" },
+    { name: ja.app.pages.teams, path: "/teams" },
+    { name: ja.app.pages.customers, path: "/customers" },
+    { name: ja.app.pages.contracts, path: "/contracts" },
+    { name: ja.app.pages.members, path: "/members" },
+    { name: ja.app.pages.rules, path: "/rules" },
+    { name: ja.app.pages.dataCheck, path: "/data-check" },
+    { name: ja.app.pages.masters, path: "/masters" },
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.ts）を dist/data/worklogs/<id>.json に出力する
   // ファイル名は worklogKey(id)（英数字以外の ID は "~"＋16進。ローダ・画面の fetchWorklogs も同じ関数を使う）
@@ -117,7 +118,7 @@ export default {
   sidebar: false,
   header,
   search: false,
-  footer: "予実ナビ — 保守契約の予実（粗利）管理",
+  footer: escapeHtml(ja.app.footer),
   // 社内GitLab Pages はサブパス配信のことが多いので相対パスにする
   // (GitLab Pages で https://group.pages.example/yojitsu-navi/ の形で配信される想定)
   cleanUrls: true,

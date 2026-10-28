@@ -7,6 +7,7 @@
 import { normalizeName } from "./normalize.js";
 import type { Assignment, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TeamRecord, Worklog } from "./types.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
+import { T, fmt } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // 低レベル: テキスト → 行列
@@ -162,7 +163,7 @@ function checkColumns(file: string, table: CsvTable, required: readonly string[]
   const present = new Set(table.header);
   for (const col of required) {
     if (!present.has(col)) {
-      issues.push({ severity: "error", code: "MISSING_COLUMN", message: `${file}: 列 ${col} がありません`, file, row: 1, ref: { column: col } });
+      issues.push({ severity: "error", code: "MISSING_COLUMN", message: fmt(T.checks.missingColumn, { file, column: col }), file, row: 1, ref: { column: col } });
     }
   }
 }
@@ -188,7 +189,7 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   // 引用符の閉じ忘れは以降の行がすべて 1 セルに飲み込まれ、別の行のエラーとして現れるので、原因の行を示す
   const unclosed = unclosedQuoteLine(text);
   if (unclosed !== null) {
-    issues.push({ severity: "error", code: "UNCLOSED_QUOTE", message: `${file} ${unclosed} 行目: ダブルクォート（"）が閉じていません。この行以降が正しく読めません`, file, row: unclosed });
+    issues.push({ severity: "error", code: "UNCLOSED_QUOTE", message: fmt(T.checks.unclosedQuote, { file, row: unclosed }), file, row: unclosed });
   }
   // 空ファイルはヘッダ無しとみなし、列の欠落を報告する
   checkColumns(file, table, required, issues);

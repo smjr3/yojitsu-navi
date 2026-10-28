@@ -12,6 +12,7 @@
  * spec は関数でもよい（開いたときに初めて計算する）。
  */
 import { html } from "htl";
+import { T, fmt } from "../i18n/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
 import { grossMarginOf } from "./analysis.js";
 import { worklogKey } from "./worklog-key.js";
@@ -31,10 +32,10 @@ function ensureDialog() {
     <div class="yn-dialog-inner">
       <header class="yn-dialog-head">
         <h2 id="yn-dialog-title" class="yn-dialog-title"></h2>
-        <button type="button" class="yn-btn yn-btn-icon yn-dialog-close" aria-label="閉じる">×</button>
+        <button type="button" class="yn-btn yn-btn-icon yn-dialog-close" aria-label=${T.breakdown.close}>×</button>
       </header>
       <div class="yn-dialog-body"></div>
-      <footer class="yn-dialog-foot"><span class="yn-dialog-hint">Esc で閉じる</span><button type="button" class="yn-btn yn-dialog-close2">閉じる</button></footer>
+      <footer class="yn-dialog-foot"><span class="yn-dialog-hint">${T.breakdown.escHint}</span><button type="button" class="yn-btn yn-dialog-close2">${T.breakdown.close}</button></footer>
     </div>
   </dialog>`;
   const close = () => dialog.close();
@@ -71,19 +72,19 @@ function renderSection(section) {
     ${section.table ? renderTable(section.table) : null}
   </section>`;
   if (section.lazy) {
-    const btn = html`<button type="button" class="yn-btn yn-btn-sm">${section.lazyLabel ?? "明細を読み込む"}</button>`;
+    const btn = html`<button type="button" class="yn-btn yn-btn-sm">${section.lazyLabel ?? T.breakdown.loadDetails}</button>`;
     const holder = html`<div class="yn-bd-lazy"></div>`;
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      btn.textContent = "読み込み中…";
+      btn.textContent = T.common.loading;
       try {
         const content = await section.lazy();
         holder.replaceChildren(content);
         btn.remove();
       } catch (error) {
-        holder.replaceChildren(html`<p class="yn-note yn-note-danger" role="alert">明細を読み込めませんでした: ${error?.message ?? String(error)}</p>`);
+        holder.replaceChildren(html`<p class="yn-note yn-note-danger" role="alert">${fmt(T.breakdown.loadFailed, { error: error?.message ?? String(error) })}</p>`);
         btn.disabled = false;
-        btn.textContent = section.lazyLabel ?? "明細を読み込む";
+        btn.textContent = section.lazyLabel ?? T.breakdown.loadDetails;
       }
     });
     node.append(btn, holder);
@@ -95,7 +96,7 @@ function renderSpec(spec) {
   const formulas = Array.isArray(spec.formula) ? spec.formula : spec.formula ? [spec.formula] : [];
   return html`<div class="yn-bd">
     ${spec.subtitle ? html`<p class="yn-bd-subtitle">${spec.subtitle}</p>` : null}
-    ${formulas.length ? html`<div class="yn-bd-formula" aria-label="計算式">${formulas.map((f) => html`<code>${f}</code>`)}</div>` : null}
+    ${formulas.length ? html`<div class="yn-bd-formula" aria-label=${T.breakdown.formulaLabel}>${formulas.map((f) => html`<code>${f}</code>`)}</div>` : null}
     ${spec.rows?.length
       ? html`<dl class="yn-bd-rows">${spec.rows.map(
           (r) => html`<div class=${r.emphasis ? "is-emphasis" : ""}><dt>${r.label}</dt><dd><span class="num">${r.value ?? EMPTY_VALUE}</span>${r.note ? html`<small>${r.note}</small>` : null}</dd></div>`,
@@ -111,7 +112,7 @@ export function openBreakdown(spec, opener = null) {
   const resolved = typeof spec === "function" ? spec() : spec;
   const dialog = ensureDialog();
   lastOpener = opener ?? document.activeElement;
-  dialog.querySelector("#yn-dialog-title").textContent = resolved.title ?? "計算根拠";
+  dialog.querySelector("#yn-dialog-title").textContent = resolved.title ?? T.breakdown.title;
   const body = dialog.querySelector(".yn-dialog-body");
   body.replaceChildren(renderSpec(resolved));
   body.scrollTop = 0;
@@ -125,7 +126,7 @@ export function closeBreakdown() {
 }
 
 /** 数値ボタン。クリック／Enter で内訳を開く */
-export function numberButton(text, spec, { className = "", ariaLabel = null, title = "計算根拠を表示" } = {}) {
+export function numberButton(text, spec, { className = "", ariaLabel = null, title = T.breakdown.show } = {}) {
   const btn = html`<button type="button" class=${`yn-num ${className}`.trim()} title=${title} aria-label=${ariaLabel}>${text}</button>`;
   btn.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -155,7 +156,7 @@ export function fetchWorklogs(contractId) {
         lastStatus = res.status;
         if (res.status !== 404) break;
       }
-      throw new Error(`作業ログ明細の取得に失敗しました（HTTP ${lastStatus}）`);
+      throw new Error(fmt(T.breakdown.worklogFetchFailed, { status: lastStatus }));
     })();
     p.catch(() => worklogCache.delete(contractId));
     worklogCache.set(contractId, p);
@@ -168,11 +169,11 @@ export function worklogTable(entries, { unit = "yen", limit = 500 } = {}) {
   const rows = entries.slice(0, limit).map((w) => [w.date, `${w.memberName}（${w.memberId}）`, w.task, formatHours(w.hours), money(w.hourlyRate, "yen"), money(w.amount, unit)]);
   const total = entries.reduce((s, w) => s + w.amount, 0);
   const hours = entries.reduce((s, w) => s + w.hours, 0);
-  const more = entries.length > limit ? html`<p class="yn-note">先頭 ${integer(limit)} 件を表示（全 ${integer(entries.length)} 件）</p>` : null;
+  const more = entries.length > limit ? html`<p class="yn-note">${fmt(T.breakdown.showingFirst, { limit: integer(limit), total: integer(entries.length) })}</p>` : null;
   return html`<div>${renderTable({
-    columns: [{ label: "日付" }, { label: "メンバー" }, { label: "作業内容" }, { label: "時間", align: "num" }, { label: "単価", align: "num" }, { label: "金額", align: "num" }],
+    columns: [{ label: T.breakdown.colDate }, { label: T.breakdown.colMember }, { label: T.breakdown.colTask }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colAmount, align: "num" }],
     rows,
-    foot: ["合計", `${integer(entries.length)} 件`, "", formatHours(hours), "", money(total, unit)],
+    foot: [T.breakdown.total, fmt(T.breakdown.countSpaced, { n: integer(entries.length) }), "", formatHours(hours), "", money(total, unit)],
   })}${more}</div>`;
 }
 
@@ -184,21 +185,21 @@ export function worklogTable(entries, { unit = "yen", limit = 500 } = {}) {
 export function budgetMonthSpec({ contract, cm, unit }) {
   const b = cm.budgetBreakdown;
   return {
-    title: `予算の計算根拠 — ${contract.customerName} / ${contract.projectName}（${monthJa(cm.month)}）`,
-    formula: ["基本額 = floor(契約総額 ÷ 契約月数)", "端数 = 契約総額 − 基本額 × 契約月数", "月の予算 = 基本額（最終月は 基本額 + 端数）"],
+    title: fmt(T.breakdown.budgetTitle, { customer: contract.customerName, project: contract.projectName, month: monthJa(cm.month) }),
+    formula: [T.breakdown.budgetFormulaBase, T.breakdown.budgetFormulaRemainder, T.breakdown.budgetFormulaMonth],
     rows: [
-      { label: "契約総額", value: money(b.totalAmount, unit) },
-      { label: "契約月数", value: `${b.monthCount}か月`, note: `${contract.startMonth}〜${contract.endMonth}` },
-      { label: "基本額", value: money(b.baseMonthly, unit) },
-      { label: "端数（最終月に加算）", value: money(b.remainder, unit) },
-      { label: "この月は最終月か", value: b.isLastMonth ? "はい" : "いいえ" },
-      { label: `${monthJa(cm.month)} の予算`, value: money(cm.budget, unit), emphasis: true },
+      { label: T.breakdown.totalAmount, value: money(b.totalAmount, unit) },
+      { label: T.breakdown.monthCount, value: fmt(T.breakdown.months, { n: b.monthCount }), note: `${contract.startMonth}〜${contract.endMonth}` },
+      { label: T.breakdown.baseMonthly, value: money(b.baseMonthly, unit) },
+      { label: T.breakdown.remainder, value: money(b.remainder, unit) },
+      { label: T.breakdown.isLastMonth, value: b.isLastMonth ? T.breakdown.yes : T.breakdown.no },
+      { label: fmt(T.breakdown.monthBudget, { month: monthJa(cm.month) }), value: money(cm.budget, unit), emphasis: true },
     ],
   };
 }
 
 /** 期間・契約範囲の予算合計 */
-export function budgetAggregateSpec({ model, contractIds, period, unit, label = "予算" }) {
+export function budgetAggregateSpec({ model, contractIds, period, unit, label = T.breakdown.budget }) {
   const set = contractIds ? new Set(contractIds) : null;
   const rows = [];
   let total = 0;
@@ -220,22 +221,22 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
     ]);
   }
   return {
-    title: `${label}の計算根拠（${periodJa(period)}）`,
-    formula: ["契約ごとの月予算 = floor(契約総額 ÷ 契約月数)（最終月に端数を加算）", `${label} = Σ 期間内の月予算`],
+    title: fmt(T.breakdown.aggregateTitle, { label, period: periodJa(period) }),
+    formula: [T.breakdown.budgetAggFormula, fmt(T.breakdown.budgetAggFormulaSum, { label })],
     rows: [
-      { label: "対象契約", value: `${rows.length}件` },
-      { label: `${label}合計`, value: money(total, unit), emphasis: true },
+      { label: T.breakdown.targetContracts, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: fmt(T.breakdown.labelTotal, { label }), value: money(total, unit), emphasis: true },
     ],
     sections: [
       {
-        title: "契約ごとの内訳",
+        title: T.breakdown.byContract,
         table: {
-          columns: [{ label: "契約ID" }, { label: "顧客 / 案件" }, { label: "契約総額", align: "num" }, { label: "契約月数", align: "num" }, { label: "月予算（基本額）", align: "num" }, { label: "期間内の月数", align: "num" }, { label: "期間内の予算", align: "num" }],
+          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.totalAmount, align: "num" }, { label: T.breakdown.monthCount, align: "num" }, { label: T.breakdown.colMonthlyBase, align: "num" }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colBudgetInPeriod, align: "num" }],
           rows,
         },
       },
     ],
-    note: "端数は契約の最終月に加算されるため、最終月を含む期間は基本額 × 月数と一致しないことがあります。",
+    note: T.breakdown.budgetAggNote,
   };
 }
 
@@ -245,35 +246,35 @@ export function costMonthSpec({ contract, cm, unit, model }) {
     `${l.memberName}（${l.memberId}）`,
     l.memberTeamId ? (model?.teamTree?.[l.memberTeamId]?.name ?? l.memberTeamId) : "—",
     formatHours(l.hours),
-    l.rateMissing ? html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">▲</span>単価なし</span>` : money(l.hourlyRate, "yen"),
+    l.rateMissing ? html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">▲</span>${T.breakdown.rateMissing}</span>` : money(l.hourlyRate, "yen"),
     l.rateSource ? `${l.rateSource.key}（${l.rateSource.effectiveFrom}〜）` : "—",
     money(l.amount, unit),
   ]);
   return {
-    title: `原価の計算根拠 — ${contract.customerName} / ${contract.projectName}（${monthJa(cm.month)}）`,
-    subtitle: `状態: ${STATUS_LABELS[cm.status]}`,
-    formula: ["メンバーごとの原価 = round(作業時間 × その月に有効な時間単価)", "月の原価 = Σ メンバーごとの原価"],
+    title: fmt(T.breakdown.costTitle, { customer: contract.customerName, project: contract.projectName, month: monthJa(cm.month) }),
+    subtitle: fmt(T.breakdown.statusLine, { status: STATUS_LABELS[cm.status] }),
+    formula: [T.breakdown.costFormulaMember, T.breakdown.costFormulaMonth],
     rows: [
-      { label: "作業時間", value: formatHours(cm.hours) },
-      { label: "原価行の数", value: `${cm.costLines.length}` },
-      { label: `${monthJa(cm.month)} の原価`, value: money(cm.cost, unit), emphasis: true },
+      { label: T.breakdown.workHours, value: formatHours(cm.hours) },
+      { label: T.breakdown.costLineCount, value: `${cm.costLines.length}` },
+      { label: fmt(T.breakdown.monthCost, { month: monthJa(cm.month) }), value: money(cm.cost, unit), emphasis: true },
     ],
     sections: [
       {
-        title: "メンバーごとの原価行",
+        title: T.breakdown.costLinesByMember,
         table: {
-          columns: [{ label: "メンバー" }, { label: "当時の所属" }, { label: "時間", align: "num" }, { label: "単価", align: "num" }, { label: "単価の出どころ" }, { label: "金額", align: "num" }],
+          columns: [{ label: T.breakdown.colMember }, { label: T.breakdown.colTeamAtTime }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colRateSource }, { label: T.breakdown.colAmount, align: "num" }],
           rows: lines,
         },
       },
       {
-        title: "元の作業ログ",
-        lazyLabel: "作業ログを読み込む",
+        title: T.breakdown.worklogs,
+        lazyLabel: T.breakdown.loadWorklogs,
         lazy: async () => {
           const data = await fetchWorklogs(contract.contractId);
           const month = data.months.find((m) => m.month === cm.month);
           const entries = month?.worklogs ?? [];
-          if (entries.length === 0) return html`<p class="yn-note">この月の作業ログはありません。</p>`;
+          if (entries.length === 0) return html`<p class="yn-note">${T.breakdown.noWorklogsMonth}</p>`;
           return worklogTable(entries, { unit });
         },
       },
@@ -282,7 +283,7 @@ export function costMonthSpec({ contract, cm, unit, model }) {
 }
 
 /** 期間・契約範囲の原価合計 */
-export function costAggregateSpec({ model, contractIds, period, unit, label = "原価", detailHref = null }) {
+export function costAggregateSpec({ model, contractIds, period, unit, label = T.breakdown.cost, detailHref = null }) {
   const set = contractIds ? new Set(contractIds) : null;
   const rows = [];
   let total = 0;
@@ -302,23 +303,23 @@ export function costAggregateSpec({ model, contractIds, period, unit, label = "�
       `${months.length}`,
       formatHours(h),
       money(sum, unit),
-      missing ? "単価なしの行を含む" : "",
+      missing ? T.breakdown.hasRateMissing : "",
     ]);
   }
   return {
-    title: `${label}の計算根拠（${periodJa(period)}）`,
-    formula: ["メンバー×月ごとの原価 = round(作業時間 × その月に有効な時間単価)", `${label} = Σ 期間内の原価`],
+    title: fmt(T.breakdown.aggregateTitle, { label, period: periodJa(period) }),
+    formula: [T.breakdown.costAggFormula, fmt(T.breakdown.costAggFormulaSum, { label })],
     rows: [
-      { label: "対象契約", value: `${rows.length}件` },
-      { label: "作業時間", value: formatHours(hours) },
-      { label: `${label}合計`, value: money(total, unit), emphasis: true },
+      { label: T.breakdown.targetContracts, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: T.breakdown.workHours, value: formatHours(hours) },
+      { label: fmt(T.breakdown.labelTotal, { label }), value: money(total, unit), emphasis: true },
     ],
     sections: [
       {
-        title: "契約ごとの内訳",
-        text: "契約IDを開くと月・メンバーごとの原価行と元の作業ログまで辿れます。",
+        title: T.breakdown.byContract,
+        text: T.breakdown.costAggHint,
         table: {
-          columns: [{ label: "契約ID" }, { label: "顧客 / 案件" }, { label: "期間内の月数", align: "num" }, { label: "時間", align: "num" }, { label: "原価", align: "num" }, { label: "注記" }],
+          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.colMonthsInPeriod, align: "num" }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.cost, align: "num" }, { label: T.breakdown.colNote }],
           rows,
         },
       },
@@ -327,15 +328,15 @@ export function costAggregateSpec({ model, contractIds, period, unit, label = "�
 }
 
 /** 粗利 */
-export function grossProfitSpec({ budget, cost, unit, label = "粗利", subtitle = null }) {
+export function grossProfitSpec({ budget, cost, unit, label = T.breakdown.grossProfit, subtitle = null }) {
   return {
-    title: `${label}の計算根拠`,
+    title: fmt(T.breakdown.labelTitle, { label }),
     subtitle,
-    formula: ["粗利 = 予算 − 原価"],
+    formula: [T.breakdown.gpFormula],
     rows: [
-      { label: "予算", value: money(budget, unit) },
-      { label: "原価", value: money(cost, unit) },
-      { label: "粗利", value: money(budget - cost, unit), emphasis: true, note: profitLabel(budget - cost) },
+      { label: T.breakdown.budget, value: money(budget, unit) },
+      { label: T.breakdown.cost, value: money(cost, unit) },
+      { label: T.breakdown.grossProfit, value: money(budget - cost, unit), emphasis: true, note: profitLabel(budget - cost) },
     ],
   };
 }
@@ -347,14 +348,14 @@ export function grossProfitSpec({ budget, cost, unit, label = "粗利", subtitle
 export function marginSpec({ totals = null, budget = totals?.budget, cost = totals?.cost, grossMargin = totals ? totals.grossMargin : grossMarginOf(budget, cost), unit, subtitle = null }) {
   const gp = totals ? totals.grossProfit : budget - cost;
   return {
-    title: "粗利率の計算根拠",
+    title: T.breakdown.marginTitle,
     subtitle,
-    formula: ["粗利率 = 粗利 ÷ 予算 = (予算 − 原価) ÷ 予算"],
+    formula: [T.breakdown.marginFormula],
     rows: [
-      { label: "予算", value: money(budget, unit) },
-      { label: "原価", value: money(cost, unit) },
-      { label: "粗利", value: money(gp, unit) },
-      { label: "粗利率", value: formatPercent(grossMargin), emphasis: true, note: grossMargin === null ? "予算が 0 のため計算できません" : null },
+      { label: T.breakdown.budget, value: money(budget, unit) },
+      { label: T.breakdown.cost, value: money(cost, unit) },
+      { label: T.breakdown.grossProfit, value: money(gp, unit) },
+      { label: T.breakdown.margin, value: formatPercent(grossMargin), emphasis: true, note: grossMargin === null ? T.breakdown.marginZero : null },
     ],
   };
 }
@@ -363,19 +364,19 @@ export function marginSpec({ totals = null, budget = totals?.budget, cost = tota
 export function burnRateSpec({ totals, unit, threshold, asOfMonth, subtitle = null }) {
   const b = totals.burnRateBreakdown;
   const months = b.elapsedMonths;
-  const span = months.length ? (months.length === 1 ? monthJa(months[0]) : `${monthJa(months[0])}〜${monthJa(months[months.length - 1])}`) : "なし";
+  const span = months.length ? (months.length === 1 ? monthJa(months[0]) : `${monthJa(months[0])}〜${monthJa(months[months.length - 1])}`) : T.common.none;
   return {
-    title: "消化率の計算根拠",
+    title: T.breakdown.burnTitle,
     subtitle,
-    formula: ["消化率 = 経過月の累計原価 ÷ 経過月の累計予算", `経過月 = 期間内で ${monthJa(asOfMonth)}（基準月）以前の月`],
+    formula: [T.breakdown.burnFormula, fmt(T.breakdown.burnFormulaElapsed, { month: monthJa(asOfMonth) })],
     rows: [
-      { label: "経過月", value: `${months.length}か月`, note: span },
-      { label: "累計原価（経過月）", value: money(b.cumulativeCost, unit) },
-      { label: "累計予算（経過月）", value: money(b.cumulativeBudget, unit) },
-      { label: "消化率", value: formatPercent(totals.burnRate), emphasis: true, note: totals.burnRate === null ? "累計予算が 0 のため計算できません" : null },
-      { label: "赤の基準", value: `${formatPercent(threshold)} 超`, note: totals.isOverBudget ? "超過しています" : "範囲内です" },
+      { label: T.breakdown.elapsed, value: fmt(T.breakdown.months, { n: months.length }), note: span },
+      { label: T.breakdown.cumCost, value: money(b.cumulativeCost, unit) },
+      { label: T.breakdown.cumBudget, value: money(b.cumulativeBudget, unit) },
+      { label: T.breakdown.burnRate, value: formatPercent(totals.burnRate), emphasis: true, note: totals.burnRate === null ? T.breakdown.burnZero : null },
+      { label: T.breakdown.threshold, value: fmt(T.breakdown.thresholdValue, { value: formatPercent(threshold) }), note: totals.isOverBudget ? T.breakdown.over : T.breakdown.within },
     ],
-    note: "基準月（速報）も経過月に含みます。速報月の原価は確定日まで増える可能性があります。",
+    note: T.breakdown.burnNote,
   };
 }
 
@@ -384,40 +385,40 @@ export function forecastSpec({ forecast, contract, unit, config, subtitle = null
   const b = forecast.breakdown;
   const method = forecast.method;
   const rows = [
-    { label: "方式", value: METHOD_LABELS[method] },
-    { label: "対象年度", value: `FY${forecast.fiscalYear}`, note: `${b.fiscalYearMonths[0]}〜${b.fiscalYearMonths[b.fiscalYearMonths.length - 1]}` },
-    { label: "年度内の契約月", value: `${b.contractMonthsInFY.length}か月`, note: b.contractMonthsInFY.length ? `${b.contractMonthsInFY[0]}〜${b.contractMonthsInFY[b.contractMonthsInFY.length - 1]}` : "年度に掛からない契約" },
-    { label: "実績月（完了した月）", value: `${b.actualMonths.length}か月`, note: b.actualMonths.join(", ") || "なし" },
-    { label: "残り月（基準月を含む）", value: `${b.remainingMonths.length}か月`, note: b.remainingMonths.join(", ") || "なし" },
-    { label: "年度予算", value: money(forecast.fyBudget, unit) },
-    { label: "実績原価（実績月の合計）", value: money(b.actualCost, unit) },
+    { label: T.breakdown.method, value: METHOD_LABELS[method] },
+    { label: T.breakdown.fiscalYear, value: `FY${forecast.fiscalYear}`, note: `${b.fiscalYearMonths[0]}〜${b.fiscalYearMonths[b.fiscalYearMonths.length - 1]}` },
+    { label: T.breakdown.contractMonthsInFy, value: fmt(T.breakdown.months, { n: b.contractMonthsInFY.length }), note: b.contractMonthsInFY.length ? `${b.contractMonthsInFY[0]}〜${b.contractMonthsInFY[b.contractMonthsInFY.length - 1]}` : T.breakdown.notInFy },
+    { label: T.breakdown.actualMonths, value: fmt(T.breakdown.months, { n: b.actualMonths.length }), note: b.actualMonths.join(", ") || T.common.none },
+    { label: T.breakdown.remainingMonths, value: fmt(T.breakdown.months, { n: b.remainingMonths.length }), note: b.remainingMonths.join(", ") || T.common.none },
+    { label: T.breakdown.fyBudget, value: money(forecast.fyBudget, unit) },
+    { label: T.breakdown.actualCostSum, value: money(b.actualCost, unit) },
   ];
-  const formula = ["年度予算 = Σ 年度内の契約月の予算", "着地原価 = 実績原価 + 残り原価", "着地粗利 = 年度予算 − 着地原価"];
+  const formula = [T.breakdown.fcFormulaBudget, T.breakdown.fcFormulaCost, T.breakdown.fcFormulaGp];
   const sections = [];
   if (method === "assignment") {
-    formula.splice(1, 0, "残り原価 = Σ(残り月 × アサイン: 配分 × 標準時間 × 単価)");
-    rows.push({ label: "標準時間（1人月）", value: `${config.standardHoursPerMonth}h` });
-    rows.push({ label: "残り原価", value: money(b.remainingCost, unit), note: b.noAssignments ? "アサインが 1 件もありません（残り原価 0）" : null });
+    formula.splice(1, 0, T.breakdown.fcFormulaAssignment);
+    rows.push({ label: T.breakdown.standardHours, value: `${config.standardHoursPerMonth}h` });
+    rows.push({ label: T.breakdown.remainingCost, value: money(b.remainingCost, unit), note: b.noAssignments ? T.breakdown.noAssignments : null });
     if (b.assignmentLines.length) {
       sections.push({
-        title: "残り月のアサイン明細",
+        title: T.breakdown.assignmentDetails,
         table: {
-          columns: [{ label: "月" }, { label: "メンバー" }, { label: "配分", align: "num" }, { label: "時間", align: "num" }, { label: "単価", align: "num" }, { label: "金額", align: "num" }],
+          columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colMember }, { label: T.breakdown.colAllocation, align: "num" }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colAmount, align: "num" }],
           rows: b.assignmentLines.map((l) => [l.month, l.memberId, decimal(l.allocation, 2), formatHours(l.hours), money(l.hourlyRate, "yen"), money(l.amount, unit)]),
         },
       });
     }
   } else {
-    const n = method === "recent3" ? `直近 ${config.forecastRecentMonths} か月` : "契約開始からの全月";
-    formula.splice(1, 0, `残り原価 = round(平均月次原価 × 残り月数)`, `平均月次原価 = ${n}（基準月より前）の原価平均`);
-    rows.push({ label: "平均の基礎にした月", value: `${b.averageBasisMonths.length}か月`, note: b.averageBasisMonths.join(", ") || "実績なし" });
-    rows.push({ label: "平均月次原価", value: money(Math.round(b.averageMonthlyCost), unit), note: b.noActuals ? "実績が無いため 0 として扱います" : `正確には ${decimal(b.averageMonthlyCost, 2)} 円` });
-    rows.push({ label: "残り原価", value: money(b.remainingCost, unit), note: `${money(Math.round(b.averageMonthlyCost), unit)} × ${b.remainingMonths.length}か月` });
+    const n = method === "recent3" ? fmt(T.breakdown.recentN, { n: config.forecastRecentMonths }) : T.breakdown.allMonths;
+    formula.splice(1, 0, T.breakdown.fcFormulaAvg, fmt(T.breakdown.fcFormulaAvgBasis, { basis: n }));
+    rows.push({ label: T.breakdown.averageBasis, value: fmt(T.breakdown.months, { n: b.averageBasisMonths.length }), note: b.averageBasisMonths.join(", ") || T.breakdown.noActual });
+    rows.push({ label: T.breakdown.averageCost, value: money(Math.round(b.averageMonthlyCost), unit), note: b.noActuals ? T.breakdown.noActualZero : fmt(T.breakdown.exactYen, { value: decimal(b.averageMonthlyCost, 2) }) });
+    rows.push({ label: T.breakdown.remainingCost, value: money(b.remainingCost, unit), note: fmt(T.breakdown.avgTimesMonths, { avg: money(Math.round(b.averageMonthlyCost), unit), n: b.remainingMonths.length }) });
   }
-  rows.push({ label: "着地原価", value: money(forecast.forecastCost, unit) });
-  rows.push({ label: "着地粗利", value: money(forecast.forecastGrossProfit, unit), emphasis: true, note: forecast.isDeficit ? "赤字見込み" : "黒字見込み" });
+  rows.push({ label: T.breakdown.forecastCost, value: money(forecast.forecastCost, unit) });
+  rows.push({ label: T.breakdown.forecastGp, value: money(forecast.forecastGrossProfit, unit), emphasis: true, note: forecast.isDeficit ? T.breakdown.deficitForecast : T.breakdown.surplusForecast });
   return {
-    title: `着地見込みの計算根拠 — ${contract.customerName} / ${contract.projectName}`,
+    title: fmt(T.breakdown.forecastTitle, { customer: contract.customerName, project: contract.projectName }),
     subtitle,
     formula,
     rows,
@@ -440,24 +441,24 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
       money(f.breakdown.actualCost, unit),
       money(f.breakdown.remainingCost, unit),
       money(f.forecastGrossProfit, unit),
-      f.isDeficit ? html`<span class="yn-chip yn-chip-danger"><span class="yn-chip-icon" aria-hidden="true">▲</span>赤字</span>` : "黒字",
+      f.isDeficit ? html`<span class="yn-chip yn-chip-danger"><span class="yn-chip-icon" aria-hidden="true">▲</span>${T.common.deficit}</span>` : T.common.surplus,
     ]);
   }
   return {
-    title: `着地見込み粗利の計算根拠（FY${totals.fiscalYear}・${METHOD_LABELS[totals.method]}）`,
-    formula: ["契約ごとに 着地粗利 = 年度予算 − (実績原価 + 残り原価)", "合計 = Σ 契約ごとの着地粗利"],
+    title: fmt(T.breakdown.forecastTotalsTitle, { fy: totals.fiscalYear, method: METHOD_LABELS[totals.method] }),
+    formula: [T.breakdown.fcTotalsFormula, T.breakdown.fcTotalsFormulaSum],
     rows: [
-      { label: "対象契約（年度に掛かるもの）", value: `${rows.length}件` },
-      { label: "年度予算", value: money(totals.fyBudget, unit) },
-      { label: "着地原価", value: money(totals.forecastCost, unit) },
-      { label: "着地見込み粗利", value: money(totals.forecastGrossProfit, unit), emphasis: true },
-      { label: "赤字見込みの契約", value: `${totals.deficitContractIds.length}件`, note: totals.deficitContractIds.join(", ") || null },
+      { label: T.breakdown.targetContractsFy, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: T.breakdown.fyBudget, value: money(totals.fyBudget, unit) },
+      { label: T.breakdown.forecastCost, value: money(totals.forecastCost, unit) },
+      { label: T.breakdown.forecastGpLong, value: money(totals.forecastGrossProfit, unit), emphasis: true },
+      { label: T.breakdown.deficitContracts, value: fmt(T.breakdown.count, { n: totals.deficitContractIds.length }), note: totals.deficitContractIds.join(", ") || null },
     ],
     sections: [
       {
-        title: "契約ごとの内訳",
+        title: T.breakdown.byContract,
         table: {
-          columns: [{ label: "契約ID" }, { label: "顧客 / 案件" }, { label: "年度予算", align: "num" }, { label: "実績原価", align: "num" }, { label: "残り原価", align: "num" }, { label: "着地粗利", align: "num" }, { label: "判定" }],
+          columns: [{ label: T.breakdown.colContractId }, { label: T.breakdown.colCustomerProject }, { label: T.breakdown.fyBudget, align: "num" }, { label: T.breakdown.actualCost, align: "num" }, { label: T.breakdown.remainingCost, align: "num" }, { label: T.breakdown.forecastGp, align: "num" }, { label: T.breakdown.judgement }],
           rows,
         },
       },
@@ -468,13 +469,13 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
 /** 作業時間・人月 */
 export function hoursSpec({ totals, config, subtitle = null }) {
   return {
-    title: "作業時間と人月換算",
+    title: T.breakdown.hoursTitle,
     subtitle,
-    formula: [`人月（標準）= 作業時間 ÷ ${config.standardHoursPerMonth}h`, `人月（カレンダー）= Σ 月ごとの 作業時間 ÷ (営業日数 × ${config.hoursPerBusinessDay}h)`],
+    formula: [fmt(T.breakdown.pmStdFormula, { hours: config.standardHoursPerMonth }), fmt(T.breakdown.pmCalFormula, { hours: config.hoursPerBusinessDay })],
     rows: [
-      { label: "作業時間", value: formatHours(totals.hours) },
-      { label: "人月（標準）", value: `${decimal(totals.personMonthsStandard, 2)}人月` },
-      { label: "人月（カレンダー）", value: `${decimal(totals.personMonthsCalendar, 2)}人月` },
+      { label: T.breakdown.workHours, value: formatHours(totals.hours) },
+      { label: T.breakdown.pmStd, value: fmt(T.breakdown.personMonths, { value: decimal(totals.personMonthsStandard, 2) }) },
+      { label: T.breakdown.pmCal, value: fmt(T.breakdown.personMonths, { value: decimal(totals.personMonthsCalendar, 2) }) },
     ],
   };
 }
@@ -495,10 +496,10 @@ function contractLabelOf(model, contractId) {
 }
 
 function rateSourceText(mm) {
-  if (mm.rateMissing) return html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">○</span>単価なし（0円）</span>`;
+  if (mm.rateMissing) return html`<span class="yn-chip yn-chip-neutral"><span class="yn-chip-icon" aria-hidden="true">○</span>${T.breakdown.rateMissingZero2}</span>`;
   if (!mm.rateSource) return "—";
   const personal = mm.rateSource.key === mm.memberId;
-  return `${personal ? "個人単価" : `役職「${mm.rateSource.key}」`}（${mm.rateSource.effectiveFrom}〜）`;
+  return fmt(T.breakdown.rateSourceText, { source: personal ? T.breakdown.personalRate : fmt(T.breakdown.roleRate, { role: mm.rateSource.key }), from: mm.rateSource.effectiveFrom });
 }
 
 function memberRows(months, contractIds) {
@@ -520,30 +521,30 @@ export function memberPlanSpec({ model, member, months, contractIds = null, unit
   const hours = rows.reduce((s, { row }) => s + row.plannedHours, 0);
   const cost = rows.reduce((s, { row }) => s + row.plannedCost, 0);
   const missing = rows.some(({ mm }) => mm.rateMissing);
-  const label = measure === "hours" ? "計画時間" : "計画原価";
+  const label = measure === "hours" ? T.breakdown.plannedHours : T.breakdown.plannedCost;
   return {
-    title: `${label}の計算根拠 — ${member.memberName}（${member.memberId}）`,
+    title: fmt(T.breakdown.memberTitle, { label, name: member.memberName, id: member.memberId }),
     subtitle,
-    formula: [`計画時間 = 配分人月 × 基準時間（${std}h）`, "計画原価 = round(計画時間 × その月の時間単価)（契約・月ごとに円に丸める）", `${label} = Σ 契約・月ごとの${label}`],
+    formula: [fmt(T.breakdown.planHoursFormula, { hours: std }), T.breakdown.planCostFormula, fmt(T.breakdown.planSumFormula, { label, label2: label })],
     rows: [
-      { label: "アサインの行（契約×月）", value: `${rows.length}件` },
-      { label: "基準時間（1人月）", value: `${std}h` },
-      { label: "計画時間", value: formatHours(hours), emphasis: measure === "hours" },
-      { label: "計画原価", value: money(cost, unit), emphasis: measure !== "hours", note: missing ? "単価が見つからない月は 0 円で計算しています" : null },
+      { label: T.breakdown.assignmentRows, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: T.breakdown.baseHours, value: `${std}h` },
+      { label: T.breakdown.plannedHours, value: formatHours(hours), emphasis: measure === "hours" },
+      { label: T.breakdown.plannedCost, value: money(cost, unit), emphasis: measure !== "hours", note: missing ? T.breakdown.rateMissingZero : null },
     ],
     sections: [
       rows.length
         ? {
-            title: "契約・月ごとの計画",
+            title: T.breakdown.planByContractMonth,
             table: {
-              columns: [{ label: "月" }, { label: "契約" }, { label: "配分", align: "num" }, { label: "計画時間", align: "num" }, { label: "単価", align: "num" }, { label: "単価の出どころ" }, { label: "計画原価", align: "num" }],
+              columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContract }, { label: T.breakdown.colAllocation, align: "num" }, { label: T.breakdown.plannedHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colRateSource }, { label: T.breakdown.plannedCost, align: "num" }],
               rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), decimal(row.allocation, 3), formatHours(row.plannedHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.plannedCost, unit)]),
-              foot: ["合計", "", "", formatHours(hours), "", "", money(cost, unit)],
+              foot: [T.breakdown.total, "", "", formatHours(hours), "", "", money(cost, unit)],
             },
           }
-        : { title: "契約・月ごとの計画", text: "この範囲にアサインはありません（計画 0）。" },
+        : { title: T.breakdown.planByContractMonth, text: T.breakdown.noAssignmentsInRange },
     ],
-    note: "配分は assignments.csv の allocation（同じ契約・月に複数行あれば合計）。契約期間外の月のアサインは数えません。",
+    note: T.breakdown.allocationNote,
   };
 }
 
@@ -554,25 +555,25 @@ export function memberActualSpec({ model, member, months, contractIds = null, un
   const hours = rows.reduce((s, { row }) => s + row.actualHours, 0);
   const cost = rows.reduce((s, { row }) => s + row.actualCost, 0);
   const unplannedHours = rows.filter(({ row }) => row.assignmentCount === 0).reduce((s, { row }) => s + row.actualHours, 0);
-  const label = measure === "hours" ? "実績時間" : "実績原価";
+  const label = measure === "hours" ? T.breakdown.actualHours : T.breakdown.actualCost;
   const ids = [...new Set(rows.map(({ row }) => row.contractId))];
   const monthSet = new Set(rows.map(({ mm }) => mm.month));
   const sections = [
     rows.length
       ? {
-          title: "契約・月ごとの原価行",
+          title: T.breakdown.costLinesByContractMonth,
           table: {
-            columns: [{ label: "月" }, { label: "契約" }, { label: "時間", align: "num" }, { label: "単価", align: "num" }, { label: "単価の出どころ" }, { label: "原価", align: "num" }, { label: "アサイン" }],
-            rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), formatHours(row.actualHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.actualCost, unit), row.assignmentCount > 0 ? "あり" : "なし"]),
-            foot: ["合計", "", formatHours(hours), "", "", money(cost, unit), ""],
+            columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContract }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colRateSource }, { label: T.breakdown.cost, align: "num" }, { label: T.breakdown.colAssignment }],
+            rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), formatHours(row.actualHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.actualCost, unit), row.assignmentCount > 0 ? T.breakdown.present : T.common.none]),
+            foot: [T.breakdown.total, "", formatHours(hours), "", "", money(cost, unit), ""],
           },
         }
-      : { title: "契約・月ごとの原価行", text: "この範囲に作業実績はありません。" },
+      : { title: T.breakdown.costLinesByContractMonth, text: T.breakdown.noWorklogsInRange },
   ];
   if (rows.length) {
     sections.push({
-      title: "元の作業ログ",
-      lazyLabel: "作業ログを読み込む",
+      title: T.breakdown.worklogs,
+      lazyLabel: T.breakdown.loadWorklogs,
       lazy: async () => {
         const all = [];
         for (const id of ids) {
@@ -580,20 +581,20 @@ export function memberActualSpec({ model, member, months, contractIds = null, un
           for (const m of data.months) if (monthSet.has(m.month)) for (const w of m.worklogs) if (w.memberId === member.memberId) all.push(w);
         }
         all.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-        if (all.length === 0) return html`<p class="yn-note">作業ログはありません。</p>`;
-        return html`<div><p class="yn-note">作業ログ 1 行ごとの金額は行単位で丸めているため、合計が原価行と最大 0.5 円/件ずれることがあります（原価は原価行が正）。</p>${worklogTable(all, { unit })}</div>`;
+        if (all.length === 0) return html`<p class="yn-note">${T.breakdown.noWorklogs}</p>`;
+        return html`<div><p class="yn-note">${T.breakdown.worklogRoundingNote}</p>${worklogTable(all, { unit })}</div>`;
       },
     });
   }
   return {
-    title: `${label}の計算根拠 — ${member.memberName}（${member.memberId}）`,
+    title: fmt(T.breakdown.memberTitle, { label, name: member.memberName, id: member.memberId }),
     subtitle,
-    formula: ["実績原価 = round(その月の作業時間の合計 × その月の時間単価)（契約・月ごと。契約詳細の原価行と同じ値）", `${label} = Σ 契約・月ごとの${label}`],
+    formula: [T.breakdown.actualCostFormula, fmt(T.breakdown.planSumFormula, { label, label2: label })],
     rows: [
-      { label: "原価行（契約×月）", value: `${rows.length}件` },
-      { label: "実績時間", value: formatHours(hours), emphasis: measure === "hours" },
-      { label: "うちアサインの無い契約・月", value: formatHours(unplannedHours), note: unplannedHours > 0 ? "応援など、アサインが登録されていない作業" : null },
-      { label: "実績原価", value: money(cost, unit), emphasis: measure !== "hours" },
+      { label: T.breakdown.costLinesContractMonth, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: T.breakdown.actualHours, value: formatHours(hours), emphasis: measure === "hours" },
+      { label: T.breakdown.unplannedPart, value: formatHours(unplannedHours), note: unplannedHours > 0 ? T.breakdown.unplannedNote : null },
+      { label: T.breakdown.actualCost, value: money(cost, unit), emphasis: measure !== "hours" },
     ],
     sections,
   };
@@ -604,62 +605,62 @@ export function memberVarianceSpec({ plannedCost, actualCost, unit, subtitle = n
   unit = memberUnit(unit);
   const v = plannedCost - actualCost;
   return {
-    title: "差額の計算根拠",
+    title: T.breakdown.varianceTitle,
     subtitle,
-    formula: ["差額 = 計画原価 − 実績原価（プラス = 計画より原価が少ない）"],
+    formula: [T.breakdown.varianceFormula],
     rows: [
-      { label: "計画原価", value: money(plannedCost, unit) },
-      { label: "実績原価", value: money(actualCost, unit) },
-      { label: "差額", value: money(v, unit), emphasis: true, note: v > 0 ? "計画より原価が少ない" : v < 0 ? "計画より原価が多い" : "計画どおり" },
+      { label: T.breakdown.plannedCost, value: money(plannedCost, unit) },
+      { label: T.breakdown.actualCost, value: money(actualCost, unit) },
+      { label: T.breakdown.variance, value: money(v, unit), emphasis: true, note: v > 0 ? T.format.varianceLess : v < 0 ? T.format.varianceMore : T.format.varianceEven },
     ],
-    note: "差額は色分けしません（赤は消化率超過と赤字見込みだけ）。",
+    note: T.breakdown.varianceNote,
   };
 }
 
 /** 稼働率 = 実績時間 ÷ 計画時間 */
 export function memberUtilizationSpec({ plannedHours, actualHours, utilization, unplannedHours = 0, subtitle = null }) {
   return {
-    title: "稼働率の計算根拠",
+    title: T.breakdown.utilTitle,
     subtitle,
-    formula: ["稼働率 = 実績時間 ÷ 計画時間（計画時間 = 配分人月 × 基準時間）"],
+    formula: [T.breakdown.utilFormula],
     rows: [
-      { label: "実績時間", value: formatHours(actualHours), note: unplannedHours > 0 ? `うちアサインの無い契約 ${formatHours(unplannedHours)}` : null },
-      { label: "計画時間", value: formatHours(plannedHours) },
-      { label: "稼働率", value: formatPercent(utilization), emphasis: true, note: utilization === null ? "計画時間が 0 のため計算できません" : null },
+      { label: T.breakdown.actualHours, value: formatHours(actualHours), note: unplannedHours > 0 ? fmt(T.breakdown.utilUnplanned, { hours: formatHours(unplannedHours) }) : null },
+      { label: T.breakdown.plannedHours, value: formatHours(plannedHours) },
+      { label: T.breakdown.utilization, value: formatPercent(utilization), emphasis: true, note: utilization === null ? T.breakdown.utilZero : null },
     ],
-    note: "100% を超えても赤にはしません（表示のみ）。アサインの無い契約への作業も実績時間に含みます。",
+    note: T.breakdown.utilNote,
   };
 }
 
 const MEMBER_MEASURES = {
-  plannedHours: { label: "計画時間", hours: true, formula: "計画時間 = Σ メンバーの 配分人月 × 基準時間" },
-  actualHours: { label: "実績時間", hours: true, formula: "実績時間 = Σ メンバーの作業時間" },
-  plannedCost: { label: "計画原価", formula: "計画原価 = Σ メンバーの round(計画時間 × 単価)（契約・月ごとに丸め）" },
-  actualCost: { label: "実績原価", formula: "実績原価 = Σ メンバーの原価行（同じ期間の契約原価の合計と一致）" },
-  variance: { label: "差額", formula: "差額 = 計画原価 − 実績原価" },
-  utilization: { label: "稼働率", percent: true, formula: "稼働率 = Σ 実績時間 ÷ Σ 計画時間" },
+  plannedHours: { label: T.breakdown.plannedHours, hours: true, formula: T.breakdown.sumPlanHours },
+  actualHours: { label: T.breakdown.actualHours, hours: true, formula: T.breakdown.sumActualHours },
+  plannedCost: { label: T.breakdown.plannedCost, formula: T.breakdown.sumPlanCost },
+  actualCost: { label: T.breakdown.actualCost, formula: T.breakdown.sumActualCost },
+  variance: { label: T.breakdown.variance, formula: T.breakdown.sumVariance },
+  utilization: { label: T.breakdown.utilization, percent: true, formula: T.breakdown.sumUtil },
 };
 
 /** メンバー一覧の合計行（表示中のメンバー。total は aggregateMembers の total） */
 export function memberTotalsSpec({ members, total, measure, unit, period }) {
   unit = memberUnit(unit);
   const d = MEMBER_MEASURES[measure];
-  const fmt = (v) => (d.hours ? formatHours(v) : d.percent ? formatPercent(v) : money(v, unit));
+  const fmtValue = (v) => (d.hours ? formatHours(v) : d.percent ? formatPercent(v) : money(v, unit));
   const parts =
     measure === "utilization"
-      ? [{ label: "実績時間", value: formatHours(total.actualHours) }, { label: "計画時間", value: formatHours(total.plannedHours) }]
+      ? [{ label: T.breakdown.actualHours, value: formatHours(total.actualHours) }, { label: T.breakdown.plannedHours, value: formatHours(total.plannedHours) }]
       : measure === "variance"
-        ? [{ label: "計画原価", value: money(total.plannedCost, unit) }, { label: "実績原価", value: money(total.actualCost, unit) }]
+        ? [{ label: T.breakdown.plannedCost, value: money(total.plannedCost, unit) }, { label: T.breakdown.actualCost, value: money(total.actualCost, unit) }]
         : [];
   return {
-    title: `${d.label}（合計）の計算根拠`,
+    title: fmt(T.breakdown.membersTotalTitle, { label: d.label }),
     subtitle: periodJa(period),
     formula: [d.formula],
-    rows: [{ label: "対象メンバー", value: `${members.length}人` }, ...parts, { label: `${d.label}（合計）`, value: fmt(total[measure]), emphasis: true }],
+    rows: [{ label: T.breakdown.targetMembers, value: fmt(T.breakdown.people, { n: members.length }) }, ...parts, { label: fmt(T.breakdown.labelSum, { label: d.label }), value: fmtValue(total[measure]), emphasis: true }],
     sections: [
       {
-        title: "メンバーごとの内訳",
-        table: { columns: [{ label: "メンバー" }, { label: d.label, align: "num" }], rows: members.map((m) => [`${m.memberName}（${m.memberId}）`, fmt(m[measure])]) },
+        title: T.breakdown.byMember,
+        table: { columns: [{ label: T.breakdown.colMember }, { label: d.label, align: "num" }], rows: members.map((m) => [`${m.memberName}（${m.memberId}）`, fmtValue(m[measure])]) },
       },
     ],
   };

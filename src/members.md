@@ -11,6 +11,7 @@ title: メンバー別
 
 ```js
 import { html } from "htl";
+import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
@@ -96,9 +97,9 @@ if (model) {
   display(
     pageHeader({
       model,
-      title: "メンバー別",
-      lead: "人ごとの計画（アサインの配分人月 × 基準時間 × 単価）と実績（その人の作業時間 × 単価）の比較。差額がマイナスの人は計画より原価が多く掛かっています。行をクリックするとメンバー詳細へ移動します。",
-      breadcrumbs: [{ label: "全体サマリー", href: store.href("./") }, { label: "メンバー別" }],
+      title: T.app.pages.members,
+      lead: T.members.lead,
+      breadcrumbs: [{ label: T.app.pages.index, href: store.href("./") }, { label: T.app.pages.members }],
       includesPreliminary: vm?.includesPreliminary ?? false,
     }),
   );
@@ -111,7 +112,7 @@ if (store) mountFilterBar(store, model, { show: ["period", "team", "unit"] });
 
 ```js
 if (vm?.scope.teamMissing) {
-  display(note(`選択したチーム「${vm.scope.teamLabel}」は ${monthJa(vm.baseMonth)} 時点の組織に存在しません。メンバーは 0 人になります。`, "warn"));
+  display(note(fmt(T.members.teamMissing, { team: vm.scope.teamLabel, month: monthJa(vm.baseMonth) }), "warn"));
 }
 ```
 
@@ -121,15 +122,15 @@ if (vm) {
   const t = agg.total;
   const subtitle = `${vm.scope.teamLabel} ・ ${periodJa(period)}`;
   const future = fullAgg.total.plannedCost - t.plannedCost;
-  if (vm.allFuture) display(note(`選択した期間（${periodJa(fullPeriod)}）はすべて基準月より後のため、実績はまだありません。計画だけを表示しています。`));
+  if (vm.allFuture) display(note(fmt(T.members.futureOnly, { period: periodJa(fullPeriod) })));
   else if (period.to !== fullPeriod.to)
-    display(note(`計画と実績は経過月（${periodJa(period)}）で比べています。${monthJa(fullPeriod.to)} までの期間全体の計画は ${money(fullAgg.total.plannedCost, unit)}（うち${monthJa(period.to)}より後の月 ${money(future, unit)}）です。`));
+    display(note(fmt(T.members.elapsedNote, { period: periodJa(period), to: monthJa(fullPeriod.to), total: money(fullAgg.total.plannedCost, unit), asOf: monthJa(period.to), future: money(future, unit) })));
   display(
     memberKpiRow([
-        statTile({ label: `計画原価（${periodJa(period)}）`, value: money(t.plannedCost, unit), sub: `計画時間 ${formatHours(t.plannedHours)} ・ ${t.memberCount}人${period.to !== fullPeriod.to ? ` ・ 期間全体 ${money(fullAgg.total.plannedCost, unit)}` : ""}`, breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),
-        statTile({ label: "実績原価", value: money(t.actualCost, unit), sub: `実績時間 ${formatHours(t.actualHours)}（うちアサイン外 ${formatHours(t.unplannedHours)}）`, breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
-        statTile({ label: "差額（計画 − 実績）", value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
-        statTile({ label: "稼働率（実績時間 ÷ 計画時間）", value: formatPercent(t.utilization), sub: t.utilization === null ? "計画時間が 0 のため計算できません" : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
+        statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.members.plannedSub, { hours: formatHours(t.plannedHours), n: t.memberCount, whole: period.to !== fullPeriod.to ? fmt(T.members.wholePeriodSuffix, { value: money(fullAgg.total.plannedCost, unit) }) : "" }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),
+        statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.members.actualSub, { hours: formatHours(t.actualHours), unplanned: formatHours(t.unplannedHours) }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
+        statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
+        statTile({ label: T.members.utilizationTile, value: formatPercent(t.utilization), sub: t.utilization === null ? T.breakdown.utilZero : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
   );
 }
@@ -139,9 +140,9 @@ if (vm) {
 // 検索フォームは model だけに依存し 1 回だけ描く（期間・単位を変えても作り直さない）
 const searchForm = (() => {
   if (!model) return null;
-  const form = html`<form class="yn-chip-filters" role="search" aria-label="メンバーの検索"></form>`;
+  const form = html`<form class="yn-chip-filters" role="search" aria-label=${T.members.searchLabel}></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
-  const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder="名前・ID・役職・チームで検索" value=${initialQuery} aria-label="名前・ID・役職・チームで検索（全角・半角、大文字・小文字は区別しません）">`;
+  const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder=${T.members.searchPlaceholder} value=${initialQuery} aria-label=${T.members.searchAria}>`;
   let timer = null;
   input.addEventListener("input", () => {
     // 150ms デバウンス（1 文字ごとに表を作り直さない）
@@ -156,7 +157,7 @@ const searchForm = (() => {
       form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
     }, 150);
   });
-  form.append(html`<label class="yn-filter-label" for="yn-m-text">検索</label>`, input);
+  form.append(html`<label class="yn-filter-label" for="yn-m-text">${T.members.searchHead}</label>`, input);
   form.value = initialQuery;
   return form;
 })();
@@ -179,8 +180,8 @@ if (vm) {
   const shown = q ? aggregateMembers(model, { period, memberIds: rows.map((r) => r.memberId) }) : vm.agg;
   display(
     sectionTitle(
-      "メンバーごとの計画と実績",
-      `${periodJa(period)}${period.to !== vm.fullPeriod.to ? "（経過月）" : ""} ・ 所属は ${monthJa(vm.baseMonth)} 時点。期間内に計画（アサイン）か実績（作業）のある人だけを表示します。稼働率 = 実績時間 ÷ 計画時間（100% 超でも色は付けません）。差額 = 計画原価 − 実績原価。`,
+      T.members.sectionTitle,
+      fmt(T.members.sectionHint, { period: periodJa(period), elapsed: period.to !== vm.fullPeriod.to ? T.members.elapsedSuffix : "", month: monthJa(vm.baseMonth) }),
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);
@@ -188,34 +189,34 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   const chips = (r) => {
     const list = [];
-    if (r.memberUnknown) list.push({ kind: "neutral", text: "マスタ未登録", title: "members.csv に無いメンバー（作業ログの名前で表示）" });
-    if (r.rateMissing) list.push({ kind: "neutral", text: "単価なし", title: "時間単価が見つからない月があります（0円で計算）" });
-    if (r.unplannedHours > 0) list.push({ kind: "neutral", text: `アサイン外 ${formatHours(r.unplannedHours)}`, title: "アサインの無い契約・月への作業時間（実績の内数）" });
+    if (r.memberUnknown) list.push({ kind: "neutral", text: T.members.chipUnknown, title: T.members.chipUnknownTitle });
+    if (r.rateMissing) list.push({ kind: "neutral", text: T.breakdown.rateMissing, title: T.members.chipRateMissingTitle });
+    if (r.unplannedHours > 0) list.push({ kind: "neutral", text: fmt(T.members.chipUnplanned, { hours: formatHours(r.unplannedHours) }), title: T.members.chipUnplannedTitle });
     // 速報はページ見出しのバッジで示す（ほぼ全員に付いてしまい行ごとのチップは情報にならない）
     return list;
   };
   const columns = [
     {
       key: "memberName",
-      label: "メンバー",
-      sublabel: "（ID・所属・役職）",
+      label: T.breakdown.colMember,
+      sublabel: T.members.colMemberSub,
       type: "text",
       // 2 行目に ID・所属チーム・役職（列を分けると 1280/1024px に収まらないため。Excel には別列で出す）
-      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}（${r.memberId}）・${r.teamName || "未所属"}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.memberId}</span> ・ ${r.teamName || "未所属"}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
+      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}（${r.memberId}）・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub"><span class="yn-cell-id">${r.memberId}</span> ・ ${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
       sortValue: (r) => r.memberName,
       exportValue: (r) => r.memberName,
     },
-    { key: "memberId", label: "メンバーID", type: "text", exportOnly: true },
-    { key: "teamName", label: "所属チーム", type: "text", exportOnly: true, exportValue: (r) => r.teamName || "未所属" },
-    { key: "title", label: "役職", type: "text", exportOnly: true },
-    { key: "kindLabel", label: "区分", type: "text", exportOnly: true, get: (r) => (r.memberUnknown ? "マスタ未登録" : r.kind === "partner" ? "パートナー" : "社員") },
-    { key: "plannedHours", label: "計画時間", type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
-    { key: "actualHours", label: "実績時間", type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
-    { key: "utilization", label: "稼働率", type: "percent", breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: sub(r) }) },
-    { key: "plannedCost", label: "計画原価", type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
-    { key: "actualCost", label: "実績原価", type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
-    { key: "variance", label: "差額", sublabel: "（計画−実績）", type: "money", exportLabel: "差額（計画−実績）（円）", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: sub(r) }) },
-    { key: "status", label: "状態", type: "status", get: chips, hideNarrow: true, sortable: false },
+    { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
+    { key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true, exportValue: (r) => r.teamName || T.members.noTeam },
+    { key: "title", label: T.members.colTitle, type: "text", exportOnly: true },
+    { key: "kindLabel", label: T.members.colKind, type: "text", exportOnly: true, get: (r) => (r.memberUnknown ? T.members.chipUnknown : r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "utilization", label: T.breakdown.utilization, type: "percent", breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: sub(r) }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
+    { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "money", exportLabel: T.members.varianceExport, render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: sub(r) }) },
+    { key: "status", label: T.columns.status, type: "status", get: chips, hideNarrow: true, sortable: false },
   ];
   const st = shown.total;
   display(
@@ -223,17 +224,17 @@ if (vm) {
       columns,
       rows,
       unit,
-      caption: "メンバー別の計画と実績",
+      caption: T.members.caption,
       exportName: `members_${period.from}_${period.to}`,
       sort: { key: "variance", dir: "asc" },
       rowHref: (r) => store.href("./member", {}, { id: r.memberId }),
-      emptyText: q ? "検索に一致するメンバーがいません" : "この期間に計画も実績もあるメンバーがいません",
+      emptyText: q ? T.members.emptySearch : T.members.emptyTitle,
       summary: rows.length
-        ? { memberName: null, name: `合計（${rows.length}人）`, plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, teamName: null, title: null, status: null }
+        ? { memberName: null, name: fmt(T.members.totalRow, { n: rows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, teamName: null, title: null, status: null }
         : null,
       summaryBreakdown: (col) => (["plannedHours", "actualHours", "utilization", "plannedCost", "actualCost", "variance"].includes(col.key) ? () => bd.memberTotalsSpec({ members: shown.members, total: st, measure: col.key, unit, period }) : null),
     }),
   );
-  if (vm.rows.length === 0) display(note("期間を広げるか、チームの絞り込みを外してください。アサインは assignments.csv、作業実績は作業ログから読み込んでいます。"));
+  if (vm.rows.length === 0) display(note(T.members.emptyText));
 }
 ```

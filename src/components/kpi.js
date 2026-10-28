@@ -3,6 +3,7 @@
  */
 import { html } from "htl";
 import { numberButton } from "./breakdown.js";
+import { T, fmt } from "../i18n/index.js";
 
 /**
  * statTile({
@@ -12,7 +13,7 @@ import { numberButton } from "./breakdown.js";
  */
 export function statTile({ label, value, sub = null, compare = null, status = null, breakdown = null, id = null, emphasis = false, wrap = false }) {
   const valueNode = breakdown
-    ? numberButton(value, breakdown, { className: "yn-kpi-value", ariaLabel: `${label} ${value} の計算根拠を表示` })
+    ? numberButton(value, breakdown, { className: "yn-kpi-value", ariaLabel: fmt(T.layout.kpiBreakdownAria, { label, value }) })
     : html`<span class="yn-kpi-value">${value}</span>`;
   const statusNode = status
     ? html`<span class=${`yn-chip yn-chip-${status.kind}`}><span class="yn-chip-icon" aria-hidden="true">${chipIcon(status.kind)}</span>${status.text}</span>`
@@ -53,5 +54,5 @@ export function statusChip(kind, text, title = null) {
 
 /** KPI の行 */
 export function kpiRow(tiles, { columns = 5 } = {}) {
-  return html`<section class="yn-kpi-grid" style=${`--yn-kpi-cols:${columns}`} aria-label="主要指標">${tiles}</section>`;
+  return html`<section class="yn-kpi-grid" style=${`--yn-kpi-cols:${columns}`} aria-label=${T.layout.kpiRowLabel}>${tiles}</section>`;
 }
