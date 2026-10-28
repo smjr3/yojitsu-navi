@@ -261,6 +261,28 @@ if (vm) {
 ```
 
 ```js
+// 工数の明細（SPEC §30）。この表だけが使うので、他の表示を待たせずに後から読む
+import { decodeWorkRows, filterWorkRows, monthRange } from "./core/index.js";
+import { workTaskSection } from "./components/work.js";
+const workRows = FileAttachment("./data/work-hours.json").json().then((d) => decodeWorkRows(d)).catch(() => null);
+```
+
+```js
+if (vm && workRows) {
+  display(
+    workTaskSection({
+      rows: filterWorkRows(workRows, { period: vm.fullPeriod, memberIds: [memberId] }),
+      months: monthRange(vm.fullPeriod.from, vm.fullPeriod.to).filter((m) => m <= model.meta.asOfMonth),
+      unit: vm.unit,
+      config: model.config,
+      hint: fmt(T.work.sectionHintMember, { period: periodJa(vm.fullPeriod), name: vm.name }),
+      exportName: `member_${memberId}_tasks_${vm.fullPeriod.from}_${vm.fullPeriod.to}`,
+    }),
+  );
+}
+```
+
+```js
 if (vm) {
   const segs = rateHistory[memberId] ?? [];
   display(sectionTitle(T.member.rateHistory, fmt(T.member.rateHistoryHint, { from: monthJa(model.meta.minMonth), to: monthJa(model.meta.maxMonth) })));

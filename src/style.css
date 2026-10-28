@@ -1572,9 +1572,17 @@ th[aria-sort="descending"] .yn-sort-icon {
   font-weight: 600;
 }
 
+/* スマホ幅だけで出す補足（列を隠したときの代わり） */
+.only-phone {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .hide-phone {
     display: none !important;
+  }
+  .only-phone {
+    display: inline;
   }
   .yn-table th,
   .yn-table td {

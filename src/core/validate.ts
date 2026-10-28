@@ -9,6 +9,7 @@ import { isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./cal
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, memberAt, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
+import { createTaskClassifier, isOutsideWorklog, unclassifiedTaskWarnings } from "./workTypes.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface ValidationIssue {
@@ -238,7 +239,13 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   const valid = new Set(validContracts);
   const excluded = new Map(dataset.contracts.filter((c) => !valid.has(c)).map((c) => [c.contractId, contractInvalidReason(c) ?? T.calcWarnings.duplicateReason]));
   for (const c of validContracts) excluded.delete(c.contractId); // 重複 ID は 1 行目が有効
-  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, validContracts, excluded);
+  // 契約外の作業（§30）は紐付けの対象外（buildModel と同じ）
+  const classifier = createTaskClassifier(dataset.taskTypes);
+  const inScope = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
+  const mapping = mapWorklogs(inScope, dataset.mappings, validContracts, excluded);
+  for (const w of unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier)) {
+    push({ severity: "warning", code: w.code, message: w.message, file: "task-types.csv", ref: { task: String(w.ref?.task ?? ""), hours: w.hours ?? 0, count: w.count ?? 0 } });
+  }
   for (const g of mapping.unmapped) {
     push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
   }

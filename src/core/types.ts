@@ -219,6 +219,16 @@ export interface Worklog {
   hours: number;
 }
 
+/** 作業種別の区分（SPEC §30）。contract = 契約内（運用保守）、outside = 契約外（提案・運用設計など） */
+export type TaskCategory = "contract" | "outside";
+
+/** data/task-types.csv の 1 行（SPEC §30.1） */
+export interface TaskTypeRule {
+  task: string;
+  category: TaskCategory;
+  note?: string;
+}
+
 /** 計算コアへの入力一式 */
 export interface Dataset {
   config: Config;
@@ -230,6 +240,8 @@ export interface Dataset {
   rates: RateRecord[];
   holidays: Holiday[];
   worklogs: Worklog[];
+  /** 作業種別の分類表（§30.1）。省略・空 = すべて契約内 */
+  taskTypes?: TaskTypeRule[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }
@@ -353,7 +365,8 @@ export type WarningCode =
   | "MAPPING_UNKNOWN_CONTRACT"
   | "MAPPING_EXCLUDED_CONTRACT"
   | "MAPPING_AMBIGUOUS"
-  | "EXCLUDED_NO_CUSTOMER";
+  | "EXCLUDED_NO_CUSTOMER"
+  | "TASK_UNCLASSIFIED";
 
 export interface Warning {
   code: WarningCode;
@@ -415,6 +428,35 @@ export interface Model {
    * 画面用の model.json では空にし、data/member-months.json で別に配る（メンバー別の画面だけが読む）
    */
   memberMonths: MemberMonth[];
+  /**
+   * 工数の明細（§30.2）。month → memberId → contractId → task の順。
+   * 画面用の model.json では空にし、data/work-hours.json で別に配る
+   */
+  workRows: WorkRow[];
+}
+
+/** 工数の明細 1 行（SPEC §30.2）。（月, メンバー, 契約, 顧客, 作業種別, 区分）ごとの合計 */
+export interface WorkRow {
+  month: YearMonth;
+  memberId: string;
+  /** その月のマスタの名前（無ければ作業ログの名前） */
+  memberName: string;
+  /** その月の所属チーム（null = 非所属・不明） */
+  teamId: string | null;
+  /** 契約内 = 紐付いた契約、契約外 = 関連契約（紐付かなければ null） */
+  contractId: string | null;
+  /** customerKey（§17） */
+  customerKey: string;
+  /** 顧客の表示名（契約に紐付けば契約の顧客名、無ければ作業ログの顧客名） */
+  customerName: string;
+  /** 作業種別（作業ログの表記のまま。空 = 空文字） */
+  task: string;
+  category: TaskCategory;
+  /** 分類表に無い作業種別（契約内として数えた） */
+  unclassified: boolean;
+  hours: number;
+  /** 契約内: 実績額の按分（円）。契約外: null */
+  amount: number | null;
 }
 
 // ---------------------------------------------------------------------------
