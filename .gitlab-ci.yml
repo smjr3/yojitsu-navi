@@ -16,13 +16,20 @@
 #   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
 #   GIT_PUSH_TOKEN      data/worklogs を書き戻すための Project Access Token（role: Developer、scope: write_repository）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
-#   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する
+#   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
+#   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#
+# 外部ネットワーク:
+#   - 画面は外部 CDN を一切使わない（ライブラリは dist/ に同梱）
+#   - ビルドも外部に出ない（npm の prebuild で scripts/seed-npm-cache.mjs が Framework のバージョン問い合わせを止める）
+#   - 外に出るのは npm ci（NPM_CONFIG_REGISTRY で社内ミラーに向けられる）とイメージの取得だけ
+#   - 手順は docs/DEPLOY_GITLAB.md
 #
 # 注意:
 #   - Pages のジョブ名は必ず `pages`、成果物は `public/` にする（GitLab の仕様）
-#   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は image: を書き換える
+#   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は CI/CD 変数 NODE_IMAGE で差し替える
 
-image: node:22
+image: $NODE_IMAGE
 
 stages:
   - validate
@@ -31,6 +38,8 @@ stages:
   - pages
 
 variables:
+  # CI/CD 変数で上書きできる（例: registry.gitlab.example.local/mirror/node:22）
+  NODE_IMAGE: "node:22"
   # npm のキャッシュをプロジェクト内に置いて cache: で共有する
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
   # Playwright のブラウザもキャッシュ対象
@@ -121,13 +130,23 @@ pages:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  # build の成果物を移すだけなので、リポジトリの取得・npm ci・キャッシュは不要
+  variables:
+    GIT_STRATEGY: none
+  before_script: []
+  cache: []
   script:
+    - test -f dist/index.html || { echo "dist/index.html がありません（build ジョブの成果物を確認）"; exit 1; }
     - rm -rf public
     - mv dist public
   artifacts:
     paths:
       - public/
   # 公開先は https://<group>.pages.example/<project>/（サブパス配信。observablehq.config.js 側で相対パスを使う）
+  # 閲覧制限は Settings > General > Visibility > Pages = Only Project Members（docs/DEPLOY_GITLAB.md）
+  environment:
+    name: pages
+    url: $CI_PAGES_URL
 
 # --------------------------------------------------------------------------
 # fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、リポジトリに書き戻す
