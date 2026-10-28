@@ -70,11 +70,11 @@ test.describe("全体サマリー", () => {
     await gotoPage(page, "/?unit=yen");
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
     const { totals, fc } = await expectKpis(page, FY, "", "recent3", "yen");
-    // 補足: 契約数、粗利率、赤字件数
+    // 補足: 契約数、残予算率、赤字件数
     await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の契約`);
     await expect(page.locator(".yn-kpi").nth(2)).toContainText(formatPercent(totals.grossMargin));
     const deficit = fc.deficitContractIds.length;
-    await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toHaveText(deficit > 0 ? new RegExp(`赤字見込み ${deficit}件`) : /赤字見込みなし/);
+    await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toHaveText(deficit > 0 ? new RegExp(`超過見込み ${deficit}件`) : /超過見込みなし/);
     // URL は初回表示で正規化される
     const q = query(page);
     expect(q.get("from")).toBe(FY.from);
@@ -133,7 +133,7 @@ test.describe("全体サマリー", () => {
   });
 
   for (const method of ["all", "assignment", "recent3"] as const) {
-    test(`着地方式 ${method} で 着地見込み粗利 が core の forecastTotals と一致`, async ({ page }) => {
+    test(`着地方式 ${method} で 着地見込みの差 が core の forecastTotals と一致`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
       await page.locator(`#yn-method-${method}`).check();
       await expect(page.locator(`input[name=yn-method][value=${method}]`)).toBeChecked();
@@ -266,11 +266,11 @@ test.describe("チーム一覧", () => {
       const f = forecastFor(fc, ids, model);
       const label = `チーム ${key}`;
       expect(await cellText(row, col(h, "予算")), `${label} 予算`).toBe(yen(t.budget, unit));
-      expect(await cellText(row, col(h, "原価")), `${label} 原価`).toBe(yen(t.cost, unit));
-      expect(await cellText(row, col(h, "粗利")), `${label} 粗利`).toBe(yen(t.grossProfit, unit));
-      expect(await cellText(row, col(h, "粗利率")), `${label} 粗利率`).toBe(formatPercent(t.grossMargin));
+      expect(await cellText(row, col(h, "実績")), `${label} 実績`).toBe(yen(t.cost, unit));
+      expect(await cellText(row, col(h, "残予算")), `${label} 残予算`).toBe(yen(t.grossProfit, unit));
+      expect(await cellText(row, col(h, "残予算率")), `${label} 残予算率`).toBe(formatPercent(t.grossMargin));
       expect(await cellText(row, col(h, "契約数")), `${label} 契約数`).toBe(String(t.contractCount));
-      expect(await cellText(row, col(h, "着地粗利")), `${label} 着地粗利`).toContain(yen(f.forecastGrossProfit, unit));
+      expect(await cellText(row, col(h, "着地差")), `${label} 着地差`).toContain(yen(f.forecastGrossProfit, unit));
       const burn = await cellText(row, col(h, "消化率"));
       expect(burn.replace(/[▲\s]/g, ""), `${label} 消化率`).toBe(formatPercent(t.burnRate));
       const nameCell = row.locator("th, td").nth(col(h, "チーム"));
@@ -300,16 +300,16 @@ test.describe("契約一覧", () => {
       sumBudget += e.totals.budget;
       sumCost += e.totals.cost;
       expect(await cellText(row, col(h, "予算")), `${id} 予算`).toBe(yen(e.totals.budget, unit));
-      expect(await cellText(row, col(h, "原価")), `${id} 原価`).toBe(yen(e.totals.cost, unit));
-      expect(await cellText(row, col(h, "粗利")), `${id} 粗利`).toBe(yen(e.totals.grossProfit, unit));
-      expect(await cellText(row, col(h, "粗利率")), `${id} 粗利率`).toBe(formatPercent(e.totals.grossMargin));
+      expect(await cellText(row, col(h, "実績")), `${id} 実績`).toBe(yen(e.totals.cost, unit));
+      expect(await cellText(row, col(h, "残予算")), `${id} 残予算`).toBe(yen(e.totals.grossProfit, unit));
+      expect(await cellText(row, col(h, "残予算率")), `${id} 残予算率`).toBe(formatPercent(e.totals.grossMargin));
       const burn = (await cellText(row, col(h, "消化率"))).replace(/[▲\s]/g, "");
       expect(burn, `${id} 消化率`).toBe(formatPercent(e.totals.burnRate));
-      const fcText = (await cellText(row, col(h, "着地粗利"))).replace(/[▲\s]/g, "");
-      expect(fcText, `${id} 着地粗利`).toBe(e.forecastGrossProfit === null ? "—" : yen(e.forecastGrossProfit, unit));
+      const fcText = (await cellText(row, col(h, "着地差"))).replace(/[▲\s]/g, "");
+      expect(fcText, `${id} 着地差`).toBe(e.forecastGrossProfit === null ? "—" : yen(e.forecastGrossProfit, unit));
       const status = await cellText(row, col(h, "状態"));
-      if (e.isDeficit) expect(status, `${id} 状態`).toContain("赤字見込み");
-      if (e.isOverBudget) expect(status, `${id} 状態`).toContain("予算超過");
+      if (e.isDeficit) expect(status, `${id} 状態`).toContain("超過見込み");
+      if (e.isOverBudget) expect(status, `${id} 状態`).toContain("消化率超過");
       if (!e.isDeficit && !e.isOverBudget && e.includesPreliminary) expect(status, `${id} 状態`).toContain("速報含む");
       // 行の先頭セルに契約IDと顧客名
       const first = await cellText(row, 0);
@@ -322,8 +322,8 @@ test.describe("契約一覧", () => {
     const foot = table.locator("tfoot tr");
     await expect(foot).toHaveCount(1);
     expect(await cellText(foot, col(h, "予算"))).toBe(yen(sumBudget, unit));
-    expect(await cellText(foot, col(h, "原価"))).toBe(yen(sumCost, unit));
-    expect(await cellText(foot, col(h, "粗利"))).toBe(yen(sumBudget - sumCost, unit));
+    expect(await cellText(foot, col(h, "実績"))).toBe(yen(sumCost, unit));
+    expect(await cellText(foot, col(h, "残予算"))).toBe(yen(sumBudget - sumCost, unit));
     await expect(foot).toContainText(`合計（${expected.length}件）`);
     await expect(page.locator(".yn-table-count")).toHaveText(`${expected.length} 件`);
   });
@@ -338,7 +338,7 @@ test.describe("契約一覧", () => {
       const row = table.locator(`tbody tr[data-key="${id}"]`);
       const e = contractRowExpected(r, FY, "recent3", model);
       expect(await cellText(row, col(h, "予算")), `${id} 予算`).toBe(yen(e.totals.budget, "k"));
-      expect(await cellText(row, col(h, "原価")), `${id} 原価`).toBe(yen(e.totals.cost, "k"));
+      expect(await cellText(row, col(h, "実績")), `${id} 実績`).toBe(yen(e.totals.cost, "k"));
     }
   });
 });
@@ -357,8 +357,8 @@ test.describe("契約詳細", () => {
     await expect(kpiValue(page, 2)).toHaveText(yen(t.grossProfit, unit));
     await expect(kpiValue(page, 3)).toHaveText(formatPercent(t.burnRate));
     await expect(kpiValue(page, 4)).toHaveText(yen(f.forecastGrossProfit, unit));
-    expect(f.isDeficit, "C008 はダミーデータ上は赤字見込み").toBe(true);
-    await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toContainText("赤字見込み");
+    expect(f.isDeficit, "C008 はダミーデータ上は超過見込み").toBe(true);
+    await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toContainText("超過見込み");
     // 基本情報
     await expect(page.locator(".yn-facts")).toContainText(yen(r.contract.totalAmount, unit));
     await expect(page.locator(".yn-facts")).toContainText(`${r.months.length}か月`);
@@ -370,7 +370,7 @@ test.describe("契約詳細", () => {
     const keys = (await dataRows(table).evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-key")))) as string[];
     expect(keys).toEqual(months.map((m) => m.month));
     const statusLabel = { final: "確定", preliminary: "速報", future: "予定", outside: "期間外" } as const;
-    // 予定（未来）の月は選択中の方式の見込み原価（recent3/all: 平均 × 1 か月、analysis.forecastMonthlyCost と同じ）を「見込」として表示する
+    // 予定（未来）の月は選択中の方式の見込み額（recent3/all: 平均 × 1 か月、analysis.forecastMonthlyCost と同じ）を「見込」として表示する
     const monthlyForecast = (month: string) => (f.breakdown.remainingMonths.includes(month) ? Math.round(f.breakdown.averageMonthlyCost) : null);
     let sumCost = 0;
     for (const m of months) {
@@ -379,27 +379,27 @@ test.describe("契約詳細", () => {
       if (m.status === "future") {
         const fcCost = monthlyForecast(m.month);
         expect(fcCost, `${m.month} は残り月`).not.toBeNull();
-        const costText = await cellText(row, col(h, "原価"));
-        expect(costText, `${m.month} 原価（見込）`).toContain(yen(fcCost, unit));
-        expect(costText, `${m.month} 原価は見込と分かる`).toContain("見込");
-        expect(await cellText(row, col(h, "粗利")), `${m.month} 粗利（見込）`).toBe(yen(m.budget - fcCost!, unit));
-        expect(await cellText(row, col(h, "粗利率")), `${m.month} 粗利率（見込）`).toBe(formatPercent(m.budget ? (m.budget - fcCost!) / m.budget : null));
-        expect(m.cost, `core の未来月の原価は 0`).toBe(0);
+        const costText = await cellText(row, col(h, "実績"));
+        expect(costText, `${m.month} 実績（見込）`).toContain(yen(fcCost, unit));
+        expect(costText, `${m.month} 実績は見込と分かる`).toContain("見込");
+        expect(await cellText(row, col(h, "残予算")), `${m.month} 残予算（見込）`).toBe(yen(m.budget - fcCost!, unit));
+        expect(await cellText(row, col(h, "残予算率")), `${m.month} 残予算率（見込）`).toBe(formatPercent(m.budget ? (m.budget - fcCost!) / m.budget : null));
+        expect(m.cost, `core の未来月の実績は 0`).toBe(0);
       } else {
         sumCost += m.cost;
-        expect(await cellText(row, col(h, "原価")), `${m.month} 原価`).toBe(yen(m.cost, unit));
-        expect(await cellText(row, col(h, "粗利")), `${m.month} 粗利`).toBe(yen(m.grossProfit, unit));
-        expect(await cellText(row, col(h, "粗利率")), `${m.month} 粗利率`).toBe(formatPercent(m.budget ? m.grossProfit / m.budget : null));
+        expect(await cellText(row, col(h, "実績")), `${m.month} 実績`).toBe(yen(m.cost, unit));
+        expect(await cellText(row, col(h, "残予算")), `${m.month} 残予算`).toBe(yen(m.grossProfit, unit));
+        expect(await cellText(row, col(h, "残予算率")), `${m.month} 残予算率`).toBe(formatPercent(m.budget ? m.grossProfit / m.budget : null));
       }
       expect(await cellText(row, col(h, "時間")), `${m.month} 時間`).toBe(`${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(m.hours)}h`);
       expect(await cellText(row, col(h, "状態")), `${m.month} 状態`).toContain(statusLabel[m.status]);
       expect(await cellText(row, col(h, "作業者数")), `${m.month} 作業者数`).toContain(String(m.costLines.length));
       expect(await cellText(row, col(h, "営業日")), `${m.month} 営業日`).toBe(String(m.businessDays));
     }
-    // 合計行: 予算は全月、原価は実績月（確定・速報）のみ
+    // 合計行: 予算は全月、実績は実績月（確定・速報）のみ
     const foot = table.locator("tfoot tr");
     expect(await cellText(foot, col(h, "予算"))).toBe(yen(t.budget, unit));
-    expect(await cellText(foot, col(h, "原価"))).toBe(yen(sumCost, unit));
+    expect(await cellText(foot, col(h, "実績"))).toBe(yen(sumCost, unit));
     expect(sumCost).toBe(t.cost);
     // 3 方式の着地カード: 選択中が強調され、値が core と一致
     for (const method of ["recent3", "all", "assignment"] as const) {
@@ -426,14 +426,14 @@ test.describe("契約詳細", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(t.cost, "yen"));
   });
 
-  test("百万円の丸めで 0 になる小さい金額は「0.0百万円」で、「-0.0」にならない（C003 2026-06 の粗利 -7,375 / C013 の月）", async ({ page }) => {
+  test("百万円の丸めで 0 になる小さい金額は「0.0百万円」で、「-0.0」にならない（C003 2026-06 の残予算 -7,375 / C013 の月）", async ({ page }) => {
     const small = [
       { id: "C003", month: "2026-06", key: "grossProfit" as const },
       { id: "C013", month: "2026-04", key: "budget" as const },
       { id: "C013", month: "2026-04", key: "cost" as const },
       { id: "C013", month: "2026-04", key: "grossProfit" as const },
     ];
-    const label = { budget: "予算", cost: "原価", grossProfit: "粗利" } as const;
+    const label = { budget: "予算", cost: "実績", grossProfit: "残予算" } as const;
     let negative = 0;
     for (const id of ["C003", "C013"]) {
       await gotoPage(page, `/contract?id=${id}&unit=m`);

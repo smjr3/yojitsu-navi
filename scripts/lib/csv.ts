@@ -7,6 +7,7 @@
  */
 import { csvFormat, csvParse } from "d3-dsv";
 import type { Worklog } from "../../src/core/types.js";
+import { normalizeWorklogDate, parseNumberCell } from "../../src/core/csv.js";
 
 /** 作業実績CSVの列順（docs/DATA.md の定義どおり） */
 export const WORKLOG_COLUMNS = [
@@ -43,13 +44,13 @@ export function parseWorklogCsv(text: string): Worklog[] {
     // 空行・空白だけの行は無視
     if (Object.values(r).every((v) => (v ?? "").trim() === "")) continue;
     out.push({
-      date: (r.date ?? "").trim(),
+      date: normalizeWorklogDate((r.date ?? "").trim()),
       memberId: (r.member_id ?? "").trim(),
       memberName: (r.member_name ?? "").trim(),
       customerName: r.customer_name ?? "",
       projectName: r.project_name ?? "",
       task: r.task ?? "",
-      hours: Number(r.hours ?? ""),
+      hours: parseNumberCell(r.hours ?? ""),
     });
   }
   return out;

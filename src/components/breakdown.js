@@ -15,6 +15,7 @@ import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
 import { grossMarginOf } from "./analysis.js";
+import { worklogKey } from "./worklog-key.js";
 
 /**
  * 計算根拠は丸めずに見せる（SPEC §12）: 画面の表示単位（百万円など）に関係なく、内訳の金額は常に円で出す。
@@ -143,7 +144,7 @@ const worklogCache = new Map();
 /** 契約の作業ログ明細を取得する（結果はキャッシュ） */
 export function fetchWorklogs(contractId) {
   if (!worklogCache.has(contractId)) {
-    const file = `data/worklogs/${encodeURIComponent(contractId)}.json`;
+    const file = `data/worklogs/${worklogKey(contractId)}.json`;
     // ビルド済みサイトでは dynamicPaths により /data/worklogs/<id>.json に置かれる。
     // 開発プレビュー（npm run dev）では /_file/data/worklogs/<id>.json で配信されるので順に試す。
     const candidates = [new URL(`../../${file}`, import.meta.url), new URL(`../../_file/${file}`, import.meta.url)];

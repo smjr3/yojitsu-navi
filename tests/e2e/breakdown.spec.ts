@@ -1,5 +1,5 @@
 /**
- * 計算根拠パネル（<dialog>）: 原価の内訳、作業ログの遅延読み込み、予算の月割り、消化率、着地見込み、キーボード操作
+ * 計算根拠パネル（<dialog>）: 実績の内訳、作業ログの遅延読み込み、予算の月割り、消化率、着地見込み、キーボード操作
  */
 import { test, expect, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, headerIndex, col, cell, cellText, parseNumber } from "./helpers/app.js";
 import { DEFAULT_UNIT, contractResult, contractsInPeriod, fiscalPeriod, formatPercent, getModel, totalsFor, yen } from "./helpers/core.js";
@@ -10,7 +10,7 @@ const inYen = (path: string) => `${path}${path.includes("?") ? "&" : "?"}unit=ye
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致する", async ({ page }) => {
+test("実績 KPI の内訳: 契約ごとの実績の合計が表示値と一致する", async ({ page }) => {
   await gotoPage(page, "/");
   const kpi = kpiValue(page, 1);
   const shown = (await kpi.textContent())!.trim();
@@ -19,14 +19,14 @@ test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致�
   await kpi.click();
   const d = dialog(page);
   await expect(d).toBeVisible();
-  await expect(d.locator("#yn-dialog-title")).toContainText("原価の計算根拠");
+  await expect(d.locator("#yn-dialog-title")).toContainText("実績の計算根拠");
   // 式が表示される
   await expect(d.locator(".yn-bd-formula")).toContainText("作業時間 × その月に有効な時間単価");
   // 強調行 = KPI の値
   const totals = totalsFor(FY, undefined, model);
-  expect(await dialogRow(page, "原価合計")).toBe(yen(totals.cost, "yen"));
+  expect(await dialogRow(page, "実績合計")).toBe(yen(totals.cost, "yen"));
   expect(await dialogRow(page, "対象契約")).toBe(`${contractsInPeriod(FY, undefined, model).length}件`);
-  // 契約ごとの内訳表の「原価」列の合計 = 表示値
+  // 契約ごとの内訳表の「実績」列の合計 = 表示値
   const table = d.locator(".yn-bd-section table").first();
   const h = await headerIndex(table);
   const rows = table.locator("tbody tr");
@@ -34,7 +34,7 @@ test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致�
   expect(n).toBe(contractsInPeriod(FY, undefined, model).length);
   let sum = 0;
   for (let i = 0; i < n; i++) {
-    const v = parseNumber(await cellText(rows.nth(i), col(h, "原価")));
+    const v = parseNumber(await cellText(rows.nth(i), col(h, "実績")));
     expect(v).not.toBeNull();
     sum += v!;
   }
@@ -43,7 +43,7 @@ test("原価 KPI の内訳: 契約ごとの原価の合計が表示値と一致�
   await expect(rows.first().locator("a")).toHaveAttribute("href", /contract\?/);
 });
 
-test("月の原価の内訳から作業ログを遅延読み込みする（C008 2026-10）", async ({ page }) => {
+test("月の実績の内訳から作業ログを遅延読み込みする（C008 2026-10）", async ({ page }) => {
   const worklogUrls: string[] = [];
   page.on("response", (res) => {
     if (/\/data\/worklogs\//.test(res.url())) worklogUrls.push(`${res.status()} ${res.url()}`);
@@ -55,14 +55,14 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
   const table = tableByCaption(page, "月ごとの予実");
   const h = await headerIndex(table);
   const row = table.locator(`tbody tr[data-key="${month}"]`);
-  await cell(row, col(h, "原価")).locator("button").click();
+  await cell(row, col(h, "実績")).locator("button").click();
   const d = dialog(page);
   await expect(d).toBeVisible();
-  await expect(d.locator("#yn-dialog-title")).toContainText("原価の計算根拠");
+  await expect(d.locator("#yn-dialog-title")).toContainText("実績の計算根拠");
   await expect(d.locator("#yn-dialog-title")).toContainText("2026年10月");
-  expect(await dialogRow(page, "原価行の数")).toBe(String(cm.costLines.length));
-  expect(await dialogRow(page, "2026年10月 の原価")).toBe(yen(cm.cost, "yen"));
-  // メンバーごとの原価行の金額合計 = 月の原価
+  expect(await dialogRow(page, "実績行の数")).toBe(String(cm.costLines.length));
+  expect(await dialogRow(page, "2026年10月 の実績")).toBe(yen(cm.cost, "yen"));
+  // メンバーごとの実績行の金額合計 = 月の実績
   const lines = d.locator(".yn-bd-section").first().locator("table tbody tr");
   await expect(lines).toHaveCount(cm.costLines.length);
   const lh = await headerIndex(d.locator(".yn-bd-section").first().locator("table"));
@@ -89,7 +89,7 @@ test("月の原価の内訳から作業ログを遅延読み込みする（C008 
   const wh = await headerIndex(wl);
   const total = entries.reduce((s, w) => s + w.amount, 0);
   expect(await cellText(foot, col(wh, "金額"))).toBe(yen(total, "yen"));
-  expect(total, "作業ログの金額合計 = 月の原価").toBe(cm.cost);
+  expect(total, "作業ログの金額合計 = 月の実績").toBe(cm.cost);
   // 行の金額の合計も一致
   const rows = wl.locator("tbody tr");
   let rowSum = 0;
@@ -133,7 +133,7 @@ test("予算の月割り: 総額 ÷ 月数 = 基本額、端数は最終月に�
   expect(r.months.reduce((s, m) => s + m.budget, 0)).toBe(38_000_000);
 });
 
-test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する", async ({ page }) => {
+test("消化率の内訳: 累計実績 ÷ 累計予算 が KPI と一致する", async ({ page }) => {
   await gotoPage(page, inYen("/"));
   const kpi = kpiValue(page, 3);
   const shown = (await kpi.textContent())!.trim();
@@ -141,18 +141,18 @@ test("消化率の内訳: 累計原価 ÷ 累計予算 が KPI と一致する",
   const d = dialog(page);
   await expect(d).toBeVisible();
   await expect(d.locator("#yn-dialog-title")).toContainText("消化率の計算根拠");
-  await expect(d.locator(".yn-bd-formula")).toContainText("経過月の累計原価 ÷ 経過月の累計予算");
+  await expect(d.locator(".yn-bd-formula")).toContainText("経過月の累計実績 ÷ 経過月の累計予算");
   const t = totalsFor(FY, undefined, model);
   const b = t.burnRateBreakdown;
   expect(await dialogRow(page, "経過月")).toBe(`${b.elapsedMonths.length}か月`);
-  const cost = await dialogRow(page, "累計原価（経過月）");
+  const cost = await dialogRow(page, "累計実績（経過月）");
   const budget = await dialogRow(page, "累計予算（経過月）");
   expect(cost).toBe(yen(b.cumulativeCost, "yen"));
   expect(budget).toBe(yen(b.cumulativeBudget, "yen"));
   const rate = await dialogRow(page, "消化率");
   expect(rate).toBe(shown);
   expect(rate).toBe(formatPercent(t.burnRate));
-  // 表示値どうしの算術: 累計原価 ÷ 累計予算 ≒ 消化率（小数1桁）
+  // 表示値どうしの算術: 累計実績 ÷ 累計予算 ≒ 消化率（小数1桁）
   const c = parseNumber(cost)!;
   const bud = parseNumber(budget)!;
   expect(formatPercent(c / bud)).toBe(rate);
@@ -170,7 +170,7 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   const d = dialog(page);
   await expect(d).toBeVisible();
   await expect(d.locator("#yn-dialog-title")).toContainText("着地見込みの計算根拠");
-  await expect(d.locator(".yn-bd-formula")).toContainText("着地粗利 = 年度予算 − 着地原価");
+  await expect(d.locator(".yn-bd-formula")).toContainText("着地差 = 年度予算 − 着地実績");
   expect(await dialogRow(page, "方式")).toBe("直近実績");
   expect(await dialogRow(page, "対象年度")).toBe(`FY${f.fiscalYear}`);
   expect(await dialogRow(page, "実績月（完了した月）")).toBe(`${b.actualMonths.length}か月`);
@@ -178,11 +178,11 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   expect(await dialogRow(page, "平均の基礎にした月")).toBe(`${b.averageBasisMonths.length}か月`);
   expect(b.averageBasisMonths.length).toBe(model.config.forecastRecentMonths);
   const fyBudget = parseNumber(await dialogRow(page, "年度予算"))!;
-  const actual = parseNumber(await dialogRow(page, "実績原価（実績月の合計）"))!;
-  const avg = parseNumber(await dialogRow(page, "平均月次原価"))!;
-  const remaining = parseNumber(await dialogRow(page, "残り原価"))!;
-  const forecastCost = parseNumber(await dialogRow(page, "着地原価"))!;
-  const gp = await dialogRow(page, "着地粗利");
+  const actual = parseNumber(await dialogRow(page, "実績（実績月の合計）"))!;
+  const avg = parseNumber(await dialogRow(page, "月平均の実績"))!;
+  const remaining = parseNumber(await dialogRow(page, "残り見込み"))!;
+  const forecastCost = parseNumber(await dialogRow(page, "着地実績"))!;
+  const gp = await dialogRow(page, "着地差");
   expect(shown, "KPI は画面の既定単位").toBe(yen(f.forecastGrossProfit, DEFAULT_UNIT));
   expect(gp, "dialog は常に円").toBe(yen(f.forecastGrossProfit, "yen"));
   // core の値と一致
@@ -193,13 +193,13 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   expect(forecastCost).toBe(f.forecastCost);
   // 表示値どうしの算術
   const n = b.remainingMonths.length;
-  expect(Math.abs(remaining - avg * n), "残り原価 ≒ 平均 × 残り月数（丸め差は月数以内）").toBeLessThanOrEqual(n);
+  expect(Math.abs(remaining - avg * n), "残り見込み ≒ 平均 × 残り月数（丸め差は月数以内）").toBeLessThanOrEqual(n);
   expect(actual + remaining).toBe(forecastCost);
   expect(fyBudget - forecastCost).toBe(parseNumber(gp));
   // 実績月 + 残り月 = 年度内の契約月
   expect(b.actualMonths.length + b.remainingMonths.length).toBe(b.contractMonthsInFY.length);
   await expect(d.locator(".yn-bd-rows")).toContainText(b.remainingMonths[0]!);
-  await expect(d.locator(".yn-bd-rows")).toContainText("赤字見込み");
+  await expect(d.locator(".yn-bd-rows")).toContainText("超過見込み");
 });
 
 test("Esc で閉じ、フォーカスは開いたボタンに戻り、開いている間はフォーカスが閉じ込められる", async ({ page }) => {

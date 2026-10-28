@@ -8,7 +8,7 @@
  */
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, parseCsvTable } from "../core/index.js";
+import { addMonths, parseCsvTable, parseNumberCell } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   MASTER_FILES,
@@ -388,7 +388,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     };
     parts.draft.replaceChildren(html`<section class="yn-me-banner" role="region" aria-labelledby="yn-me-draft-title">
       <h2 id="yn-me-draft-title" class="yn-me-banner-title">${T.masters.draftTitle}</h2>
-      <p>${dateTimeJst(d.savedAt)} ${T.masters.draftSavedAt} ${counts.join("、")}${T.masters.draftRestoreHint}</p>
+      <p>${dateTimeJst(d.savedAt)} ${T.masters.draftSavedAt} ${counts.join("、")}${T.masters.draftRestoreHint}<strong>${T.masters.draftLocked}</strong></p>
       ${stale.length
         ? html`<div class="yn-me-stale" role="alert">
             <p><strong>${T.masters.staleTitle}</strong>（${stale.map((id) => fileName(MASTER_FILES[id].path)).join("、")}${T.masters.staleText1}<strong>${T.masters.staleText2}</strong>${T.masters.staleText3}</p>
@@ -552,7 +552,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </div>
       ${notes.map((n) => html`<p class="yn-note yn-note-warn">${n}</p>`)}
       <div class="yn-me-toolbar">
-        <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${locked} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
+        <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${locked || !!pendingDraft} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>${T.masters.onlyChanged}</span></label>
         <span class="yn-table-count" aria-live="polite">${integer(shown.length)} / ${integer(doc.rows.length)} ${T.masters.rowsSuffix}</span>
@@ -643,7 +643,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
         <td class="num">${pm(sum)}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} onclick=${() => toggle(r.memberId)}>${fmt(T.plan.toggle, { n: integer(r.assignments.length) })} ${open ? "▴" : "▾"}</button>
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${locked} aria-label=${fmt(T.plan.addForAria, { name: r.name || r.memberId })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.plan.addShort}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.addForAria, { name: r.name || r.memberId })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.plan.addShort}</button>
         </div></td>
       </tr>`;
       if (!open) return [main];
@@ -657,8 +657,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
           <span class="yn-me-plan-alloc">${Number.isFinite(a.allocation) ? fmt(T.plan.allocPerMonth, { pm: pm(a.allocation) }) : T.plan.allocNotNumber}</span>
           ${st !== "unchanged" ? html`<span class=${`yn-chip ${st === "added" ? "yn-chip-ok" : "yn-chip-neutral"}`}>${st === "added" ? "＋" : "✎"} ${STATE_LABELS[st]}</span>` : null}
           <span class="yn-me-row-actions">
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${locked} aria-label=${fmt(T.plan.editAria, { contract: a.contractId })} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>${T.masters.edit}</button>
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${locked} aria-label=${fmt(T.plan.deleteAria, { contract: a.contractId })} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>${T.masters.deleteKind}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${a.rowId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.editAria, { contract: a.contractId })} onclick=${() => openRowDialog({ fileId: "assignments", mode: "edit", rowId: a.rowId, focus: `edit:${a.rowId}` })}>${T.masters.edit}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${a.rowId}`} disabled=${locked || !!pendingDraft} aria-label=${fmt(T.plan.deleteAria, { contract: a.contractId })} onclick=${() => openDeleteDialog("assignments", a.rowId, `plan:toggle:${r.memberId}`)}>${T.masters.deleteKind}</button>
           </span>
           ${list.length ? html`<ul class="yn-me-issues">${list.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${issueText(i)}</li>`)}</ul>` : null}
         </li>`;
@@ -687,7 +687,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
           <span aria-live="polite">${fyLabel}</span>
           <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:next" aria-label=${T.plan.nextYear} onclick=${() => shiftYear(1)}>▶</button>
         </span>
-        <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${locked} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
+        <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${locked || !!pendingDraft} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria}>
@@ -741,13 +741,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       const conv = html`<span class="yn-me-conv" id=${`${id}-conv`} aria-live="polite"></span>`;
       const update = () => {
         const out = allocationFromInput(input.value, unitSel.value, std);
-        const n = Number(out);
+        const n = parseNumberCell(out);
         conv.textContent = out === "" || !Number.isFinite(n) ? "" : unitSel.value === "hours" ? fmt(T.plan.convFromHours, { hours: input.value.trim(), pm: out, std }) : fmt(T.plan.convFromPm, { pm: out, hours: hoursFromAllocation(n, std) });
       };
       let lastUnit = "personMonth";
       unitSel.addEventListener("change", () => {
         // 単位を切り替えたら、入っている値を新しい単位に換算して見せる
-        const n = Number(input.value.normalize("NFKC").trim());
+        const n = parseNumberCell(input.value);
         if (input.value.trim() !== "" && Number.isFinite(n)) input.value = lastUnit === "personMonth" ? String(hoursFromAllocation(n, std)) : allocationFromInput(String(n), "hours", std);
         lastUnit = unitSel.value;
         update();
@@ -801,7 +801,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
    * 追加（mode: "add"、template があればその行を写して適用開始月を翌月に）／修正（mode: "edit"）
    */
   function openRowDialog({ fileId, mode, rowId = null, template = null, preset = null, focus }) {
-    if (locked) return;
+    if (locked || pendingDraft) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
@@ -953,7 +953,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
   }
 
   function openDeleteDialog(fileId, rowId, focus) {
-    if (locked) return;
+    if (locked || pendingDraft) return;
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
     const before = docs[fileId];
@@ -1060,6 +1060,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     return null;
   }
 
+  /** 利用者が入力したコミットメッセージ（再描画で既定文に戻さない）。null なら既定文 */
+  let typedMessage = null;
   function commitMessage() {
     const files = changedFiles();
     return fmt(T.masters.commitTitle, { files: files.map((id) => fileName(MASTER_FILES[id].path)).join(", ") });
@@ -1091,6 +1093,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     } catch (e) {
       outcome = { kind: "error", error: { kind: e?.kind ?? "other", message: e?.message ?? String(e), detail: e?.detail ?? "", status: e?.status ?? null, partial: e?.partial ?? null } };
       if (outcome.error.kind === "permission" && outcome.error.status === 401) session.remove(TOKEN_STORAGE_KEY);
+      // コミットまでは済んだ（MR だけ失敗）: もう一度保存すると別ブランチに同じ変更が重複するので止める
+      if (outcome.error.partial) {
+        locked = true;
+        local.remove(DRAFT_STORAGE_KEY);
+        draftSavedAt = null;
+      }
     } finally {
       saving = false;
       renderAll();
@@ -1118,6 +1126,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
     rebasedInfo = {};
     locked = false;
     outcome = null;
+    typedMessage = null;
     downloaded = new Set();
     validation = validateEdited(docs, data.context, config);
     persistDraft();
@@ -1165,12 +1174,18 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
       </div>`;
     }
     const e = outcome.error;
-    const titles = { conflict: T.masters.errConflict, permission: T.masters.errPermission, network: T.masters.errNetwork, other: T.masters.errOther };
+    const titles = e.partial ? { other: T.masters.errPartial, permission: T.masters.errPartial } : { conflict: T.masters.errConflict, permission: T.masters.errPermission, network: T.masters.errNetwork, other: T.masters.errOther };
     return html`<div class="yn-me-outcome is-error" role="alert" tabindex="-1" data-fk="save:outcome" data-error-kind=${e.kind}>
       <p class="yn-me-outcome-title"><span aria-hidden="true">!</span> ${titles[e.kind] ?? titles.other}</p>
       <p>${e.message}</p>
-      ${e.detail ? html`<p class="yn-me-small">${T.masters.gitlabResponse} <code>${e.detail}</code></p>` : null}
-      <p class="yn-me-small">${T.masters.editsKept}</p>
+      ${e.partial
+        ? html`<ul>
+            <li>${T.masters.branchLabel} <code>${e.partial.branch}</code></li>
+            ${e.partial.commitUrl ? html`<li>${T.masters.commitLabel} <a href=${e.partial.commitUrl} target="_blank" rel="noopener">${T.masters.openInGitlab}</a></li>` : null}
+          </ul>
+          <p><button type="button" class="yn-btn" data-fk="save:restart" onclick=${() => resetAll()}>${T.masters.startOver}</button></p>`
+        : html`${e.detail ? html`<p class="yn-me-small">${T.masters.gitlabResponse} <code>${e.detail}</code></p>` : null}
+          <p class="yn-me-small">${T.masters.editsKept}</p>`}
       ${e.kind === "network" ? html`<p><button type="button" class="yn-btn yn-btn-primary" data-fk="save:to-download" onclick=${() => {
         mode = "download";
         outcome = null;
@@ -1202,7 +1217,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
           setToken();
         }
       });
-      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${commitMessage()} aria-describedby="yn-me-message-hint">`;
+      const msgInput = html`<input type="text" id="yn-me-message" class="yn-input yn-me-message" value=${typedMessage ?? commitMessage()} aria-describedby="yn-me-message-hint">`;
+      msgInput.addEventListener("input", () => {
+        typedMessage = msgInput.value.trim() === "" ? null : msgInput.value;
+      });
       const tokenReason = hasToken ? null : T.gitlab.noToken;
       const disabled = saving || !!reason || !!tokenReason;
       body = html`<div class="yn-me-save-body">
@@ -1270,7 +1288,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, initialView =
 
   function renderAll() {
     root.dataset.mode = mode;
-    root.classList.toggle("is-locked", locked);
+    // 下書きの復元／破棄を選ぶまでは編集させない（選ぶ前の編集は下書きに保存されず、再読み込みで消えるため）
+    root.classList.toggle("is-locked", locked || !!pendingDraft);
     renderDraft();
     renderTabs();
     renderPanel();

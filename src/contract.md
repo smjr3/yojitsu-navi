@@ -28,8 +28,13 @@ import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, p
 
 ```js
 const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
-const contractId = new URLSearchParams(location.search).get("id") ?? "";
-const result = model ? model.contracts.find((r) => r.contract.contractId === contractId) ?? null : null;
+// 前後の空白は無視し、完全一致が無ければ大文字・小文字の違いだけの契約を探す（URL を手で打ったとき用）
+const contractId = (new URLSearchParams(location.search).get("id") ?? "").trim();
+const result = model
+  ? model.contracts.find((r) => r.contract.contractId === contractId) ??
+    model.contracts.find((r) => r.contract.contractId.toLowerCase() === contractId.toLowerCase()) ??
+    null
+  : null;
 const store = model ? createStore(model) : null;
 ```
 
@@ -212,7 +217,7 @@ if (vm) {
       rows,
       unit,
       caption: T.contract.monthlyTableTitle,
-      exportName: `contract_${c.contractId}_monthly`,
+      exportName: `contract_${c.contractId}_monthly_${vm.period.from}_${vm.period.to}`,
       sort: { key: "month", dir: "asc" },
       summary: { name: T.contract.totalActualOnly, budget: t.budget, cost: t.cost, grossProfit: t.grossProfit, grossMargin: t.grossMargin, hours: t.hours, members: null, businessDays: null, status: null },
     }),
@@ -242,13 +247,13 @@ if (vm) {
     { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName} <span class="yn-muted">${r.memberId}</span>${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}` },
     { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
     { key: "hours", label: T.columns.hours, type: "hours" },
-    { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true },
+    { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: T.contract.rateExportLabel, exportValue: (r) => (r.rates.size === 1 ? [...r.rates][0] : [...r.rates].join(" / ")) },
     { key: "amount", label: T.columns.cost, type: "moneyYen" },
     { key: "share", label: T.team.colShare, type: "percent" },
     { key: "months", label: T.team.colWorkMonths, type: "int", hideOnPhone: true },
   ];
   if (rows.length === 0) display(emptyState({ title: T.team.noWorkTitle, text: T.contract.noWorkText, icon: "○" }));
-  else display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `contract_${c.contractId}_members`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
+  else display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `contract_${c.contractId}_members_${vm.period.from}_${vm.period.to}`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
 }
 ```
 

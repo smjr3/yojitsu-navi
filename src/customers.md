@@ -40,7 +40,16 @@ const state = Generators.observe((notify) => {
 
 ```js
 // 一覧専用の絞り込み（検索語は URL の q。ページ内の状態）
-const listFilter = { text: new URLSearchParams(location.search).get("q") ?? "", showOutside: false };
+const listFilter = { text: new URLSearchParams(location.search).get("q") ?? "", showOutside: new URLSearchParams(location.search).get("f") === "outside" };
+// 検索語と「期間外も表示」を URL に書き戻す（詳細から「戻る」で復元するため）
+function writeListFilter(lf) {
+  const url = new URL(location.href);
+  if (lf.showOutside) url.searchParams.set("f", "outside");
+  else url.searchParams.delete("f");
+  if (lf.text) url.searchParams.set("q", lf.text);
+  else url.searchParams.delete("q");
+  history.replaceState(history.state, "", url);
+}
 ```
 
 ```js
@@ -113,7 +122,10 @@ const chips = (() => {
     text,
   );
   form.value = { ...listFilter };
-  form.addEventListener("input", () => (form.value = { ...listFilter }));
+  form.addEventListener("input", () => {
+    form.value = { ...listFilter };
+    writeListFilter(listFilter);
+  });
   return form;
 })();
 ```

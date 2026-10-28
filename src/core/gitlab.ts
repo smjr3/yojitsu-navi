@@ -152,7 +152,7 @@ export function classifyHttpError(step: "user" | "commit" | "mr", status: number
   if (status === 403) {
     return new GitLabError("permission", T.gitlab.noPermission, { status, detail });
   }
-  if (status === 409 || (step === "commit" && status === 400 && CONFLICT_PATTERN.test(detail))) {
+  if (step === "commit" && (status === 409 || (status === 400 && CONFLICT_PATTERN.test(detail)))) {
     return new GitLabError("conflict", T.gitlab.conflict, { status, detail });
   }
   if (status === 404) {
@@ -258,7 +258,7 @@ export async function saveToGitLab(fetchImpl: FetchLike, req: SaveRequest): Prom
   } catch (e) {
     const err = e as GitLabError;
     // コミットは済んでいるので「ダウンロードに切り替え」は出さない（network → other）
-    throw new GitLabError(err.kind === "permission" ? "permission" : "other", fmt(T.gitlab.mrFailed, { branch, error: err.message }), {
+    throw new GitLabError(err.kind === "permission" ? "permission" : "other", fmt(T.gitlab.mrFailed, { branch, error: err.status ? `（HTTP ${err.status}${err.detail ? `: ${err.detail}` : ""}）` : "" }), {
       status: err.status,
       detail: err.detail,
       partial: { branch, commitUrl },

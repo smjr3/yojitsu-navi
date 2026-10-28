@@ -34,6 +34,8 @@ interface RuleTarget {
   contracts: Contract[];
   /** 存在しない契約IDを指すルールがあった */
   hasUnknownContract: boolean;
+  /** 不備で除外中の契約を指すルールがあった（「存在しない」と区別する） */
+  hasExcludedContract: boolean;
 }
 
 function ruleKey(customer: string, project: string): string {
@@ -45,22 +47,33 @@ function buildRuleIndex(
   rules: readonly MappingRule[],
   contractsById: ReadonlyMap<string, Contract>,
   warnings: Warning[],
+  excludedContracts: ReadonlyMap<string, string>,
 ): Map<string, RuleTarget> {
   const index = new Map<string, RuleTarget>();
   rules.forEach((rule, i) => {
     const key = ruleKey(normalizeName(rule.worklogCustomerName), normalizeName(rule.worklogProjectName));
     let target = index.get(key);
     if (!target) {
-      target = { contracts: [], hasUnknownContract: false };
+      target = { contracts: [], hasUnknownContract: false, hasExcludedContract: false };
       index.set(key, target);
     }
     const contract = contractsById.get(rule.contractId);
+    const excludedReason = excludedContracts.get(rule.contractId);
+    if (!contract && excludedReason !== undefined) {
+      target.hasExcludedContract = true;
+      warnings.push({
+        code: "MAPPING_EXCLUDED_CONTRACT",
+        message: fmt(T.calcWarnings.mappingExcludedContract, { row: i + 2, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId, reason: excludedReason }),
+        ref: { row: i + 2, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
+      });
+      return;
+    }
     if (!contract) {
       target.hasUnknownContract = true;
       warnings.push({
         code: "MAPPING_UNKNOWN_CONTRACT",
-        message: fmt(T.calcWarnings.mappingUnknownContract, { row: i + 1, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId }),
-        ref: { row: i + 1, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
+        message: fmt(T.calcWarnings.mappingUnknownContract, { row: i + 2, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId }),
+        ref: { row: i + 2, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
       });
       return;
     }
@@ -89,11 +102,13 @@ export function mapWorklogs(
   worklogs: readonly Worklog[],
   rules: readonly MappingRule[],
   contracts: readonly Contract[],
+  /** 不備で除外した契約ID → 理由。指すルールを「存在しない契約」と区別するため */
+  excludedContracts: ReadonlyMap<string, string> = new Map(),
 ): MappingResult {
   const warnings: Warning[] = [];
   const contractsById = new Map<string, Contract>();
   for (const c of contracts) contractsById.set(c.contractId, c);
-  const ruleIndex = buildRuleIndex(rules, contractsById, warnings);
+  const ruleIndex = buildRuleIndex(rules, contractsById, warnings, excludedContracts);
 
   const mappings: WorklogMapping[] = [];
   const assigned: MappingResult["assigned"] = [];
@@ -152,9 +167,10 @@ export function mapWorklogs(
       continue;
     }
     if (target.contracts.length === 0) {
-      // ルールはあるが、指す契約がすべて存在しない
-      mappings.push({ kind: "unmapped", worklog: w, month, reason: "UNKNOWN_CONTRACT" });
-      addUnmapped(w, "UNKNOWN_CONTRACT");
+      // ルールはあるが、指す契約がすべて存在しない（または不備で除外中）
+      const reason: UnmappedReason = target.hasExcludedContract ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT";
+      mappings.push({ kind: "unmapped", worklog: w, month, reason });
+      addUnmapped(w, reason);
       continue;
     }
     const inPeriod = target.contracts.filter((c) => c.startMonth <= month && month <= c.endMonth);
@@ -228,5 +244,7 @@ export function unmappedReasonLabel(reason: UnmappedReason): string {
       return T.calcWarnings.reasonOutOfPeriod;
     case "UNKNOWN_CONTRACT":
       return T.calcWarnings.reasonUnknownContract;
+    case "EXCLUDED_CONTRACT":
+      return T.calcWarnings.reasonExcludedContract;
   }
 }

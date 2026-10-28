@@ -6,6 +6,7 @@
  * 人月と時間の換算（§23.2。保存・表示は人月、時間は入力のときだけ）もここに置く。
  */
 import { isValidYearMonth } from "./calendar.js";
+import { parseNumberCell } from "./csv.js";
 import { createEffectiveIndex, teamTreeAt } from "./masters.js";
 import type { MemberRecord, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
@@ -169,7 +170,8 @@ export function formatAllocation(value: number): string {
 export function allocationFromInput(text: string, unit: "personMonth" | "hours", standardHoursPerMonth: number): string {
   const t = text.normalize("NFKC").trim();
   if (t === "") return "";
-  const n = Number(t);
+  // CSV の読み込み（parseNumberCell）と同じ規則で数値にする。0x10・1e-5 などを画面だけ数値扱いしない
+  const n = parseNumberCell(t);
   if (!Number.isFinite(n)) return t;
   if (unit === "personMonth") return t;
   if (!(standardHoursPerMonth > 0)) return t;

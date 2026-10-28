@@ -40,11 +40,21 @@ const state = Generators.observe((notify) => {
 ```
 
 ```js
-// 一覧専用の絞り込み（URL には保存しない。ページ内の状態）
+// 一覧専用の絞り込み。URL の f（deficit,over,prelim,outside のカンマ区切り）と q に書き戻す（詳細から「戻る」で復元するため）
 const listFilter = (() => {
   const q = new URLSearchParams(location.search);
-  return { deficit: q.get("f") === "deficit", over: q.get("f") === "over", prelim: q.get("f") === "prelim", text: q.get("q") ?? "", showOutside: false };
+  const f = (q.get("f") ?? "").split(",");
+  return { deficit: f.includes("deficit"), over: f.includes("over"), prelim: f.includes("prelim"), text: q.get("q") ?? "", showOutside: f.includes("outside") };
 })();
+function writeListFilter(lf) {
+  const url = new URL(location.href);
+  const f = [lf.deficit && "deficit", lf.over && "over", lf.prelim && "prelim", lf.showOutside && "outside"].filter(Boolean).join(",");
+  if (f) url.searchParams.set("f", f);
+  else url.searchParams.delete("f");
+  if (lf.text) url.searchParams.set("q", lf.text);
+  else url.searchParams.delete("q");
+  history.replaceState(history.state, "", url);
+}
 
 // 顧客キーでの厳密絞り込み（?customer=<key>）。顧客詳細の担当チーム行から来る。
 // direct=1 のときは主担当チームがちょうど team の契約だけ（配下のチームは含めない）。検索語（部分一致）とは別物
@@ -140,7 +150,10 @@ const chips = (() => {
     text,
   );
   form.value = { ...listFilter };
-  form.addEventListener("input", () => (form.value = { ...listFilter }));
+  form.addEventListener("input", () => {
+    form.value = { ...listFilter };
+    writeListFilter(listFilter);
+  });
   return form;
 })();
 ```

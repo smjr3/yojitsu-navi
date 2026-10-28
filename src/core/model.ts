@@ -9,7 +9,7 @@ import { addMonths, businessDaysInMonth, isValidISODate, monthOfDate, monthRange
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { forecastAllMethods, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
-import { createMasterIndex, teamTreeAt, type MasterIndex } from "./masters.js";
+import { createMasterIndex, memberAt, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
@@ -41,7 +41,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   const contracts = partition.valid;
 
   // 紐付け（§4）
-  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, contracts);
+  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, contracts, new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason])));
   warnings.push(...mapping.warnings);
   const worklogIndex = indexWorklogs(mapping.assigned);
 
@@ -176,7 +176,8 @@ function collectRateWarnings(results: readonly ContractResult[], masters: Master
   for (const m of [...missing.values()].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : a.memberId < b.memberId ? -1 : 1))) {
     warnings.push({
       code: "RATE_MISSING",
-      message: fmt(T.calcWarnings.rateMissing, { month: m.month, memberId: m.memberId, memberName: m.memberName, hours: m.hours }),
+      // メンバーの effective_from より前の作業は役職が決まらず単価が引けない。原因が分かる文言にする
+      message: fmt(memberAt(masters, m.memberId, m.month) === null ? T.calcWarnings.rateMissingBeforeMember : T.calcWarnings.rateMissing, { month: m.month, memberId: m.memberId, memberName: m.memberName, hours: m.hours }),
       ref: { memberId: m.memberId, month: m.month },
       hours: m.hours,
     });

@@ -67,7 +67,9 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
       EXCLUDED_NO_CUSTOMER: 1,
       UNKNOWN_MEMBER: 1,
       RATE_MISSING: 19,
+      MEMBER_RATE_UNDEFINED: 1,
     });
+    expect(issues.find((i) => i.code === "MEMBER_RATE_UNDEFINED")?.ref?.title).toBe("技術顧問");
     expect(issues.find((i) => i.code === "UNKNOWN_MEMBER")?.ref?.memberId).toBe("M099");
     const missing = issues.filter((i) => i.code === "RATE_MISSING");
     expect(missing.every((i) => i.ref?.memberId === "M025")).toBe(true);

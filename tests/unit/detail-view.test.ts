@@ -12,15 +12,15 @@ import { UNASSIGNED_TEAM_ID } from "../../src/core/index.js";
 
 describe("varianceNote: 丸め後の値で判定", () => {
   it("+40,000円 は円なら『少ない』、百万円では ±0.0 なので『計画どおり』", () => {
-    expect(varianceNote(40_000, "yen")).toBe("計画より原価が少ない");
+    expect(varianceNote(40_000, "yen")).toBe("計画より実績が少ない");
     expect(moneySigned(40_000, "m")).toBe("±0.0百万円");
     expect(varianceNote(40_000, "m")).toBe("計画どおり");
     expect(varianceNote(-40_000, "m")).toBe("計画どおり");
   });
   it("丸めても 0 にならなければ符号どおり", () => {
-    expect(varianceNote(60_000, "m")).toBe("計画より原価が少ない"); // 0.1百万円
-    expect(varianceNote(-60_000, "m")).toBe("計画より原価が多い");
-    expect(varianceNote(1_000, "k")).toBe("計画より原価が少ない");
+    expect(varianceNote(60_000, "m")).toBe("計画より実績が少ない"); // 0.1百万円
+    expect(varianceNote(-60_000, "m")).toBe("計画より実績が多い");
+    expect(varianceNote(1_000, "k")).toBe("計画より実績が少ない");
     expect(varianceNote(400, "k")).toBe("計画どおり"); // 0千円
   });
   it("ちょうど 0 と数値でない値", () => {

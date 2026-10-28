@@ -127,10 +127,24 @@ export function safeFileName(name) {
 export const EXPORT_UNIT_NOTE = T.table.exportUnitNote;
 
 /** 現在の表示（並べ替え・絞り込み後）を .xlsx で保存。金額は常に円の整数 */
-export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1" }) {
+export async function exportXlsx({ columns, rows, unit = "yen", name = "export", sheet = "Sheet1", summary = null }) {
   const XLSX = await import("xlsx");
   const header = columns.map((c) => exportLabel(c, unit));
-  const body = rows.map((r) => columns.map((c) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit))));
+  const valueOf = (c, r) => (c.exportValue ? c.exportValue(r, unit) : defaultExport(c, r, unit));
+  const body = rows.map((r) => columns.map((c) => valueOf(c, r)));
+  // 画面の合計行（tfoot）と同じ列だけ値を入れる
+  if (summary) {
+    body.push(columns.map((c, ci) => {
+      if (ci === 0) return summary.name ?? T.table.total;
+      const has = summary[c.key] !== undefined && summary[c.key] !== null;
+      if (c.summary === false || (!has && (!isNumeric(c) || !c.get))) return null;
+      try {
+        return valueOf(c, summary);
+      } catch {
+        return null; // 行専用の exportValue（ID など）は合計行では空にする
+      }
+    }));
+  }
   const ws = XLSX.utils.aoa_to_sheet([[EXPORT_UNIT_NOTE], header, ...body]);
   ws["!cols"] = columns.map((c) => ({ wch: Math.max(10, Math.min(40, String(exportLabel(c, unit)).length * 2)) }));
   const wb = XLSX.utils.book_new();
@@ -173,7 +187,17 @@ export function dataTable({
 }) {
   const visibleCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   const exportCols = columns.filter((c) => !c.hidden && c.export !== false);
-  let sortState = tree ? null : sort ? { ...sort } : null;
+  // 利用者が選んだ並べ替えは、絞り込み・単位の変更で表が作り直されても、詳細から戻っても残す（タブ単位）
+  const sortMemoKey = !tree && caption ? `yojitsu-navi:sort:${location.pathname}:${caption}` : null;
+  const remembered = (() => {
+    try {
+      const v = sortMemoKey ? JSON.parse(sessionStorage.getItem(sortMemoKey) ?? "null") : null;
+      return v && columns.some((c) => c.key === v.key) && (v.dir === "asc" || v.dir === "desc") ? v : null;
+    } catch {
+      return null;
+    }
+  })();
+  let sortState = tree ? null : remembered ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
   let currentRows = rows;
 
@@ -216,6 +240,11 @@ export function dataTable({
           btn.addEventListener("click", () => {
             const first = numeric ? "desc" : "asc";
             sortState = active ? { key: col.key, dir: sortState.dir === "asc" ? "desc" : "asc" } : { key: col.key, dir: first };
+            try {
+              if (sortMemoKey) sessionStorage.setItem(sortMemoKey, JSON.stringify(sortState));
+            } catch {
+              /* プライベートモード等では無視 */
+            }
             renderHead();
             renderBody();
             // 再描画で消えたフォーカスを同じ列のボタンへ戻す（キーボード操作の継続）
@@ -273,6 +302,7 @@ export function dataTable({
         if (href) content = html`<a class="yn-row-link" href=${href}>${content}</a>`;
       }
       cell.append(content);
+      if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });
     if (href) {
@@ -293,7 +323,7 @@ export function dataTable({
     } else {
       tbody.replaceChildren(...currentRows.map(renderRow));
     }
-    if (count) count.textContent = fmt(tree ? T.table.rowCountTree : T.table.rowCount, { n: integer(rows.length) });
+    if (count) count.textContent = tree && currentRows.length < rows.length ? fmt(T.table.rowCountTreeCollapsed, { shown: integer(currentRows.length), n: integer(rows.length) }) : fmt(tree ? T.table.rowCountTree : T.table.rowCount, { n: integer(rows.length) });
   }
 
   renderHead();
@@ -317,6 +347,7 @@ export function dataTable({
         unit,
         name: exportName,
         sheet: caption ?? exportName,
+        summary,
       }))
     : null;
 

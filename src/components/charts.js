@@ -39,15 +39,19 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
     ? [...(lastActual ? [{ ...lastActual, forecastGrossProfit: lastActual.grossProfit }] : []), ...remaining]
     : [];
   const hasForecast = remaining.length > 0;
-  const every = n > 14 ? 2 : 1;
+  // 目盛りの間引き: 1 目盛りあたり 44px 以上（390px 幅で月ラベルが重ならないように。memberHoursChart と同じ）
+  const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 76) / 44))));
   const ticks = data.filter((d) => d.i % every === 0).map((d) => d.i);
   const tickFormat = (i) => {
     const d = data[i];
     return d ? monthShort(d.month, i === 0) : "";
   };
   const peak = Math.max(0, ...data.map((d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0)));
-  const axisUnit = peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
+  const axisUnit = peak >= 5e10 ? { label: T.charts.axisHundredMillionYen, div: 1e8 } : peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
   const axisFormat = (v) => new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(v / axisUnit.div);
+  // 左余白は最も長い目盛り（負の粗利を含む）に合わせる。固定だと桁が増えたとき符号が切れる
+  const low = Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
+  const marginLeft = Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1));
   const barW = Math.max(6, Math.min(24, ((width - 90) / n) * 0.42));
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
   const gap = 0.03;
@@ -56,13 +60,14 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const plot = Plot.plot({
     width,
     height,
-    marginLeft: 56,
+    marginLeft,
     marginRight: 20,
     marginTop: 28,
     marginBottom: 32,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, label: null, line: false },
-    y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false },
+    // 値がすべて 0（契約 0 件など）だと y の domain が [0,0] になり棒が全高で描かれるので、範囲を与える
+    y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, ...(peak === 0 && low === 0 ? { domain: [0, axisUnit.div] } : {}) },
     marks: [
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),

@@ -9,7 +9,7 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
-import { parseCsvTable, parseDataset, type DatasetFiles } from "./csv.js";
+import { parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
 import type { Config, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
@@ -1131,7 +1131,7 @@ export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, 
       contractId: (v.contract_id ?? "").trim(),
       startMonth: (v.start_month ?? "").trim(),
       endMonth: (v.end_month ?? "").trim(),
-      allocation: raw === "" ? Number.NaN : Number(raw),
+      allocation: raw === "" ? Number.NaN : parseNumberCell(raw),
     };
   });
   const contractTeams = new Map<string, string | null>();

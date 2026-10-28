@@ -182,6 +182,15 @@ body {
     margin: -24px -32px 24px;
   }
 }
+/* スマホ幅では固定するとヘッダ（タブ＋表示条件）が画面の約 1/4 を占めるので、固定せず一緒にスクロールさせる */
+@media (max-width: 639px) {
+  #observablehq-header {
+    position: static;
+  }
+  :root:has(#observablehq-header) {
+    scroll-padding-top: 0;
+  }
+}
 .yn-topbar {
   display: flex;
   align-items: stretch;
@@ -297,8 +306,8 @@ body {
   color: var(--yn-text-1) !important;
   font-weight: 600;
 }
-/* スマホ: タブを 2 段目に回して横スクロール */
-@media (max-width: 719px) {
+/* スマホ・タブレット: タブを 2 段目に回して横スクロール（960px 未満は 1 段に収まらない） */
+@media (max-width: 959px) {
   .yn-topbar {
     flex-wrap: wrap;
     padding-top: 8px;
@@ -457,6 +466,7 @@ h3 {
   margin: 0 0 16px;
 }
 .yn-crumbs ol {
+  overflow-wrap: anywhere;
   list-style: none;
   display: flex;
   flex-wrap: wrap;
@@ -486,6 +496,8 @@ h3 {
   gap: 8px 16px;
 }
 .yn-page-title {
+  overflow-wrap: anywhere;
+  min-width: 0;
   font-size: 26px;
   font-weight: 700;
   line-height: 1.25;
@@ -551,6 +563,23 @@ h3 {
   line-height: 1.5;
   white-space: nowrap;
   vertical-align: middle;
+}
+/* 「◔」はフォントによって点にしか見えないので、文字は隠して円を描く（スクリーンリーダーには元々読ませない） */
+.yn-icon-prelim,
+.yn-chip-icon.yn-icon-prelim {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 2px;
+  vertical-align: -1px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: conic-gradient(currentColor 0 25%, transparent 0);
+  color: inherit;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .yn-badge-prelim,
 .yn-chip-prelim {
@@ -860,6 +889,12 @@ h3 {
   color: var(--yn-text-1);
   white-space: nowrap;
 }
+.yn-kpi-long .yn-kpi-value {
+  font-size: 18px !important;
+}
+.yn-kpi-xlong .yn-kpi-value {
+  font-size: 15px !important;
+}
 .yn-kpi-wrap .yn-kpi-value {
   white-space: normal;
   font-size: 20px;
@@ -888,7 +923,8 @@ h3 {
   color: var(--yn-good-text);
 }
 .yn-kpi-compare.is-bad {
-  color: var(--yn-danger-text);
+  /* 赤は「消化率超過」と「赤字着地」だけに使う（SPEC §12）。前年比の悪化は矢印と文で示す */
+  color: var(--yn-text-2);
 }
 .yn-kpi-arrow {
   font-size: 10px;
@@ -940,6 +976,8 @@ h3 {
   margin: 32px 0 12px;
 }
 .yn-section-title {
+  overflow-wrap: anywhere;
+  min-width: 0;
   font-size: 18px;
   font-weight: 700;
   margin: 0;
@@ -1242,6 +1280,12 @@ h3 {
 .yn-table thead th:first-child {
   z-index: 3;
 }
+/* 名前列は sticky なので、長い名前で広がると数値列が隠れる。上限を設けて省略し、全文は title で出す */
+.yn-table .yn-primary-cell {
+  max-width: min(40vw, 320px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .yn-table tbody tr:hover th:first-child {
   background: color-mix(in srgb, var(--yn-card), var(--yn-text-1) 4%);
 }
@@ -1468,6 +1512,8 @@ th[aria-sort="descending"] .yn-sort-icon {
   background: rgba(0, 0, 0, 0.45);
 }
 .yn-dialog-inner {
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 32px);
@@ -1481,6 +1527,8 @@ th[aria-sort="descending"] .yn-sort-icon {
   border-bottom: 1px solid var(--yn-hairline);
 }
 .yn-dialog-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 16px;
   font-weight: 700;
   margin: 0;
@@ -1500,6 +1548,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   color: var(--yn-text-muted);
 }
 .yn-bd-subtitle {
+  overflow-wrap: anywhere;
   margin: 0 0 12px;
   color: var(--yn-text-2);
   font-size: 13px;
@@ -1585,6 +1634,8 @@ th[aria-sort="descending"] .yn-sort-icon {
   color: var(--yn-text-muted);
 }
 .yn-facts dd {
+  overflow-wrap: anywhere;
+  min-width: 0;
   margin: 0;
   font-weight: 600;
 }
@@ -2345,6 +2396,19 @@ th[aria-sort="descending"] .yn-sort-icon {
   }
 }
 
+/* 計算根拠ダイアログ: 長い明細（作業ログなど）は表の中でスクロールし、列見出しを残す */
+.yn-dialog .yn-table-wrap-inline {
+  max-height: 60vh;
+  overflow: auto;
+}
+.yn-dialog .yn-table-wrap-inline thead th {
+  position: sticky;
+  top: 0;
+}
+/* ダイアログを開いている間は背景のページをスクロールさせない */
+html:has(dialog.yn-dialog[open]) {
+  overflow: hidden;
+}
 /* ---- 稼働計画（§23）・組織の種別とリーダー（§21・§22） ---- */
 .yn-me-alloc {
   display: flex;
@@ -2434,4 +2498,18 @@ th[aria-sort="descending"] .yn-sort-icon {
   margin: 0 0 6px;
   font-size: 13px;
   color: var(--yn-text-2);
+}
+/* 横スクロールする表の中で、行全体にまたがる説明（行のエラー・稼働計画の明細）は左端に貼り付ける。
+   操作ボタンへフォーカスが移ると表が右端までスクロールし、狭い幅では中身が見えなくなるため */
+#observablehq-main .yn-me-issue-row td > .yn-me-issues,
+#observablehq-main .yn-me-plan-detail > td > * {
+  position: sticky;
+  left: 12px;
+  max-width: calc(100vw - 72px);
+}
+@media (min-width: 640px) {
+  #observablehq-main .yn-me-issue-row td > .yn-me-issues,
+  #observablehq-main .yn-me-plan-detail > td > * {
+    max-width: min(calc(100vw - 112px), 960px);
+  }
 }

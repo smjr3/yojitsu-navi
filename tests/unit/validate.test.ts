@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { hasErrors, validateDataset } from "../../src/core/validate.js";
+import { hasErrors, validateDataset as validateAll } from "../../src/core/validate.js";
+
+// fixtures の既定は rates が空なので、役職単価の警告（qa-extreme-data.test.ts で検査）はここでは除く
+const validateDataset = (...args: Parameters<typeof validateAll>) => validateAll(...args).filter((i) => i.code !== "MEMBER_RATE_UNDEFINED");
 import { assignment, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
 
 const codes = (ds: Parameters<typeof validateDataset>[0]): string[] => validateDataset(ds).map((i) => i.code);
@@ -79,7 +82,7 @@ describe("validateDataset (SPEC §14) — エラー", () => {
   it("チーム: 未知の親、循環、形式", () => {
     expect(errors(dataset({ teams: [team("A", "NOPE")] }))).toEqual(["TEAM_UNKNOWN_PARENT"]);
     expect(errors(dataset({ teams: [team("A", "B"), team("B", "A")] }))).toEqual(["TEAM_CYCLE"]);
-    expect(errors(dataset({ teams: [team("A", "A")] }))).toEqual(["TEAM_CYCLE"]);
+    expect(errors(dataset({ teams: [team("A", "A")] }))).toEqual(["TEAM_SELF_PARENT"]);
     expect(errors(dataset({ teams: [team("A", null, "2026-1")] }))).toEqual(["INVALID_MONTH"]);
     expect(errors(dataset({ teams: [team("", null)] }))).toEqual(["TEAM_ID_EMPTY"]);
   });

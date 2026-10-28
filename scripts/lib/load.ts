@@ -39,13 +39,21 @@ export function worklogDir(rootDir: string, config: Config): string {
   return join(rootDir, config.worklogSource.csv?.path || "data/worklogs");
 }
 
-/** data/worklogs/YYYY-MM.csv を月順に列挙する（ディレクトリが無ければ空） */
-export function listWorklogFiles(dir: string): Array<{ month: string; path: string }> {
+/** data/worklogs/YYYY-MM.csv を月順に列挙する（ディレクトリが無ければ空）。拡張子の大文字小文字は問わない */
+export function listWorklogFiles(dir: string): Array<{ month: string; path: string; name: string }> {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => /^\d{4}-\d{2}\.csv$/.test(f))
+    .filter((f) => /^\d{4}-\d{2}\.csv$/i.test(f))
     .sort()
-    .map((f) => ({ month: f.slice(0, 7), path: join(dir, f) }));
+    .map((f) => ({ month: f.slice(0, 7), path: join(dir, f), name: f }));
+}
+
+/** 作業実績フォルダの CSV のうち、名前が YYYY-MM.csv でないため読まないもの（「2026-10 (1).csv」など） */
+export function skippedWorklogFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => /\.csv$/i.test(f) && !/^\d{4}-\d{2}\.csv$/i.test(f))
+    .sort();
 }
 
 /** _meta.json を読む（無ければ空オブジェクト） */
@@ -68,7 +76,8 @@ function readOrEmpty(path: string): string {
 export function readDatasetFiles(rootDir: string): DatasetFiles {
   const config = loadConfig(rootDir);
   const dir = worklogDir(rootDir, config);
-  const worklogs = listWorklogFiles(dir).map((f) => readTextAuto(f.path));
+  const listed = listWorklogFiles(dir);
+  const worklogs = listed.map((f) => readTextAuto(f.path));
   const meta = readWorklogMeta(dir);
   const files: DatasetFiles = {
     config,
@@ -80,6 +89,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     rates: readOrEmpty(join(rootDir, DATA_FILES.rates)),
     holidays: readOrEmpty(join(rootDir, DATA_FILES.holidays)),
     worklogs,
+    worklogNames: listed.map((f) => f.name),
+    skippedWorklogFiles: skippedWorklogFiles(dir),
   };
   if (typeof meta.fetchedAt === "string" && meta.fetchedAt !== "") files.worklogFetchedAt = meta.fetchedAt;
   return files;

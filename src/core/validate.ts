@@ -7,7 +7,7 @@
 import { contractInvalidReason } from "./budget.js";
 import { isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
-import { createMasterIndex, rateFor, teamTreeAt } from "./masters.js";
+import { createMasterIndex, memberAt, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -27,7 +27,20 @@ function rowOf(index: number): number {
   return index + 2;
 }
 
-function validateContracts(dataset: Dataset, push: IssueSink): void {
+/** 同じキーで effective_from も同じ行が複数ある（どちらが効くか分からない）→ error。2 行目以降を報告する */
+function pushDuplicates<T extends { effectiveFrom: string }>(rows: readonly T[], keyOf: (r: T) => string, file: string, code: string, column: string, push: IssueSink): void {
+  const first = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const k = keyOf(r);
+    if (k === "") return;
+    const id = `${k}\u0000${r.effectiveFrom}`;
+    const prev = first.get(id);
+    if (prev === undefined) first.set(id, rowOf(i));
+    else push({ severity: "error", code, message: fmt(T.checks.duplicateHistoryRow, { file, row: rowOf(i), column, key: k, effectiveFrom: r.effectiveFrom, prev }), file, row: rowOf(i), ref: { key: k, effectiveFrom: r.effectiveFrom } });
+  });
+}
+
+function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
   const seen = new Set<string>();
   dataset.contracts.forEach((c, i) => {
     const file = "contracts.csv";
@@ -48,6 +61,12 @@ function validateContracts(dataset: Dataset, push: IssueSink): void {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNegative, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
     } else if (!Number.isInteger(c.totalAmount)) {
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotInteger, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
+    } else if (!Number.isSafeInteger(c.totalAmount)) {
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountTooLarge, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
+    }
+    // 主担当チームが teams.csv に無い: 打ち間違いのまま「未設定」に集計されるのを防ぐ（メンバーの MEMBER_UNKNOWN_TEAM と同じ扱い）
+    if (c.teamId !== null && c.teamId !== "" && !teamIds.has(c.teamId)) {
+      push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: fmt(T.checks.contractUnknownTeam, { file, row, contractId: c.contractId, teamId: c.teamId }), file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
     }
   });
 }
@@ -64,6 +83,7 @@ function validateMappings(dataset: Dataset, contractIds: ReadonlySet<string>, pu
 
 function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "assignments.csv";
+  const contractById = new Map(dataset.contracts.map((c) => [c.contractId, c]));
   const monthlyTotal = new Map<string, { memberId: string; month: YearMonth; total: number; rows: number[] }>();
   dataset.assignments.forEach((a, i) => {
     const row = rowOf(i);
@@ -74,10 +94,15 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentEndMonthInvalid, { file, row, value: a.endMonth }), file, row });
     if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: fmt(T.checks.assignmentPeriodInverted, { file, row, from: a.startMonth, to: a.endMonth }), file, row });
     if (!Number.isFinite(a.allocation) || a.allocation < 0 || a.allocation > 1) {
-      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: fmt(T.checks.allocationOutOfRange, { file, row, value: String(a.allocation) }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
+      push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: fmt(T.checks.allocationOutOfRange, { file, row, value: Number.isFinite(a.allocation) ? String(a.allocation) : T.checks.notANumber }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
       return;
     }
     if (!monthsOk) return;
+    // 契約期間の外の月は計画に入らない（着地見込みにも効かない）ので、気付けるよう警告する
+    const c = contractById.get(a.contractId);
+    if (c && isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && a.startMonth <= a.endMonth && (a.startMonth < c.startMonth || a.endMonth > c.endMonth)) {
+      push({ severity: "warning", code: "ASSIGNMENT_OUTSIDE_CONTRACT", message: fmt(T.checks.assignmentOutsideContract, { file, row, contractId: a.contractId, from: a.startMonth, to: a.endMonth, cFrom: c.startMonth, cTo: c.endMonth }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
+    }
     for (const month of monthRange(a.startMonth, a.endMonth)) {
       const key = `${a.memberId}\u0000${month}`;
       const acc = monthlyTotal.get(key);
@@ -101,19 +126,23 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds
     const row = rowOf(i);
     if (t.teamId === "") push({ severity: "error", code: "TEAM_ID_EMPTY", message: fmt(T.checks.teamIdEmpty, { file, row }), file, row });
     if (!isValidYearMonth(t.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.teamEffectiveFromInvalid, { file, row, value: t.effectiveFrom }), file, row });
-    if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
+    if (t.parentTeamId !== null && t.parentTeamId !== "" && t.parentTeamId === t.teamId) {
+      push({ severity: "error", code: "TEAM_SELF_PARENT", message: fmt(T.checks.teamSelfParent, { file, row, teamId: t.teamId }), file, row, ref: { teamId: t.teamId } });
+    } else if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
       push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: fmt(T.checks.teamUnknownParent, { file, row, parentTeamId: t.parentTeamId }), file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
     }
     if (t.leaderMemberId != null && t.leaderMemberId !== "" && !memberIds.has(t.leaderMemberId)) {
       push({ severity: "error", code: "TEAM_UNKNOWN_LEADER", message: fmt(T.checks.teamUnknownLeader, { file, row, leaderMemberId: t.leaderMemberId }), file, row, ref: { teamId: t.teamId, memberId: t.leaderMemberId } });
     }
   });
+  pushDuplicates(dataset.teams, (t) => t.teamId, file, "DUPLICATE_TEAM_ROW", "team_id", push);
   // 循環: effective_from の各時点の組織で検出する
   const snapshots = [...new Set(dataset.teams.map((t) => t.effectiveFrom).filter(isValidYearMonth))].sort();
   const reported = new Set<string>();
   for (const month of snapshots) {
     for (const w of teamTreeAt(dataset, month).warnings) {
       if (typeof w.ref?.cycle !== "string") continue;
+      if (!w.ref.cycle.includes(">")) continue; // 自分自身を親にした行は TEAM_SELF_PARENT で行番号つきで報告済み
       if (reported.has(w.ref.cycle)) continue;
       reported.add(w.ref.cycle);
       push({ severity: "error", code: "TEAM_CYCLE", message: `${file}: ${w.message}`, file, ref: { cycle: w.ref.cycle, month } });
@@ -123,6 +152,7 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds
 
 function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "masters/members.csv";
+  pushDuplicates(dataset.members, (m) => m.memberId, file, "DUPLICATE_MEMBER_ROW", "member_id", push);
   dataset.members.forEach((m, i) => {
     const row = rowOf(i);
     if (m.memberId === "") push({ severity: "error", code: "MEMBER_ID_EMPTY", message: fmt(T.checks.memberIdEmpty, { file, row }), file, row });
@@ -136,8 +166,29 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
   });
 }
 
+/** 役職に単価が 1 行も無いメンバー（個人単価も無い）→ 実績が 0 円になるので警告。役職ごとにまとめる */
+function validateTitleRates(dataset: Dataset, push: IssueSink): void {
+  const keys = new Set(dataset.rates.map((r) => r.key));
+  const byTitle = new Map<string, Set<string>>();
+  for (const m of dataset.members) {
+    if (m.memberId === "" || keys.has(m.memberId)) continue;
+    const title = m.title ?? "";
+    if (title !== "" && keys.has(title)) continue;
+    const ids = byTitle.get(title) ?? new Set<string>();
+    ids.add(m.memberId);
+    byTitle.set(title, ids);
+  }
+  const file = "masters/members.csv";
+  for (const [title, ids] of byTitle) {
+    const members = [...ids].join(", ");
+    const message = title === "" ? fmt(T.checks.memberNoTitleNoRate, { file, members }) : fmt(T.checks.titleRateUndefined, { file, title, members });
+    push({ severity: "warning", code: "MEMBER_RATE_UNDEFINED", message, file, ref: { title, count: ids.size } });
+  }
+}
+
 function validateRates(dataset: Dataset, push: IssueSink): void {
   const file = "masters/rates.csv";
+  pushDuplicates(dataset.rates, (r) => r.key, file, "DUPLICATE_RATE_ROW", "key", push);
   dataset.rates.forEach((r, i) => {
     const row = rowOf(i);
     if (r.key === "") push({ severity: "error", code: "RATE_KEY_EMPTY", message: fmt(T.checks.rateKeyEmpty, { file, row }), file, row });
@@ -169,10 +220,25 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   }
   if (invalidDates > 0) push({ severity: "warning", code: "WORKLOG_INVALID_DATE", message: fmt(T.checks.worklogInvalidDate, { file, count: invalidDates }), file, ref: { count: invalidDates } });
   if (invalidHours > 0) push({ severity: "warning", code: "WORKLOG_INVALID_HOURS", message: fmt(T.checks.worklogInvalidHours, { file, count: invalidHours }), file, ref: { count: invalidHours } });
+  // 1 人 1 日 24 時間超は入力ミスの可能性が高い（計算には含める）
+  const perDay = new Map<string, number>();
+  for (const w of dataset.worklogs) {
+    if (!isValidISODate(w.date) || !Number.isFinite(w.hours) || w.hours <= 0) continue;
+    const k = `${w.memberId}\u0000${w.date}`;
+    perDay.set(k, (perDay.get(k) ?? 0) + w.hours);
+  }
+  const overDays = [...perDay].filter(([, h]) => h > 24);
+  if (overDays.length > 0) {
+    const examples = overDays.slice(0, 5).map(([k, h]) => `${k.replace("\u0000", " ")} ${Math.round(h * 100) / 100}h`).join("、");
+    push({ severity: "warning", code: "WORKLOG_DAY_OVER_24H", message: fmt(T.checks.worklogDayOver24, { file, count: overDays.length, examples }), file, ref: { count: overDays.length } });
+  }
 
   // 紐付けは妥当な契約のみを対象にする（重複・不正契約はエラーで別途報告済み）
   const validContracts = dataset.contracts.filter((c, i, all) => contractInvalidReason(c) === null && all.findIndex((x) => x.contractId === c.contractId) === i);
-  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, validContracts);
+  const valid = new Set(validContracts);
+  const excluded = new Map(dataset.contracts.filter((c) => !valid.has(c)).map((c) => [c.contractId, contractInvalidReason(c) ?? T.calcWarnings.duplicateReason]));
+  for (const c of validContracts) excluded.delete(c.contractId); // 重複 ID は 1 行目が有効
+  const mapping = mapWorklogs(dataset.worklogs, dataset.mappings, validContracts, excluded);
   for (const g of mapping.unmapped) {
     push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
   }
@@ -201,7 +267,8 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     push({ severity: "warning", code: "UNKNOWN_MEMBER", message: fmt(T.checks.unknownMember, { file, memberId, hours }), file, ref: { memberId, hours } });
   }
   for (const m of missing.values()) {
-    push({ severity: "warning", code: "RATE_MISSING", message: fmt(T.checks.rateMissing, { file, month: m.month, memberId: m.memberId, hours: m.hours }), file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
+    const before = memberAt(masters, m.memberId, m.month) === null;
+    push({ severity: "warning", code: "RATE_MISSING", message: fmt(before ? T.checks.rateMissingBeforeMember : T.checks.rateMissing, { file, month: m.month, memberId: m.memberId, hours: m.hours }), file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
   }
 }
 
@@ -213,12 +280,13 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   const memberIds = new Set(dataset.members.map((m) => m.memberId));
   const teamIds = new Set(dataset.teams.map((t) => t.teamId));
 
-  validateContracts(dataset, push);
+  validateContracts(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
   validateTeams(dataset, teamIds, memberIds, push);
   validateMembers(dataset, teamIds, push);
   validateRates(dataset, push);
+  validateTitleRates(dataset, push);
   validateHolidays(dataset, push);
   validateWorklogs(dataset, push);
   return issues;
