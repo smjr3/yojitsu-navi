@@ -90,6 +90,9 @@ Node 22 以上。
 2. 既定ブランチでは `pages` ジョブが `dist/` を `public/` として公開する
 3. 公開 URL は `https://<group>.pages.<社内ドメイン>/<project>/`（サブパス配信を前提に相対パスでビルド）
 
+初回の設定（閲覧制限・メンバー・Runner・社内ミラー）と、困ったときの対処は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)。
+画面もビルドも外部 CDN・外部サイトに接続しません（`npm ci` とイメージ取得だけは社内ミラーに向けられます）。
+
 必要な CI/CD 変数（Settings > CI/CD > Variables）:
 
 | 変数 | 用途 |
@@ -99,6 +102,7 @@ Node 22 以上。
 | `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Masked にする |
 | `GIT_PUSH_TOKEN` | スケジュール実行で `data/worklogs` を書き戻すための Project Access Token（Developer / `write_repository`） |
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL |
+| `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
