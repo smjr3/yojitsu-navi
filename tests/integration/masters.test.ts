@@ -60,7 +60,7 @@ describe("ローダ（src/data/masters.json.ts の中身）", () => {
       expect(p.files[id].lineEnding).toBe("lf");
     }
     expect(p.gitAvailable).toBe(false);
-    expect(p.masterEdit.mode).toBe("download");
+    expect(p.masterEdit.mode).toBe("gitlab") // §24: 既定は gitlab（接続先が空なら画面で download に落とす）;
     expect(p.memberSourceAdapter).toBe("none");
     expect(p.context.contracts).toContain("contract_id");
     expect(p.context.holidays.charCodeAt(0)).not.toBe(0xfeff); // BOM は除いて渡す
