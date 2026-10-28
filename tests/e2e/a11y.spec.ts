@@ -2,7 +2,7 @@
  * アクセシビリティと表示環境: キーボード到達、aria-sort、ダイアログの role、画像の代替、状態チップの文字、
  * 390px 幅で横スクロール無し、ダークモード、印刷メディア
  */
-import { test, expect, gotoPage, kpiValue, dialog } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, kpiValue, dialog } from "./helpers/app.js";
 
 const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/data-check"];
 
@@ -164,7 +164,9 @@ test.describe("スマートフォン幅（390×844）", () => {
 });
 
 test.describe("ダークモード", () => {
-  test.use({ colorScheme: "dark" });
+  test.beforeEach(async ({ page }) => {
+    await useDarkTheme(page);
+  });
   for (const path of ["/", "/contract?id=C008"]) {
     test(`${path}: 背景が暗く、エラー無し`, async ({ page }) => {
       await gotoPage(page, path);
@@ -181,10 +183,10 @@ test.describe("ダークモード", () => {
         const c = body && body.a > 0 ? body : html;
         if (!c) return null;
         const lum = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
-        return { ...c, lum, scheme: matchMedia("(prefers-color-scheme: dark)").matches };
+        return { ...c, lum, theme: document.documentElement.dataset.theme };
       });
       expect(bg).not.toBeNull();
-      expect(bg!.scheme).toBe(true);
+      expect(bg!.theme).toBe("dark");
       expect(bg!.lum, `背景の輝度 ${JSON.stringify(bg)}`).toBeLessThan(0.25);
       // 本文の文字色は明るい
       const fg = await page.evaluate(() => {
@@ -196,6 +198,32 @@ test.describe("ダークモード", () => {
       await expect(page.locator(".yn-legend").first()).toBeVisible();
     });
   }
+});
+
+test.describe("テーマ切替", () => {
+  // OS がダークでも既定はライト。ヘッダーのボタンでダークにし、ページを移っても保たれる
+  test.use({ colorScheme: "dark" });
+  test("既定はライト、ボタンでダーク・ライトを切り替えて保持する", async ({ page }) => {
+    const bgLum = () =>
+      page.evaluate(() => {
+        const m = getComputedStyle(document.documentElement).backgroundColor.match(/\d+/g)!.map(Number);
+        return (0.2126 * m[0]! + 0.7152 * m[1]! + 0.0722 * m[2]!) / 255;
+      });
+    await gotoPage(page, "/");
+    const toggle = page.locator(".yn-theme-toggle");
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(await bgLum()).toBeGreaterThan(0.75);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await bgLum()).toBeLessThan(0.25);
+    await gotoPage(page, "/teams");
+    await expect(page.locator(".yn-theme-toggle")).toHaveAttribute("aria-pressed", "true");
+    expect(await bgLum()).toBeLessThan(0.25);
+    await page.locator(".yn-theme-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await bgLum()).toBeGreaterThan(0.75);
+  });
 });
 
 test("印刷メディアのエミュレーションで例外が出ない", async ({ page }) => {

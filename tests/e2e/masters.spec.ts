@@ -8,7 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import type { Page, Request, Route } from "@playwright/test";
-import { test, expect, gotoPage, type ErrorLog } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, type ErrorLog } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
 import { MASTER_FILES, parseMasterDoc, serializeMasterDoc, addRow, deleteRow, updateRow } from "../../src/core/masterEdit.js";
@@ -568,7 +568,7 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
 });
 
 test("ダークモード・390px: 横スクロール無し、主要な操作が見える", async ({ page }) => {
-  await page.emulateMedia({ colorScheme: "dark" });
+  await useDarkTheme(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page);
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);

@@ -1,11 +1,11 @@
 /* 予実ナビ スタイル
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
- * ダーク／ライトは prefers-color-scheme で切り替わる（Framework の挙動）。
+ * 既定はライト。ヘッダーの切替ボタンで <html data-theme="dark"> にするとダーク（OS の設定には追従しない）。
+ * 選んだテーマは localStorage（yn-theme）に保存し、observablehq.config.js の head スクリプトが描画前に復元する。
  * 8px グリッド、日本語向けシステムフォント、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
  */
 @import url("observablehq:default.css");
-@import url("observablehq:theme-air.css") (prefers-color-scheme: light);
-@import url("observablehq:theme-near-midnight.css") (prefers-color-scheme: dark);
+@import url("observablehq:theme-air.css");
 @import url("observablehq:theme-wide.css");
 
 /* ---------------------------------------------------------------------------
@@ -54,45 +54,20 @@
   --yn-accent-bg: #e4eefb;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --theme-foreground: #f0efec;
-    --theme-foreground-focus: #6da7ec;
-    --theme-background-a: #121211; /* ページ */
-    --theme-background-b: #1a1a19; /* サイドバー等 */
-    --yn-card: #1a1a19;
-    --yn-text-1: #f0efec;
-    --yn-text-2: #c3c2b7;
-    --yn-text-muted: #a3a29a;
-    --yn-hairline: rgba(255, 255, 255, 0.1);
-    --yn-hairline-strong: rgba(255, 255, 255, 0.18);
-    --yn-grid: #2c2c2a;
-    --yn-wash: rgba(255, 255, 255, 0.05);
-    --yn-wash-strong: rgba(255, 255, 255, 0.1);
-    --yn-focus: #6da7ec;
-    --yn-link: #6da7ec;
-    --yn-series-budget: #3987e5;
-    --yn-series-cost: #d95926;
-    --yn-series-gp: #199e70;
-    --yn-danger: #d03b3b;
-    --yn-danger-text: #ee7a7a;
-    --yn-danger-bg: #3a1515;
-    --yn-good-text: #2fbf4a; /* 5.97:1 on --yn-good-bg */
-    --yn-good-bg: #10300f;
-    --yn-warn-text: #fab219;
-    --yn-warn-bg: #3a2a08;
-    --yn-prelim-text: #c3c2b7;
-    --yn-prelim-bg: #2a2a28;
-    --yn-neutral-text: #c3c2b7;
-    --yn-neutral-bg: #2a2a28;
-    --yn-accent-bg: #1a2a40;
-  }
-}
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --theme-foreground: #f0efec;
   --theme-foreground-focus: #6da7ec;
   --theme-background-a: #121211;
   --theme-background-b: #1a1a19;
+  /* air テーマの派生色（ライト基準）をダークの面で作り直す */
+  --theme-background: var(--theme-background-a);
+  --theme-background-alt: var(--theme-background-b);
+  --theme-foreground-alt: color-mix(in srgb, var(--theme-foreground) 90%, var(--theme-background-b));
+  --theme-foreground-muted: color-mix(in srgb, var(--theme-foreground) 60%, var(--theme-background-b));
+  --theme-foreground-faint: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-b));
+  --theme-foreground-fainter: color-mix(in srgb, var(--theme-foreground) 30%, var(--theme-background-b));
+  --theme-foreground-faintest: color-mix(in srgb, var(--theme-foreground) 14%, var(--theme-background-b));
   --yn-card: #1a1a19;
   --yn-text-1: #f0efec;
   --yn-text-2: #c3c2b7;
@@ -282,6 +257,7 @@ body {
 }
 .yn-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -296,6 +272,18 @@ body {
   font-size: 13px;
   text-decoration: none;
   white-space: nowrap;
+}
+.yn-theme-toggle {
+  align-self: center;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.yn-theme-toggle[aria-pressed="true"] {
+  background: var(--yn-accent-bg);
+  border-color: var(--yn-focus);
+  color: var(--yn-text-1) !important;
 }
 .yn-tool:hover {
   background: var(--yn-wash);
@@ -1818,13 +1806,8 @@ th[aria-sort="descending"] .yn-sort-icon {
 :root[data-theme="dark"] .yn-btn-primary {
   color: #0b0b0b;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .yn-btn-primary {
-    color: #0b0b0b;
-  }
-  :root:not([data-theme="light"]) .yn-btn-primary:hover {
-    background: color-mix(in srgb, var(--yn-focus), #fff 12%);
-  }
+:root[data-theme="dark"] .yn-btn-primary:hover {
+  background: color-mix(in srgb, var(--yn-focus), #fff 12%);
 }
 .yn-btn-primary:disabled {
   cursor: not-allowed;
