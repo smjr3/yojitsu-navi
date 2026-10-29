@@ -89,4 +89,27 @@ describe("画面文言 ja.js", () => {
     expect([...prose.matchAll(/(?<!\$)\{(\w+)\}/g)].map((m) => m[0])).toEqual([]);
     expect(page).toContain("${contract}");
   });
+
+  it("使い方の本文 guide.txt: 差し込み口はすべて既知の名前。目次は番号つきの見出しすべてを指す", () => {
+    const page = execFileSync(process.execPath, [join(ROOT, "src", "guide.md.js")], { encoding: "utf-8" });
+    const prose = page.slice(page.indexOf('<div class="yn-prose">')).replace(/```[\s\S]*?```/g, "");
+    expect([...prose.matchAll(/(?<!\$)\{(\w+)\}/g)].map((m) => m[0])).toEqual([]);
+    const ids = [...prose.matchAll(/<h2 id="(\d+)"/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThanOrEqual(5);
+    const toc = [...prose.matchAll(/<li><a href="#(\d+)">/g)].map((m) => m[1]);
+    expect(toc).toEqual(ids);
+    // 本文のリンク #番号 の行き先がある
+    for (const m of prose.matchAll(/\]\(#(\d+)\)/g)) expect(ids, `#${m[1]}`).toContain(m[1]);
+  });
+
+  it("利用者に見える文言で、README・docs・リポジトリの文書へ誘導しない（§47）", () => {
+    const strip = (t: string) => t.replace(/<!--[\s\S]*?-->/g, "");
+    const texts: Array<[string, string]> = [
+      ...leaves(T).map(([k, v]) => [`ja.js ${k}`, String(v)] as [string, string]),
+      ["rules.txt", strip(readFileSync(join(ROOT, "src", "i18n", "rules.txt"), "utf-8"))],
+      ["guide.txt", strip(readFileSync(join(ROOT, "src", "i18n", "guide.txt"), "utf-8"))],
+    ];
+    const bad = texts.filter(([, v]) => /README|docs\/|SPEC\.md|リポジトリ|\.md\b/.test(v)).map(([k]) => k);
+    expect(bad).toEqual([]);
+  });
 });

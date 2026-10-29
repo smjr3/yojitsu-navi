@@ -36,6 +36,8 @@ export const INPUT_PATHS = [
   "src/components/worklog-key.js",
   "src/components/gitlab-env.js",
   "src/rules.md.js",
+  "src/guide.md.js",
+  "src/prose-page.js",
   "scripts/lib",
   "scripts/adapters",
 ] as const;

@@ -1817,7 +1817,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 
 /* ---------------------------------------------------------------------------
- * 計算ルール（読み物）
+ * 計算ルール・使い方（読み物）
  * ------------------------------------------------------------------------- */
 .yn-prose {
   max-width: 80ch;
@@ -1849,6 +1849,21 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-prose li {
   margin: 4px 0;
+}
+/* 使い方の目次（見出しの番号へのリンク） */
+.yn-prose-toc ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15em), 1fr));
+  gap: 2px 24px;
+  margin: 8px 0 0;
+  padding: 12px 16px 12px 20px;
+  list-style: none;
+  background: var(--yn-wash);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.yn-prose-toc li {
+  margin: 2px 0;
 }
 
 /* ---------------------------------------------------------------------------
