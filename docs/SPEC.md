@@ -108,7 +108,7 @@ costs[labor] = cost
 
 ## 9. 営業日数と人月換算
 
-- `businessDays(m)` = m の暦日のうち土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§47）を除いた日数。
+- `businessDays(m)` = m の暦日のうち土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§48）を除いた日数。
 - 人月（標準）= hours ÷ `standardHoursPerMonth`。
 - 人月（カレンダー）= hours ÷ (businessDays(m) × `hoursPerBusinessDay`)。複数月の合計は月ごとの人月を合算。
 

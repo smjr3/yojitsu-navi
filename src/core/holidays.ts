@@ -6,7 +6,7 @@
  *
  * holidays.csv に行がある運用で、ある年の行が 1 つも無いときは、その年をこの計算で補う
  * （年度が替わって祝日表を足し忘れても、締め日・営業日が土日だけで数えられないように）。
- * holidays.csv が空なら「祝日なし」の指定として補わない。SPEC §47
+ * holidays.csv が空なら「祝日なし」の指定として補わない。SPEC §48
  */
 import type { Holiday, ISODate } from "./types.js";
 
