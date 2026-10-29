@@ -164,7 +164,7 @@ isDeficit           = forecastGrossProfit < 0
 - Excel 出力の金額は単位に関係なく円の整数。
 - 割合は小数1桁（例 103.4%）。
 - 赤表示は消化率 > 閾値 と 着地が超過見込み のみ。黄色警告は無し。
-- 例外: マスタ編集・稼働計画の検証は、保存を止める **エラーを赤**、止めない **警告を黄** で分ける（§39）。
+- 例外: マスタ編集・稼働計画の検証は、保存を止める **エラーを赤**、止めない **警告を黄** で分ける（§40）。
 
 ## 13. 計算根拠（内訳）
 
@@ -189,7 +189,7 @@ isDeficit           = forecastGrossProfit < 0
 警告（未紐付け工数、単価なし）は止めずに表示する。追加の警告:
 - 役職の単価が rates.csv に 1 行も無いメンバー（個人単価も無い）。役職ごとにまとめる（`MEMBER_RATE_UNDEFINED`）
 - アサインが契約期間の外にはみ出している（`ASSIGNMENT_OUTSIDE_CONTRACT`。はみ出した月は計画に入らない）
-- 1 人の月合計 allocation > 1.0（`ALLOCATION_OVER_1`。2026-10-29 にエラーから警告へ。同じ人の続いた月は 1 件にまとめ、期間と最大値を示す。§39）
+- 1 人の月合計 allocation > 1.0（`ALLOCATION_OVER_1`。2026-10-29 にエラーから警告へ。同じ人の続いた月は 1 件にまとめ、期間と最大値を示す。§40）
 - 1 人 1 日の作業実績が 24 時間超（`WORKLOG_DAY_OVER_24H`。先頭 5 件を例示。計算には含める）
 - メンバーの effective_from より前の作業による単価なしは、原因が分かる文言にする（`RATE_MISSING`）
 
@@ -354,7 +354,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - 組織を選ぶ（木の順。名前・種別・リーダー名を表示。「すべて」も可）。URL `/plan?team=<teamId>` で開ける。`&member=<memberId>` のときは、そのメンバーの基準月の所属組織を選び、その人の行を強調する。
 - 期間 = 年度（4月〜3月）の12か月。前年度・次年度に切り替えられる。既定は asOf 月の年度。
 - 行 = メンバー。対象は「期間のいずれかの月に、選んだ組織か配下に所属していた人」＋「選んだ組織か配下が担当する契約（`contract.team_id`）に、期間内の計画がある他組織の人（『応援』と表示）」。
-- 各月のセル = その人のその月の配分合計＋契約外予定（人月、小数2桁。§36.3）。1.0 を超える月は「1.0 超」チップ（保守の配分だけで超えるときも警告。保存は止めない。§14・§39）。赤は使わない（§12）。空き（1.0 − 合計）は合計列の補足に出す。
+- 各月のセル = その人のその月の配分合計＋契約外予定（人月、小数2桁。§36.3）。1.0 を超える月は「1.0 超」チップ（保守の配分だけで超えるときも警告。保存は止めない。§14・§40）。赤は使わない（§12）。空き（1.0 − 合計）は合計列の補足に出す。
 - 行を開くと、案件ごとの行と契約外予定の行（§36.3）。メンバーごとに「＋ 案件」（メンバーを入れた状態でアサインの追加ダイアログを開く）。
 - 計算は純粋関数 `planView(sources, teamId|null, months)`（`src/core/plan.ts`）。編集中のデータ（保存前）で即時に計算し直す。
 
@@ -599,7 +599,35 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 作業ブランチへの push だけでは動かさない（Pull Request と二重に走るため）。文書だけの変更で CI を動かさない（paths の除外）のは従来どおり。`docs.yml` も同じく Pull Request と `main` だけ。
 - 全件はマージ前にローカルで通す（CONTRIBUTING.md）。縮小版の中身は `tests/e2e/README.md`。
 
-## 39. 検証の一覧（2026-10-29 shimaさん要望）
+## 39. 本番 GitLab の構成と権限（2026-10-29 shimaさん要望）
+展開を迷わず進められるよう、社内 GitLab 側の構成・権限・ファイルの置き場をこのリポジトリで決め、確認・適用を自動化する。推奨構成と手順の正は `docs/DEPLOY_GITLAB.md`。
+- 構成: グループ `yojitsu-navi` の下にプロジェクト `yojitsu-navi`（どちらも Private）1 つ。コード・データ・CI・Pages を同じプロジェクトに置く。メンバーはグループに追加する。
+- ブランチ: `main` は保護ブランチ（直接プッシュ = No one、マージ = Maintainers、force push 不可）。画面の保存は `masters/<日時>-<ユーザー>`（§19.2）、定期取り込みは `data/<種類>-<日時>` の MR を通す。
+- 権限: 閲覧 = Guest、編集（MR 作成）= Developer、マージ = Maintainer（リーダー層）、管理 = Owner。トークンは各自の PAT（scope `api`）と、取り込み用の Project Access Token（Maintainer・`write_repository`、CI/CD 変数 `GIT_PUSH_TOKEN` は Protected・Masked）。
+
+### 39.1 接続先を GitLab CI から補う
+- `config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId` が空のとき、ビルド時の環境変数 `YOJITSU_GITLAB_API_URL`・`YOJITSU_GITLAB_PROJECT` で埋める（`src/components/gitlab-env.js`）。`.gitlab-ci.yml` の build ジョブが `CI_API_V4_URL`・`CI_PROJECT_PATH` を渡すので、社内 GitLab では config を書き換えずに保存先がそのプロジェクトになる。
+- config に値があればそちらを優先する。`mode` が `demo`・`download` なら補わない。マスタ編集のローダとヘッダーのバッジ（§27）は同じ結果を使う。
+- 環境変数はローダの入力の指紋に入れる（接続先が変わればキャッシュを捨てる）。
+
+### 39.2 設定の確認・適用 `npm run gitlab:setup`
+- `scripts/gitlab-setup.ts`。既定は確認だけ（GET のみ）で、推奨値との違いを ✓／✗ で出す。`--apply` で自動で直せる項目を直し、確認し直す。2 回目以降は何も変えない（冪等）。
+- 確認する項目: 公開範囲 Private、Pages = Only Project Members、CI/CD = Only Project Members、パイプライン成功時だけマージ、マージ後にソースブランチを削除、既定ブランチ = `targetBranch`、保護ブランチ（上記）、Maintainer 以上がいるか、スケジュールがあるなら `GIT_PUSH_TOKEN`、トークン系の CI/CD 変数が Protected・Masked か。後ろの 3 つは手で直す項目（直し方を出す）。
+- 保護ブランチは Free 版の API では中身を直接変えられないため、違うときは外してから推奨値で保護し直す。
+- トークンは環境変数 `GITLAB_TOKEN` だけで受け取る（`--token` は拒否）。接続先は `--api`・`--project`、無ければ config、それも空なら `CI_API_V4_URL`・`CI_PROJECT_PATH`。終了コード 0 = 推奨どおり、1 = 直すところが残る、2 = 引数・接続の誤り。
+
+### 39.3 接続の確認で設定の不足を出す（設定画面 §28）
+「接続を確認」で、ユーザー・権限に加えて次を調べ、不足があれば「GitLab の設定に N 件の不足があります」と一覧で出す（警告。説明は増やさない）。
+- `GET /personal_access_tokens/self` の scopes に `api` が無い → scope。
+- `GET /projects/:id` の `visibility` が `private` でない → visibility。`pages_access_level` が `public` → pagesPublic。
+- Maintainer 以上の人だけ `GET /projects/:id/protected_branches/:targetBranch`: 404 → unprotected、push に 0 より大きいレベル → pushAllowed、merge に 40 未満のレベル → mergeByDeveloper。個人・グループ指定（`access_level` が null）は判定しない。
+- 取れない項目（古い GitLab に無い API、権限で読めない、通信失敗）は警告しない。デモの模擬は推奨どおりの値を返す。
+
+### 39.4 定期取り込みは MR で反映する
+`main` が直接プッシュ不可なので、`fetch-worklogs`・`fetch-members` は変更を `data/<種類>-<日時>` に 1 コミットして push し、push オプション（`merge_request.create`・`target`・`merge_when_pipeline_succeeds`・`remove_source_branch`・`title`）で MR の作成と、パイプライン成功後の自動マージを指定する（`scripts/ci/push-data-mr.sh`）。変更が無ければ何もしない。
+- CI の重複を避けるため、`.gitlab-ci.yml` の `workflow:rules` で、開いている MR があるブランチへの push は MR のパイプラインだけにする。
+
+## 40. 検証の一覧（2026-10-29 shimaさん要望）
 「1.0 超過はエラーにしないで警告に」「エラーを探すのがしんどい。名前で教えて、押したら該当箇所に飛んでほしい。色も警告と分けて」への対応。マスタ編集・稼働計画の「検証」の欄。
 - **1.0 人月超は警告**（`ALLOCATION_OVER_1`。§14）。保存を止めない。同じ人の続いた月は 1 件（例「2026-11〜2026-12 のアサイン合計が 1.0 を超えています（最大 1.4）」）。
 - 検証の欄に **エラーと警告を 1 件 1 行で並べる**（エラーが先、同じ重さはこの画面のファイル・行の順）。先頭 8 件、残りは「すべて表示（n件）」。

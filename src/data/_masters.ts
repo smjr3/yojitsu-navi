@@ -14,6 +14,7 @@ import { decodeAuto, type DetectedEncoding } from "../../scripts/lib/encoding.js
 import { DATA_FILES, loadConfig } from "../../scripts/lib/load.js";
 import { MASTER_FILES, MASTER_FILE_IDS, emptyMasterText, type MasterFileId } from "../core/masterEdit.js";
 import { resolveMasterEdit } from "../core/gitlab.js";
+import { withGitLabEnv } from "../components/gitlab-env.js";
 import type { MasterEditConfig } from "../core/types.js";
 
 export interface MasterFilePayload {
@@ -76,7 +77,8 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
   return {
     files,
     context: { contracts: ctx(DATA_FILES.contracts), mapping: ctx(DATA_FILES.mapping), holidays: ctx(DATA_FILES.holidays) },
-    masterEdit: resolveMasterEdit(config.masterEdit),
+    // 接続先が空なら GitLab CI の値（YOJITSU_GITLAB_*）で補う（§39.1）
+    masterEdit: resolveMasterEdit(withGitLabEnv(config.masterEdit, process.env) as MasterEditConfig | undefined),
     memberSourceAdapter: adapter ?? "none",
     gitAvailable: inRepo && !shallow,
   };

@@ -2003,7 +2003,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   // ---- 検証 ---------------------------------------------------------------
-  // ---- 検証の一覧（§39）: 名前で示し、押すと該当箇所へ -------------------------
+  // ---- 検証の一覧（§40）: 名前で示し、押すと該当箇所へ -------------------------
   /** 一覧に最初に出す件数（残りは「すべて表示」） */
   const ISSUE_PREVIEW = 8;
   let showAllIssues = false;
@@ -2446,7 +2446,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   mrPanel.refresh();
-  // 他の画面の検証の一覧から来たとき（?jump=ファイル:行番号）は、その行を見せる（§39）
+  // 他の画面の検証の一覧から来たとき（?jump=ファイル:行番号）は、その行を見せる（§40）
   const jm = /^([a-z]+):(\d+)$/.exec(initialJump ?? "");
   if (jm && pageFiles.includes(jm[1])) {
     const fileId = jm[1];

@@ -2155,12 +2155,12 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-me-issues li.is-warning {
   color: var(--yn-warn-text);
 }
-/* 行のエラーは赤、警告だけの行は黄（§39） */
+/* 行のエラーは赤、警告だけの行は黄（§40） */
 .yn-me-issue-row.is-error td {
   background: var(--yn-danger-bg);
 }
 
-/* 検証の一覧（§39）: 1 件 1 行。押すと該当の行へ */
+/* 検証の一覧（§40）: 1 件 1 行。押すと該当の行へ */
 .yn-me-issue-list {
   list-style: none;
   margin: 8px 0 0;
@@ -2357,6 +2357,11 @@ li.is-jumped,
 .yn-me-outcome p {
   max-width: none;
 }
+/* 区切りの無い長いユーザー名・ブランチ名でも枠からはみ出さない */
+.yn-me-outcome li,
+.yn-me-outcome p {
+  overflow-wrap: anywhere;
+}
 .yn-me-outcome.is-ok {
   background: var(--yn-good-bg);
   border-color: var(--yn-good-text);
@@ -2364,6 +2369,10 @@ li.is-jumped,
 .yn-me-outcome.is-error {
   background: var(--yn-danger-bg);
   border-color: var(--yn-danger);
+}
+.yn-me-outcome.is-warn {
+  background: var(--yn-warn-bg);
+  border-color: var(--yn-warn-text);
 }
 .yn-me-outcome.is-busy {
   display: flex;
@@ -2374,6 +2383,10 @@ li.is-jumped,
   font-weight: 700;
   font-size: 14px;
   margin: 0 0 4px;
+}
+.yn-me-outcome-title.is-warning {
+  margin-top: 8px;
+  color: var(--yn-warn-text);
 }
 .yn-me-outcome code {
   overflow-wrap: anywhere;

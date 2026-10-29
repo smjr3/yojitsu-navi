@@ -113,7 +113,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
       } else monthlyTotal.set(key, { memberId: a.memberId, month, total: a.allocation, rows: [row] });
     }
   });
-  // 1.0 超は警告（保存は止めない。§39）。同じ人の続いた月は 1 件にまとめる（3 か月超えて 3 件並ばないように）
+  // 1.0 超は警告（保存は止めない。§40）。同じ人の続いた月は 1 件にまとめる（3 か月超えて 3 件並ばないように）
   const overs = [...monthlyTotal.values()].filter((acc) => acc.total > 1 + 1e-9); // 浮動小数の誤差（0.3+0.7 など）を許容
   overs.sort((a, b) => (a.memberId === b.memberId ? (a.month < b.month ? -1 : 1) : a.memberId < b.memberId ? -1 : 1));
   let run: { memberId: string; from: YearMonth; to: YearMonth; max: number; rows: Set<number> } | null = null;

@@ -141,13 +141,49 @@ describe("ファイルと接続の確認", () => {
   });
   it("checkConnection: ユーザーと権限（プロジェクトとグループの大きいほう）", async () => {
     const { fetch } = route({ "GET /user": { body: { username: "sato", name: "佐藤" } }, "GET /projects/grp%2Fyn": { body: { permissions: { project_access: { access_level: 30 }, group_access: { access_level: 40 } } } } });
-    expect(await checkConnection(fetch, cfg, "t")).toEqual({ user: { username: "sato", name: "佐藤" }, accessLevel: 40 });
+    expect(await checkConnection(fetch, cfg, "t")).toEqual({ user: { username: "sato", name: "佐藤" }, accessLevel: 40, warnings: [] });
   });
   it("checkConnection: 権限が無ければ null。トークン無効は permission", async () => {
     const ok = route({ "GET /user": { body: { username: "a" } }, "GET /projects/grp%2Fyn": { body: { permissions: {} } } });
     expect((await checkConnection(ok.fetch, cfg, "t")).accessLevel).toBeNull();
     const bad = route({ "GET /user": { status: 401, body: { message: "401 Unauthorized" } } });
     await expect(checkConnection(bad.fetch, cfg, "t")).rejects.toMatchObject({ kind: "permission", status: 401 });
+  });
+});
+
+describe("接続の確認: 本番の設定の不足（§39.3）", () => {
+  const user = { "GET /user": { body: { username: "sato", name: "佐藤" } } };
+  const project = (level: number, extra: Record<string, unknown> = {}) => ({ "GET /projects/grp%2Fyn": { body: { visibility: "private", pages_access_level: "private", permissions: { project_access: { access_level: level } }, ...extra } } });
+  const protectedMain = (push: number[], merge: number[]) => ({
+    "GET /protected_branches/main": { body: { push_access_levels: push.map((access_level) => ({ access_level })), merge_access_levels: merge.map((access_level) => ({ access_level })) } },
+  });
+  const run = (map: Parameters<typeof route>[0]) => checkConnection(route(map).fetch, cfg, "t");
+
+  it("推奨どおりなら警告なし", async () => {
+    const info = await run({ ...user, "GET /personal_access_tokens/self": { body: { scopes: ["api"] } }, ...protectedMain([0], [40]), ...project(40) });
+    expect(info.warnings).toEqual([]);
+  });
+  it("scope が read_api だけなら scope。公開範囲・Pages が公開なら visibility・pagesPublic", async () => {
+    const info = await run({ ...user, "GET /personal_access_tokens/self": { body: { scopes: ["read_api"] } }, ...project(30, { visibility: "internal", pages_access_level: "public" }) });
+    expect(info.warnings).toEqual(["scope", "visibility", "pagesPublic"]);
+  });
+  it("リーダーには保護ブランチの不足を出す（未保護・直接プッシュ可・Developer もマージ可）", async () => {
+    expect((await run({ ...user, "GET /protected_branches/main": { status: 404, body: { message: "404 Not found" } }, ...project(40) })).warnings).toEqual(["unprotected"]);
+    expect((await run({ ...user, ...protectedMain([40], [30]), ...project(40) })).warnings).toEqual(["pushAllowed", "mergeByDeveloper"]);
+    // 個人・グループの指定（access_level が null）は判定しない
+    expect((await run({ ...user, "GET /protected_branches/main": { body: { push_access_levels: [{ access_level: null }], merge_access_levels: [{ access_level: null }] } }, ...project(40) })).warnings).toEqual([]);
+  });
+  it("Developer には保護ブランチを問い合わせない。読めない項目・古い GitLab（404・403・接続失敗）は警告しない", async () => {
+    const r = route({ ...user, ...protectedMain([40], [30]), ...project(30) });
+    expect((await checkConnection(r.fetch, cfg, "t")).warnings).toEqual([]);
+    expect(r.calls.some((c) => c.url.includes("protected_branches"))).toBe(false);
+    expect((await run({ ...user, "GET /personal_access_tokens/self": { status: 404 }, "GET /protected_branches/main": { status: 403 }, "GET /projects/grp%2Fyn": { body: { permissions: { project_access: { access_level: 40 } } } } })).warnings).toEqual([]);
+  });
+  it("デモの模擬は推奨どおり（警告なし）", async () => {
+    const mem = new Map<string, string>();
+    const demo = resolveMasterEdit({ mode: "demo" });
+    const fetch = createGitLabMock({ storage: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) }, baseFiles: {}, canMerge: () => true });
+    expect((await checkConnection(fetch, demo, "demo")).warnings).toEqual([]);
   });
 });
 
