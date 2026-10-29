@@ -1,5 +1,5 @@
 /**
- * 計算コアの npm パッケージ（@yojitsu-navi/core、SPEC §42）
+ * 計算コアの npm パッケージ（@yojitsu-navi/core、SPEC §43）
  * - npm run core:build が通り、dist の公開 API が src/core/index.ts と同じであること
  * - src/core が読むのは src/core と src/i18n だけ（ほかを読むとパッケージで壊れる）
  * - パッケージに入るファイル（dist と README だけ。テスト・データ・画面は入らない）

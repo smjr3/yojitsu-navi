@@ -157,7 +157,7 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 
 ## 計算コアの npm パッケージ（`@yojitsu-navi/core`）
 
-計算コア（`src/core/`）を、ほかの社内プロジェクトから同じ計算・型で使えるように、このプロジェクトの **Package Registry**（Deploy > Package registry）に npm パッケージとして公開します（SPEC §42）。画面の公開とは独立していて、使わないなら何も設定しなくて構いません。
+計算コア（`src/core/`）を、ほかの社内プロジェクトから同じ計算・型で使えるように、このプロジェクトの **Package Registry**（Deploy > Package registry）に npm パッケージとして公開します（SPEC §43）。画面の公開とは独立していて、使わないなら何も設定しなくて構いません。
 
 **最初に 1 回**: Settings > Repository > **Protected tags** で `core-v*` を「Allowed to create = Maintainers」で保護します（公開できる人をリーダーに限るため）。
 

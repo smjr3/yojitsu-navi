@@ -1,4 +1,4 @@
-// 計算コア（src/core）を npm パッケージ @yojitsu-navi/core として packages/core/dist/ に出力する（SPEC §42）
+// 計算コア（src/core）を npm パッケージ @yojitsu-navi/core として packages/core/dist/ に出力する（SPEC §43）
 //
 //   npm run core:build          … dist を作り直す
 //   npm run core:pack           … 上に加えて packages/core/*.tgz を作る（中身の確認・手で渡すとき）
