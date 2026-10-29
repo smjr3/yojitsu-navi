@@ -674,7 +674,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 「この仕組みを npm パッケージで社内に持ち込む」への対応。社内は外部（開発元のリポジトリ）に接続できない前提で、`.tgz` のファイル 1 つから社内 GitLab のプロジェクトを作り、Pages まで流せるようにする。画面は変えない。
 - パッケージ名 `yojitsu-navi`（コマンド `yojitsu-navi`）、置き場 `packages/app/`。**依存を持たない**（Node の標準モジュールだけ）ので、`npm install -g` や `npx` で入れるときに外部へ接続しない。版はルートの `package.json` と同じ値にする（違うと `npm run app:pack` が止まる）。
 - 中身: `template/` = git が管理するファイル一式（`.github/` を除く。`.gitignore` は `_gitignore` として入れ、`init` で戻す）、`bin/`・`lib/` = コマンド、`dist/gitlab-setup.mjs` = `scripts/gitlab-setup.ts` の型を外した JS（依存なしで §39.2 の確認・適用ができる）。`template`・`dist`・`deps` と `.tgz` は git に入れない。
-- **依存の扱い（決定）**: 2 種類を作る。社内に npm のミラーがあれば依存なし版（約 4 MB、CI は `NPM_CONFIG_REGISTRY` で取る）。無ければ依存込み版（`--with-deps`、約 60 MB）で、`package-lock.json` の依存を npm のキャッシュとして `deps/npm-cache/` に入れ、`init` が `vendor/npm-cache/` に写す。`.gitlab-ci.yml` はこのフォルダがあれば `npm ci --offline --cache vendor/npm-cache` する。キャッシュは Linux x64（CI の Runner）の分と、Windows x64 の PC で使う OS 別バイナリ（esbuild・rollup）を入れる。理由: 社内のミラーの有無が未確認で、どちらでも止まらないようにするため。node_modules をそのまま入れる案は OS ごとのバイナリが合わず採らない。
+- **依存の扱い（決定）**: 2 種類を作る。社内に npm のミラーがあれば依存なし版（約 8 MB。うち画面フォント約 4 MB §46、CI は `NPM_CONFIG_REGISTRY` で取る）。無ければ依存込み版（`--with-deps`、約 64 MB）で、`package-lock.json` の依存を npm のキャッシュとして `deps/npm-cache/` に入れ、`init` が `vendor/npm-cache/` に写す。`.gitlab-ci.yml` はこのフォルダがあれば `npm ci --offline --cache vendor/npm-cache` する。キャッシュは Linux x64（CI の Runner）の分と、Windows x64 の PC で使う OS 別バイナリ（esbuild・rollup）を入れる。理由: 社内のミラーの有無が未確認で、どちらでも止まらないようにするため。node_modules をそのまま入れる案は OS ごとのバイナリが合わず採らない。
 - **計算コアとの関係（決定）**: `@yojitsu-navi/core`（§43）は別パッケージのまま残す（monorepo の 2 パッケージ）。core はほかのプロジェクトが `import` して使う部品、`yojitsu-navi` は予実ナビのプロジェクトを作る道具で、使う人と更新の仕方が違うため。`yojitsu-navi` の template には `packages/core/` も入るので、社内でも §43 の手順で core を公開できる。
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
@@ -689,3 +689,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **データ確認・計算ルール** は右端のアイコン（テーマ・設定）の後ろの **その他「⋯」** のメニュー（`MORE`）。押すと開き、もう一度押す・外を押す・Esc・フォーカスが外れると閉じる。開いている画面がメニューの中のときは「⋯」を選択状態にする。説明文は足さない（§37）。
 - 2 段のレイアウトにする境目を 960px から 1024px に上げ、1024px 以上はヘッダーを 1 段に収める（単位のボタンも折り返さない）。スマホ幅はロゴと右上のリンク・アイコンを 1 段に収め、タブを 2 段目にする（従来は 3 段）。
 - 再発防止: `tests/e2e/header-nav.spec.ts`（並び・メニューの開閉・選択状態・390／320px で 1 段・はみ出しなし）、`qa-regressions.spec.ts`（1000px でタブがすべて見える・1024px で 1 段）。
+
+## 46. 画面フォント BIZ UDPゴシック（2026-10-29 要望）
+「フォントが AI っぽい」への対応。6 案（Noto Sans JP・BIZ UDPゴシック・IBM Plex Sans JP・M PLUS 2・Zen Kaku Gothic New・LINE Seed JP）を同じ画面で比べ、利用者が **BIZ UDPゴシック** を選んだ。
+- フォントファイルは `src/fonts/`（`BIZUDPGothic-Regular.woff2`・`BIZUDPGothic-Bold.woff2`、各約 2MB）に同梱し、外部（Google Fonts など）には取りに行かない。ライセンスは SIL Open Font License 1.1（`src/fonts/OFL.txt`、フォント内の name 表にも同じ本文）。
+- 元のフォントは「1」だけ他の数字より幅が狭く、`tabular-nums` も持たないため、そのままでは表の桁がそろわない。同梱版は **「1」を他の数字と同じ幅にして中央に寄せた** だけで、ほかの字形・ヒンティングは変えていない。作り直しは `scripts/fonts/build_fonts.py`。
+- グリフは間引かない（人名・顧客名の第 2 水準以上の漢字も同じフォントで出す）。太さは 400 と 700 の 2 つ（600 は 700 で表示）。
+- 読み込み: `observablehq.config.js` の head に `<link rel="preload" as="font">` を置き、Framework がハッシュ付きで `dist/_file/fonts/` に出したパスから head スクリプトが `@font-face`（`font-display: swap`）を組み立てる。`--sans-serif` の先頭が `"YN BIZ UDPGothic"`。読み込めないときは端末の BIZ UDPゴシック → システムフォントの順。
+- 字幅が広いぶん、表を少し詰めた（1024px・1280px で横スクロールを出さないため）: セルの左右余白 7px → 6px、数値セルの字間 -0.02em、名前列の上限 `min(40vw, 300px)` → `min(40vw, 260px)`、2 行の名前セル 200px → 160px（1200px 以上は `min(24vw, 320px)` → `min(20vw, 320px)`）。省略した名前は今までどおり title で全文。チーム詳細の作業種別×月の表は円単位・1024px だけ横スクロールになる（13 列の金額のため）。
+- 再発防止: `tests/e2e/fonts.spec.ts`（各画面で同梱フォントが読み込まれる・外部への通信がない・数字 0〜9 の幅がすべて同じ）。

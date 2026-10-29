@@ -2,7 +2,7 @@
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
  * 既定はライト。ヘッダーの切替ボタンで <html data-theme="dark"> にするとダーク（OS の設定には追従しない）。
  * 選んだテーマは localStorage（yn-theme）に保存し、observablehq.config.js の head スクリプトが描画前に復元する。
- * 8px グリッド、日本語向けシステムフォント、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
+ * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§46）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
  */
 @import url("observablehq:default.css");
 @import url("observablehq:theme-air.css");
@@ -12,7 +12,7 @@
  * トークン
  * ------------------------------------------------------------------------- */
 :root {
-  --sans-serif: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo",
+  --sans-serif: "YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo",
     "Noto Sans JP", "Noto Sans CJK JP", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --monospace: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Noto Sans Mono CJK JP", monospace;
   --yn-space: 8px;
@@ -458,6 +458,10 @@ h3 {
 .yn-facts dd.num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+/* BIZ UDPゴシックの数字は幅が広いので、表の数値だけ少し詰める（1024px で横スクロールを出さない。§46） */
+.yn-table td.num {
+  letter-spacing: -0.02em;
 }
 :where(button, a, select, input, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--yn-focus);
@@ -1307,7 +1311,7 @@ h3 {
 }
 .yn-table th,
 .yn-table td {
-  padding: 6px 7px;
+  padding: 6px;
   border-bottom: 1px solid var(--yn-hairline);
   vertical-align: middle;
   white-space: nowrap;
@@ -1370,7 +1374,7 @@ h3 {
 }
 /* 名前列は sticky なので、長い名前で広がると数値列が隠れる。上限を設けて省略し、全文は title で出す */
 .yn-table .yn-primary-cell {
-  max-width: min(40vw, 300px);
+  max-width: min(40vw, 260px);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1414,12 +1418,12 @@ h3 {
   display: inline-flex;
   flex-direction: column;
   line-height: 1.3;
-  max-width: 200px;
+  max-width: 160px;
   vertical-align: middle;
 }
 @media (min-width: 1200px) {
   .yn-cell-2line {
-    max-width: min(24vw, 320px);
+    max-width: min(20vw, 320px);
   }
 }
 .yn-cell-main,

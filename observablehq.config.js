@@ -178,6 +178,26 @@ const SCROLL_SCRIPT = `(() => {
   };
   requestAnimationFrame(tick);
 })();`;
+/**
+ * 画面フォント BIZ UDPゴシック（src/fonts/、§46）。外部に出ないよう同梱する。
+ * Framework は head の <link href> のファイルを dist にハッシュ付きの名前で出すので、その href から @font-face を組み立てる
+ */
+const FONT_WEIGHTS = [
+  ["Regular", 400],
+  ["Bold", 700],
+];
+const FONT_LINKS = FONT_WEIGHTS.map(
+  ([style, weight]) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="./fonts/BIZUDPGothic-${style}.woff2" data-yn-font="${weight}">`,
+).join("");
+const FONT_SCRIPT = `(() => {
+  let css = "";
+  for (const l of document.querySelectorAll("link[data-yn-font]")) {
+    css += '@font-face{font-family:"YN BIZ UDPGothic";font-style:normal;font-weight:' + l.dataset.ynFont + ';font-display:swap;src:url("' + l.href + '") format("woff2")}';
+  }
+  const s = document.createElement("style");
+  s.textContent = css;
+  document.head.append(s);
+})();`;
 /** 右端「その他」（⋯）のメニュー: 押すと開閉、外を押す・Esc・フォーカスが外れると閉じる */
 const MORE_SCRIPT = `(() => {
   const parts = () => { const btn = document.querySelector(".yn-more-btn"); return btn ? [btn, document.getElementById("yn-more-menu")] : []; };
@@ -206,7 +226,7 @@ const MORE_SCRIPT = `(() => {
   addEventListener("pageshow", () => set(false));
 })();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
-const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
+const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,
