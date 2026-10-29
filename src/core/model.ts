@@ -32,7 +32,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   const asOf = options.asOf;
   const asOfMonth = monthOfDate(asOf);
   const config = dataset.config;
-  // holidays.csv に行の無い年は国民の祝日で補う（§48）
+  // holidays.csv に行の無い年は国民の祝日で補う（§49）
   const holidays = new HolidaySet(dataset.holidays);
   const statusCtx: StatusContext = { asOf, config, holidays };
   const masters = createMasterIndex(dataset);

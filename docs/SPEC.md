@@ -108,7 +108,7 @@ costs[labor] = cost
 
 ## 9. 営業日数と人月換算
 
-- `businessDays(m)` = m の暦日のうち土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§48）を除いた日数。
+- `businessDays(m)` = m の暦日のうち土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§49）を除いた日数。
 - 人月（標準）= hours ÷ `standardHoursPerMonth`。
 - 人月（カレンダー）= hours ÷ (businessDays(m) × `hoursPerBusinessDay`)。複数月の合計は月ごとの人月を合算。
 
@@ -710,7 +710,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - あわせて、「⋯」のメニューを読み込み中に開くと読み込み完了（`pageshow`）で閉じてしまう不具合を直した（戻るでキャッシュから戻ったときだけ閉じる）。
 - 再発防止: `tests/e2e/guide.spec.ts`（「⋯」から開ける・目次で移動して見出しが固定ヘッダーに隠れない・リンクがすべてアプリ内で開ける・390／320px でライト／ダークともはみ出さない）、`tests/unit/texts.test.ts`（差し込み口・目次と見出しの対応・外部の文書への誘導が無い）、`header-nav.spec.ts`・`smoke.spec.ts`・`a11y.spec.ts`・`monkey.spec.ts` に `/guide` を追加。
 
-## 48. 年度を直書きしない（2026-10-29 要望）
+## 49. 年度を直書きしない（2026-10-29 要望）
 「FY2026 などのハードコーディングをやめる。来年度も使いたい」への対応。年度・年月はすべて **計算基準日（`YOJITSU_AS_OF`、無ければ今日 JST）** と `fiscalYearStartMonth` から求める。
 - 画面（年度の表示・期間の既定とプリセット・稼働計画の年度切替・グラフの軸・Excel のファイル名）と計算コアは、もとから `meta.fiscalYear`／`meta.fiscalYearMonths`／`asOfMonth` から作っている。計算ルール画面の例（月数の数え方・日付と月の書式）も基準日の年度・月で表示する。画面文言の例から固定の年を除いた（`YYYY-MM.csv`・`YYYY-04`・「4月からの単価改定」）。
 - ダミーデータ（`scripts/generate-dummy.ts`・`scripts/dummy-scale.ts`）は、年月を `FyCalendar`（`c.m(-1, 4)` = 前年度の 4 月、`c.label()` = `FY<今年度>`）で書く。基準日を翌年度にするとシナリオ全体が 1 年後ろへずれる。同じ seed・基準日なら同じ出力（基準日 2026-10-27 では従来の `data/` と同一。祝日表だけ 2024 年と 2028 年を足した）。`--asOf` と dummy アダプタの既定は、取得の基準日 → `YOJITSU_AS_OF` → 今日。

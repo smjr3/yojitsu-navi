@@ -1,5 +1,5 @@
 /**
- * 祝日（SPEC §48）: 国民の祝日の計算と、holidays.csv に無い年の自動補完
+ * 祝日（SPEC §49）: 国民の祝日の計算と、holidays.csv に無い年の自動補完
  */
 import { describe, expect, it } from "vitest";
 import { businessDaysInMonth, closingDateOf } from "../../src/core/calendar.js";

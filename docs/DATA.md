@@ -12,7 +12,7 @@
 | `data/masters/teams.csv` | `team_id, name, parent_team_id, effective_from, level, leader_member_id` （level = 種別「課」「チーム」「班」など自由入力・省略可、leader_member_id = リーダーのメンバーID・省略可。SPEC §21・§22） |
 | `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from, status` （kind = employee / partner。status = 空（在籍）/ `退職`（その月から退職）、列ごと省略可。SPEC §35） |
 | `data/masters/rates.csv` | `key, hourly_rate, effective_from` （key = 役職名 または member_id） |
-| `data/holidays.csv` | `date, name` （祝日・会社休日。行の無い年は国民の祝日を計算で補い、データ確認に `HOLIDAYS_AUTO` を出す。全体が空なら祝日なし。SPEC §48） |
+| `data/holidays.csv` | `date, name` （祝日・会社休日。行の無い年は国民の祝日を計算で補い、データ確認に `HOLIDAYS_AUTO` を出す。全体が空なら祝日なし。SPEC §49） |
 | `data/task-types.csv` | `task, category, note` （作業種別の分類表。category = 契約内 / 契約外。ファイルが無ければすべて契約内。SPEC §30） |
 | `data/worklogs/*.csv` | `date, member_id, member_name, customer_name, project_name, task, hours` （月ごとに `YYYY-MM.csv`。アダプタが生成） |
 | `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }` |
