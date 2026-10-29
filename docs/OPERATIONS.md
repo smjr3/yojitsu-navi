@@ -9,16 +9,16 @@ Settings > CI/CD > Variables に登録します。
 
 | 変数 | 用途 |
 |---|---|
-| `WORKLOG_API_TOKEN` | 作業実績 API のトークン（http アダプタ）。Masked にする |
+| `WORKLOG_API_TOKEN` | 作業実績 API のトークン（http アダプタ）。Protected・Masked にする |
 | `MEMBER_FETCH_ENABLED` | 任意。`1` でスケジュール実行時に `fetch-members` ジョブも動く（既定は無効） |
-| `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Masked にする |
-| `GIT_PUSH_TOKEN` | スケジュール実行で `data/worklogs` を書き戻すための Project Access Token（Developer / `write_repository`） |
+| `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Protected・Masked にする |
+| `GIT_PUSH_TOKEN` | スケジュール実行の取り込み結果を MR にして自動マージするための Project Access Token（**Maintainer** / `write_repository`。Protected・Masked。`main` は直接プッシュ不可のため MR を通す。SPEC §39.4） |
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
-直近 N か月の作業実績を取り直してコミット＆プッシュし、その push で通常パイプラインが走って公開まで進みます。
+直近 N か月の作業実績を取り直して MR（`data/worklogs-<日時>`）を作り、パイプラインの成功後に自動でマージされて公開まで進みます。
 
 ## 作業実績の取得元（アダプタ）を本番 API に切り替える
 
@@ -55,9 +55,9 @@ Settings > CI/CD > Variables に登録します。
      `authScheme`（既定は `Authorization` ヘッダのとき `Bearer`、他のヘッダ名なら接頭辞なし）、`method`
    - 応答は `Content-Type` が JSON なら配列、`text/csv` なら CSV として読みます
    - 5xx とネットワークエラーは 3 回まで再試行、4xx は即失敗
-2. CI/CD 変数 `WORKLOG_API_TOKEN` と `GIT_PUSH_TOKEN` を登録（トークンは config.json に書かない。ログにも出ません）
+2. CI/CD 変数 `WORKLOG_API_TOKEN` と `GIT_PUSH_TOKEN` を Protected・Masked で登録（トークンは config.json に書かない。ログにも出ません）
 3. ローカルで確認: `WORKLOG_API_TOKEN=... npm run fetch && npm run validate`
-4. スケジュールを登録
+4. スケジュールを登録（取り込み結果は `data/worklogs-<日時>` の MR になり、パイプラインの成功後に自動でマージされます）
 
 `refetchMonths` か月分を毎回取り直すので、締め後の修正入力も反映されます。それより前の月は触りません。
 一時的に切り替えたいときは環境変数 `WORKLOG_ADAPTER=dummy npm run fetch` のように上書きできます。
@@ -127,10 +127,11 @@ npm run fetch:members                           # members.csv を更新
 }
 ```
 
-1. `apiBaseUrl` と `projectId` を入れてコミットする（どちらかが空なら自動で CSV ダウンロードになる）。
+1. 接続先: 社内 GitLab の CI でビルドすると、`apiBaseUrl`・`projectId` が空ならそのプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）が自動で入る（SPEC §39.1）。別のプロジェクトに保存したいときだけ値を入れる。ローカルのビルドで両方空なら CSV ダウンロードになる。
 2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面（右上の歯車）で登録する。マスタ編集・稼働計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
    既定はそのタブの `sessionStorage` だけ（タブを閉じると消える）。設定画面で「このブラウザに記憶する」を選ぶと `localStorage`。画面に再表示しない・サーバーやリポジトリには保存しない。
-3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)「3. メンバーを追加する」）。
+3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)「推奨構成」。`npm run gitlab:setup -- --apply` で設定できる）。
+   設定画面の「接続を確認」は、トークンの scope・公開範囲・Pages の閲覧制限・保護ブランチが推奨と違えば「GitLab の設定に N 件の不足があります」と出す（SPEC §39.3）。
    画面は GitLab が返す `can_merge` を見て、マージできる人にだけ「マージ」ボタンを出す（強制は GitLab 側）。
 4. 競合検出: ビルド時に各ファイルの最終コミット ID を取り、コミットの `last_commit_id` に付ける。編集中に他の人が同じファイルを更新していると GitLab が拒否し、画面に「他の人が先に更新しました」と出る（編集内容は下書きに残る）。
    このため CI の build ジョブは `GIT_DEPTH: "0"`（浅いクローンにしない）にしている。マージは表示中の head（`sha`）を付けて行い、見ていない変更が入らないようにする。

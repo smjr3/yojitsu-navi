@@ -6,15 +6,19 @@
 #   - test     : 型チェック + vitest（ユニット・プロパティ・結合）
 #   - build    : Observable Framework で dist/ を生成
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
-#   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直して
-#                      data/worklogs/ をコミット＆プッシュする（その push が通常パイプラインを起動し、
-#                      validate → … → pages まで流れる）
+#   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
+#                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
+#                      マージで通常パイプラインが走り、validate → … → pages まで流れる）
+#
+# 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §39）。
+# 設定の確認・適用は `npm run gitlab:setup`（scripts/gitlab-setup.ts）
 #
 # 必要な CI/CD 変数（Settings > CI/CD > Variables、Masked 推奨）:
 #   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
 #   MEMBER_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-members（所属・役職の取り込み）も動く。既定は無効
 #   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
-#   GIT_PUSH_TOKEN      data/worklogs を書き戻すための Project Access Token（role: Developer、scope: write_repository）
+#   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
+#                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
@@ -30,6 +34,14 @@
 #   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は CI/CD 変数 NODE_IMAGE で差し替える
 
 image: $NODE_IMAGE
+
+# パイプラインの重複を防ぐ: MR があるブランチへの push は MR のパイプラインだけにする
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
 
 stages:
   - validate
@@ -106,7 +118,8 @@ build:
     # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
     GIT_DEPTH: "0"
   script:
-    - npm run build
+    # マスタ編集の保存先（config.json の apiBaseUrl・projectId が空のとき）をこのプロジェクトにする（§39.1）
+    - YOJITSU_GITLAB_API_URL="$CI_API_V4_URL" YOJITSU_GITLAB_PROJECT="$CI_PROJECT_PATH" npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
     - |
       if [ "$PLAYWRIGHT_E2E" = "1" ] && [ -f tests/e2e/playwright.config.ts ]; then
@@ -151,7 +164,7 @@ pages:
     url: $CI_PAGES_URL
 
 # --------------------------------------------------------------------------
-# fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、リポジトリに書き戻す
+# fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、MR で反映する
 #   Settings > CI/CD > Schedules で cron を登録する（対象ブランチ = 既定ブランチ）
 # --------------------------------------------------------------------------
 fetch-worklogs:
@@ -167,25 +180,16 @@ fetch-worklogs:
     - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
     # 直近 refetchMonths か月を取り直して data/worklogs/ を更新
     - npm run fetch
-    # 取り直した結果で検証が通ることを確認してから書き戻す
+    # 取り直した結果で検証が通ることを確認してから反映する
     - npm run validate
-    - git config user.name "yojitsu-navi-bot"
-    - git config user.email "yojitsu-navi-bot@example.local"
-    - git add data/worklogs
-    - |
-      if git diff --cached --quiet; then
-        echo "作業実績に変更はありません"
-      else
-        git commit -m "chore(data): 作業実績を更新 ($(date -u +%Y-%m-%dT%H:%MZ)) [skip schedule]"
-        # トークンは URL に埋め込むがログには出ない（set -x しない）。push が通常パイプラインを起動し、build → pages まで進む
-        git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
-      fi
+    # main は直接プッシュ不可（保護ブランチ）なので、data/worklogs-<日時> の MR を作って自動マージする
+    - bash scripts/ci/push-data-mr.sh worklogs "chore(data): 作業実績を更新 ($(date -u +%Y-%m-%dT%H:%MZ))" data/worklogs
 
 # --------------------------------------------------------------------------
 # fetch-members: 所属・役職を人事データから取り込み、data/masters/members.csv に書き戻す
 #   既定は無効。スケジュール実行 かつ CI/CD 変数 MEMBER_FETCH_ENABLED=1 のときだけ動く。
 #   config.json の memberSource.adapter が none のままなら何もしない（変更なし）。
-#   変わった人だけ実行月の行が追加される（冪等）。fetch-worklogs と同時に書き戻さないよう resource_group を共有する
+#   変わった人だけ実行月の行が追加される（冪等）。fetch-worklogs と同時に動かないよう resource_group を共有する
 # --------------------------------------------------------------------------
 fetch-members:
   stage: validate
@@ -199,15 +203,5 @@ fetch-members:
     - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
     - npm run fetch:members
     - npm run validate
-    - git config user.name "yojitsu-navi-bot"
-    - git config user.email "yojitsu-navi-bot@example.local"
-    - git add data/masters/members.csv
-    - |
-      if git diff --cached --quiet; then
-        echo "メンバーに変更はありません"
-      else
-        git commit -m "chore(data): メンバーの所属・役職を更新 ($(date -u +%Y-%m-%dT%H:%MZ)) [skip schedule]"
-        # fetch-worklogs が先に書き戻していても取り込めるよう、data は衝突しないので rebase してから push する
-        git pull --rebase "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "${CI_COMMIT_BRANCH}"
-        git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
-      fi
+    # fetch-worklogs とは別の MR（data/members-<日時>）。触るファイルが違うので互いに競合しない
+    - bash scripts/ci/push-data-mr.sh members "chore(data): メンバーの所属・役職を更新 ($(date -u +%Y-%m-%dT%H:%MZ))" data/masters/members.csv
