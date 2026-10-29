@@ -79,8 +79,9 @@ describe("パッケージの中身", () => {
     const words = (process.env.YOJITSU_PRIVATE_WORDS ?? "").split(",").map((w) => w.trim()).filter(Boolean);
     const grep = (args: string[]) => spawnSync("grep", ["-rIl", ...args, join(PKG, "template")], { encoding: "utf-8" }).stdout.trim().split("\n").filter(Boolean);
     if (words.length) expect(grep(["-i", ...words.flatMap((w) => ["-e", w])])).toEqual([]);
-    // GitHub のアカウントへのリンク（npm の依存の寄付先 = package-lock.json は除く）・メールアドレス（例示用のドメインは除く）
-    expect(grep(["-e", "github\\.com/"]).filter((f) => !f.endsWith("package-lock.json"))).toEqual([]);
+    // GitHub のアカウントへのリンク（npm の依存の寄付先 = package-lock.json と、フォントの著作権表示 = src/fonts/OFL.txt は除く。
+    // OFL はライセンス本文と著作権表示をそのまま添えることが条件で、書き換えられない。§46）・メールアドレス（例示用のドメインは除く）
+    expect(grep(["-e", "github\\.com/"]).filter((f) => !f.endsWith("package-lock.json") && !f.endsWith(join("src", "fonts", "OFL.txt")))).toEqual([]);
     const mails = spawnSync("grep", ["-rIohE", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[a-z]{2,}", join(PKG, "template", "src"), join(PKG, "template", "docs"), join(PKG, "template", "scripts"), join(PKG, "template", "README.md")], { encoding: "utf-8" }).stdout;
     expect(mails.split("\n").filter((m) => m && !/@(example\.(local|com|jp)|users\.noreply)/.test(m) && !/@[0-9]/.test(m))).toEqual([]);
     const g = JSON.parse(readFileSync(join(PKG, "template", "config.json"), "utf-8")).masterEdit.gitlab;

@@ -73,8 +73,8 @@ Premium 以上なら、保護ブランチの「Allowed to merge」に特定の�
 
 | ファイル | 大きさ | 使う場面 |
 |---|---|---|
-| `yojitsu-navi-<版>.tgz` | 約 4 MB | 社内に npm のミラー（Nexus・Artifactory など）がある。CI/CD 変数 `NPM_CONFIG_REGISTRY` を設定する（手順 4） |
-| `yojitsu-navi-<版>-with-deps.tgz` | 約 60 MB | 社内に npm のミラーが無い。依存（npm のキャッシュ）を `vendor/npm-cache/` に入れ、CI は外に出ずに `npm ci --offline` する。Linux x64 の Runner と Windows x64 の PC で使える |
+| `yojitsu-navi-<版>.tgz` | 約 8 MB | 社内に npm のミラー（Nexus・Artifactory など）がある。CI/CD 変数 `NPM_CONFIG_REGISTRY` を設定する（手順 4） |
+| `yojitsu-navi-<版>-with-deps.tgz` | 約 64 MB | 社内に npm のミラーが無い。依存（npm のキャッシュ）を `vendor/npm-cache/` に入れ、CI は外に出ずに `npm ci --offline` する。Linux x64 の Runner と Windows x64 の PC で使える |
 
 どちらも、開発元のリポジトリで `npm run app:pack`（依存込みは `npm run app:pack -- --with-deps`）を実行すると `packages/app/` にできます。
 社内で使う PC には Node.js 20 以上と git が要ります。パッケージ自体は依存を持たないので、入れるときに外部へ接続しません。
