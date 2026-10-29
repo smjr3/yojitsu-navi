@@ -1,7 +1,7 @@
 /**
  * 試用のデモ（SPEC §29）: GitLab REST API の代わりにブラウザ内で動く模擬。
  *
- * gitlab.ts が使う範囲（/user、/projects/:id、commits、merge_requests の作成・一覧・詳細・マージ・取り下げ、
+ * gitlab.ts が使う範囲（/user、/personal_access_tokens/self、/projects/:id、保護ブランチ、commits、merge_requests の作成・一覧・詳細・マージ・取り下げ、
  * repository/files/:path/raw）だけを、localStorage 相当の保存先に持つ。fetch と同じ形（FetchLike）なので
  * 画面・テストからは本物の GitLab と同じ呼び方で使える。
  *
@@ -99,10 +99,14 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
     if (!init.headers["PRIVATE-TOKEN"]) return reply(401, { message: "401 Unauthorized" });
 
     if (method === "GET" && path === "/user") return reply(200, DEMO_USER);
+    if (method === "GET" && path === "/personal_access_tokens/self") return reply(200, { scopes: ["api"] });
     if (!path.startsWith(projectPrefix)) return reply(404, { message: "404 Project Not Found" });
     const rest = path.slice(projectPrefix.length);
 
-    if (method === "GET" && rest === "") return reply(200, { id: 1, path_with_namespace: DEMO_PROJECT_ID, permissions: { project_access: { access_level: canMerge() ? 40 : 30 }, group_access: null } });
+    if (method === "GET" && rest === "") return reply(200, { id: 1, path_with_namespace: DEMO_PROJECT_ID, visibility: "private", pages_access_level: "private", permissions: { project_access: { access_level: canMerge() ? 40 : 30 }, group_access: null } });
+
+    // 推奨どおりの保護（§38.2: 直接プッシュ不可・マージは Maintainer）
+    if (method === "GET" && rest === `/protected_branches/${target}`) return reply(200, { name: target, push_access_levels: [{ access_level: 0 }], merge_access_levels: [{ access_level: 40 }] });
 
     if (method === "POST" && rest === "/repository/commits") {
       const s = load();

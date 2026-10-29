@@ -13,6 +13,7 @@
     "fetch": "tsx scripts/fetch-worklogs.ts",
     "fetch:members": "tsx scripts/fetch-members.ts",
     "validate": "tsx scripts/validate-data.ts",
+    "gitlab:setup": "tsx scripts/gitlab-setup.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

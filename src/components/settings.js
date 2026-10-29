@@ -40,17 +40,22 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     if (check.error) {
       return html`<div class="yn-me-outcome is-error" role="alert" tabindex="-1" data-role="check-result"><p class="yn-me-outcome-title"><span aria-hidden="true">!</span> ${T.settings.checkFailed}</p><p>${check.error.message}</p>${check.error.detail ? html`<p class="yn-me-small"><code>${check.error.detail}</code></p>` : null}</div>`;
     }
-    const { user, accessLevel } = check.info;
+    const { user, accessLevel, warnings = [] } = check.info;
     const role = accessLevel !== null ? (ACCESS_LEVELS[accessLevel] ?? String(accessLevel)) : T.settings.roleUnknown;
     const canMerge = accessLevel !== null && accessLevel >= 40;
     const canSave = accessLevel === null || accessLevel >= 30;
-    return html`<div class="yn-me-outcome is-ok" role="status" tabindex="-1" data-role="check-result">
+    const branch = cfg.gitlab.targetBranch;
+    return html`<div class=${`yn-me-outcome ${warnings.length ? "is-warn" : "is-ok"}`} role="status" tabindex="-1" data-role="check-result">
       <p class="yn-me-outcome-title"><span aria-hidden="true">✓</span> ${T.settings.checkOk}</p>
       <ul>
         <li>${fmt(T.settings.checkUser, { name: user.name || user.username, username: user.username })}</li>
         <li>${fmt(T.settings.checkRole, { role })}</li>
       </ul>
       <p>${!canSave ? T.settings.cannotSave : canMerge ? T.settings.canMergeYes : T.settings.canMergeNo}</p>
+      ${warnings.length
+        ? html`<p class="yn-me-outcome-title is-warning" data-role="check-warnings-title"><span aria-hidden="true">!</span> ${fmt(T.settings.warnTitle, { n: warnings.length })}</p>
+          <ul class="is-warning" data-role="check-warnings">${warnings.map((w) => html`<li data-warning=${w}>${fmt(T.settings.warn[w] ?? w, { branch })}</li>`)}</ul>`
+        : null}
     </div>`;
   }
 

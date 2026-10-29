@@ -24,7 +24,7 @@
 | `/rules` 計算ルール | 画面の数値の計算方法 |
 | `/plan` 稼働計画 | リーダーが組織のメンバーの計画を入れる。人ごとに 1 行、開くと案件ごとの行と「契約外予定」の行。途中で人月が変わるときは「＋ 変更」で「何月から何人月」を入れ、いつ変わったかは「変更の履歴」で見る（人月でも時間でも、保存は人月。SPEC §23・§36） |
 | `/masters` マスタ編集 | メンバー・単価・組織の台帳。1 対象 1 行で今の値、開くと適用開始月ごとの変更の履歴。「＋ 変更」で「何月から何に変わるか」を足す。表／CSV で編集し、稼働計画の変更とあわせて GitLab に MR を作る。リーダーがマージ（SPEC §19・§36） |
-| `/settings` 設定 | GitLab の接続（トークンの登録・接続の確認。GitLab の設定はこの画面だけ）、テーマ（ライト／ダーク） |
+| `/settings` 設定 | GitLab の接続（トークンの登録・接続の確認。権限と、本番の設定の不足も出す。GitLab の設定はこの画面だけ）、テーマ（ライト／ダーク） |
 
 数値をクリックすると「式 ＋ 実際に使った値」の計算根拠が開きます。グラフは右上の「拡大」で大きく表示できます（スマホは全画面。SPEC §33）。
 期間・チーム・単位・着地方式は URL（`?from=2026-04&to=2027-03&team=T111&unit=k&method=recent3`）に入るので、URL を共有すると同じ表示を再現できます。
@@ -97,7 +97,9 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 ## 公開（GitLab Pages）
 
 `.gitlab-ci.yml` のパイプラインは `validate → test → build → pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。
-初回の設定（閲覧制限・メンバー・保護ブランチ・Runner）と困ったときの対処は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)、
+GitLab 側の推奨構成（グループ・プロジェクト・保護ブランチ・権限・トークン）、展開の手順、社内で確認することのチェックリストは [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) にあります。
+プロジェクトの設定は `GITLAB_TOKEN=… npm run gitlab:setup -- --api <URL> --project <グループ/プロジェクト>` で確認でき、`--apply` で推奨値に直せます。
+
 CI/CD 変数・作業実績 API への切り替え・人事データの取り込み・マスタ編集の設定は [docs/OPERATIONS.md](docs/OPERATIONS.md) にあります。
 画面もビルドも外部 CDN・外部サイトに接続しません。
 
@@ -112,7 +114,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 | [docs/DUMMY_DATA.md](docs/DUMMY_DATA.md) | ダミーデータのシナリオと検証結果の期待値 |
 | [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md) | データローダとキャッシュの決まり（壊れた・古い出力を公開しない） |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | 運用と設定（CI/CD 変数・API・人事取り込み・マスタ編集・実績の種類の追加） |
-| [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) | 社内 GitLab Pages への公開手順 |
+| [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) | 社内 GitLab の推奨構成・権限・展開手順・確認チェックリスト |
 | [docs/UI_NOTES.md](docs/UI_NOTES.md) | 画面の構成・状態管理・ページの追加方法 |
 | [docs/CORE_NOTES.md](docs/CORE_NOTES.md) | 計算コアの実装メモ |
 | [docs/TEXTS.md](docs/TEXTS.md) | 画面の文言の書き換え方 |
@@ -121,7 +123,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 ## これから
 
 - 作業実績 API・人事 API の本番適用（列名の確認、定期取り込み）
-- GitLab API 経由のマスタ保存の本番確認（CORS・保護ブランチ・トークン権限）
+- 社内 GitLab での確認（Pages の閲覧制限・トークン・CORS・保護ブランチ。[チェックリスト](docs/DEPLOY_GITLAB.md#社内で確認することチェックリスト)）
 - 前年比（1 年分のデータがたまってから）
 
 ## リポジトリ構成
@@ -137,6 +139,8 @@ scripts/
   fetch-worklogs.ts      作業実績の取得（直近 N か月を書き換え）
   fetch-members.ts       所属・役職の取り込み（members.csv に追記）
   validate-data.ts       データ検証（CI）
+  gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
+  ci/push-data-mr.sh     定期取り込みの結果を MR で反映（GitLab CI）
   screenshots.mjs        README のスクリーンショット
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）

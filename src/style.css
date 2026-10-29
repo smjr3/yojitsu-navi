@@ -2267,11 +2267,17 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-me-outcome p {
   max-width: none;
 }
+/* 区切りの無い長いユーザー名・ブランチ名でも枠からはみ出さない */
+.yn-me-outcome li,
+.yn-me-outcome p {
+  overflow-wrap: anywhere;
+}
 .yn-me-outcome.is-ok {
   background: var(--yn-good-bg);
   border-color: var(--yn-good-text);
 }
-.yn-me-outcome.is-error {
+.yn-me-outcome.is-error,
+.yn-me-outcome.is-warn {
   background: var(--yn-warn-bg);
   border-color: var(--yn-warn-text);
 }
@@ -2284,6 +2290,10 @@ th[aria-sort="descending"] .yn-sort-icon {
   font-weight: 700;
   font-size: 14px;
   margin: 0 0 4px;
+}
+.yn-me-outcome-title.is-warning {
+  margin-top: 8px;
+  color: var(--yn-warn-text);
 }
 .yn-me-outcome code {
   overflow-wrap: anywhere;

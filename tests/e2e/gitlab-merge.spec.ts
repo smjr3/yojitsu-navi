@@ -243,6 +243,8 @@ test.describe("本物の GitLab API の形（モック）", () => {
 });
 
 test.describe("設定画面とヘッダー", () => {
+  const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "content-type": "application/json" };
+  const cfg = { mode: "gitlab", gitlab: { apiBaseUrl: GITLAB, projectId: "grp/yn", targetBranch: "main", commitMode: "mr" } };
   test("ヘッダー: テーマ切替と設定はアイコンのボタン（他のリンクと形が違う）", async ({ page }) => {
     await gotoPage(page, "/");
     const toggle = page.locator(".yn-theme-toggle");
@@ -256,6 +258,38 @@ test.describe("設定画面とヘッダー", () => {
     await expect(page).toHaveURL(/\/settings/);
     await expect(page.getByRole("heading", { level: 1, name: "設定" })).toBeVisible();
     await expect(page.locator(".yn-settings-link")).toHaveAttribute("aria-current", "page");
+  });
+
+  test("接続の確認で本番の設定の不足を警告する（scope・公開範囲・保護ブランチ）。390px でもはみ出さない", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await patchMasters(page, cfg);
+    await page.route(`${GITLAB}/**`, async (route: Route) => {
+      const req = route.request();
+      if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      const url = req.url();
+      const json = (status: number, body: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(body) });
+      // 区切りの無い長いユーザー名でも枠からはみ出さない
+      if (url.endsWith("/user")) return json(200, { username: "a.very.long.username.without.any.breaks.xxxxxxxxxxxx", name: "佐藤" });
+      if (url.endsWith("/personal_access_tokens/self")) return json(200, { scopes: ["read_api"] });
+      if (url.endsWith("/projects/grp%2Fyn")) return json(200, { visibility: "internal", pages_access_level: "public", permissions: { project_access: { access_level: 40 } } });
+      if (url.endsWith("/protected_branches/main")) return json(200, { push_access_levels: [{ access_level: 40 }], merge_access_levels: [{ access_level: 30 }] });
+      return json(404, { message: "404" });
+    });
+    await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
+    await gotoPage(page, "/settings");
+    await page.getByRole("button", { name: "接続を確認" }).click();
+    const res = page.locator('[data-role="check-result"]');
+    await expect(res).toContainText("接続できました");
+    await expect(res).toHaveClass(/is-warn/);
+    await expect(res).toContainText("GitLab の設定に 5 件の不足があります");
+    await expect(res.locator("[data-warning]")).toHaveText([
+      "トークンに scope「api」がありません（保存・マージができません）",
+      "プロジェクトが Private ではありません",
+      "Pages を誰でも見られる設定です",
+      "main に直接プッシュできる人がいます",
+      "Developer も main にマージできます",
+    ]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
 
   test("接続先が未設定（既定の config.json）: 案内だけ出し、トークン欄は出さない", async ({ page }) => {
@@ -274,6 +308,7 @@ test.describe("設定画面とヘッダー", () => {
     await expect(res).toContainText("接続できました");
     await expect(res).toContainText("Maintainer");
     await expect(res).toContainText("マージできる立場");
+    await expect(res.locator("[data-warning]")).toHaveCount(0);
     expect(await page.evaluate(() => [localStorage.getItem("yojitsu-navi:gitlab-token"), sessionStorage.getItem("yojitsu-navi:gitlab-token")])).toEqual(["demo-token", null]);
     expect(await page.content()).not.toContain("demo-token");
     await expect(page.locator(".yn-settings")).toContainText("このブラウザに記憶しています");

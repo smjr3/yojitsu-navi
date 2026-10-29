@@ -589,3 +589,31 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - マスタ編集・稼働計画: 「はじめての方へ」を廃止（要点はページの「?」）。検証・変更内容・保存の補足、CSV 編集の案内、稼働計画の表の凡例・組織の説明は各見出しの「?」。保存の欄は変更があるときだけ出す。CSV ダウンロードの手順も保存の見出しの「?」。
 - 一覧・詳細: 「期間外の N 件は非表示」などの状態は短く（1 行）。経過月で比べる注記は KPI の「期間全体」と見出しの「?」へ。契約外を実績に含めない旨は「作業種別の内訳」の「?」。着地見込みの各方式の説明は「着地見込みの比較」の「?」。
 - 再発防止（`tests/e2e/screen-text.spec.ts`）: 各画面（計算ルールを除く）の本文の文章（表・「?」の吹き出し・ダイアログ・警告／エラー・KPI・データの値を除く）は **合計 120 文字以内、1 段落 70 文字以内**。マスタ編集で変更した後の保存の欄も同じ。設定画面以外にトークンの入力欄が無いこと。
+
+## 38. 本番 GitLab の構成と権限（2026-10-29 shimaさん要望）
+展開を迷わず進められるよう、社内 GitLab 側の構成・権限・ファイルの置き場をこのリポジトリで決め、確認・適用を自動化する。推奨構成と手順の正は `docs/DEPLOY_GITLAB.md`。
+- 構成: グループ `yojitsu-navi` の下にプロジェクト `yojitsu-navi`（どちらも Private）1 つ。コード・データ・CI・Pages を同じプロジェクトに置く。メンバーはグループに追加する。
+- ブランチ: `main` は保護ブランチ（直接プッシュ = No one、マージ = Maintainers、force push 不可）。画面の保存は `masters/<日時>-<ユーザー>`（§19.2）、定期取り込みは `data/<種類>-<日時>` の MR を通す。
+- 権限: 閲覧 = Guest、編集（MR 作成）= Developer、マージ = Maintainer（リーダー層）、管理 = Owner。トークンは各自の PAT（scope `api`）と、取り込み用の Project Access Token（Maintainer・`write_repository`、CI/CD 変数 `GIT_PUSH_TOKEN` は Protected・Masked）。
+
+### 38.1 接続先を GitLab CI から補う
+- `config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId` が空のとき、ビルド時の環境変数 `YOJITSU_GITLAB_API_URL`・`YOJITSU_GITLAB_PROJECT` で埋める（`src/components/gitlab-env.js`）。`.gitlab-ci.yml` の build ジョブが `CI_API_V4_URL`・`CI_PROJECT_PATH` を渡すので、社内 GitLab では config を書き換えずに保存先がそのプロジェクトになる。
+- config に値があればそちらを優先する。`mode` が `demo`・`download` なら補わない。マスタ編集のローダとヘッダーのバッジ（§27）は同じ結果を使う。
+- 環境変数はローダの入力の指紋に入れる（接続先が変わればキャッシュを捨てる）。
+
+### 38.2 設定の確認・適用 `npm run gitlab:setup`
+- `scripts/gitlab-setup.ts`。既定は確認だけ（GET のみ）で、推奨値との違いを ✓／✗ で出す。`--apply` で自動で直せる項目を直し、確認し直す。2 回目以降は何も変えない（冪等）。
+- 確認する項目: 公開範囲 Private、Pages = Only Project Members、CI/CD = Only Project Members、パイプライン成功時だけマージ、マージ後にソースブランチを削除、既定ブランチ = `targetBranch`、保護ブランチ（上記）、Maintainer 以上がいるか、スケジュールがあるなら `GIT_PUSH_TOKEN`、トークン系の CI/CD 変数が Protected・Masked か。後ろの 3 つは手で直す項目（直し方を出す）。
+- 保護ブランチは Free 版の API では中身を直接変えられないため、違うときは外してから推奨値で保護し直す。
+- トークンは環境変数 `GITLAB_TOKEN` だけで受け取る（`--token` は拒否）。接続先は `--api`・`--project`、無ければ config、それも空なら `CI_API_V4_URL`・`CI_PROJECT_PATH`。終了コード 0 = 推奨どおり、1 = 直すところが残る、2 = 引数・接続の誤り。
+
+### 38.3 接続の確認で設定の不足を出す（設定画面 §28）
+「接続を確認」で、ユーザー・権限に加えて次を調べ、不足があれば「GitLab の設定に N 件の不足があります」と一覧で出す（警告。説明は増やさない）。
+- `GET /personal_access_tokens/self` の scopes に `api` が無い → scope。
+- `GET /projects/:id` の `visibility` が `private` でない → visibility。`pages_access_level` が `public` → pagesPublic。
+- Maintainer 以上の人だけ `GET /projects/:id/protected_branches/:targetBranch`: 404 → unprotected、push に 0 より大きいレベル → pushAllowed、merge に 40 未満のレベル → mergeByDeveloper。個人・グループ指定（`access_level` が null）は判定しない。
+- 取れない項目（古い GitLab に無い API、権限で読めない、通信失敗）は警告しない。デモの模擬は推奨どおりの値を返す。
+
+### 38.4 定期取り込みは MR で反映する
+`main` が直接プッシュ不可なので、`fetch-worklogs`・`fetch-members` は変更を `data/<種類>-<日時>` に 1 コミットして push し、push オプション（`merge_request.create`・`target`・`merge_when_pipeline_succeeds`・`remove_source_branch`・`title`）で MR の作成と、パイプライン成功後の自動マージを指定する（`scripts/ci/push-data-mr.sh`）。変更が無ければ何もしない。
+- CI の重複を避けるため、`.gitlab-ci.yml` の `workflow:rules` で、開いている MR があるブランチへの push は MR のパイプラインだけにする。

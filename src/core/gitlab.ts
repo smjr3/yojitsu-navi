@@ -318,10 +318,22 @@ export interface GitLabUser {
   name: string;
 }
 
+/**
+ * 接続の確認で見つかった本番の設定の不足（§38.3）。取れなかった項目は出さない（判定できないものは警告しない）
+ *  - scope: トークンに scope `api` が無い（保存・マージができない）
+ *  - visibility: プロジェクトが Private でない（CSV が見える人が広がる）
+ *  - pagesPublic: Pages が誰でも見られる設定
+ *  - unprotected: 反映先のブランチが保護されていない（Developer もマージ・直接変更できる）
+ *  - pushAllowed: 反映先のブランチに直接プッシュできる人がいる
+ *  - mergeByDeveloper: Developer もマージできる
+ */
+export type ConnectionWarning = "scope" | "visibility" | "pagesPublic" | "unprotected" | "pushAllowed" | "mergeByDeveloper";
+
 export interface ConnectionInfo {
   user: GitLabUser;
   /** プロジェクトでの権限レベル（プロジェクトとグループの大きいほう。取れなければ null） */
   accessLevel: number | null;
+  warnings: ConnectionWarning[];
 }
 
 function token0(token: string): string {
@@ -341,14 +353,54 @@ export async function fetchCurrentUser(fetchImpl: FetchLike, cfg: MasterEditConf
   return userOf(me);
 }
 
-/** 接続の確認: トークンの持ち主と、このプロジェクトでの権限 */
+/** 接続の確認: トークンの持ち主と、このプロジェクトでの権限、本番の設定の不足（§28・§38.3） */
 export async function checkConnection(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionInfo> {
   ensureConfigured(cfg);
   const t = token0(token);
   const user = await fetchCurrentUser(fetchImpl, cfg, t);
-  const project = await request<{ permissions?: { project_access?: { access_level?: unknown } | null; group_access?: { access_level?: unknown } | null } }>(fetchImpl, "project", projectPath(cfg), t, "GET");
+  const project = await request<{
+    visibility?: unknown;
+    pages_access_level?: unknown;
+    permissions?: { project_access?: { access_level?: unknown } | null; group_access?: { access_level?: unknown } | null };
+  }>(fetchImpl, "project", projectPath(cfg), t, "GET");
   const levels = [project.permissions?.project_access?.access_level, project.permissions?.group_access?.access_level].filter((v): v is number => typeof v === "number");
-  return { user, accessLevel: levels.length ? Math.max(...levels) : null };
+  const accessLevel = levels.length ? Math.max(...levels) : null;
+  const warnings: ConnectionWarning[] = [];
+  const scopes = await optional(() => request<{ scopes?: unknown }>(fetchImpl, "user", `${cfg.gitlab.apiBaseUrl}/personal_access_tokens/self`, t, "GET"));
+  if (Array.isArray(scopes?.scopes) && !scopes.scopes.includes("api")) warnings.push("scope");
+  if (typeof project.visibility === "string" && project.visibility !== "private") warnings.push("visibility");
+  if (project.pages_access_level === "public") warnings.push("pagesPublic");
+  // 保護ブランチの設定は Maintainer 以上でないと読めない GitLab があるので、リーダーにだけ確かめる
+  if (accessLevel !== null && accessLevel >= 40) warnings.push(...(await protectionWarnings(fetchImpl, cfg, t)));
+  return { user, accessLevel, warnings };
+}
+
+/** 失敗しても止めない問い合わせ（古い GitLab に無い API・権限で読めない項目）。失敗は null */
+async function optional<R>(fn: () => Promise<R>): Promise<R | null> {
+  try {
+    return await fn();
+  } catch {
+    return null;
+  }
+}
+
+type AccessLevelRow = { access_level?: unknown };
+
+/** 反映先のブランチの保護（§38.2: push = No one、merge = Maintainers）との違い */
+export async function protectionWarnings(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionWarning[]> {
+  const url = `${projectPath(cfg)}/protected_branches/${encodeURIComponent(cfg.gitlab.targetBranch)}`;
+  let branch: { push_access_levels?: unknown; merge_access_levels?: unknown };
+  try {
+    branch = await request<typeof branch>(fetchImpl, "project", url, token, "GET");
+  } catch (e) {
+    return e instanceof GitLabError && e.status === 404 && e.kind === "other" ? ["unprotected"] : [];
+  }
+  const rows = (v: unknown): AccessLevelRow[] => (Array.isArray(v) ? (v as AccessLevelRow[]) : []);
+  const out: ConnectionWarning[] = [];
+  // access_level が null の行は個人・グループの指定（Premium）。誰かは分からないので警告しない
+  if (rows(branch.push_access_levels).some((r) => typeof r.access_level === "number" && r.access_level > 0)) out.push("pushAllowed");
+  if (rows(branch.merge_access_levels).some((r) => typeof r.access_level === "number" && r.access_level > 0 && r.access_level < 40)) out.push("mergeByDeveloper");
+  return out;
 }
 
 export interface MergeRequestSummary {

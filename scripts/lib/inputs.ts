@@ -13,15 +13,17 @@
  * 指紋に入るもの:
  *   data/ 配下の全ファイル、config.json、計算コア・ローダ・文言（src/core, src/data, src/i18n, worklog-key.js）、
  *   Node 側の読み込み処理（scripts/lib, scripts/adapters）、package-lock.json、計算基準日（asOf）、
- *   マスタ編集が使う Git の最終コミット（HEAD と data/ の未コミット変更の有無）
+ *   マスタ編集が使う Git の最終コミット（HEAD と data/ の未コミット変更の有無）、
+ *   GitLab の接続先の環境変数（YOJITSU_GITLAB_*。§38.1）
  */
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { GITLAB_ENV_KEYS } from "../../src/components/gitlab-env.js";
 
 /** 指紋の計算方法を変えたら上げる（古い指紋のキャッシュを確実に捨てるため） */
-export const FINGERPRINT_VERSION = 1;
+export const FINGERPRINT_VERSION = 2;
 
 /** ローダの出力を左右するファイル・フォルダ（プロジェクトルートからの相対パス） */
 export const INPUT_PATHS = [
@@ -32,6 +34,7 @@ export const INPUT_PATHS = [
   "src/data",
   "src/i18n",
   "src/components/worklog-key.js",
+  "src/components/gitlab-env.js",
   "src/rules.md.js",
   "scripts/lib",
   "scripts/adapters",
@@ -93,10 +96,12 @@ export interface Fingerprint {
  * 入力の指紋を計算する。内容（バイト列）で比べるので、更新時刻だけ変わった（git checkout など）ときは同じ値になる
  * @param opts.git false にすると Git の状態を含めない（テスト用）
  */
-export function computeFingerprint(rootDir: string, opts: { asOf?: string; git?: boolean; paths?: readonly string[] } = {}): Fingerprint {
+export function computeFingerprint(rootDir: string, opts: { asOf?: string; git?: boolean; paths?: readonly string[]; env?: NodeJS.ProcessEnv } = {}): Fingerprint {
   const asOf = opts.asOf ?? resolveAsOf();
   const h = createHash("sha256");
   h.update(`v${FINGERPRINT_VERSION}\0asOf=${asOf}\0`);
+  // マスタ編集の接続先（masters.json）は環境変数でも変わる
+  for (const k of GITLAB_ENV_KEYS) h.update(`${k}=${(opts.env ?? process.env)[k] ?? ""}\0`);
   const files = listInputFiles(rootDir, opts.paths ?? INPUT_PATHS);
   for (const f of files) {
     const bytes = readFileSync(join(rootDir, f));
