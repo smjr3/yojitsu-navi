@@ -661,3 +661,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 案件一覧・チームの案件一覧の Excel: 先頭列の見出しを「顧客 / 案件」にし、後ろの「案件」列と同じ名前にしない。
 - メンバーの差額: 計画も実績も無い期間では「計画どおり」と出さない。
 - 再発防止: `tests/e2e/qa-regressions.spec.ts`（上の各項目）、`tests/e2e/screen-text.spec.ts`（下書きの復元を聞く欄も文字数の上限内）、モンキーテストに工数・稼働計画・設定の画面を追加。
+
+## 43. 計算コアの npm パッケージ（2026-10-29 shimaさん要望）
+「npm にしたい」への対応。計算コアをほかの社内プロジェクト（工数・負荷分析のダッシュボードなど）から同じ計算・型で使えるようにする。画面は変えない。
+- パッケージ名 `@yojitsu-navi/core`（スコープは GitLab のグループ名 §39）。置き場は `packages/core/`（`package.json`・`README.md`・`tsconfig.json` だけ）。版はアプリと別に持つ（semver）。
+- **ソースの正は `src/core/`**（コピーを置かない）。画面は今までどおり `src/core/` を直接読む（Framework はルートの外を読めず、パッケージ経由にすると開発中に毎回ビルドが要るため）。
+- `npm run core:build` が `tsc` で `packages/core/dist/core/`（`.js`＋`.d.ts`）を作り、計算コアが使う文言 `src/i18n/index.js`・`index.d.ts`・`ja.js` を `dist/i18n/` に写す。外部の依存なし、ES Modules のみ、`exports` は `.`（`index`）と `./*`（`gitlab`・`types` など個別のモジュール）。`dist/` は git に入れない。
+- 公開先はこのプロジェクトの GitLab Package Registry。タグ `core-v<版>` の push で `.gitlab-ci.yml` の `publish-core` が、タグと版の一致・型チェック・テスト・ビルドのあと `CI_JOB_TOKEN` で `npm publish` する。`core-v*` は Maintainer だけが作れる保護タグにする。手順は `docs/DEPLOY_GITLAB.md`。
+- 再発防止: `tests/integration/core-package.test.ts`（ビルドが通る・`dist` の公開 API が `src/core/index.ts` と同じ・パッケージに入るのは `dist` と README だけ・別プロジェクトから Node で読み込めて NodeNext で型が解決できる）。

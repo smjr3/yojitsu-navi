@@ -6,6 +6,8 @@
 #   - test     : 型チェック + vitest（ユニット・プロパティ・結合）
 #   - build    : Observable Framework で dist/ を生成
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
+#   - publish-core   : タグ core-v<版>（例 core-v0.2.0）の push 時だけ。計算コアを npm パッケージ
+#                      @yojitsu-navi/core としてこのプロジェクトの Package Registry に公開する（SPEC §43）
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
 #                      マージで通常パイプラインが走り、validate → … → pages まで流れる）
@@ -42,12 +44,15 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
+    # 計算コアの公開（publish-core）だけ。ほかのジョブは $CI_COMMIT_BRANCH が条件なのでタグでは動かない
+    - if: $CI_COMMIT_TAG =~ /^core-v/
 
 stages:
   - validate
   - test
   - build
   - pages
+  - publish
 
 variables:
   # CI/CD 変数で上書きできる（例: registry.gitlab.example.local/mirror/node:22）
@@ -162,6 +167,31 @@ pages:
   environment:
     name: pages
     url: $CI_PAGES_URL
+
+# --------------------------------------------------------------------------
+# publish-core: 計算コアを npm パッケージとして Package Registry に公開する（SPEC §43）
+#   packages/core/package.json の version を上げて main にマージし、その版のタグ core-v<版> を打つ
+#   （タグは Settings > Repository > Protected tags で core-v* を Maintainers だけに保護する）
+#   認証は CI_JOB_TOKEN（追加の変数は要らない）。同じ版は 2 回公開できない（Registry が 403 を返す）
+# --------------------------------------------------------------------------
+publish-core:
+  stage: publish
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^core-v/
+  script:
+    - VERSION="$(node -p "require('./packages/core/package.json').version")"
+    - test "$CI_COMMIT_TAG" = "core-v$VERSION" || { echo "タグ $CI_COMMIT_TAG と packages/core/package.json の version $VERSION が一致しません"; exit 1; }
+    # 公開する前に、計算のテストと配布物の検査を通す
+    - npm run typecheck
+    - npx vitest run
+    - npm run core:build
+    - REGISTRY="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/npm/"
+    - |
+      {
+        echo "@yojitsu-navi:registry=${REGISTRY}"
+        echo "${REGISTRY#https:}:_authToken=${CI_JOB_TOKEN}"
+      } > packages/core/.npmrc
+    - cd packages/core && npm publish
 
 # --------------------------------------------------------------------------
 # fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、MR で反映する
