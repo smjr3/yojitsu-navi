@@ -30,6 +30,6 @@ PR を出す前に確認すること:
 
 ## そのほか
 
-- 画面の文言は `src/i18n/ja.js` と `src/i18n/rules.txt` に集める（[docs/TEXTS.md](docs/TEXTS.md)）
+- 画面の文言は `src/i18n/ja.js`・`src/i18n/rules.txt`・`src/i18n/guide.txt` に集める（[docs/TEXTS.md](docs/TEXTS.md)）。画面を変えたら「使い方」（`guide.txt`）も同じ PR で直す
 - ビルドは必ず `npm run build`（`npx observable build` を直接使わない。[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)）
 - 文書・コメント・設定に個人のアカウント名や外部サービスのアカウント情報を書かない

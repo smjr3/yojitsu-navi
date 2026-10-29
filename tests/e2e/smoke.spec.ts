@@ -12,6 +12,7 @@ const PAGES: Array<{ path: string; h1: string; extra?: string; noMeta?: boolean 
   { path: "/contract?id=C008", h1: "こもれび出版 / 会員サイト保守" },
   { path: "/contract?id=NOPE", h1: "案件詳細", extra: "案件 NOPE は見つかりません" },
   { path: "/rules", h1: "計算ルール" },
+  { path: "/guide", h1: "使い方" },
   { path: "/data-check", h1: "データ確認" },
   { path: "/team?id=S11", h1: "" },
   { path: "/customers", h1: "顧客" },

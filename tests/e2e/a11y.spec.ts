@@ -4,7 +4,7 @@
  */
 import { test, expect, useDarkTheme, gotoPage, kpiValue, dialog } from "./helpers/app.js";
 
-const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/data-check"];
+const PAGES = ["/", "/teams", "/contracts", "/contract?id=C008", "/contract?id=NOPE", "/rules", "/guide", "/data-check"];
 
 test("Tab でフィルタ・並べ替え見出し・行リンク・Excel 出力ボタンに到達できる", async ({ page }) => {
   await gotoPage(page, "/contracts");

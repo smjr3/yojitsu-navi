@@ -1,11 +1,11 @@
 /**
  * ヘッダーの並び（SPEC §45）
- * - 右上は業務の「稼働計画」「マスタ編集」だけ。データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる
+ * - 右上は業務の「稼働計画」「マスタ編集」だけ。使い方・データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる（§47）
  * - メニューは押すと開き、もう一度押す・外を押す・Esc・フォーカスが外れると閉じる。開いている画面なら ⋯ が選択状態
  */
 import { test, expect, gotoPage } from "./helpers/app.js";
 
-test("右上は稼働計画 → マスタ編集の順。データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
+test("右上は稼働計画 → マスタ編集の順。使い方・データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
   await expect(page.locator(".yn-tools a.yn-tool")).toHaveText(["稼働計画", /^マスタ編集/]);
   const btn = page.getByRole("button", { name: "その他" });
@@ -14,7 +14,7 @@ test("右上は稼働計画 → マスタ編集の順。データ確認・計算
   await expect(btn).not.toHaveClass(/is-current/);
   await btn.click();
   await expect(btn).toHaveAttribute("aria-expanded", "true");
-  await expect(menu.locator("a")).toHaveText(["データ確認", "計算ルール"]);
+  await expect(menu.locator("a")).toHaveText(["使い方", "データ確認", "計算ルール"]);
   await expect(menu.locator("a").first()).toBeFocused();
   await btn.click();
   await expect(menu).toBeHidden();
@@ -27,6 +27,7 @@ test("右上は稼働計画 → マスタ編集の順。データ確認・計算
   await expect(btn).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
   await expect(menu).toBeHidden();

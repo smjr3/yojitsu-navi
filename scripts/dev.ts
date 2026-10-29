@@ -20,7 +20,7 @@ function loaderFiles(dir: string): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) out.push(...loaderFiles(p));
-    else if (/\.(json|csv)\.(ts|js)$/.test(e.name) || e.name === "rules.md.js") out.push(p);
+    else if (/\.(json|csv)\.(ts|js)$/.test(e.name) || e.name === "rules.md.js" || e.name === "guide.md.js") out.push(p);
   }
   return out;
 }
@@ -39,7 +39,7 @@ const onChange = () => {
       last = fp;
       prepareLoaderCache(ROOT, fp);
       const now = new Date();
-      for (const f of [...loaderFiles(join(ROOT, "src", "data")), join(ROOT, "src", "rules.md.js")]) utimesSync(f, now, now);
+      for (const f of [...loaderFiles(join(ROOT, "src", "data")), join(ROOT, "src", "rules.md.js"), join(ROOT, "src", "guide.md.js")]) utimesSync(f, now, now);
       console.log(`[dev] 入力が変わったのでデータを作り直します（指紋 ${fp.hash.slice(0, 12)}…）`);
     } catch (e) {
       console.error(`[dev] 入力の確認に失敗: ${e instanceof Error ? e.message : String(e)}`);
@@ -47,7 +47,7 @@ const onChange = () => {
   }, 400);
 };
 for (const p of INPUT_PATHS) {
-  if (p === "src/data" || p === "src/rules.md.js") continue; // ローダ自体の変更はプレビューが自分で拾う
+  if (p === "src/data" || p === "src/rules.md.js" || p === "src/guide.md.js") continue; // ローダ自体の変更はプレビューが自分で拾う
   try {
     watch(join(ROOT, p), { recursive: true }, onChange);
   } catch {

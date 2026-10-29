@@ -91,8 +91,9 @@ const TOOLS = [
   { name: ja.app.nav.plan, path: "/plan" },
   { name: ja.app.nav.masters, path: "/masters", badge: true },
 ];
-// データ確認・計算ルールはたまに見る画面なので、目立つ場所に置かない（§45）
+// 使い方・データ確認・計算ルールはたまに見る画面なので、目立つ場所に置かない（§45・§47）
 const MORE = [
+  { name: ja.app.nav.guide, path: "/guide" },
   { name: ja.app.nav.dataCheck, path: "/data-check" },
   { name: ja.app.nav.rules, path: "/rules" },
 ];
@@ -223,7 +224,8 @@ const MORE_SCRIPT = `(() => {
     const [btn] = parts();
     if (btn?.getAttribute("aria-expanded") === "true" && e.relatedTarget instanceof Element && !e.relatedTarget.closest(".yn-more")) set(false);
   });
-  addEventListener("pageshow", () => set(false));
+  // 戻るでキャッシュから戻ったときだけ閉じる（読み込み中に開いたメニューを、読み込み完了で閉じない）
+  addEventListener("pageshow", (e) => { if (e.persisted) set(false); });
 })();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
 const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
@@ -239,6 +241,7 @@ export default {
     { name: ja.app.pages.contracts, path: "/contracts" },
     { name: ja.app.pages.members, path: "/members" },
     { name: ja.app.pages.workload, path: "/workload" },
+    { name: ja.app.pages.guide, path: "/guide" },
     { name: ja.app.pages.rules, path: "/rules" },
     { name: ja.app.pages.dataCheck, path: "/data-check" },
     { name: ja.app.pages.plan, path: "/plan" },
