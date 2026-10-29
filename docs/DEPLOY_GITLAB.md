@@ -28,7 +28,8 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 | `data/contracts.csv`・`mapping.csv`・`task-types.csv`・`holidays.csv` | 契約・名称の対応・作業種別・祝日 | 編集者・リーダー | GitLab の画面（Web IDE）でブランチを作って編集 → MR |
 | `data/worklogs/` | 作業実績 | 取り込みの自動処理 | 定期取り込み（本番 API の確認後。下の「将来」） |
 | `config.json` | 計算の設定・取り込み元・マスタ編集の接続先 | 管理者 | MR |
-| `.gitlab-ci.yml`・`src/`・`scripts/` | 画面・CI | 管理者 | 開発元の更新を取り込む（手順 1） |
+| `.gitlab-ci.yml`・`src/`・`scripts/` など | 画面・CI | 管理者 | 新しい版のパッケージで `yojitsu-navi update`（下の「新しい版にする」） |
+| `.yojitsu-navi.json` | 入れた版とファイルの記録 | （コマンドが書く） | 手で編集しない |
 
 マスタ編集の接続先（`config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId`）は空のままで構いません。CI の build ジョブが、このプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）を自動で入れます。
 
@@ -65,37 +66,51 @@ Premium 以上なら、保護ブランチの「Allowed to merge」に特定の�
 
 ## 展開の手順
 
+### 0. 持ち込むもの
+
+予実ナビは npm パッケージ（`.tgz` のファイル 1 つ）で持ち込みます。中身は画面・計算・データローダ・サンプルデータ・CI 定義・文書の一式と、展開用のコマンド `yojitsu-navi` です（SPEC §44）。
+パッケージには社内 GitLab の URL や個人・会社の情報は入っていません。接続先は手順 1 で入れます。
+
+| ファイル | 大きさ | 使う場面 |
+|---|---|---|
+| `yojitsu-navi-<版>.tgz` | 約 4 MB | 社内に npm のミラー（Nexus・Artifactory など）がある。CI/CD 変数 `NPM_CONFIG_REGISTRY` を設定する（手順 4） |
+| `yojitsu-navi-<版>-with-deps.tgz` | 約 60 MB | 社内に npm のミラーが無い。依存（npm のキャッシュ）を `vendor/npm-cache/` に入れ、CI は外に出ずに `npm ci --offline` する。Linux x64 の Runner と Windows x64 の PC で使える |
+
+どちらも、開発元のリポジトリで `npm run app:pack`（依存込みは `npm run app:pack -- --with-deps`）を実行すると `packages/app/` にできます。
+社内で使う PC には Node.js 20 以上と git が要ります。パッケージ自体は依存を持たないので、入れるときに外部へ接続しません。
+
 ### 1. グループ・プロジェクトを作って push する
 
 1. GitLab で **グループ** `yojitsu-navi`（Private）を作り、その中に空の **プロジェクト** `yojitsu-navi`（Private）を作る。
-2. 履歴を持ち込まずに、今のファイルだけを 1 コミットにして push する（開発元のアカウント名などがコミット履歴に残らないようにするため）。この時点ではまだ `main` が保護されていないので push できます。
+2. 受け取った `.tgz` のあるフォルダで、コマンドを入れてプロジェクトのフォルダを作り、push する。この時点ではまだ `main` が保護されていないので push できます。
 
 ```sh
-git checkout --orphan gitlab-main
-git commit -m "予実ナビ 初回"
-git remote add gitlab https://<社内GitLab>/yojitsu-navi/yojitsu-navi.git
-git push gitlab gitlab-main:main
+npm install -g ./yojitsu-navi-<版>.tgz
+yojitsu-navi init yojitsu-navi --gitlab https://<社内GitLab> --project yojitsu-navi/yojitsu-navi
+cd yojitsu-navi
+git push -u origin main
 ```
 
-ZIP で取得して展開し、`git init` → `git add .` → `git commit` → 上の push でも同じ結果になります。
-2 回目以降の更新（`main` を保護したあと）は、変更後のファイルを `update-<日付>` などのブランチにコミットして push し、MR を作ってマージしてください。
+- `init` は一式を写し、`--gitlab`・`--project` の接続先を `config.json`（`masterEdit.gitlab`）と `git remote` に入れて、`main` に最初のコミットを作ります。省くとその場で聞かれます（空のまま進めても、CI が接続先を自動で補います）。
+- `npm install -g` ができない PC では、`npx --yes ./yojitsu-navi-<版>.tgz init …` でも同じです（以下の `yojitsu-navi …` も `npx --yes ./yojitsu-navi-<版>.tgz …` に読み替え）。
+- サンプルデータ（`data/`）が入っています。まず Pages に出ることを確かめ、そのあと本番のデータに差し替えてください（[DATA.md](DATA.md)）。
+- git の履歴は新しく始まるので、開発元のアカウント名などは入りません。
 
 ### 2. プロジェクトの設定を確認・適用する
 
-Node.js 20 以上の入った PC で、このリポジトリのフォルダから実行します。トークンは Owner か Maintainer の人の Personal Access Token（scope `api`）です。
+手順 1 のフォルダで実行します。トークンは Owner か Maintainer の人の Personal Access Token（scope `api`）で、実行するとその場で聞かれます（画面には出ません。環境変数 `GITLAB_TOKEN` でも渡せます）。
 
 ```sh
-npm ci
-export GITLAB_TOKEN=glpat-…            # 引数には書かない（履歴に残るため）
-npm run gitlab:setup -- --api https://<社内GitLab>/api/v4 --project yojitsu-navi/yojitsu-navi
-npm run gitlab:setup -- --api https://<社内GitLab>/api/v4 --project yojitsu-navi/yojitsu-navi --apply
+yojitsu-navi gitlab-setup
+yojitsu-navi gitlab-setup --apply
 ```
 
+- 接続先は `config.json`、それも空なら `git remote` の `origin` から読みます。違うプロジェクトを見るときは `--api https://<社内GitLab>/api/v4 --project <グループ/プロジェクト>`。
 - 1 回目（`--apply` なし）は何も変えず、推奨構成との違いを ✓／✗ で出します。
 - `--apply` で、プロジェクトの設定と保護ブランチを推奨値に直し、もう一度確かめて結果を出します。何度実行しても同じ結果です。
 - `→` の付いた ✗（メンバー・CI/CD 変数）は手で直します。直し方が `→` の後ろに出ます。
 - 社内の証明書でエラーになるときは `NODE_EXTRA_CA_CERTS=<社内CAのPEM>` を付けて実行します。
-- Node.js を使えない場合は、上の「プロジェクトの設定」の表どおりに GitLab の画面（Settings > General、Settings > Repository > Protected branches、Settings > Merge requests）で設定してください。
+- `npm ci` 済みのフォルダなら `npm run gitlab:setup -- …` でも同じです。Node.js を使えない場合は、上の「プロジェクトの設定」の表どおりに GitLab の画面（Settings > General、Settings > Repository > Protected branches、Settings > Merge requests）で設定してください。
 
 ### 3. メンバーを追加する
 
@@ -108,7 +123,7 @@ npm run gitlab:setup -- --api https://<社内GitLab>/api/v4 --project yojitsu-na
 `.gitlab-ci.yml` は `image:` を使うので **Docker（または Kubernetes）executor** の Runner が必要です。
 shell executor しか無い場合は、Runner のマシンに Node.js 20 以上を入れ、管理者に相談してください。
 
-**CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します。
+**CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
 
 | 変数 | いつ必要か | 例 |
 |---|---|---|
@@ -122,6 +137,23 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 1. 手順 1 の push で CI/CD > Pipelines にパイプラインが出る。4 段すべて緑になるのを待つ（手順 2 より前に終わっていてもよい）。
 2. Deploy > **Pages** に公開 URL が出る（例: `https://yojitsu-navi.pages.<社内ドメイン>/yojitsu-navi/`。「Use unique domain」が有効なら `https://yojitsu-navi-xxxx.pages.<社内ドメイン>/`。どちらでも動きます）。
 3. 下の「社内で確認すること」を順に確かめる。
+
+## 新しい版にする
+
+開発元から新しい版の `.tgz` を受け取ったら、手順 1 のフォルダ（`main` を最新にしたもの）で実行します。
+
+```sh
+npm install -g ./yojitsu-navi-<新しい版>.tgz
+git switch main && git pull
+yojitsu-navi update
+git push -u origin update-<新しい版>
+```
+
+- `data/` と `config.json` は変えません（社内で書き換えるもの）。それ以外は新しい版に入れ替え、新しい版で無くなったファイルは消します。結果はブランチ `update-<版>` にコミットされるので、MR を作り、パイプラインが緑になったらリーダーがマージします。
+- 社内で手を入れていたファイルを上書きしたときは、その一覧が出ます。MR の差分で確かめ、要るものは入れ直してください。
+- 新しい版で増えた設定（`config.json` に無い項目）や、サンプルにだけある新しいデータのファイルも一覧で出ます。無くても既定値で動きます。
+- 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
+- コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける）。
 
 ## 社内で確認すること（チェックリスト）
 
@@ -157,7 +189,7 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 
 ## 計算コアの npm パッケージ（`@yojitsu-navi/core`）
 
-計算コア（`src/core/`）を、ほかの社内プロジェクトから同じ計算・型で使えるように、このプロジェクトの **Package Registry**（Deploy > Package registry）に npm パッケージとして公開します（SPEC §43）。画面の公開とは独立していて、使わないなら何も設定しなくて構いません。
+アプリ一式の持ち込み（手順 0〜1 の `yojitsu-navi`）とは別に、計算コア（`src/core/`）を、ほかの社内プロジェクトから同じ計算・型で使えるように、このプロジェクトの **Package Registry**（Deploy > Package registry）に npm パッケージとして公開します（SPEC §43）。画面の公開とは独立していて、使わないなら何も設定しなくて構いません。
 
 **最初に 1 回**: Settings > Repository > **Protected tags** で `core-v*` を「Allowed to create = Maintainers」で保護します（公開できる人をリーダーに限るため）。
 
@@ -179,7 +211,10 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 
 | 症状 | 原因と対処 |
 |---|---|
-| `npm ci` が `ETIMEDOUT` / `ENOTFOUND registry.npmjs.org` | 外部に出られない。`NPM_CONFIG_REGISTRY` に社内ミラーを設定 |
+| `npm ci` が `ETIMEDOUT` / `ENOTFOUND registry.npmjs.org` | 外部に出られない。`NPM_CONFIG_REGISTRY` に社内ミラーを設定するか、依存込みのパッケージで作り直す |
+| `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
+| `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
+| `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
 | `validate` が失敗 | データ（CSV）の誤り。ジョブのログに行番号と理由が出るので、該当 CSV を直して MR |

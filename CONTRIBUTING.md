@@ -10,6 +10,7 @@ PR を出す前に確認すること:
 - [ ] `git diff main --stat` で触った領域を確認し、関係する文書を直した
   - 画面 → README「画面」、[docs/UI_NOTES.md](docs/UI_NOTES.md)、スクリーンショット
   - 計算・仕様 → [docs/SPEC.md](docs/SPEC.md)、[docs/CORE_NOTES.md](docs/CORE_NOTES.md)。`src/core/index.ts` の公開 API を変えたら `packages/core/package.json` の版も上げる（SPEC §43）
+  - 社内へ渡す版を作るとき → ルートと `packages/app/package.json` の `version` を同じ値に上げてから `npm run app:pack`（SPEC §44）
   - データの列・ファイル → [docs/DATA.md](docs/DATA.md)
   - ダミーデータ → [docs/DUMMY_DATA.md](docs/DUMMY_DATA.md)（規模・警告の件数の表）
   - 画面の文言 → [docs/TEXTS.md](docs/TEXTS.md)

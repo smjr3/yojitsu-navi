@@ -2,7 +2,7 @@
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
  * 既定はライト。ヘッダーの切替ボタンで <html data-theme="dark"> にするとダーク（OS の設定には追従しない）。
  * 選んだテーマは localStorage（yn-theme）に保存し、observablehq.config.js の head スクリプトが描画前に復元する。
- * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§44）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
+ * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§46）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
  */
 @import url("observablehq:default.css");
 @import url("observablehq:theme-air.css");
@@ -173,7 +173,7 @@ body {
 .yn-topbar {
   display: flex;
   align-items: stretch;
-  gap: 8px 24px;
+  gap: 8px 16px;
   min-height: 52px;
   padding: 0 16px;
 }
@@ -251,6 +251,9 @@ body {
   gap: 6px;
   margin: 0;
 }
+.yn-unit-slot .yn-seg {
+  flex-wrap: nowrap;
+}
 .yn-unit-slot .yn-seg-btn {
   min-height: 28px;
   padding: 2px 8px;
@@ -286,8 +289,8 @@ body {
   color: var(--yn-text-1) !important;
   font-weight: 600;
 }
-/* スマホ・タブレット: タブを 2 段目に回して横スクロール（960px 未満は 1 段に収まらない） */
-@media (max-width: 959px) {
+/* スマホ・タブレット: タブを 2 段目に回して横スクロール（1024px 未満は 1 段に収まらない） */
+@media (max-width: 1023px) {
   .yn-topbar {
     flex-wrap: wrap;
     padding-top: 8px;
@@ -456,7 +459,7 @@ h3 {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
-/* BIZ UDPゴシックの数字は幅が広いので、表の数値だけ少し詰める（1024px で横スクロールを出さない。§44） */
+/* BIZ UDPゴシックの数字は幅が広いので、表の数値だけ少し詰める（1024px で横スクロールを出さない。§46） */
 .yn-table td.num {
   letter-spacing: -0.02em;
 }
@@ -3120,9 +3123,52 @@ html:has(dialog.yn-dialog[open]) {
   outline: 2px solid var(--yn-focus);
   outline-offset: 1px;
 }
-.yn-icon-btn[aria-current="page"] {
+.yn-icon-btn[aria-current="page"],
+.yn-more-btn.is-current {
   background: var(--yn-accent-bg);
   color: var(--yn-text-1) !important;
+}
+/* 右端「その他」（⋯）のメニュー: データ確認・計算ルール（§45） */
+.yn-more {
+  position: relative;
+  display: inline-flex;
+}
+.yn-more-btn[aria-expanded="true"] {
+  background: var(--yn-wash-strong);
+  color: var(--yn-text-1) !important;
+}
+.yn-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 9em;
+  padding: 4px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-card);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+}
+.yn-more-menu[hidden] {
+  display: none;
+}
+.yn-more-item {
+  padding: 8px 12px;
+  border-radius: var(--yn-radius-sm);
+  color: var(--yn-text-1) !important;
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.yn-more-item:hover,
+.yn-more-item:focus-visible {
+  background: var(--yn-wash);
+}
+.yn-more-item[aria-current="page"] {
+  background: var(--yn-accent-bg);
+  font-weight: 600;
 }
 .yn-theme-toggle .yn-icon-sun {
   display: none;
@@ -3133,7 +3179,7 @@ html:has(dialog.yn-dialog[open]) {
 :root[data-theme="dark"] .yn-theme-toggle .yn-icon-sun {
   display: block;
 }
-@media (max-width: 959px) {
+@media (max-width: 1023px) {
   .yn-icon-btn {
     width: 30px;
     height: 30px;
@@ -3375,9 +3421,16 @@ html:has(dialog.yn-dialog[open]) {
     flex: 1 1 100%;
   }
 }
-/* スマホ幅: 補助リンクの後ろに折り返すので、区切り線は付けない */
+/* スマホ幅: ロゴと右上のリンクを 1 段に収める（入らない幅では右上のリンクが折り返す）。区切り線は付けない */
 @media (max-width: 639px) {
+  .yn-topbar {
+    column-gap: 8px;
+  }
+  .yn-tools {
+    gap: 6px;
+  }
   .yn-icon-tools {
+    gap: 0;
     margin-left: 0;
     padding-left: 0;
     border-left: 0;

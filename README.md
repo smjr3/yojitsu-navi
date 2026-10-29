@@ -11,7 +11,7 @@
 
 ## 画面
 
-上部タブ（全体・チーム・顧客・案件・メンバー・工数）と右上の補助リンク（データ確認・計算ルール・稼働計画・マスタ編集・設定）で移動します。
+上部タブ（全体・チーム・顧客・案件・メンバー・工数）と右上のリンク（稼働計画・マスタ編集）、右端のアイコン（テーマ・設定・その他「⋯」）で移動します。データ確認・計算ルールは「⋯」のメニューにあります。
 
 | パス | 内容 |
 |---|---|
@@ -21,10 +21,10 @@
 | `/contracts` → `/contract?id=` 案件 | 案件ごとの予実（赤 = 消化率 100% 超 または 超過見込み）→ 案件詳細（月ごと・メンバー別・着地 3 方式・作業ログ） |
 | `/members` → `/member?id=` メンバー | 計画と実績・稼働率 → メンバー詳細（月ごと・案件別・単価の変遷・退職） |
 | `/workload` 工数 | 契約内／契約外の工数（人月）を組織・顧客・メンバー別に。作業種別の内訳 |
-| `/data-check` データ確認 | 未紐付けの作業実績・単価なし・退職後の実績などの警告 |
-| `/rules` 計算ルール | 画面の数値の計算方法 |
 | `/plan` 稼働計画 | リーダーが組織のメンバーの計画を入れる。人ごとに 1 行、開くと案件ごとの行と「契約外予定」の行。途中で人月が変わるときは「＋ 変更」で「何月から何人月」を入れ、いつ変わったかは「変更の履歴」で見る（人月でも時間でも、保存は人月。SPEC §23・§36） |
 | `/masters` マスタ編集 | メンバー・単価・組織の台帳。1 対象 1 行で今の値、開くと適用開始月ごとの変更の履歴。「＋ 変更」で「何月から何に変わるか」を足す（ID は変えられない）。表／CSV で編集し、稼働計画の変更とあわせて GitLab に MR を作る。リーダーがマージ（SPEC §19・§36） |
+| `/data-check` データ確認（「⋯」） | 未紐付けの作業実績・単価なし・退職後の実績などの警告 |
+| `/rules` 計算ルール（「⋯」） | 画面の数値の計算方法 |
 | `/settings` 設定 | GitLab の接続（トークンの登録・接続の確認。権限と、本番の設定の不足も出す。GitLab の設定はこの画面だけ）、テーマ（ライト／ダーク） |
 
 数値をクリックすると「式 ＋ 実際に使った値」の計算根拠が開きます。グラフは右上の「拡大」で大きく表示できます（スマホは全画面。SPEC §33）。
@@ -76,6 +76,7 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run screenshots` | `dist/` から README のスクリーンショットを撮り直す |
+| `npm run app:pack` | 社内へ持ち込むパッケージ `packages/app/yojitsu-navi-<版>.tgz` を作る（`-- --with-deps` で依存込み。使い方は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#0-持ち込むもの)） |
 | `npm run core:build` / `npm run core:pack` | 計算コアを npm パッケージ `@yojitsu-navi/core` として `packages/core/` に出力する（`pack` は `.tgz` も作る。公開は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)） |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
 
@@ -99,6 +100,8 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 
 ## 公開（GitLab Pages）
 
+社内へは npm パッケージ（`.tgz` 1 つ）で持ち込みます。`npm run app:pack` で作り、社内で `yojitsu-navi init` するとプロジェクトのフォルダができ、push すれば Pages まで流れます。新しい版は `yojitsu-navi update` で `data/` と `config.json` を残したまま入れ替えます。社内 GitLab の URL はパッケージに入れず、社内で `init` するときに入れます（[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）。
+
 `.gitlab-ci.yml` のパイプラインは `validate → test → build → pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。
 GitLab 側の推奨構成（グループ・プロジェクト・保護ブランチ・権限・トークン）、展開の手順、社内で確認することのチェックリストは [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) にあります。
 プロジェクトの設定は `GITLAB_TOKEN=… npm run gitlab:setup -- --api <URL> --project <グループ/プロジェクト>` で確認でき、`--apply` で推奨値に直せます。
@@ -108,7 +111,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 
 計算コア（`src/core/`）は、ほかの社内プロジェクトから使えるよう npm パッケージ `@yojitsu-navi/core` として同じ GitLab の Package Registry に公開できます（タグ `core-v<版>` で CI が公開。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)）。
 
-開発用の GitHub Actions（`.github/workflows/ci.yml`）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
+開発元の GitHub Actions（`.github/workflows/ci.yml`。社内へ持ち込むパッケージには入らない）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
 
 ## ドキュメント
 
@@ -137,9 +140,11 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 config.json              計算・表示・取り込み元・マスタ編集の設定
 data/                    CSV データ（docs/DATA.md）
 docs/                    仕様・データ定義・運用手順など（上の「ドキュメント」）
+packages/app/            社内へ持ち込む npm パッケージ yojitsu-navi（コマンド yojitsu-navi。中身はリポジトリ一式を写して作る）
 packages/core/           計算コアの npm パッケージ（package.json と README。中身は src/core からビルド）
 scripts/
   build.ts / dev.ts      ビルド・開発サーバ（入力の指紋でキャッシュを管理）
+  build-app.mjs          社内へ持ち込むパッケージを作る（npm run app:pack）
   build-core.mjs         計算コアの npm パッケージを作る（npm run core:build）
   verify-dist.ts         ビルド結果の検証
   generate-dummy.ts      ダミーデータ生成（基本シナリオ）。dummy-scale.ts が実運用規模の部分
@@ -149,7 +154,7 @@ scripts/
   gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
   ci/push-data-mr.sh     定期取り込みの結果を MR で反映（GitLab CI）
   screenshots.mjs        README のスクリーンショット
-  fonts/build_fonts.py   同梱フォント（src/fonts/）の作り直し（SPEC §44）
+  fonts/build_fonts.py   同梱フォント（src/fonts/）の作り直し（SPEC §46）
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）
 src/core/                計算コア（純粋関数。画面に依存しない。npm パッケージ @yojitsu-navi/core のソース）

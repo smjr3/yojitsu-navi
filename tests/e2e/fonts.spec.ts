@@ -1,5 +1,5 @@
 /**
- * 画面フォント（SPEC §44）: 同梱の BIZ UDPゴシックが読み込まれ、外部に取りに行かず、数字の桁がそろう
+ * 画面フォント（SPEC §46）: 同梱の BIZ UDPゴシックが読み込まれ、外部に取りに行かず、数字の桁がそろう
  */
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
 

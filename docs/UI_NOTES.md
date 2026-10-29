@@ -30,10 +30,10 @@ src/
 
 左サイドバーは使わない（`sidebar: false`）。`observablehq.config.js` の `header()` が全ページ共通のヘッダを出す。
 
-- 1 段目: ロゴ ＋ **画面タブ**（`NAV`: 全体・チーム・顧客・案件・メンバー・工数。現在のページは `aria-current="page"`）＋ 右上に **表示単位**（`#yn-unit-slot`）と **補助リンク**（`TOOLS`: データ確認・計算ルール・稼働計画・マスタ編集）とテーマ切替・設定のアイコン
+- 1 段目: ロゴ ＋ **画面タブ**（`NAV`: 全体・チーム・顧客・案件・メンバー・工数。現在のページは `aria-current="page"`）＋ 右上に **表示単位**（`#yn-unit-slot`）と **業務リンク**（`TOOLS`: 稼働計画・マスタ編集）、テーマ切替・設定・**その他「⋯」**（`MORE`: データ確認・計算ルール。たまに見る画面なので目立たせない。§45）のアイコン
 - 2 段目: **固定フィルタバー**（`#yn-filterbar-slot`）。ページが `mountFilterBar()` を呼んだときだけ表示。期間（開始月・終了月の選択＋カレンダーでの日付指定＋プリセット「今年度・今月・先月・直近3か月・直近12か月・前年度」。データは月単位なので、カレンダーで選んだ日付はその日が属する月として扱う）・チーム・着地見込みを 1 行に並べ、ヘッダごと `position: sticky` で上端に残る。フィルタの無いページ（計算ルール・データ確認）では出ない
 - href は `/teams` のように `/` 始まりで書けば Framework がページごとの相対パスに書き換える（GitLab Pages のサブパス配信でも動く）
-- 960px 未満はタブを 2 段目に回して横スクロール、フィルタも 1 行で横スクロール
+- 1024px 未満はタブを 2 段目に回して横スクロール、フィルタも 1 行で横スクロール。1024px 以上はヘッダーが 1 段（単位のボタンも折り返さない）。スマホ幅はロゴと右上のリンク・アイコンを 1 段、タブを 2 段目
 - スマホ（640px 未満）はヘッダを固定しない（固定すると画面の約 1/4 を占めるため）。表示条件はページ上端に戻って変える
 - 1 段だけのパンくずはタブと重複するので `pageHeader` は 2 段以上のときだけ出す
 
@@ -119,7 +119,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 ## スタイル（style.css）
 
 - `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。既定はライトで、OS の設定には追従しない。ヘッダー右端の「ダーク表示」ボタンで `<html data-theme="dark">` に切り替え、選択は localStorage `yn-theme` に保存（復元は observablehq.config.js の head スクリプト）。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
-- フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §44）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
+- フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §46）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。
 - `@media print` で上部ヘッダ・フィルタ・ボタンを隠し、表の固定ヘッダを解除。
@@ -129,7 +129,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 1. `src/<name>.md` を作り、先頭に front matter（`title`）と読み込み中スケルトン（`<div id="page-skeleton" class="yn-skeleton">`）を置く。
 2. 最初の `js` セルで `htl` / components / core を import。`const model = await loadJson(FileAttachment("./data/model.json"), {skeleton: "page-skeleton"})`、`const store = model ? createStore(model) : null`、`state = Generators.observe(...)`（既存ページからコピー）。
 3. `pageHeader({...})` → `mountFilterBar(store, model, {show: [...]})` → 本文。セルは `if (vm) {...}` で囲み、`display()` で描く。
-4. `observablehq.config.js` の `pages` に追加し、上部タブに出すなら `NAV`、右上の補助リンクなら `TOOLS` にも追加する（詳細画面は親タブの `match` にパスを足すとそのタブが選択状態になる。案件詳細がその例）。
+4. `observablehq.config.js` の `pages` に追加し、上部タブに出すなら `NAV`、右上の業務リンクなら `TOOLS`、「⋯」のメニューなら `MORE` にも追加する（詳細画面は親タブの `match` にパスを足すとそのタブが選択状態になる。案件詳細がその例）。
 5. 新しいデータが必要なら `src/data/<name>.json.ts` を追加（Node で動く。`_shared.ts` の `emitJson` で出力し `_build: buildStamp()` を付ける。[DATA_LOADERS.md](DATA_LOADERS.md)）。
 
 ## 検証の仕方
@@ -233,7 +233,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | 行き来 | 下書きの扱い | sessionStorage に最後に書いた下書きの `savedAt` を置き、同じタブ・土台が同じなら黙って続きから（`DRAFT_SESSION_KEY`）。別のタブ・後日だけ「復元 / 破棄」を聞く |
 | 契約外予定 | ファイルが無い | 見出しだけの空ファイルとして扱い、保存時は GitLab に `create`。CSV 編集では 2 ファイル（アサイン・契約外予定）を並べる |
 
-## ドキュメントの更新（2026-10-28 shimaさん指示）
+## ドキュメントの更新（2026-10-28 指示）
 
 画面・データ・操作を変える PR では、**同じ PR で** README・docs（SPEC・DATA・UI_NOTES・TEXTS・DEPLOY_GITLAB）と `tests/e2e/README.md` を直す。README のスクリーンショットは `npm run build && npm run screenshots`（`scripts/screenshots.mjs`）で撮り直す。スクリプトは一覧に無い古い PNG を消す。古い画像・古い説明を残さない。
 
