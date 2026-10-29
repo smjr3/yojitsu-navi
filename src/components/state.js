@@ -9,7 +9,7 @@
  *   team     チームID / "" = 全体 / "__unassigned__" = 未設定
  *   unit     m（百万円）| k（千円）| yen
  *   method   recent3 | all | assignment
- *   outside  1 = 契約外を含む（メンバー別の計画・実績。§48.4）。0（既定）は URL に書かない
+ *   outside  1 = 契約外を含む（メンバー別の計画・実績。§50.4）。0（既定）は URL に書かない
  */
 import { UNITS, fromCoreUnit } from "./format.js";
 import { T, fmt } from "../i18n/index.js";

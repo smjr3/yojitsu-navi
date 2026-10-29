@@ -7,7 +7,7 @@ import { buildCommitPayload } from "../../src/core/gitlab.js";
 import { MASTER_FILES, MASTER_FILE_IDS, addRow, describeImpactEffects, emptyMasterText, impactBetween, parseMasterDoc, updateRow, validateEdited, type MasterDoc, type MasterFileId } from "../../src/core/masterEdit.js";
 import { baseConfig } from "./fixtures.js";
 
-/** 種別の列（§48）が無い旧形式の見出し。読み込みは従来どおり（種別なし） */
+/** 種別の列（§50）が無い旧形式の見出し。読み込みは従来どおり（種別なし） */
 const HEADER = "member_id,start_month,end_month,person_months,note\n";
 const NEW_HEADER = "member_id,type,start_month,end_month,person_months,note\n";
 
@@ -39,7 +39,7 @@ describe("契約外予定の読み込み", () => {
   it("行を読み、メモは省略できる", () => {
     const r = parseDataset(files(`${HEADER}M1,2026-11,2027-01,0.2,"提案, 準備"\n`));
     expect(r.dataset.outsidePlans).toEqual([{ memberId: "M1", type: "", startMonth: "2026-11", endMonth: "2027-01", personMonths: 0.2, note: "提案, 準備" }]);
-    // 種別の列（§48.1）
+    // 種別の列（§50.1）
     const typed = parseDataset(files(`${NEW_HEADER}M1,会社業務,2026-11,2027-01,0.2,\n`));
     expect(typed.dataset.outsidePlans?.[0]).toMatchObject({ memberId: "M1", type: "会社業務", personMonths: 0.2 });
     const r2 = parseDataset(files("member_id,start_month,end_month,person_months\nM1,2026-11,2026-11,1\n"));

@@ -142,7 +142,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("outside")) {
-    // 契約外（提案・会社業務など）を含む／含まない（§48.4）。メンバー別の計画と実績の両方に効く
+    // 契約外（提案・会社業務など）を含む／含まない（§50.4）。メンバー別の計画と実績の両方に効く
     const input = html`<input type="checkbox" id="yn-filter-outside">`;
     input.addEventListener("change", () => store.set({ outside: input.checked ? "1" : "0" }));
     form.append(html`<div class="yn-filter yn-filter-outside"><label class="yn-toggle-chip" for="yn-filter-outside" title=${T.filters.outsideTitle}>${input}<span>${T.filters.outsideInclude}</span></label></div>`);

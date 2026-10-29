@@ -47,7 +47,7 @@ describe("parseTaskCategory", () => {
   it("契約内／契約外と英字を受け付け、それ以外は null", () => {
     expect(parseTaskCategory("契約内")).toBe("contract");
     expect(parseTaskCategory(" 契約外 ")).toBe("outside");
-    // 画面の呼び名（§48）も受け付ける
+    // 画面の呼び名（§50）も受け付ける
     expect(parseTaskCategory("運用保守")).toBe("contract");
     expect(parseTaskCategory("運用保守以外")).toBe("outside");
     expect(parseTaskCategory("CONTRACT")).toBe("contract");
@@ -111,7 +111,7 @@ describe("buildModel: 契約外は契約の実績に入れない", () => {
       worklog({ date: "2026-04-04", memberId: "M2", customerName: "新規見込み", projectName: "提案書", task: "運用設計", hours: 4 }),
       // 未分類（契約内として数える）
       worklog({ date: "2026-04-05", memberId: "M2", customerName: "ABC", projectName: "保守", task: "勉強会", hours: 1 }),
-      // 顧客名なしの契約内は除外（顧客名なしの契約外は残す。§48.2 は別の describe）
+      // 顧客名なしの契約内は除外（顧客名なしの契約外は残す。§50.2 は別の describe）
       worklog({ date: "2026-04-06", memberId: "M2", customerName: "", projectName: "", task: "保守", hours: 5 }),
     ],
   });

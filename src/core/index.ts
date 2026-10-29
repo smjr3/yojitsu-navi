@@ -25,6 +25,7 @@ export {
   toHolidaySet,
   type HolidayLookup,
 } from "./calendar.js";
+export { HolidaySet, nationalHolidays } from "./holidays.js";
 export {
   createEffectiveIndex,
   createMasterIndex,

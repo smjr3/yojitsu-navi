@@ -131,7 +131,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     optional: true,
     columns: [
       { name: "member_id", label: T.masterFiles.colMember, input: "member", required: true },
-      // 契約外の種別（§48.1）。省略可（旧ファイルには無い。無ければ見出しの末尾に足す）
+      // 契約外の種別（§50.1）。省略可（旧ファイルには無い。無ければ見出しの末尾に足す）
       { name: "type", label: T.masterFiles.colOutsideType, input: "outsideType", required: false },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
@@ -686,7 +686,7 @@ export interface ContextFiles {
   contracts: string;
   mapping: string;
   holidays: string;
-  /** 作業種別の分類表（契約外の種別の検証用。§48.1）。省略 = 分類なし */
+  /** 作業種別の分類表（契約外の種別の検証用。§50.1）。省略 = 分類なし */
   taskTypes?: string;
 }
 

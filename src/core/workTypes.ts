@@ -21,7 +21,7 @@ import { T, fmt } from "../i18n/index.js";
 /** category 列の値 → 区分。不正なら null（契約内／契約外、contract／outside。前後空白・大文字小文字は問わない） */
 export function parseTaskCategory(value: string | null | undefined): TaskCategory | null {
   const v = (value ?? "").normalize("NFKC").trim().toLowerCase();
-  // 画面の呼び名は「運用保守」「運用保守以外」（§48）。旧表記の 契約内・契約外 も受け付ける
+  // 画面の呼び名は「運用保守」「運用保守以外」（§50）。旧表記の 契約内・契約外 も受け付ける
   if (v === "運用保守" || v === "契約内" || v === "contract") return "contract";
   if (v === "運用保守以外" || v === "契約外" || v === "outside") return "outside";
   return null;
@@ -29,7 +29,7 @@ export function parseTaskCategory(value: string | null | undefined): TaskCategor
 
 export interface TaskClassification {
   category: TaskCategory;
-  /** 契約外の種別（§48.1。group、無ければ分類表の task の表記）。契約内は "" */
+  /** 契約外の種別（§50.1。group、無ければ分類表の task の表記）。契約内は "" */
   group: string;
   /** 分類表に無い（契約内として数える）。分類表が空のときは常に false */
   unclassified: boolean;
@@ -66,7 +66,7 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined)
 
 /**
  * 契約外として契約の紐付けから外す作業ログか（hours・日付が正しく、分類が契約外）。
- * 顧客名の無い作業（会社業務など）も契約外なら残す（§48.2。契約内の顧客名なしは従来どおり除外）
+ * 顧客名の無い作業（会社業務など）も契約外なら残す（§50.2。契約内の顧客名なしは従来どおり除外）
  */
 export function isOutsideWorklog(w: Worklog, classifier: TaskClassifier): boolean {
   if (!classifier.enabled) return false;
@@ -76,7 +76,7 @@ export function isOutsideWorklog(w: Worklog, classifier: TaskClassifier): boolea
 }
 
 // ---------------------------------------------------------------------------
-// 契約外の種別（§48.1）
+// 契約外の種別（§50.1）
 // ---------------------------------------------------------------------------
 
 /** 分類表の行の契約外の種別（group、空なら task の表記） */
@@ -100,7 +100,7 @@ export function outsideTypes(rules: readonly TaskTypeRule[] | undefined): string
   return out;
 }
 
-/** メンバー別の契約外の行の ID（§48.3。契約ID と重ならない接頭辞） */
+/** メンバー別の契約外の行の ID（§50.3。契約ID と重ならない接頭辞） */
 export const OUTSIDE_ROW_PREFIX = "~outside:";
 export function outsideRowId(type: string): string {
   return `${OUTSIDE_ROW_PREFIX}${type}`;
@@ -546,7 +546,7 @@ export function aggregateWork(model: Pick<Model, "meta" | "members">, rows: read
 export function outsideInputs(mappings: ReadonlyArray<{ kind: string; worklog: Worklog; month?: YearMonth; contractId?: string }>): OutsideInput[] {
   const out: OutsideInput[] = [];
   for (const m of mappings) {
-    // 顧客名なし（excluded）の契約外も残す（§48.2）
+    // 顧客名なし（excluded）の契約外も残す（§50.2）
     if (m.kind === "ignored") continue;
     out.push({ worklog: m.worklog, month: m.month ?? monthOfDate(m.worklog.date), contractId: m.kind === "assigned" ? (m.contractId ?? null) : null });
   }

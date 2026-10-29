@@ -1,5 +1,5 @@
 /**
- * 契約外の作業の計画と予実（SPEC §48）: 種別・顧客名なしの会社業務・メンバー別の「契約外を含む」
+ * 契約外の作業の計画と予実（SPEC §50）: 種別・顧客名なしの会社業務・メンバー別の「契約外を含む」
  * 月は基準月 BASE からの相対で作る（特定の年度に依存しない）
  */
 import { describe, expect, it } from "vitest";
@@ -57,7 +57,7 @@ function ds() {
   });
 }
 
-describe("契約外の種別（§48.1）", () => {
+describe("契約外の種別（§50.1）", () => {
   it("group で束ね、無ければ task の表記。契約内は数えない・重複を除きファイルの順", () => {
     expect(outsideTypes(TYPES)).toEqual(["提案", "設計", "会社業務", "構築"]);
     expect(outsideTypes([{ task: "提案", category: "outside", group: " 提案 " }, { task: "見積", category: "outside", group: "提案" }])).toEqual(["提案"]);
@@ -91,7 +91,7 @@ describe("契約外の種別（§48.1）", () => {
   });
 });
 
-describe("顧客名なしの契約外（§48.2）", () => {
+describe("顧客名なしの契約外（§50.2）", () => {
   const model = buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" });
   it("契約外は工数の明細に残り、契約内の顧客名なしだけ除外", () => {
     expect(model.excludedHours).toBe(3);
@@ -103,7 +103,7 @@ describe("顧客名なしの契約外（§48.2）", () => {
   });
 });
 
-describe("メンバー別の契約外（§48.3・§48.4）", () => {
+describe("メンバー別の契約外（§50.3・§50.4）", () => {
   const model = buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" });
   const mm = (id: string, n: number) => model.memberMonths.find((x) => x.memberId === id && x.month === m(n));
 
@@ -157,7 +157,7 @@ describe("メンバー別の契約外（§48.3・§48.4）", () => {
   });
 });
 
-describe("契約外予定の検証（§48.1）", () => {
+describe("契約外予定の検証（§50.1）", () => {
   const codes = (plans: NonNullable<ReturnType<typeof ds>["outsidePlans"]>) => {
     const d = ds();
     d.outsidePlans = plans;

@@ -101,7 +101,7 @@ export function buildMemberMonths(
     }
   }
 
-  // 契約外（§48.3）: 計画 = 契約外予定、実績 = 契約外の作業ログ（種別ごと）
+  // 契約外（§50.3）: 計画 = 契約外予定、実績 = 契約外の作業ログ（種別ごと）
   const outsideCell = (memberId: string, month: YearMonth, type: string): CellAcc => {
     const acc = cellOf(memberId, month, outsideRowId(type));
     acc.outsideType = type;
@@ -198,7 +198,7 @@ export function buildMemberMonths(
   return out;
 }
 
-/** buildMemberMonths の契約外の入力（§48.3） */
+/** buildMemberMonths の契約外の入力（§50.3） */
 export interface MemberOutsideInput {
   plans?: readonly OutsidePlan[];
   /** 契約外の作業ログの時間（メンバー・月・種別ごと） */
@@ -219,7 +219,7 @@ export interface MemberScope {
   memberIds?: readonly string[];
   /** 対象契約（byContract を絞る）。省略 = 全契約 */
   contractIds?: readonly string[];
-  /** 契約外の計画・実績も数える（§48.4。既定 false = 契約の分だけ） */
+  /** 契約外の計画・実績も数える（§50.4。既定 false = 契約の分だけ） */
   includeOutside?: boolean;
 }
 

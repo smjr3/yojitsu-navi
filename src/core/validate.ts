@@ -139,7 +139,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   flush();
 }
 
-/** 契約外予定（§36・§48）: メンバー・種別・月・人月の形式と、同じ人・同じ種別・同じ月の重複 */
+/** 契約外予定（§36・§50）: メンバー・種別・月・人月の形式と、同じ人・同じ種別・同じ月の重複 */
 function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "outside-plans.csv";
   const seen = new Map<string, number[]>();

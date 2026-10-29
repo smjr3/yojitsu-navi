@@ -375,7 +375,7 @@ function parseTaskTypes(text: string | undefined, issues: ValidationIssue[]): Ta
     }
     seen.set(key, row);
     const note = r.get("note");
-    // 計画の種別（§48.1）は契約外の行だけ使う
+    // 計画の種別（§50.1）は契約外の行だけ使う
     const group = category === "outside" ? r.get("group") : "";
     out.push({ task, category, ...(group !== "" ? { group } : {}), ...(note !== "" ? { note } : {}) });
   });

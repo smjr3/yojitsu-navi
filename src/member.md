@@ -71,7 +71,7 @@ const vm = (() => {
   const asOf = model.meta.asOfMonth;
   const allFuture = fullPeriod.from > asOf;
   const period = allFuture ? fullPeriod : { from: fullPeriod.from, to: fullPeriod.to < asOf ? fullPeriod.to : asOf };
-  // 契約外を含むか（§48.4）
+  // 契約外を含むか（§50.4）
   const includeOutside = state.outside === "1";
   const agg = aggregateMembers(model, { period, memberIds: [memberId], includeOutside });
   const totals = agg.members[0] ?? null;

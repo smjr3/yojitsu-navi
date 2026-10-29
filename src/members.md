@@ -73,7 +73,7 @@ const vm = (() => {
   // 比較は経過月（期間内で基準月以前）で行う。未来月は実績が無く、期間全体の計画と比べると見かけ上よく見えるため（SPEC §18.2）
   const allFuture = fullPeriod.from > model.meta.asOfMonth;
   const period = allFuture ? fullPeriod : { from: fullPeriod.from, to: fullPeriod.to < model.meta.asOfMonth ? fullPeriod.to : model.meta.asOfMonth };
-  // 契約外を含むか（§48.4。フィルタバーの切替）。計画・実績の両方に効く
+  // 契約外を含むか（§50.4。フィルタバーの切替）。計画・実績の両方に効く
   const includeOutside = state.outside === "1";
   const all = aggregateMembers(model, { period, includeOutside });
   // 所属チーム（基準月 = 期間の終了月。未来は基準月）で絞る。上位チームは配下を含む。

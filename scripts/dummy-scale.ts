@@ -14,12 +14,14 @@
  *   - アサインの頻繁な変更（契約ごとに 1〜3 区間、期中に配分が変わる）。人×月の配分合計は 1.0 以下（0.05 刻み）
  */
 import type { Worklog, YearMonth } from "../src/core/types.js";
-import { addMonths, monthCount, Rng, splitHours, ymOf } from "./lib/dummy-util.js";
+import { addMonths, FyCalendar, monthCount, Rng, splitHours, ymOf } from "./lib/dummy-util.js";
 import type { AssignmentRow, ContractRow, MappingRow, MemberRow, OutsidePlanRow, RateRow, TeamRow } from "./generate-dummy.js";
 
 export interface ScaleInput {
   seed: number;
   asOf: string;
+  /** 基準日の年度からの相対の年月（基本シナリオと同じもの） */
+  cal: FyCalendar;
   /** 営業日（基本シナリオと同じ） */
   days: readonly string[];
   /** 基本シナリオの単価（役職の単価は共通で使う） */
@@ -47,6 +49,12 @@ interface TeamDef {
   name: string;
   parent: string;
   level: string;
+  /** 新設チーム: 基準日の年度の何月にできたか（それより前の月の組織には無い） */
+  openedInMonth?: number;
+}
+
+/** generateScale の中で使う形（新設月を年月にしたもの） */
+interface LeafTeam extends TeamDef {
   from?: YearMonth;
 }
 
@@ -103,8 +111,8 @@ const LEAF_TEAMS: TeamDef[] = [
   { id: "T621", name: "24時間365日運用監視チーム（一次受付・エスカレーション）", parent: "S62", level: "チーム" },
   { id: "T622", name: "ジョブ運用・バッチ監視チーム", parent: "S62", level: "チーム" },
   { id: "T631", name: "品質保証・テスト自動化チーム", parent: "S63", level: "チーム" },
-  // 2026-07 新設（それより前の月の組織には無い）
-  { id: "T623", name: "生成AI活用推進チーム", parent: "S62", level: "チーム", from: "2026-07" },
+  // 今年度 7 月に新設
+  { id: "T623", name: "生成AI活用推進チーム", parent: "S62", level: "チーム", openedInMonth: 7 },
 ];
 
 /** 班の親（それ自体はメンバーを持たない中間のチーム） */
@@ -247,10 +255,10 @@ const TASK_TYPES = [
 ];
 
 /** 役職の単価（基本シナリオの役職に足す） */
-const EXTRA_RATES: RateRow[] = [
-  { key: "シニアエンジニア", hourly_rate: 9500, effective_from: "2025-04" },
-  { key: "シニアエンジニア", hourly_rate: 9800, effective_from: "2026-04" },
-  { key: "担当課長", hourly_rate: 10500, effective_from: "2025-04" },
+const extraRatesOf = (c: FyCalendar): RateRow[] => [
+  { key: "シニアエンジニア", hourly_rate: 9500, effective_from: c.m(-1, 4) },
+  { key: "シニアエンジニア", hourly_rate: 9800, effective_from: c.m(0, 4) },
+  { key: "担当課長", hourly_rate: 10500, effective_from: c.m(-1, 4) },
   // 「専門職」は単価の行を置かない（RATE_MISSING の 2 例目）
 ];
 
@@ -286,13 +294,15 @@ function deptRow(teamId: string): { department: string; section: string } {
 
 export function generateScale(input: ScaleInput): ScaleOutput {
   const rng = new Rng(input.seed * 31 + 1009);
+  const c = input.cal;
   const asOfMonth = ymOf(input.asOf);
-  const FIRST: YearMonth = "2025-04";
+  const FIRST: YearMonth = c.m(-1, 4);
+  const leafTeams: LeafTeam[] = LEAF_TEAMS.map((t) => (t.openedInMonth ? { ...t, from: c.m(0, t.openedInMonth) } : t));
 
   // ---- 組織 ----
   const teams: TeamRow[] = [];
   const leaders: Record<string, string> = {};
-  const addTeam = (t: TeamDef, from: YearMonth = t.from ?? FIRST, overrides: Partial<TeamRow> = {}) =>
+  const addTeam = (t: LeafTeam, from: YearMonth = t.from ?? FIRST, overrides: Partial<TeamRow> = {}) =>
     teams.push({ team_id: t.id, name: t.name, parent_team_id: t.parent, effective_from: from, level: t.level, leader_member_id: leaders[t.id] ?? "", ...overrides });
 
   // ---- メンバー ----
@@ -323,8 +333,8 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   // 部長（工数なし）・課長（課に所属）
   for (const d of DIVISIONS) leaders[d.id] = hire(d.id, "部長").id;
   for (const s of SECTIONS) leaders[s.id] = hire(s.id, rng.chance(0.25) ? "担当課長" : "課長").id;
-  // チーム: 主任 1 人 ＋ 一般 2〜4 人 ＋ パートナー 0〜2 人。T623（新設）は 2026-07 から
-  for (const t of LEAF_TEAMS) {
+  // チーム: 主任 1 人 ＋ 一般 2〜4 人 ＋ パートナー 0〜2 人。T623（新設）は今年度 7 月から
+  for (const t of leafTeams) {
     const from = t.from ?? FIRST;
     const chief = hire(t.id, rng.chance(0.3) ? "シニアエンジニア" : "主任", "employee", from);
     leaders[t.id] = chief.id;
@@ -338,7 +348,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   const specialist = people.find((p) => p.rows[0]!.team_id === "T631" && p.rows[0]!.title === "一般");
   if (specialist) specialist.rows[0]!.title = "専門職";
 
-  const workers = () => people.filter((p) => !["部長"].includes(p.rows[0]!.title) && LEAF_TEAMS.some((t) => t.id === p.rows[0]!.team_id));
+  const workers = () => people.filter((p) => !["部長"].includes(p.rows[0]!.title) && leafTeams.some((t) => t.id === p.rows[0]!.team_id));
   const lastRow = (p: Person) => p.rows[p.rows.length - 1] as MemberRow;
   const addRow = (p: Person, month: YearMonth, patch: Partial<MemberRow>) => {
     const prev = lastRow(p);
@@ -347,11 +357,11 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     p.rows.push(next);
   };
 
-  // 期中入社（2025-07〜2026-10）: 新しく 10 人
-  const hireMonths: YearMonth[] = ["2025-07", "2025-10", "2026-01", "2026-04", "2026-04", "2026-04", "2026-07", "2026-08", "2026-10", "2026-10"];
+  // 期中入社（前年度 7 月〜今年度 10 月）: 新しく 10 人
+  const hireMonths: YearMonth[] = [c.m(-1, 7), c.m(-1, 10), c.m(-1, 1), c.m(0, 4), c.m(0, 4), c.m(0, 4), c.m(0, 7), c.m(0, 8), c.m(0, 10), c.m(0, 10)];
   for (const m of hireMonths) {
     if (m > asOfMonth) continue;
-    const t = rng.pick(LEAF_TEAMS.filter((x) => !x.from || x.from <= m));
+    const t = rng.pick(leafTeams.filter((x) => !x.from || x.from <= m));
     hire(t.id, "一般", rng.chance(0.25) ? "partner" : "employee", m);
   }
   // 昇格（一般 → 主任）6 人、異動 8 人、退職 12 人（重ならないように別々の人を選ぶ）
@@ -361,41 +371,41 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     while (out.length < n && pool.length > 0) out.push(pool.splice(rng.int(0, pool.length - 1), 1)[0] as Person);
     return out;
   };
-  for (const p of take(6)) addRow(p, rng.pick(["2025-10", "2026-04", "2026-04", "2026-07"] as YearMonth[]), { title: "主任" });
+  for (const p of take(6)) addRow(p, rng.pick([c.m(-1, 10), c.m(0, 4), c.m(0, 4), c.m(0, 7)] as YearMonth[]), { title: "主任" });
   for (const p of take(8)) {
-    const to = rng.pick(LEAF_TEAMS.filter((t) => !t.from && t.id !== p.rows[0]!.team_id));
-    addRow(p, rng.pick(["2025-10", "2026-01", "2026-04", "2026-07", "2026-10"] as YearMonth[]), { team_id: to.id });
+    const to = rng.pick(leafTeams.filter((t) => !t.from && t.id !== p.rows[0]!.team_id));
+    addRow(p, rng.pick([c.m(-1, 10), c.m(-1, 1), c.m(0, 4), c.m(0, 7), c.m(0, 10)] as YearMonth[]), { team_id: to.id });
   }
-  const retireMonths: YearMonth[] = ["2025-07", "2025-09", "2025-12", "2026-01", "2026-03", "2026-04", "2026-04", "2026-06", "2026-07", "2026-09", "2026-10", "2026-10"];
+  const retireMonths: YearMonth[] = [c.m(-1, 7), c.m(-1, 9), c.m(-1, 12), c.m(-1, 1), c.m(-1, 3), c.m(0, 4), c.m(0, 4), c.m(0, 6), c.m(0, 7), c.m(0, 9), c.m(0, 10), c.m(0, 10)];
   const retirees = take(retireMonths.length);
   retirees.forEach((p, i) => addRow(p, retireMonths[i] as YearMonth, { status: "退職" }));
   // パートナーの契約終了（退職と同じ扱い）2 人
-  for (const p of workers().filter((x) => x.kind === "partner" && x.rows.length === 1).slice(0, 2)) addRow(p, "2026-04", { status: "退職" });
+  for (const p of workers().filter((x) => x.kind === "partner" && x.rows.length === 1).slice(0, 2)) addRow(p, c.m(0, 4), { status: "退職" });
   // 退職した人を戻すことはしない。退職の翌月に精算の工数が 1 件だけ付いている人（データの誤り）を 1 人作る
-  const lateLogger = retirees.find((p) => lastRow(p).effective_from <= "2026-07");
+  const lateLogger = retirees.find((p) => lastRow(p).effective_from <= c.m(0, 7));
 
-  // 組織の履歴: 課の廃止（S33 → 配下を S32 へ 2026-04）、チーム名の変更（T421 2025-10）、リーダー交代（T312 2026-04）
+  // 組織の履歴: 課の廃止（S33 → 配下を S32 へ 今年度 4 月）、チーム名の変更（T421 前年度 10 月）、リーダー交代（T312 今年度 4 月）
   for (const d of DIVISIONS) addTeam(d);
   for (const s of SECTIONS) addTeam(s);
   for (const t of MID_TEAMS) addTeam(t);
-  for (const t of LEAF_TEAMS) addTeam(t);
+  for (const t of leafTeams) addTeam(t);
   for (const id of ["T331", "T332"]) {
-    const t = LEAF_TEAMS.find((x) => x.id === id) as TeamDef;
-    addTeam(t, "2026-04", { parent_team_id: "S32" });
+    const t = leafTeams.find((x) => x.id === id) as LeafTeam;
+    addTeam(t, c.m(0, 4), { parent_team_id: "S32" });
   }
-  addTeam(LEAF_TEAMS.find((x) => x.id === "T421") as TeamDef, "2025-10", { name: "保険基幹システム保守チーム（生保・損保）" });
+  addTeam(leafTeams.find((x) => x.id === "T421") as LeafTeam, c.m(-1, 10), { name: "保険基幹システム保守チーム（生保・損保）" });
   const t312 = people.filter((p) => p.rows[0]!.team_id === "T312" && p.rows[0]!.title === "一般" && p.rows.length === 1)[0];
-  if (t312) addTeam(LEAF_TEAMS.find((x) => x.id === "T312") as TeamDef, "2026-04", { leader_member_id: t312.id });
-  // S33 のメンバー（課長）は 2026-04 から S32 の担当課長に
+  if (t312) addTeam(leafTeams.find((x) => x.id === "T312") as LeafTeam, c.m(0, 4), { leader_member_id: t312.id });
+  // S33 のメンバー（課長）は今年度 4 月から S32 の担当課長に
   const s33lead = people.find((p) => p.id === leaders["S33"]);
-  if (s33lead) addRow(s33lead, "2026-04", { team_id: "S32", title: "担当課長" });
+  if (s33lead) addRow(s33lead, c.m(0, 4), { team_id: "S32", title: "担当課長" });
 
   // ---- 単価 ----
-  const rates: RateRow[] = [...EXTRA_RATES];
+  const rates: RateRow[] = extraRatesOf(c);
   for (const p of people.filter((x) => x.kind === "partner")) {
     const r = Math.round(rng.int(60, 95) * 100);
     rates.push({ key: p.id, hourly_rate: r, effective_from: p.rows[0]!.effective_from });
-    if (rng.chance(0.25)) rates.push({ key: p.id, hourly_rate: r + 500, effective_from: "2026-04" });
+    if (rng.chance(0.25)) rates.push({ key: p.id, hourly_rate: r + 500, effective_from: c.m(0, 4) });
   }
   // パートナー 1 人だけ個人単価が無い（パートナーの役職単価も無いので RATE_MISSING）
   const noRate = people.filter((x) => x.kind === "partner" && x.rows.length === 1 && x.rows[0]!.effective_from === FIRST).at(-1);
@@ -442,7 +452,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     drafts.push(d);
     return d;
   };
-  const teamFrom = (id: string) => LEAF_TEAMS.find((t) => t.id === id)?.from ?? FIRST;
+  const teamFrom = (id: string) => leafTeams.find((t) => t.id === id)?.from ?? FIRST;
   for (const a of accounts) {
     const f = teamFrom(a.team);
     if (f > FIRST) {
@@ -451,34 +461,34 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     }
     const r = rng.float();
     if (r < 0.55) {
-      newContract(a, "2025-04", "2026-03", "FY2025");
-      newContract(a, "2026-04", "2027-03", "FY2026 更新");
+      newContract(a, c.m(-1, 4), c.m(-1, 3), c.label(-1));
+      newContract(a, c.m(0, 4), c.m(0, 3), `${c.label()} 更新`);
     } else if (r < 0.68) {
-      newContract(a, "2025-04", "2026-03", "FY2025 で終了（更新なし）");
+      newContract(a, c.m(-1, 4), c.m(-1, 3), `${c.label(-1)} で終了（更新なし）`);
     } else if (r < 0.75) {
-      newContract(a, "2025-04", "2025-12", "途中解約（2025-12 で終了）");
+      newContract(a, c.m(-1, 4), c.m(-1, 12), `途中解約（${c.m(-1, 12)} で終了）`);
     } else if (r < 0.82) {
-      newContract(a, "2025-04", "2026-03", "FY2025");
-      newContract(a, "2026-04", "2026-06", "FY2026（2026-06 で変更契約へ）");
-      newContract(a, "2026-07", "2027-03", "変更契約（2026-07〜 体制増強で増額）");
+      newContract(a, c.m(-1, 4), c.m(-1, 3), c.label(-1));
+      newContract(a, c.m(0, 4), c.m(0, 6), `${c.label()}（${c.m(0, 6)} で変更契約へ）`);
+      newContract(a, c.m(0, 7), c.m(0, 3), `変更契約（${c.m(0, 7)}〜 体制増強で増額）`);
     } else if (r < 0.88) {
-      newContract(a, "2026-04", "2027-03", "FY2026 新規");
+      newContract(a, c.m(0, 4), c.m(0, 3), `${c.label()} 新規`);
     } else if (r < 0.93) {
-      newContract(a, "2024-04", "2027-03", "3 年契約（2024-04〜。2025-03 以前の実績データは無い）");
+      newContract(a, c.m(-2, 4), c.m(0, 3), `3 年契約（${c.m(-2, 4)}〜。${c.m(-2, 3)} 以前の実績データは無い）`);
     } else if (r < 0.97) {
-      newContract(a, "2025-04", "2026-03", "FY2025");
-      newContract(a, "2026-04", "2026-06", "FY2026（2026-06 で解約）");
+      newContract(a, c.m(-1, 4), c.m(-1, 3), c.label(-1));
+      newContract(a, c.m(0, 4), c.m(0, 6), `${c.label()}（${c.m(0, 6)} で解約）`);
     } else {
-      newContract(a, "2025-10", "2026-09", "期中開始（10月〜9月）");
-      newContract(a, "2026-10", "2027-09", "期中開始の更新");
+      newContract(a, c.m(-1, 10), c.m(0, 9), "期中開始（10月〜9月）");
+      newContract(a, c.m(0, 10), c.m(1, 9), "期中開始の更新");
     }
   }
   // 将来開始（工数なし）、主担当チーム未設定、超大型・超少額
-  newContract(accounts.find((a) => a.team === "T513")!, "2026-12", "2027-11", "将来開始（2026-12〜）");
-  newContract(accounts.find((a) => a.team === "T321")!, "2027-04", "2028-03", "将来開始（次年度）");
-  const noTeam = newContract({ team: "", customer: "ひかり生命保険", project: "保険代理店ポータル保守", customerVariants: customerVariants("ひかり生命保険"), projectVariants: projectVariants("保険代理店ポータル保守") }, "2026-04", "2027-03", "主担当チーム未設定", "");
-  const tiny = newContract({ team: "T523", customer: "学校法人 白鷺学院", project: "同窓会名簿サイト保守", customerVariants: customerVariants("学校法人 白鷺学院"), projectVariants: projectVariants("同窓会名簿サイト保守") }, "2026-04", "2027-03", "少額（年 5 万円）");
-  const huge = drafts.find((d) => d.project_name.startsWith("国際送金") && d.start_month >= "2026-04") ?? drafts.find((d) => d.project_name.startsWith("国際送金"));
+  newContract(accounts.find((a) => a.team === "T513")!, c.m(0, 12), c.m(1, 11), `将来開始（${c.m(0, 12)}〜）`);
+  newContract(accounts.find((a) => a.team === "T321")!, c.m(1, 4), c.m(1, 3), "将来開始（次年度）");
+  const noTeam = newContract({ team: "", customer: "ひかり生命保険", project: "保険代理店ポータル保守", customerVariants: customerVariants("ひかり生命保険"), projectVariants: projectVariants("保険代理店ポータル保守") }, c.m(0, 4), c.m(0, 3), "主担当チーム未設定", "");
+  const tiny = newContract({ team: "T523", customer: "学校法人 白鷺学院", project: "同窓会名簿サイト保守", customerVariants: customerVariants("学校法人 白鷺学院"), projectVariants: projectVariants("同窓会名簿サイト保守") }, c.m(0, 4), c.m(0, 3), "少額（年 5 万円）");
+  const huge = drafts.find((d) => d.project_name.startsWith("国際送金") && d.start_month >= c.m(0, 4)) ?? drafts.find((d) => d.project_name.startsWith("国際送金"));
 
   // 契約の工数側の名前: 同じ顧客・案件名の契約は期間で振り分く（mapping は契約ごとに 1 行）
   const mappings: MappingRow[] = drafts.map((d) => ({ worklog_customer_name: d.customer_name, worklog_project_name: d.project_name, contract_id: d.contract_id }));
@@ -551,13 +561,13 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     d.total_amount = Math.max(10_000, Math.round(amount / 10_000) * 10_000 + (rng.chance(0.15) ? rng.int(1, 9999) : 0));
   }
 
-  // ---- アサイン（FY2026）: 1 人あたり 1〜3 区間。期中に配分を変える。月の合計は 1.0 以下（超えると検証エラー） ----
+  // ---- アサイン（今年度）: 1 人あたり 1〜3 区間。期中に配分を変える。月の合計は 1.0 以下（超えると検証エラー） ----
   const assignments: AssignmentRow[] = [];
   /** 人 → 月 → 配分の合計（契約外予定を足す人を選ぶ） */
   const peakOf = new Map<string, Map<YearMonth, number>>();
-  const forgotten = retirees.find((p) => lastRow(p).effective_from === "2026-10");
-  const fyFrom: YearMonth = "2026-04";
-  const fyTo: YearMonth = "2027-03";
+  const forgotten = retirees.find((p) => lastRow(p).effective_from === c.m(0, 10));
+  const fyFrom: YearMonth = c.m(0, 4);
+  const fyTo: YearMonth = c.m(0, 3);
   for (const p of people) {
     const start = p.rows[0]!.effective_from > fyFrom ? p.rows[0]!.effective_from : fyFrom;
     const leftRow = p.rows.find((r) => r.status === "退職");
@@ -603,7 +613,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   // 乱数は他のデータを作り終えてから引く（ほかの行は変わらない）
   const outsidePlans: OutsidePlanRow[] = [];
   const NOTES = ["次期更改の提案", "運用設計の支援", "新規顧客の提案", "移行計画の作成"];
-  // メモ → 種別（§48.1。乱数は増やさない）
+  // メモ → 種別（§50.1。乱数は増やさない）
   const TYPE_OF: Record<string, string> = { 次期更改の提案: "提案", 運用設計の支援: "設計", 新規顧客の提案: "提案", 移行計画の作成: "設計" };
   for (const p of people) {
     const used = peakOf.get(p.id);

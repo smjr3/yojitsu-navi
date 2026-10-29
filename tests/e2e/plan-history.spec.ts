@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 const cell = (page: Page, member: string, month: string) => page.locator(`[data-fk="plan:cell:${member}:all:${month}"]`);
 const dialog = (page: Page) => page.locator("dialog.yn-me-dialog[open]");
 
-/** 人の行を開いて、案件（または契約外予定の種別 "outside:提案"。§48.3）の行を返す */
+/** 人の行を開いて、案件（または契約外予定の種別 "outside:提案"。§50.3）の行を返す */
 async function subRow(page: Page, member: string, target: string) {
   const toggle = page.locator(`[data-fk="plan:toggle:${member}"]`);
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
@@ -54,7 +54,7 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(out).toContainText("運用保守以外");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-12"]')).toHaveText("0.20");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-10"]')).toHaveText("—");
-  // 種別ごとの行（task-types.csv の契約外の種別すべて。§48.3）
+  // 種別ごとの行（task-types.csv の契約外の種別すべて。§50.3）
   await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"]')).toHaveCount(4);
   await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"] .yn-me-plan-name')).toHaveText(["提案", "設計", "構築", "会社業務"]);
   // 合計の下に「うち契約外予定」

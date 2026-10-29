@@ -95,7 +95,7 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);
   });
 
-  it("Model の警告も同じ内訳。除外時間は顧客名が空の契約内の行の合計と一致（顧客名が空の契約外 = 会社業務は除外しない §48.2）", () => {
+  it("Model の警告も同じ内訳。除外時間は顧客名が空の契約内の行の合計と一致（顧客名が空の契約外 = 会社業務は除外しない §50.2）", () => {
     expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 4, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 * 3, TASK_UNCLASSIFIED: 1 });
     const noCustomer = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date));
     const expected = noCustomer.filter((w) => w.task !== "社内会議").reduce((a, w) => a + w.hours, 0);

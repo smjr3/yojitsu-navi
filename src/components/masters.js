@@ -191,7 +191,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     .rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name"), startMonth: r.get("start_month"), endMonth: r.get("end_month") }))
     .filter((c) => c.id !== "");
   const contractById = new Map(contracts.map((c) => [c.id, c]));
-  // 契約外の種別（§48.1。task-types.csv の契約外の行。無ければ種別なしの 1 行だけ）
+  // 契約外の種別（§50.1。task-types.csv の契約外の行。無ければ種別なしの 1 行だけ）
   const outsideTypeList = outsideTypes(
     parseCsvTable(data.context.taskTypes ?? "")
       .rows.map((r) => ({ task: r.get("task"), category: parseTaskCategory(r.get("category")), group: r.get("group") }))
@@ -1509,7 +1509,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
     const active = memberPeriodRows("assignments", r.memberId).filter((a) => a.startMonth <= month && month <= a.endMonth);
     const outAll = memberPeriodRows("outside", r.memberId);
-    // 契約外予定は種別ごとに 1 欄（§48.1）。同じ月に同じ種別の行が重なっていれば欄を無効にする
+    // 契約外予定は種別ごとに 1 欄（§50.1）。同じ月に同じ種別の行が重なっていれば欄を無効にする
     const outs = memberOutsideTypes(outAll).map((type, i) => {
       const covering = outAll.filter((o) => sameType(o.type, type) && o.startMonth <= month && month <= o.endMonth);
       const before = covering.length === 1 ? covering[0].text : covering.length === 0 ? "" : null;
@@ -1764,7 +1764,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${levelOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
     if (col.input === "outsideType") {
-      // 契約外の種別（§48.1）。分類表の種別から選ぶ（分類表に無い値も消さずに残す）
+      // 契約外の種別（§50.1）。分類表の種別から選ぶ（分類表に無い値も消さずに残す）
       const known = value === "" || outsideTypeList.some((t) => sameType(t, value));
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
         ${outsideTypeList.length === 0 || value === "" ? html`<option value="" selected=${value === ""}>${T.masterFiles.outsideNoType}</option>` : null}

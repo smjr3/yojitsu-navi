@@ -503,7 +503,7 @@ function rateSourceText(mm) {
   return fmt(T.breakdown.rateSourceText, { source: personal ? T.breakdown.personalRate : fmt(T.breakdown.roleRate, { role: mm.rateSource.key }), from: mm.rateSource.effectiveFrom });
 }
 
-/** 月 × 契約の行。contractIds を渡せばその行だけ（契約外の行 ID も可）。渡さなければ契約の行 ＋ includeOutside なら契約外の行（§48.3） */
+/** 月 × 契約の行。contractIds を渡せばその行だけ（契約外の行 ID も可）。渡さなければ契約の行 ＋ includeOutside なら契約外の行（§50.3） */
 function memberRows(months, contractIds, includeOutside = false) {
   const set = contractIds ? new Set(contractIds) : null;
   const out = [];

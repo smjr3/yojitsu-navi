@@ -172,10 +172,10 @@ export interface Assignment {
   allocation: number;
 }
 
-/** 契約外予定（§30.5・§36・§48）: 人 × 種別 × 期間 × 人月。契約の計画額・着地見込みには入れない */
+/** 契約外予定（§30.5・§36・§50）: 人 × 種別 × 期間 × 人月。契約の計画額・着地見込みには入れない */
 export interface OutsidePlan {
   memberId: string;
-  /** 契約外の種別（§48.1。task-types.csv の group）。空 = 種別なし */
+  /** 契約外の種別（§50.1。task-types.csv の group）。空 = 種別なし */
   type: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
@@ -246,7 +246,7 @@ export type TaskCategory = "contract" | "outside";
 export interface TaskTypeRule {
   task: string;
   category: TaskCategory;
-  /** 契約外の種別（計画の単位。§48.1）。空・省略 = task と同じ。契約内では使わない */
+  /** 契約外の種別（計画の単位。§50.1）。空・省略 = task と同じ。契約内では使わない */
   group?: string;
   note?: string;
 }
@@ -390,7 +390,8 @@ export type WarningCode =
   | "MAPPING_EXCLUDED_CONTRACT"
   | "MAPPING_AMBIGUOUS"
   | "EXCLUDED_NO_CUSTOMER"
-  | "TASK_UNCLASSIFIED";
+  | "TASK_UNCLASSIFIED"
+  | "HOLIDAYS_AUTO";
 
 export interface Warning {
   code: WarningCode;
@@ -457,7 +458,7 @@ export interface Model {
    * 画面用の model.json では空にし、data/work-hours.json で別に配る
    */
   workRows: WorkRow[];
-  /** 契約外の種別（§48.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
+  /** 契約外の種別（§50.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
   outsideTypes: string[];
 }
 
@@ -491,7 +492,7 @@ export interface WorkRow {
 
 /** メンバー x・月 m・契約 c の計画と実績（MemberMonth.byContract の 1 行） */
 export interface MemberContractMonth {
-  /** 契約ID。契約外の行は outsideRowId(種別)（§48.3） */
+  /** 契約ID。契約外の行は outsideRowId(種別)（§50.3） */
   contractId: string;
   /** 契約外の行だけ: 種別（空 = 種別なし） */
   outsideType?: string;
@@ -544,7 +545,7 @@ export interface MemberMonth {
 /** aggregateMembers の契約別の行（期間内の合計） */
 export interface MemberContractTotals {
   contractId: string;
-  /** 契約外の行だけ: 種別（§48.3） */
+  /** 契約外の行だけ: 種別（§50.3） */
   outsideType?: string;
   plannedHours: number;
   plannedCost: number;
