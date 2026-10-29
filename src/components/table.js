@@ -257,6 +257,15 @@ export function dataTable({
     );
   }
 
+  /** 読み上げ用の値の文字（記号や色付きの要素で包まれていても、見えている文字を使う） */
+  function plainText(text) {
+    if (typeof text === "string") return text;
+    if (!(text instanceof Node)) return "";
+    const clone = text.cloneNode(true);
+    if (clone instanceof Element) for (const h of clone.querySelectorAll('[aria-hidden="true"]')) h.remove();
+    return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+  }
+
   function cellNode(col, row, isSummary = false) {
     const cellUnit = col.type === "moneyYen" ? "yen" : unit;
     const text = col.render ? col.render(row, cellUnit) : defaultRender(col, row, unit);
@@ -264,11 +273,11 @@ export function dataTable({
     if (isSummary) {
       // 合計行は行用の breakdown(row) を使わない（契約IDなどを持たないため）。summaryBreakdown(col) があればそれを開く
       const spec = summaryBreakdown ? summaryBreakdown(col, row) : null;
-      return spec ? numberButton(text, spec, { ariaLabel: fmt(T.table.totalBreakdownAria, { label: col.label, value: typeof text === "string" ? text : "" }) }) : text;
+      return spec ? numberButton(text, spec, { ariaLabel: fmt(T.table.totalBreakdownAria, { label: col.label, value: plainText(text) }) }) : text;
     }
     if (col.breakdown) {
       const spec = () => col.breakdown(row);
-      return numberButton(text, spec, { ariaLabel: fmt(T.table.cellBreakdownAria, { label: col.label, value: typeof text === "string" ? text : "" }) });
+      return numberButton(text, spec, { ariaLabel: fmt(T.table.cellBreakdownAria, { label: col.label, value: plainText(text) }) });
     }
     return text;
   }

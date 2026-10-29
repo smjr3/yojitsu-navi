@@ -201,7 +201,7 @@ if (vm?.exists) {
     const detailHref = (id) => store.href("./contract", {}, { id });
     const sub = (r) => `${r.customerName} / ${r.projectName}`;
     const columns = [
-      { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+      { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}`, exportLabel: T.breakdown.colCustomerProject },
       { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
       { key: "customerName", label: T.customers.colCustomer, type: "text", exportOnly: true },
       { key: "projectName", label: T.contracts.colProject, type: "text", exportOnly: true },

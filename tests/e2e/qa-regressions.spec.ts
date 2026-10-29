@@ -4,8 +4,14 @@
  * - 960px 未満でも上部タブがすべて見える（2 段目に回る）
  * - 並べ替えは絞り込み・単位の変更や「戻る」で既定に戻らない。絞り込み・検索は「戻る」で復元される
  * - 案件詳細の ID は前後の空白・大文字小文字の違いを許す
+ * - 最終 QA（2026-10-29）: 「戻る」でスクロール位置を戻す、「＋ 変更」で ID を変えさせない、色付きの値の読み上げ名、
+ *   スマホ幅の計算根拠の長い案件名、Excel の見出しの重複、計画も実績も無いメンバーの差額の文
  */
+import { createRequire } from "node:module";
 import { test, expect, gotoPage, kpiValue } from "./helpers/app.js";
+
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx") as typeof import("xlsx");
 
 for (const team of ["constructor", "__proto__", "toString"]) {
   test(`team=${team} は未知のチームとして全体に戻る`, async ({ page }) => {
@@ -135,4 +141,74 @@ test("稼働計画のセルの編集欄を開いたまま画面の高さを縮�
     }, { message: `${height}px` }).toBe(true);
   }
   await expect(pop.getByRole("button", { name: "反映" })).toBeInViewport();
+});
+
+// ---- リリース前の最終 QA（2026-10-29） ---------------------------------------------
+
+test("一覧を下までスクロールして詳細を開き「戻る」と、元のスクロール位置に戻る", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoPage(page, "/contracts");
+  await page.evaluate(() => scrollTo(0, 1500));
+  await expect.poll(() => page.evaluate(() => Math.round(scrollY))).toBeGreaterThan(1400);
+  const before = await page.evaluate(() => Math.round(scrollY));
+  // 見えている行の案件を開く
+  const link = page.locator(".yn-row-link").nth(20);
+  // クリック前に要素へスクロールさせない（今の位置のまま離れる）
+  await link.evaluate((a) => (a as HTMLAnchorElement).click());
+  await expect(page).toHaveURL(/\/contract\?/);
+  await page.goBack();
+  await expect(page.locator("table tbody tr[data-key]").first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Math.round(scrollY)), { timeout: 10_000 }).toBeGreaterThan(before - 50);
+});
+
+test("マスタ編集の「＋ 変更」では対象の ID を変えられない（変えると別人の行になるため）", async ({ page }) => {
+  await gotoPage(page, "/masters");
+  await page.getByRole("button", { name: /^佐藤 健一 の変更を追加/ }).first().click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await expect(d.locator("#yn-me-f-member_id")).toBeDisabled();
+  await expect(d.locator("#yn-me-f-member_id-hint")).toHaveText("変更の追加では変えられません");
+  // 所属チームは名前で選ぶ欄なので「英数字の ID」の注記は出さない
+  await expect(d.locator("#yn-me-f-team_id-hint")).toHaveText("");
+  await d.locator("#yn-me-f-title").fill("部長");
+  await d.locator('[data-role="submit"]').click();
+  if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
+  await expect(page.locator(".yn-me-diff-table")).toContainText("M001");
+  await expect(page.locator(".yn-me-diff-table")).toContainText("部長");
+});
+
+test("色付きの値（消化率超過など）のボタンも、読み上げ名に値が入る", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const labels = await page.locator('tbody td button[aria-label*="消化率"]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
+  expect(labels.length).toBeGreaterThan(0);
+  for (const l of labels) expect(l).toMatch(/^消化率 -?[\d.,]+% の計算根拠を表示$|^消化率 — の計算根拠を表示$/);
+});
+
+test("スマホ幅の計算根拠: 長い案件名は折り返し、表の横幅を広げすぎない", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoPage(page, "/contract?id=C160");
+  await page.locator('button[aria-label*="計算根拠"]').first().click();
+  const cell = page.locator("dialog[open] .yn-bd-section table tbody td").first();
+  await expect(cell).toBeVisible();
+  const w = await cell.evaluate((td) => td.getBoundingClientRect().width);
+  expect(w).toBeLessThan(260);
+});
+
+test("案件一覧の Excel: 見出しに同じ名前の列が無い（顧客 / 案件・顧客・案件）", async ({ page }) => {
+  await gotoPage(page, "/contracts");
+  const dl = page.waitForEvent("download");
+  await page.locator(".yn-export").first().click();
+  const d = await dl;
+  const wb = XLSX.readFile((await d.path())!);
+  const aoa = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb.Sheets[wb.SheetNames[0]!]!, { header: 1, defval: null });
+  const header = aoa.find((r) => r.includes("契約ID"))!;
+  expect(header[0]).toBe("顧客 / 案件");
+  expect(new Set(header).size).toBe(header.length);
+});
+
+test("計画も実績も無い期間のメンバーでは、差額に「計画どおり」と出さない", async ({ page }) => {
+  // M122 は 2026-04 に退職（今年度は計画も実績も無い）
+  await gotoPage(page, "/member?id=M122");
+  const tile = page.locator(".yn-kpi").filter({ hasText: "差額" }).first();
+  await expect(tile).toBeVisible();
+  await expect(tile).not.toContainText("計画どおり");
 });

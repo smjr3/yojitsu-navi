@@ -127,7 +127,7 @@ if (vm) {
     memberKpiRow([
         statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.members.plannedSub, { hours: formatHours(t.plannedHours), n: t.memberCount, whole: period.to !== fullPeriod.to ? fmt(T.members.wholePeriodSuffix, { value: money(fullAgg.total.plannedCost, unit) }) : "" }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),
         statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.members.actualSub, { hours: formatHours(t.actualHours), unplanned: formatHours(t.unplannedHours) }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
-        statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
+        statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: t.plannedCost === 0 && t.actualCost === 0 ? "" : varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: T.members.utilizationTile, value: formatPercent(t.utilization), sub: t.utilization === null ? T.breakdown.utilZero : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
   );

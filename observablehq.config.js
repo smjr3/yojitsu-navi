@@ -142,8 +142,37 @@ const THEME_SCRIPT = `(() => {
     choose(root.dataset.theme === "dark" ? "light" : "dark");
   });
 })();`;
+/**
+ * 戻る・再読み込みでスクロール位置を戻す。画面はデータを読んでから描くため、ブラウザ任せだと一番上に戻ってしまう。
+ * 離れるときの位置を URL ごとに sessionStorage に置き、描き終わって高さが足りたら戻す（その前に利用者が動かしたら戻さない）
+ */
+const SCROLL_SCRIPT = `(() => {
+  const KEY = "yn-scroll:";
+  const id = () => location.pathname + location.search;
+  try { history.scrollRestoration = "manual"; } catch {}
+  addEventListener("pagehide", () => { try { sessionStorage.setItem(KEY + id(), String(Math.round(scrollY))); } catch {} });
+  const nav = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+  if (!nav || (nav.type !== "back_forward" && nav.type !== "reload") || location.hash) return;
+  let y = 0;
+  try { y = Number(sessionStorage.getItem(KEY + id())) || 0; } catch {}
+  if (y <= 0) return;
+  let stop = false;
+  const cancel = () => { stop = true; };
+  for (const t of ["wheel", "touchstart", "keydown", "mousedown"]) addEventListener(t, cancel, { once: true, passive: true });
+  const t0 = Date.now();
+  let lastH = 0, since = 0;
+  const tick = () => {
+    if (stop || Date.now() - t0 > 8000) return;
+    const h = document.documentElement.scrollHeight;
+    if (h !== lastH) { lastH = h; since = Date.now(); }
+    // 骨組みが消え、高さが足りて 0.2 秒変わらなければ描き終わったとみなす
+    if (!document.getElementById("page-skeleton") && h >= y + innerHeight && Date.now() - since >= 200) { scrollTo(0, y); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
-const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script>`;
+const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,

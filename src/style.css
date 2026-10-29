@@ -1498,6 +1498,13 @@ h3 {
 .yn-table-compact tfoot td {
   position: static;
 }
+/* 計算根拠の表: 長い案件名・メンバー名は折り返し、金額の列を画面外へ押し出さない */
+.yn-bd-section .yn-table-compact td:not(.num) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 8em;
+  max-width: 16em;
+}
 .yn-table-empty td {
   text-align: center;
   color: var(--yn-text-muted);
@@ -2406,11 +2413,6 @@ li.is-jumped,
 }
 .yn-me-dialog {
   width: min(640px, calc(100vw - 32px));
-}
-.yn-me-form-lead {
-  font-size: 13px;
-  color: var(--yn-text-2);
-  margin: 0 0 8px;
 }
 .yn-me-fields {
   display: grid;
