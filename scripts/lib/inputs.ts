@@ -14,7 +14,7 @@
  *   data/ 配下の全ファイル、config.json、計算コア・ローダ・文言（src/core, src/data, src/i18n, worklog-key.js）、
  *   Node 側の読み込み処理（scripts/lib, scripts/adapters）、package-lock.json、計算基準日（asOf）、
  *   マスタ編集が使う Git の最終コミット（HEAD と data/ の未コミット変更の有無）、
- *   GitLab の接続先の環境変数（YOJITSU_GITLAB_*。§38.1）
+ *   GitLab の接続先の環境変数（YOJITSU_GITLAB_*。§39.1）
  */
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";

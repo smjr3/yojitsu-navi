@@ -10,5 +10,5 @@
 ## テスト
 
 - [ ] `npm run check`
-- [ ] `npm run test:e2e`
+- [ ] `npm run test:e2e`（全件。CI の Pull Request では縮小版だけ）
 - [ ] 実際に操作して確認（390 / 768 / 1024 / 1280px、ライト / ダーク、極端な値・長い名前）

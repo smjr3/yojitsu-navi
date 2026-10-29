@@ -1,5 +1,5 @@
 /**
- * ビルド環境から GitLab の接続先を補う（SPEC §38.1。Node 側専用）
+ * ビルド環境から GitLab の接続先を補う（SPEC §39.1。Node 側専用）
  *
  * config.json の masterEdit.gitlab.apiBaseUrl・projectId が空のとき、環境変数
  *   YOJITSU_GITLAB_API_URL（例 https://gitlab.example.local/api/v4）

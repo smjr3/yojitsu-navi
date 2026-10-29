@@ -1,5 +1,5 @@
 /**
- * 本番 GitLab プロジェクトの設定の確認・適用（SPEC §38.2）
+ * 本番 GitLab プロジェクトの設定の確認・適用（SPEC §39.2）
  *
  *   GITLAB_TOKEN=glpat-… npm run gitlab:setup -- --api https://gitlab.example.local/api/v4 --project group/yojitsu-navi
  *   GITLAB_TOKEN=glpat-… npm run gitlab:setup -- … --apply     # 足りない設定を直す

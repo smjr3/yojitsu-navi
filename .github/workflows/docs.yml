@@ -4,9 +4,10 @@
 
 name: Docs
 
+# ci.yml と同じく、作業ブランチへの push だけでは動かさない（Pull Request で動く）
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "**/*.md"
       - "docs/**"

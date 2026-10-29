@@ -105,7 +105,7 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
 
     if (method === "GET" && rest === "") return reply(200, { id: 1, path_with_namespace: DEMO_PROJECT_ID, visibility: "private", pages_access_level: "private", permissions: { project_access: { access_level: canMerge() ? 40 : 30 }, group_access: null } });
 
-    // 推奨どおりの保護（§38.2: 直接プッシュ不可・マージは Maintainer）
+    // 推奨どおりの保護（§39.2: 直接プッシュ不可・マージは Maintainer）
     if (method === "GET" && rest === `/protected_branches/${target}`) return reply(200, { name: target, push_access_levels: [{ access_level: 0 }], merge_access_levels: [{ access_level: 40 }] });
 
     if (method === "POST" && rest === "/repository/commits") {

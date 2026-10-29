@@ -131,7 +131,7 @@ test.describe("メンバー一覧 /members", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("行クリックでメンバー詳細へ（期間・単位を引き継ぐ）", async ({ page }) => {
+  test("行クリックでメンバー詳細へ（期間・単位を引き継ぐ）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     await (await rowByKey(page, "メンバー別の計画と実績", "M020")).locator(".yn-row-link").click();
     await expect(page).toHaveURL(/\/member\?/);

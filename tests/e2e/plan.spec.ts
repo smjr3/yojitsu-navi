@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
 });
 
-test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", async ({ page }) => {
+test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   // 稼働計画は 1 画面（タブは出さない）
   await expect(page.getByRole("tab")).toHaveCount(0);

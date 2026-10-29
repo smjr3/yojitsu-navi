@@ -10,7 +10,7 @@ const inYen = (path: string) => `${path}${path.includes("?") ? "&" : "?"}unit=ye
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("実績 KPI の内訳: 案件ごとの実績の合計が表示値と一致する", async ({ page }) => {
+test("実績 KPI の内訳: 案件ごとの実績の合計が表示値と一致する", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
   const kpi = kpiValue(page, 1);
   const shown = (await kpi.textContent())!.trim();

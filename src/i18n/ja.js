@@ -1683,7 +1683,7 @@ export default {
     canMergeNo: "マージリクエストの作成（保存）はできます。マージはリーダー（Maintainer）が行います。",
     cannotSave: "この権限では保存（ブランチの作成）ができません。Developer 以上の権限が必要です。",
     checkFailed: "接続できませんでした",
-    // 接続の確認で見つかった本番の設定の不足（§38.3）。直し方は docs/DEPLOY_GITLAB.md
+    // 接続の確認で見つかった本番の設定の不足（§39.3）。直し方は docs/DEPLOY_GITLAB.md
     warnTitle: "GitLab の設定に {n} 件の不足があります",
     warn: {
       scope: "トークンに scope「api」がありません（保存・マージができません）",

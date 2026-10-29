@@ -10,7 +10,7 @@
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
 #                      マージで通常パイプラインが走り、validate → … → pages まで流れる）
 #
-# 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §38）。
+# 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §39）。
 # 設定の確認・適用は `npm run gitlab:setup`（scripts/gitlab-setup.ts）
 #
 # 必要な CI/CD 変数（Settings > CI/CD > Variables、Masked 推奨）:
@@ -118,7 +118,7 @@ build:
     # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
     GIT_DEPTH: "0"
   script:
-    # マスタ編集の保存先（config.json の apiBaseUrl・projectId が空のとき）をこのプロジェクトにする（§38.1）
+    # マスタ編集の保存先（config.json の apiBaseUrl・projectId が空のとき）をこのプロジェクトにする（§39.1）
     - YOJITSU_GITLAB_API_URL="$CI_API_V4_URL" YOJITSU_GITLAB_PROJECT="$CI_PROJECT_PATH" npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
     - |

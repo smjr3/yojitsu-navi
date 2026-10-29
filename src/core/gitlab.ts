@@ -319,7 +319,7 @@ export interface GitLabUser {
 }
 
 /**
- * 接続の確認で見つかった本番の設定の不足（§38.3）。取れなかった項目は出さない（判定できないものは警告しない）
+ * 接続の確認で見つかった本番の設定の不足（§39.3）。取れなかった項目は出さない（判定できないものは警告しない）
  *  - scope: トークンに scope `api` が無い（保存・マージができない）
  *  - visibility: プロジェクトが Private でない（CSV が見える人が広がる）
  *  - pagesPublic: Pages が誰でも見られる設定
@@ -353,7 +353,7 @@ export async function fetchCurrentUser(fetchImpl: FetchLike, cfg: MasterEditConf
   return userOf(me);
 }
 
-/** 接続の確認: トークンの持ち主と、このプロジェクトでの権限、本番の設定の不足（§28・§38.3） */
+/** 接続の確認: トークンの持ち主と、このプロジェクトでの権限、本番の設定の不足（§28・§39.3） */
 export async function checkConnection(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionInfo> {
   ensureConfigured(cfg);
   const t = token0(token);
@@ -386,7 +386,7 @@ async function optional<R>(fn: () => Promise<R>): Promise<R | null> {
 
 type AccessLevelRow = { access_level?: unknown };
 
-/** 反映先のブランチの保護（§38.2: push = No one、merge = Maintainers）との違い */
+/** 反映先のブランチの保護（§39.2: push = No one、merge = Maintainers）との違い */
 export async function protectionWarnings(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionWarning[]> {
   const url = `${projectPath(cfg)}/protected_branches/${encodeURIComponent(cfg.gitlab.targetBranch)}`;
   let branch: { push_access_levels?: unknown; merge_access_levels?: unknown };

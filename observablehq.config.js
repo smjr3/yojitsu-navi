@@ -46,10 +46,10 @@ import ja from "./src/i18n/ja.js";
 import { badgeConfig, mrBadgeScript } from "./src/components/header-badge.js";
 import { withGitLabEnv } from "./src/components/gitlab-env.js";
 
-/** config.json の masterEdit（ヘッダーのマージ待ち件数バッジの接続先。§27・§38.1）。読めなければ空 */
+/** config.json の masterEdit（ヘッダーのマージ待ち件数バッジの接続先。§27・§39.1）。読めなければ空 */
 function masterEditConfig() {
   try {
-    // 接続先が空なら GitLab CI の値で補う（§38.1。マスタ編集画面と同じ）
+    // 接続先が空なら GitLab CI の値で補う（§39.1。マスタ編集画面と同じ）
     return withGitLabEnv(JSON.parse(decode(readFileSync(new URL("./config.json", import.meta.url)))).masterEdit ?? null, process.env);
   } catch {
     return null;

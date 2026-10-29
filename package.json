@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:e2e:smoke": "playwright test -c tests/e2e/playwright.config.ts --grep @smoke",
     "check": "npm run typecheck && npm run validate && npm run test",
     "verify:dist": "tsx scripts/verify-dist.ts",
     "screenshots": "node scripts/screenshots.mjs"

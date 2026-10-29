@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 取り込んだデータを MR で反映する（.gitlab-ci.yml の fetch-worklogs / fetch-members から呼ぶ。SPEC §38.4）
+# 取り込んだデータを MR で反映する（.gitlab-ci.yml の fetch-worklogs / fetch-members から呼ぶ。SPEC §39.4）
 #
 #   scripts/ci/push-data-mr.sh <種類> <コミットメッセージ> <パス>...
 #

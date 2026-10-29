@@ -151,7 +151,7 @@ describe("ファイルと接続の確認", () => {
   });
 });
 
-describe("接続の確認: 本番の設定の不足（§38.3）", () => {
+describe("接続の確認: 本番の設定の不足（§39.3）", () => {
   const user = { "GET /user": { body: { username: "sato", name: "佐藤" } } };
   const project = (level: number, extra: Record<string, unknown> = {}) => ({ "GET /projects/grp%2Fyn": { body: { visibility: "private", pages_access_level: "private", permissions: { project_access: { access_level: level } }, ...extra } } });
   const protectedMain = (push: number[], merge: number[]) => ({

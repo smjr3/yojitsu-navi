@@ -77,7 +77,7 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
   return {
     files,
     context: { contracts: ctx(DATA_FILES.contracts), mapping: ctx(DATA_FILES.mapping), holidays: ctx(DATA_FILES.holidays) },
-    // 接続先が空なら GitLab CI の値（YOJITSU_GITLAB_*）で補う（§38.1）
+    // 接続先が空なら GitLab CI の値（YOJITSU_GITLAB_*）で補う（§39.1）
     masterEdit: resolveMasterEdit(withGitLabEnv(config.masterEdit, process.env) as MasterEditConfig | undefined),
     memberSourceAdapter: adapter ?? "none",
     gitAvailable: inRepo && !shallow,

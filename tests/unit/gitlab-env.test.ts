@@ -1,5 +1,5 @@
 /**
- * GitLab CI の値で接続先を補う（SPEC §38.1）・データ取り込みの MR 反映（§38.4）
+ * GitLab CI の値で接続先を補う（SPEC §39.1）・データ取り込みの MR 反映（§39.4）
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

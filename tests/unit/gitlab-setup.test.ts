@@ -1,5 +1,5 @@
 /**
- * 本番 GitLab の設定の確認・適用（SPEC §38.2、scripts/gitlab-setup.ts）
+ * 本番 GitLab の設定の確認・適用（SPEC §39.2、scripts/gitlab-setup.ts）
  * GitLab の API を小さな模擬で置き換え、確認 → 適用 → 確認し直しの流れを確かめる
  */
 import { describe, expect, it } from "vitest";
