@@ -28,7 +28,7 @@
 # 外部ネットワーク:
 #   - 画面は外部 CDN を一切使わない（ライブラリは dist/ に同梱）
 #   - ビルドも外部に出ない（npm の prebuild で scripts/seed-npm-cache.mjs が Framework のバージョン問い合わせを止める）
-#   - 外に出るのは npm ci（NPM_CONFIG_REGISTRY で社内ミラーに向けられる）とイメージの取得だけ
+#   - 外に出るのは npm ci（NPM_CONFIG_REGISTRY で社内ミラーに向けられる。依存込みで作ったプロジェクトは vendor/npm-cache から入れるので出ない）とイメージの取得だけ
 #   - 手順は docs/DEPLOY_GITLAB.md
 #
 # 注意:
@@ -77,7 +77,13 @@ default:
   before_script:
     # 社内ミラーがあれば NPM_CONFIG_REGISTRY を変数で渡すだけで切り替わる（npm が自動で読む）
     - if [ -n "$NPM_CONFIG_REGISTRY" ]; then echo "npm registry: $NPM_CONFIG_REGISTRY"; fi
-    - npm ci --prefer-offline --no-audit --no-fund
+    # 依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で作ったプロジェクトは、同梱のキャッシュだけで入れる（外に出ない。SPEC §44）
+    - |
+      if [ -d vendor/npm-cache ]; then
+        npm ci --offline --cache vendor/npm-cache --no-audit --no-fund
+      else
+        npm ci --prefer-offline --no-audit --no-fund
+      fi
 
 # スケジュール実行以外（push / MR / 手動）で動く共通条件
 .normal-rules: &normal-rules
