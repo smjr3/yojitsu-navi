@@ -253,8 +253,10 @@ test("必須の未入力はダイアログで止め、検証エラーは行に�
   await team.first().getByRole("button", { name: /履歴を削除/ }).click();
   await page.locator('[data-role="confirm-delete"]').click();
   await expect(page.getByRole("tab", { name: /メンバー/ })).toContainText(/エラー \d+/);
-  await page.locator(".yn-me-check-slot").getByRole("button", { name: /メンバー/ }).click();
-  await expect(page.locator(".yn-me-issue-row").first()).toContainText("S11 は存在しません");
+  // 検証の一覧から、そのメンバーの行へ（§40）
+  await page.locator(".yn-me-issue-item.is-error", { hasText: "S11 は存在しません" }).first().getByRole("button").click();
+  await expect(page.getByRole("tab", { name: /メンバー/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".yn-me-issue-row.is-error").first()).toContainText("S11 は存在しません");
 
   // 直すと保存できる
   await page.getByRole("button", { name: "編集をすべて取り消す" }).click();

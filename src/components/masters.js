@@ -95,6 +95,8 @@ export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
 /** 画面 → その画面で編集するファイル */
 const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], plan: ["assignments", "outside"] };
+/** 人ごとの検証（案件の行ではなく人の行で見せる） */
+const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
 const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", assignments: "./plan", outside: "./plan" };
 
@@ -174,7 +176,7 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, fetchImpl = null, now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
   const VIEW_IDS = [...views];
   /** この画面で編集するファイル */
   const pageFiles = VIEW_IDS.flatMap((v) => VIEW_FILES[v] ?? []);
@@ -562,7 +564,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           <span class="yn-me-tab-label">${MASTER_FILES[id].label}</span>
           <span class="yn-me-tab-file">${fileName(MASTER_FILES[id].path)}</span>
           ${counts[id] > 0 ? html`<span class="yn-chip yn-chip-neutral">${T.masters.changed} ${integer(counts[id])}</span>` : null}
-          ${errs > 0 ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(errs)}</span>` : null}
+          ${errs > 0 ? html`<span class="yn-chip yn-chip-danger"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(errs)}</span>` : null}
         </button>`;
       })}
     </div>`);
@@ -602,7 +604,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 変更・エラーの数（台帳の対象・稼働計画の行のチップ） */
   function stateChips(changed, added, errors) {
     if (!changed && !added && !errors) return null;
-    return html`<span class="yn-chip-row">${added ? html`<span class="yn-chip yn-chip-ok">＋ ${T.masters.added}${added > 1 ? ` ${integer(added)}` : ""}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">✎ ${T.masters.changed}${changed > 1 ? ` ${integer(changed)}` : ""}</span>` : null}${errors ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError}${errors > 1 ? ` ${integer(errors)}` : ""}</span>` : null}</span>`;
+    return html`<span class="yn-chip-row">${added ? html`<span class="yn-chip yn-chip-ok">＋ ${T.masters.added}${added > 1 ? ` ${integer(added)}` : ""}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">✎ ${T.masters.changed}${changed > 1 ? ` ${integer(changed)}` : ""}</span>` : null}${errors ? html`<span class="yn-chip yn-chip-danger"><span aria-hidden="true">!</span> ${T.dataCheck.severityError}${errors > 1 ? ` ${integer(errors)}` : ""}</span>` : null}</span>`;
   }
 
   function issueList(list) {
@@ -644,6 +646,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     search.addEventListener("input", () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
+        // 入力の直後にタブの切り替え・一覧からの移動で描き直したときは、古い欄の値で上書きしない
+        if (!search.isConnected) return;
         f.q = search.value;
         renderPanel();
         const el = root.querySelector(`#yn-me-q-${fileId}`);
@@ -763,7 +767,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           </div></td>
         </tr>`;
         if (list.length === 0) return [tr];
-        return [tr, html`<tr class="yn-me-issue-row"><td colspan=${colCount} id=${issueId}>${issueList(list)}</td></tr>`];
+        return [tr, html`<tr class=${`yn-me-issue-row${invalid ? " is-error" : ""}`}><td colspan=${colCount} id=${issueId}>${issueList(list)}</td></tr>`];
       });
       // 履歴の行は開閉ボタンの aria-controls が指すよう、最初の行に id を付ける
       for (const x of hist) x.dataset.parent = g.key;
@@ -1072,6 +1076,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     search.addEventListener("input", () => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
+        if (!search.isConnected) return;
         plan.q = search.value;
         renderPanel();
         const el = root.querySelector("#yn-me-plan-q");
@@ -1998,34 +2003,164 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   // ---- 検証 ---------------------------------------------------------------
+  // ---- 検証の一覧（§40）: 名前で示し、押すと該当箇所へ -------------------------
+  /** 一覧に最初に出す件数（残りは「すべて表示」） */
+  const ISSUE_PREVIEW = 8;
+  let showAllIssues = false;
+
+  /** 行の列の値（行が無ければ ""） */
+  function issueRowCell(i, column) {
+    if (!i.fileId || !i.rowId) return "";
+    const doc = docs[i.fileId];
+    const row = doc.rows.find((r) => r.id === i.rowId);
+    return row && doc.header.includes(column) ? cellOf(doc, row, column) : "";
+  }
+  /** 誰・何のエラーか（名前。ID は名前が無いときだけ） */
+  function issueSubject(i) {
+    const names = memberNames();
+    const memberId = issueRowCell(i, "member_id") || (i.ref?.memberId != null ? String(i.ref.memberId) : "");
+    switch (i.fileId) {
+      case "members":
+        return issueRowCell(i, "name") || names.get(memberId) || memberId;
+      case "rates": {
+        const key = issueRowCell(i, "key");
+        return names.get(key) || key;
+      }
+      case "teams": {
+        const id = issueRowCell(i, "team_id");
+        return issueRowCell(i, "name") || teamNames().get(id) || id;
+      }
+      case "assignments":
+      case "outside": {
+        const who = memberId ? names.get(memberId) || fmt(T.masters.unknownMemberValue, { id: memberId }) : "";
+        // 人の月合計・退職後のアサインは人ごとのこと（案件は付けない）
+        if (PERSON_ISSUES.has(i.code)) return who;
+        const contractId = issueRowCell(i, "contract_id");
+        const what = i.fileId === "outside" ? T.masterFiles.outside : contractId ? projectOfContract(contractId).label : "";
+        return [who, what].filter(Boolean).join(" ・ ");
+      }
+      default:
+        return "";
+    }
+  }
+  /** 文中の ID を名前に（メンバー・案件）。先頭に出した人の名前は文から外す */
+  function issueMessage(i) {
+    const names = memberNames();
+    const subjectId = issueRowCell(i, "member_id") || (i.ref?.memberId != null ? String(i.ref.memberId) : "");
+    return issueText(i)
+      .replace(/^メンバー(?:ID)? ([A-Za-z0-9_-]+) ?(?:の|は) ?/, (m, id) => (id === subjectId && names.get(id) ? "" : m))
+      .replace(/メンバー(?:ID)? ([A-Za-z0-9_-]+)/g, (m, id) => names.get(id) || m)
+      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (contractById.has(id) ? `「${projectOfContract(id).label}」` : m))
+      .replace(/（([A-Za-z0-9_, -]+)）/g, (m, ids) => {
+        // 「（M025, M202）」のような ID の並びも名前に
+        const list = ids.split(/,\s*/);
+        return list.every((id) => names.get(id)) ? `（${list.map((id) => names.get(id)).join("、")}）` : m;
+      });
+  }
+  /** 他の画面のファイルは、その画面を開いて該当箇所へ（?jump=ファイル:行番号） */
+  function issueHref(i) {
+    const base = FILE_PAGE[i.fileId];
+    const jump = i.row ? `jump=${i.fileId}:${i.row}` : "";
+    return jump ? `${base}${base.includes("?") ? "&" : "?"}${jump}` : base;
+  }
+
+  /** 該当箇所を見せてフォーカスする（絞り込み・年度・組織を合わせ、閉じている履歴を開く） */
+  function revealIssue(i) {
+    const fileId = i.fileId;
+    if (!fileId || !pageFiles.includes(fileId)) return;
+    const doc = docs[fileId];
+    const row = i.rowId ? doc.rows.find((r) => r.id === i.rowId) : null;
+    let key = null;
+    if (fileId === "assignments" || fileId === "outside") {
+      active = PLAN_VIEW_ID;
+      if (csvEdit.assignments.on && csvEdit.assignments.text === null) csvEdit.assignments.on = false;
+      const memberId = row ? cellOf(doc, row, "member_id") : i.ref?.memberId != null ? String(i.ref.memberId) : "";
+      const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
+      if (/^\d{4}-\d{2}$/.test(start) && !plan.months.includes(start)) plan.months = fiscalMonths(start, config.fiscalYearStartMonth);
+      plan.q = "";
+      const src = planSourcesFromDocs(docs, data.context.contracts);
+      const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
+      if (memberId && !shown()) {
+        const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];
+        plan.teamId = memberTeamAt(src.members, memberId, at) ?? null;
+        if (!shown()) plan.teamId = null;
+      }
+      if (memberId) plan.open.add(memberId);
+      if (PERSON_ISSUES.has(i.code) && memberId) {
+        // 人の行の、問題の最初の月のセルへ
+        const month = String(i.ref?.month ?? start);
+        if (/^\d{4}-\d{2}$/.test(month) && !plan.months.includes(month)) plan.months = fiscalMonths(month, config.fiscalYearStartMonth);
+        key = `plan:cell:${memberId}:all:${month}`;
+      } else if (row && memberId) {
+        const target = fileId === "outside" ? { kind: "outside" } : { kind: "project", key: projectOfContract(cellOf(doc, row, "contract_id")).key };
+        plan.hist.add(`${memberId}|${targetId(target)}`);
+        key = `edit:${row.id}`;
+      } else if (memberId) key = `plan:toggle:${memberId}`;
+    } else {
+      active = fileId;
+      if (csvEdit[fileId].on && csvEdit[fileId].text === null) csvEdit[fileId].on = false;
+      listFilter[fileId].q = "";
+      listFilter[fileId].changedOnly = false;
+      if (row) {
+        openGroupOfRow(fileId, row.id);
+        key = `edit:${row.id}`;
+      } else key = VIEW_IDS.length > 1 ? `tab:${fileId}` : null;
+    }
+    renderTabs();
+    renderPanel();
+    // 台帳は対象の行と今の値の履歴の行に同じ「修正」があるので、履歴の行（エラーの文が付く方）を選ぶ
+    const el = key ? (row ? root.querySelector(`[data-key="${CSS.escape(row.id)}"] [data-fk="${CSS.escape(key)}"]`) : null) ?? root.querySelector(`[data-fk="${CSS.escape(key)}"]`) : null;
+    if (!el) {
+      // 画面に出せない行（存在しないメンバーのアサインなど）は修正のダイアログで見せる
+      if (row && !(locked || pendingDraft)) openRowDialog({ fileId, mode: "edit", rowId: row.id, focus: `tab:${fileId}` });
+      else root.querySelector("#yn-me-panel")?.scrollIntoView({ block: "start" });
+      return;
+    }
+    // 月のセルはそのセルを（横にも）見せる。それ以外は行を
+    const box = el.matches(".yn-plan-cell-btn") ? el : (el.closest("li.yn-me-plan-entry, tr") ?? el);
+    el.focus({ preventScroll: true });
+    box.scrollIntoView({ block: "center", inline: "nearest" });
+    // 横にスクロールする表は左端に戻す（名前とエラーの文が見えるように）
+    const wrap = el.closest(".yn-table-wrap");
+    if (wrap && !el.matches(".yn-plan-cell-btn")) wrap.scrollLeft = 0;
+    box.classList.add("is-jumped");
+    setTimeout(() => box.classList.remove("is-jumped"), 2400);
+  }
+
   function renderCheck() {
     const v = validation;
-    const general = v.general;
     const status =
       v.errors > 0
-        ? html`<p class="yn-me-check is-error" role="status"><span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(v.errors)}${T.masters.countSuffix}</span> ${T.masters.cannotSave}${v.warnings ? fmt(T.masters.warningsNotBlocking, { n: integer(v.warnings) }) : ""}</p>`
-        : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span>${v.warnings ? fmt(T.masters.warningsNotBlocking2, { n: integer(v.warnings) }) : ""}</p>`;
-    const byTab = MASTER_FILE_IDS.filter((id) => errorCount(id) > 0);
-    // 行に付いた警告は下の一覧に出ないため、件数の内訳としてファイルへの移動ボタンを出す
-    const warnTabs = MASTER_FILE_IDS.filter((id) => errorCount(id, "warning") > 0);
-    /** ファイルへ移動（他の画面で編集するファイルは、その画面へのリンク） */
-    const fileLink = (id, i, n, kind) => {
-      const text = `${MASTER_FILES[id].label}（${integer(n)}${T.masters.countSuffixParen}`;
-      if (!pageFiles.includes(id)) return html`${i > 0 ? "、" : ""}<a href=${FILE_PAGE[id]} data-fk=${`${kind}:${id}`}>${text}${fmt(T.ledger.onOtherPage, { page: pageName(id) })}</a>`;
-      return html`${i > 0 ? "、" : ""}<button type="button" class="yn-btn-link" data-fk=${`${kind}:${id}`} onclick=${() => {
-        if (VIEW_IDS.includes(id)) active = id;
-        renderTabs();
-        renderPanel();
-        focusKey(VIEW_IDS.length > 1 ? `tab:${id}` : "plan:team");
-      }}>${text}</button>`;
+        ? html`<p class="yn-me-check is-error" role="status"><span class="yn-chip yn-chip-danger"><span aria-hidden="true">!</span> ${T.dataCheck.severityError} ${integer(v.errors)}${T.masters.countSuffix}</span> ${T.masters.cannotSave}${v.warnings ? html` <span class="yn-chip yn-chip-warn"><span aria-hidden="true">i</span> ${T.dataCheck.severityWarning} ${integer(v.warnings)}${T.masters.countSuffix}</span> ${T.masters.warningsNotBlocking}` : null}</p>`
+        : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span>${v.warnings ? html` <span class="yn-chip yn-chip-warn"><span aria-hidden="true">i</span> ${T.dataCheck.severityWarning} ${integer(v.warnings)}${T.masters.countSuffix}</span> ${T.masters.warningsNotBlocking}` : null}</p>`;
+    // エラーを先に。同じ重さの中はファイル（この画面のものを先）・行の順
+    const order = (i) => (i.fileId && pageFiles.includes(i.fileId) ? 0 : 1);
+    const all = [...v.issues].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1) || order(a) - order(b) || MASTER_FILE_IDS.indexOf(a.fileId) - MASTER_FILE_IDS.indexOf(b.fileId) || (a.row ?? 0) - (b.row ?? 0));
+    const shown = showAllIssues ? all : all.slice(0, ISSUE_PREVIEW);
+    const item = (i, n) => {
+      const err = i.severity === "error";
+      const subject = issueSubject(i);
+      const where = i.fileId ? MASTER_FILES[i.fileId].label : "";
+      const other = i.fileId && !pageFiles.includes(i.fileId);
+      const body = html`<span class=${`yn-chip ${err ? "yn-chip-danger" : "yn-chip-warn"}`}><span aria-hidden="true">${err ? "!" : "i"}</span> ${err ? T.dataCheck.severityError : T.dataCheck.severityWarning}</span>
+        <span class="yn-me-issue-main">${subject ? html`<strong class="yn-me-issue-subject">${subject}</strong>` : null}<span class="yn-me-issue-msg">${issueMessage(i)}</span></span>
+        ${where ? html`<span class="yn-me-issue-where">${other ? fmt(T.masters.issueOnPage, { file: where, page: pageName(i.fileId) }) : where}</span>` : null}`;
+      const fk = `issue:${n}`;
+      const cls = `yn-me-issue-item ${err ? "is-error" : "is-warning"}`;
+      if (!i.fileId) return html`<li class=${cls}><span class="yn-me-issue-static">${body}</span></li>`;
+      if (other) return html`<li class=${cls}><a class="yn-me-issue-link" href=${issueHref(i)} data-fk=${fk}>${body}</a></li>`;
+      return html`<li class=${cls}><button type="button" class="yn-me-issue-link" data-fk=${fk} onclick=${() => revealIssue(i)}>${body}</button></li>`;
     };
     parts.check.replaceChildren(html`<section class="yn-me-section" aria-labelledby="yn-me-check-title">
-      <div class="yn-title-with-tip"><h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>${infoTip(html`<span class="yn-me-help">${T.masters.validationOk}</span><span class="yn-me-help">${T.masters.worklogWarningsNote}</span>`, { label: fmt(T.layout.aboutSection, { title: T.masters.validationTitle }) })}</div>
+      <div class="yn-title-with-tip"><h2 id="yn-me-check-title" class="yn-section-title">${T.masters.validationTitle}</h2>${infoTip(html`<span class="yn-me-help">${T.masters.validationOk}</span><span class="yn-me-help">${T.masters.issueListHelp}</span><span class="yn-me-help">${T.masters.worklogWarningsNote}</span>`, { label: fmt(T.layout.aboutSection, { title: T.masters.validationTitle }) })}</div>
       ${status}
-      ${byTab.length ? html`<p class="yn-me-small">${T.masters.filesWithErrors} ${byTab.map((id, i) => fileLink(id, i, errorCount(id), "goto"))}</p>` : null}
-      ${warnTabs.length ? html`<p class="yn-me-small">${T.masters.filesWithRowWarnings} ${warnTabs.map((id, i) => fileLink(id, i, errorCount(id, "warning"), "gotow"))}</p>` : null}
-      ${general.length
-        ? html`<ul class="yn-me-issues yn-me-general">${general.map((i) => html`<li class=${i.severity === "error" ? "is-error" : "is-warning"}><span aria-hidden="true">${i.severity === "error" ? "!" : "i"}</span> ${i.severity === "error" ? T.dataCheck.severityError : T.dataCheck.severityWarning}: ${i.message}</li>`)}</ul>`
+      ${all.length ? html`<ul class="yn-me-issue-list" aria-label=${T.masters.issueListAria}>${shown.map(item)}</ul>` : null}
+      ${all.length > ISSUE_PREVIEW
+        ? html`<p class="yn-me-actions"><button type="button" class="yn-btn yn-btn-sm" data-fk="issue:more" aria-expanded=${showAllIssues ? "true" : "false"} onclick=${() => {
+            showAllIssues = !showAllIssues;
+            renderCheck();
+            focusKey(showAllIssues ? `issue:${ISSUE_PREVIEW}` : "issue:more");
+          }}>${showAllIssues ? fmt(T.masters.issueShowLess, { n: integer(ISSUE_PREVIEW) }) : fmt(T.masters.issueShowAll, { n: integer(all.length) })}</button></p>`
         : null}
     </section>`);
   }
@@ -2311,5 +2446,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   mrPanel.refresh();
+  // 他の画面の検証の一覧から来たとき（?jump=ファイル:行番号）は、その行を見せる（§40）
+  const jm = /^([a-z]+):(\d+)$/.exec(initialJump ?? "");
+  if (jm && pageFiles.includes(jm[1])) {
+    const fileId = jm[1];
+    const row = Number(jm[2]);
+    const issue = validation.issues.find((i) => i.fileId === fileId && i.row === row) ?? { fileId, row, rowId: docs[fileId].rows[row - 2]?.id ?? null };
+    // 画面に入ってから（スクロールとフォーカスのため）
+    requestAnimationFrame(() => revealIssue(issue));
+  }
   return root;
 }

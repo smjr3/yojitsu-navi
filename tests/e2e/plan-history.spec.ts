@@ -222,7 +222,7 @@ test("マスタ編集と稼働計画の役割分担: 旧 URL は稼働計画へ�
   await page.locator("dialog.yn-plan-pop[open] #yn-plan-pop-0").fill("0.4");
   await page.locator("dialog.yn-plan-pop[open] #yn-plan-pop-0").press("Enter");
   await page.evaluate(() => sessionStorage.setItem("yn-e2e-keep-draft", "1"));
-  await page.getByRole("link", { name: "マスタ編集" }).click();
+  await page.getByRole("link", { name: "マスタ編集", exact: true }).click();
   await expect(page.locator("h1")).toHaveText("マスタ編集");
   // 同じタブの続きなので「復元しますか」は聞かない
   await expect(page.locator(".yn-me-banner")).toHaveCount(0);

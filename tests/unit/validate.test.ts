@@ -71,7 +71,32 @@ describe("validateDataset (SPEC §14) — エラー", () => {
       ["ASSIGNMENT_PERIOD_INVERTED", 9],
       ["ALLOCATION_OVER_1", 7], // 2026-06 に 0.7 + 0.4 = 1.1
     ]);
-    expect(issues.find((i) => i.code === "ALLOCATION_OVER_1")?.ref).toMatchObject({ memberId: "M1", month: "2026-06" });
+    expect(issues.find((i) => i.code === "ALLOCATION_OVER_1")).toMatchObject({ severity: "warning", ref: { memberId: "M1", month: "2026-06", toMonth: "2026-06" } });
+  });
+
+  it("アサイン: 月合計 > 1 は警告（保存を止めない）。同じ人の続いた月は 1 件にまとめ、途切れたら別の件", () => {
+    const ds = dataset({
+      contracts: [contract({ contractId: "C1" }), contract({ contractId: "C2" })],
+      members: [member({ memberId: "M1" }), member({ memberId: "M2" })],
+      assignments: [
+        assignment({ memberId: "M1", contractId: "C1", allocation: 0.8, startMonth: "2026-04", endMonth: "2027-03" }),
+        assignment({ memberId: "M1", contractId: "C2", allocation: 0.3, startMonth: "2026-05", endMonth: "2026-07" }),
+        assignment({ memberId: "M1", contractId: "C2", allocation: 0.5, startMonth: "2026-10", endMonth: "2026-10" }),
+        assignment({ memberId: "M2", contractId: "C1", allocation: 0.6, startMonth: "2026-04", endMonth: "2026-04" }),
+        assignment({ memberId: "M2", contractId: "C2", allocation: 0.6, startMonth: "2026-04", endMonth: "2026-04" }),
+      ],
+    });
+    const issues = validateDataset(ds);
+    expect(errors(ds)).toEqual([]);
+    const over = issues.filter((i) => i.code === "ALLOCATION_OVER_1");
+    expect(over.map((i) => [i.severity, i.ref?.memberId, i.ref?.month, i.ref?.toMonth, i.ref?.total])).toEqual([
+      ["warning", "M1", "2026-05", "2026-07", 1.1],
+      ["warning", "M1", "2026-10", "2026-10", 1.3],
+      ["warning", "M2", "2026-04", "2026-04", 1.2],
+    ]);
+    expect(over[0]?.message).toContain("2026-05〜2026-07");
+    expect(over[0]?.message).toContain("最大 1.1");
+    expect(over[2]?.message).not.toContain("〜");
   });
 
   it("アサイン: 合計ちょうど 1.0（0.3+0.7 の浮動小数）はエラーにしない", () => {

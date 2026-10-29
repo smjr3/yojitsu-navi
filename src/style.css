@@ -1351,7 +1351,8 @@ h3 {
 }
 .yn-table thead th:first-child,
 .yn-table tbody th:first-child,
-.yn-table tfoot td:first-child {
+.yn-table tfoot td:first-child,
+.yn-table tfoot th:first-child {
   position: sticky;
   left: 0;
   z-index: 2;
@@ -2127,7 +2128,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   box-shadow: inset 3px 0 0 var(--yn-focus);
 }
 .yn-me-table tr.is-invalid th:first-child {
-  box-shadow: inset 3px 0 0 var(--yn-warn-text);
+  box-shadow: inset 3px 0 0 var(--yn-danger);
 }
 .yn-me-table tr.is-invalid td,
 .yn-me-table tr.is-invalid th {
@@ -2148,14 +2149,103 @@ th[aria-sort="descending"] .yn-sort-icon {
   margin: 2px 0;
 }
 .yn-me-issues li.is-error {
-  color: var(--yn-warn-text);
+  color: var(--yn-danger-text);
   font-weight: 600;
 }
-.yn-me-general {
-  margin: 8px 0;
-  padding: 8px 12px;
-  background: var(--yn-warn-bg);
+.yn-me-issues li.is-warning {
+  color: var(--yn-warn-text);
+}
+/* 行のエラーは赤、警告だけの行は黄（§40） */
+.yn-me-issue-row.is-error td {
+  background: var(--yn-danger-bg);
+}
+
+/* 検証の一覧（§40）: 1 件 1 行。押すと該当の行へ */
+.yn-me-issue-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-width: 960px;
+}
+.yn-me-issue-item {
+  margin: 0;
+}
+.yn-me-issue-link,
+.yn-me-issue-static {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 0;
+  border-left: 3px solid var(--yn-warn-text);
   border-radius: var(--yn-radius-sm);
+  background: var(--yn-warn-bg);
+  color: var(--yn-text-1);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+}
+.yn-me-issue-item.is-error .yn-me-issue-link,
+.yn-me-issue-item.is-error .yn-me-issue-static {
+  border-left-color: var(--yn-danger);
+  background: var(--yn-danger-bg);
+}
+.yn-me-issue-link {
+  cursor: pointer;
+}
+a.yn-me-issue-link,
+a.yn-me-issue-link:visited {
+  color: var(--yn-text-1);
+}
+.yn-me-issue-link:hover .yn-me-issue-main,
+.yn-me-issue-link:focus-visible .yn-me-issue-main {
+  text-decoration: underline;
+}
+.yn-me-issue-link:focus-visible {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 1px;
+}
+.yn-me-issue-main {
+  flex: 1 1 18em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.yn-me-issue-subject {
+  margin-right: 6px;
+}
+.yn-me-issue-where {
+  font-size: 12px;
+  color: var(--yn-text-2);
+  white-space: nowrap;
+}
+/* 一覧から移動してきた行を少しのあいだ目立たせる */
+@keyframes yn-jumped {
+  from {
+    box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--yn-focus) 22%, transparent);
+  }
+  to {
+    box-shadow: inset 0 0 0 999px transparent;
+  }
+}
+tr.is-jumped > th,
+tr.is-jumped > td,
+li.is-jumped,
+.yn-plan-cell-btn.is-jumped {
+  animation: yn-jumped 2.4s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  tr.is-jumped > th,
+  tr.is-jumped > td,
+  li.is-jumped,
+  .yn-plan-cell-btn.is-jumped {
+    animation: none;
+  }
 }
 .yn-me-row-actions {
   display: flex;
@@ -2276,7 +2366,10 @@ th[aria-sort="descending"] .yn-sort-icon {
   background: var(--yn-good-bg);
   border-color: var(--yn-good-text);
 }
-.yn-me-outcome.is-error,
+.yn-me-outcome.is-error {
+  background: var(--yn-danger-bg);
+  border-color: var(--yn-danger);
+}
 .yn-me-outcome.is-warn {
   background: var(--yn-warn-bg);
   border-color: var(--yn-warn-text);
@@ -3300,6 +3393,10 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-ledger .yn-me-issue-row > td,
 #observablehq-main .yn-me-ledger .yn-me-issue-row > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
+}
+.yn-me-ledger .yn-me-issue-row.is-error > td,
+#observablehq-main .yn-me-ledger .yn-me-issue-row.is-error > td {
+  background: var(--yn-danger-bg);
 }
 .yn-me-hist-from {
   display: block;

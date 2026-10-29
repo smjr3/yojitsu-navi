@@ -25,7 +25,7 @@
 | §11 | `MonthlyPoint.status` | SPEC どおり asOf 基準で計算。`outside` は返さない（契約の無い月も `final/preliminary/future`） |
 | §11 | 未設定グループ | `UNASSIGNED_TEAM_ID = "__unassigned__"` を `contractsForTeam` に渡すと、`teamId` が空か木に無い契約を返す |
 | §14 | 重複契約の `row` | 2 回目以降の行を報告。エラー `code` は SPEC に無いので `CONTRACT_PERIOD_INVERTED` / `CONTRACT_AMOUNT_INVALID` / `ASSIGNMENT_UNKNOWN_MEMBER` などを新設（`ValidationIssue.code` は string） |
-| §14 | アサインの月合計 > 1.0 | 浮動小数の誤差（0.3+0.7）を許容するため `> 1 + 1e-9` で判定 |
+| §14 | アサインの月合計 > 1.0 | 浮動小数の誤差（0.3+0.7）を許容するため `> 1 + 1e-9` で判定。警告（保存を止めない）で、同じ人の続いた月は 1 件（§40） |
 | `meta.generatedAt` | 決定性との両立 | `buildModel(dataset, { asOf, generatedAt? })`。省略時は現在時刻。テストでは固定する。それ以外の出力は完全に決定的 |
 | `meta.minMonth/maxMonth` | 契約 0 件のとき | `asOfMonth` |
 | CSV | 数値セル | NFKC 正規化 → カンマ除去 → `^[+-]?(\d+\.?\d*|\.\d+)$` のみ許可。それ以外（空・`abc`・`1e3`）は `NaN` にして検証でエラー |

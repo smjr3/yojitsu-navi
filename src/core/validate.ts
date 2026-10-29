@@ -5,7 +5,7 @@
  * warning = 止めずに表示（未紐付け工数、単価なし、未知メンバーの工数）
  */
 import { contractInvalidReason } from "./budget.js";
-import { isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
+import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, isLeftRecord, memberAt, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
@@ -113,12 +113,29 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
       } else monthlyTotal.set(key, { memberId: a.memberId, month, total: a.allocation, rows: [row] });
     }
   });
-  for (const acc of monthlyTotal.values()) {
-    // 浮動小数の誤差（0.3+0.7 など）を許容
-    if (acc.total > 1 + 1e-9) {
-      push({ severity: "error", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: acc.memberId, month: acc.month, total: Math.round(acc.total * 10000) / 10000, rows: acc.rows.join(", ") }), file, row: acc.rows[0] as number, ref: { memberId: acc.memberId, month: acc.month, total: acc.total } });
+  // 1.0 超は警告（保存は止めない。§40）。同じ人の続いた月は 1 件にまとめる（3 か月超えて 3 件並ばないように）
+  const overs = [...monthlyTotal.values()].filter((acc) => acc.total > 1 + 1e-9); // 浮動小数の誤差（0.3+0.7 など）を許容
+  overs.sort((a, b) => (a.memberId === b.memberId ? (a.month < b.month ? -1 : 1) : a.memberId < b.memberId ? -1 : 1));
+  let run: { memberId: string; from: YearMonth; to: YearMonth; max: number; rows: Set<number> } | null = null;
+  const flush = () => {
+    if (!run) return;
+    const rows = [...run.rows].sort((a, b) => a - b);
+    const max = Math.round(run.max * 10000) / 10000;
+    const period = run.from === run.to ? run.from : `${run.from}〜${run.to}`;
+    push({ severity: "warning", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: run.memberId, period, max, rows: rows.join(", ") }), file, row: rows[0] as number, ref: { memberId: run.memberId, month: run.from, toMonth: run.to, total: run.max } });
+    run = null;
+  };
+  for (const acc of overs) {
+    if (run && run.memberId === acc.memberId && addMonths(run.to, 1) === acc.month) {
+      run.to = acc.month;
+      run.max = Math.max(run.max, acc.total);
+      for (const r of acc.rows) run.rows.add(r);
+      continue;
     }
+    flush();
+    run = { memberId: acc.memberId, from: acc.month, to: acc.month, max: acc.total, rows: new Set(acc.rows) };
   }
+  flush();
 }
 
 /** 契約外予定（§36）: メンバー・月・人月の形式と、同じ人・同じ月の重複 */
@@ -223,7 +240,7 @@ function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
     }
   });
   for (const [memberId, h] of [...hit].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId } });
+    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId, month: h.first } });
   }
 }
 

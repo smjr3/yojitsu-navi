@@ -100,7 +100,9 @@ test("稼働計画: 単位を切り替えると入っている値を換算して
   await expect(d).toHaveCount(0);
   await expect(row).toContainText("1.0 超");
   await expect(row.locator("td.yn-me-plan-cell.is-over").first()).toHaveText("1.40");
-  await expect(page.locator(".yn-me-check")).toContainText("保存できません");
+  // 1.0 超は警告（保存は止めない。§40）
+  await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
+  await expect(page.locator(".yn-me-issue-item.is-warning", { hasText: "1.0 を超えています" })).toContainText("小林 玲奈");
 });
 
 test("組織の種別とリーダー: チーム一覧の列、チーム詳細の見出し、マスタ編集の組織タブ", async ({ page }) => {
