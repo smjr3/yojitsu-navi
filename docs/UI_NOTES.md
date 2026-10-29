@@ -236,7 +236,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 ## ドキュメントの更新（2026-10-28 指示）
 
-画面・データ・操作を変える PR では、**同じ PR で** README・docs（SPEC・DATA・UI_NOTES・TEXTS・DEPLOY_GITLAB）と `tests/e2e/README.md` を直す。README のスクリーンショットは `npm run build && npm run screenshots`（`scripts/screenshots.mjs`）で撮り直す。スクリプトは一覧に無い古い PNG を消す。古い画像・古い説明を残さない。
+画面・データ・操作を変える PR では、**同じ PR で** README・docs（SPEC・DATA・UI_NOTES・TEXTS・DEPLOY_GITLAB）と `tests/e2e/README.md` を直す。古い説明を残さない。README・docs に画像（スクリーンショット）は載せず、リポジトリに画像ファイルを置かない（2026-10-29 指示。画面を変えるたびに古くなるため。`tests/unit/docs-links.test.ts` で検査）。
 
 ## メンバー別（`/members`・`/member?id=`、SPEC §18.2）
 

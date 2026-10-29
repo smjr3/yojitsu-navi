@@ -1,5 +1,5 @@
 # 文書だけの変更で動く軽い検査（ci.yml は文書だけの変更では動かないため）
-# README・docs のリンク切れ、存在しない画像、README から参照されていない古いスクリーンショット、存在しない npm run を見つける
+# README・docs のリンク切れ、文書の画像・リポジトリに置いた画像ファイル、存在しない npm run を見つける
 # （tests/unit/docs-links.test.ts。CONTRIBUTING.md「ドキュメントは同じ変更の中で直す」）
 
 name: Docs
