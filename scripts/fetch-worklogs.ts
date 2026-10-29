@@ -83,7 +83,7 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
   const log = (m: string) => console.error(m);
   log(`[fetch] アダプタ=${adapter.name} 対象月=${from}〜${to}`);
   let report: FetchReport | undefined;
-  const rows = await adapter.fetch({ from, to, config, env, rootDir: opts.rootDir, log, report: (r) => (report = r) });
+  const rows = await adapter.fetch({ from, to, asOf, config, env, rootDir: opts.rootDir, log, report: (r) => (report = r) });
 
   if (opts.dryRun) {
     const sample = sortWorklogs(rows).slice(0, Math.max(0, opts.sample ?? 5));

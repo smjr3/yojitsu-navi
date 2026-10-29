@@ -116,3 +116,34 @@ export function addMonths(ym: YearMonth, n: number): YearMonth {
   const t = y * 12 + (m - 1) + n;
   return `${Math.floor(t / 12)}-${pad2((t % 12) + 1)}`;
 }
+
+/**
+ * 基準日の年度（4 月始まり）を 0 とした相対の年月日。ダミーデータは年を直書きせず、これで書く
+ * （基準日を翌年度にすれば、シナリオ全体が 1 年後ろへずれる）。
+ *   const c = new FyCalendar("2026-10-27");
+ *   c.m(0, 4) → 今年度の 4 月（"2026-04"）、c.m(0, 3) → 今年度の 3 月（"2027-03"）、c.m(-1, 10) → 前年度の 10 月
+ */
+export class FyCalendar {
+  /** 基準日の年度（年度番号は開始年） */
+  readonly fy: number;
+  constructor(asOf: string) {
+    const [y, m] = asOf.split("-").map(Number) as [number, number];
+    this.fy = m >= 4 ? y : y - 1;
+  }
+  /** 年度 fy+off の month 月（YYYY-MM） */
+  m(off: number, month: number): YearMonth {
+    return `${this.year(off, month)}-${pad2(month)}`;
+  }
+  /** 年度 fy+off の month 月 day 日（YYYY-MM-DD） */
+  d(off: number, month: number, day: number): string {
+    return `${this.m(off, month)}-${pad2(day)}`;
+  }
+  /** 年度 fy+off の month 月の暦年 */
+  year(off: number, month: number): number {
+    return this.fy + off + (month < 4 ? 1 : 0);
+  }
+  /** 年度の表記（"FY2026" など） */
+  label(off = 0): string {
+    return `FY${this.fy + off}`;
+  }
+}

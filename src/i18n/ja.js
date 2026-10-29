@@ -145,6 +145,7 @@ export default {
     MAPPING_AMBIGUOUS: "紐付け先が複数",
     EXCLUDED_NO_CUSTOMER: "顧客名なしで除外",
     TASK_UNCLASSIFIED: "未分類の作業種別",
+    HOLIDAYS_AUTO: "祝日表に無い年",
   },
   unmappedReasons: {
     NO_RULE: "紐付けルールなし",
@@ -289,7 +290,7 @@ export default {
     worklogExamples: "（例: {examples}）",
     worklogRowAt: "{file} {row} 行目",
     worklogRowValue: "{where}「{value}」",
-    worklogFileSkipped: "作業実績フォルダの {file} は読み込みません。ファイル名を YYYY-MM.csv（例: 2026-10.csv）にしてください",
+    worklogFileSkipped: "作業実績フォルダの {file} は読み込みません。ファイル名を YYYY-MM.csv（年-月.csv）にしてください",
     unmappedWorklog: "{file}: 「{customer} / {project}」の作業実績 {count} 件（{hours} 時間、{firstDate}〜{lastDate}）が案件に紐付いていません（{reason}）",
     excludedNoCustomer: "{file}: 顧客名が空の作業実績 {hours} 時間を除外します",
     unknownMember: "{file}: メンバー {memberId} は members.csv に存在しません（{hours} 時間）",
@@ -308,6 +309,7 @@ export default {
 
   // ── 計算時の警告（データ確認画面） ─────────────────────────
   calcWarnings: {
+    holidaysAuto: "holidays.csv に {years} 年の行が無いため、国民の祝日だけで営業日・締め日を数えています。会社の休日（年末年始など）があれば holidays.csv に足してください",
     taskUnclassified: "作業種別「{task}」は task-types.csv に無いため契約内として数えています（{count} 件・{hours} 時間）。契約内か契約外かを登録してください",
     unknownMember: "メンバー {memberId}（{memberName}）はメンバーマスタに存在しません。個人単価が無ければ単価 0 で計算しています（{hours} 時間）",
     rateMissing: "{month} のメンバー {memberId}（{memberName}）の時間単価が見つからないため 0 円で計算しています（{hours} 時間）",
@@ -1165,7 +1167,7 @@ export default {
     membersHowto: "異動・昇格は、その人の行の「＋ 変更」で、変わる月（適用開始月）と新しい値を入れます。前の値はその前の月まで残ります。「変更の履歴」で、いつ何が変わったかを確かめ・直せます。",
     ratesWhat: "役職ごとの時間単価と、パートナー個人の時間単価（キーはその人。画面では名前で選びます）。",
     ratesEffect: "実績 = 作業時間 × その月に有効な時間単価。単価を変えると、その適用開始月からの実績・残予算・消化率・着地見込みが変わります。",
-    ratesHowto: "単価改定は、その役職（または人）の行の「＋ 変更」。例: 4月から部長の単価を上げる → 「部長」の「＋ 変更」で、適用開始月 2026-04 と新しい単価を入れる。",
+    ratesHowto: "単価改定は、その役職（または人）の行の「＋ 変更」。例: 4月から部長の単価を上げる → 「部長」の「＋ 変更」で、適用開始月にその年の 4 月（YYYY-04）と新しい単価を入れる。",
     teamsWhat: "組織（本部・事業部・課・チーム・班など）の名前・種別・親子関係・リーダー。段数は自由で、種別は組織ごとに好きな呼び名を付けられます。",
     teamsEffect: "チーム一覧の組織の木と、上位組織の合計（配下の合計）が変わります。種別とリーダーは表示だけで、数値は変わりません。組織を消すと、その組織を使っているメンバー・案件が検証エラーになります。",
     teamsHowto: "改称・格上げ・リーダー交代・親の付け替えは、その組織の行の「＋ 変更」で変わった月から入れます（過去の月は当時の組織のまま集計されます）。新設は「＋ 新しい組織」。",
@@ -1372,7 +1374,7 @@ export default {
     saveWho: "保存できるのは GitLab で Developer 以上の人、マージできるのはリーダー（Maintainer）です。",
     noBaseWarning: "ビルド時に元ファイルの最終コミットを取得できなかったため、他の人の更新との競合を検出できません（後から保存した内容で上書きされます）。",
     commitMessage: "コミットメッセージ",
-    commitMessageHelp: "何をなぜ変えたかを書くと、レビューと後からの確認が楽になります（例: 2026年4月の単価改定）。",
+    commitMessageHelp: "何をなぜ変えたかを書くと、レビューと後からの確認が楽になります（例: 4月からの単価改定）。",
     fallbackDownload: "GitLab に接続できなかったため、CSV ダウンロードで保存します。",
     downloadLead: "変更したファイルを CSV でダウンロードし、GitLab の画面からアップロードしてください（この画面からは GitLab に直接保存しない設定です）。",
     downloadLeadFallback: "変更したファイルを CSV でダウンロードし、GitLab の画面からアップロードしてください。",

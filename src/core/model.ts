@@ -5,7 +5,8 @@
  * （meta.generatedAt のみ options.generatedAt で固定できる）。
  */
 import { partitionContracts, monthlyBudget } from "./budget.js";
-import { addMonths, businessDaysInMonth, isValidISODate, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf, toHolidaySet } from "./calendar.js";
+import { addMonths, businessDaysInMonth, isValidISODate, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf } from "./calendar.js";
+import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { forecastAllMethods, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
@@ -31,7 +32,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   const asOf = options.asOf;
   const asOfMonth = monthOfDate(asOf);
   const config = dataset.config;
-  const holidays = toHolidaySet(dataset.holidays);
+  // holidays.csv に行の無い年は国民の祝日で補う（§49）
+  const holidays = new HolidaySet(dataset.holidays);
   const statusCtx: StatusContext = { asOf, config, holidays };
   const masters = createMasterIndex(dataset);
   const warnings: Warning[] = [];
@@ -117,11 +119,17 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     r.months.some((m) => m.status === "final" && m.month <= priorYearCutoff && (m.cost > 0 || m.budget > 0)),
   );
 
+  const lastFinal = lastFinalMonth(statusCtx);
+  if (holidays.filledYears.size > 0) {
+    const years = [...holidays.filledYears].sort((a, b) => a - b);
+    warnings.push({ code: "HOLIDAYS_AUTO", message: fmt(T.calcWarnings.holidaysAuto, { years: years.join("・") }), ref: { years: years.join(",") } });
+  }
+
   return {
     meta: {
       asOf,
       asOfMonth,
-      lastFinalMonth: lastFinalMonth(statusCtx),
+      lastFinalMonth: lastFinal,
       fiscalYear,
       fiscalYearMonths: fiscalYearMonths(fiscalYear, config.fiscalYearStartMonth),
       minMonth,

@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 
 export const PLACEHOLDERS = [
   "contract", "customer", "project", "team", "member", "costTypes",
-  "threshold", "fy", "fyStartMonth", "fyEndYear", "fyEndMonth", "asOf", "asOfMonth", "lastFinalMonth", "closingDay",
+  "threshold", "fy", "fyStartMonth", "fyEndYear", "fyEndMonth", "fyFirstMonth", "fyLastMonth", "asOf", "asOfMonth", "asOfYm", "lastFinalMonth", "closingDay",
   "standardHours", "dayHours", "recentMonths", "methodDefault", "methodRecent3", "methodAll", "methodAssignment",
 ];
 
@@ -70,6 +70,9 @@ const { contract, customer, project, team, member } = labels;
 const costTypes = (config.costTypes ?? []).map((t) => t.label).join("、") || T.rules.defaultCostType;
 const asOf = meta.asOf ?? "—";
 const asOfMonth = monthJa(meta.asOfMonth ?? "—");
+const asOfYm = meta.asOfMonth ?? "—";
+const fyFirstMonth = meta.fiscalYearMonths?.[0] ?? "—";
+const fyLastMonth = meta.fiscalYearMonths?.at(-1) ?? "—";
 const lastFinalMonth = monthJa(meta.lastFinalMonth ?? "—");
 const methodDefault = METHOD_LABELS[config.forecastMethodDefault ?? "recent3"];
 const methodRecent3 = METHOD_LABELS.recent3;

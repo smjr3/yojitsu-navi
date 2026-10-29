@@ -31,10 +31,12 @@ describe("generate-dummy", () => {
     expect([...c.worklogsByMonth.values()].flat()).not.toEqual([...a.worklogsByMonth.values()].flat());
   });
 
-  it("asOf までの平日・非祝日だけに作業実績がある", () => {
+  it("asOf までの平日・非祝日だけに作業実績がある（前年度の 4 月から）", () => {
     const g = generate({ seed: 42, asOf: "2025-05-15" });
     const months = [...g.worklogsByMonth.keys()].sort();
-    expect(months).toEqual(["2025-04", "2025-05"]);
+    expect(months[0]).toBe("2024-04");
+    expect(months.at(-1)).toBe("2025-05");
+    expect(months).toHaveLength(14);
     const holidays = new Set(g.holidays.map((h) => h.date));
     for (const w of [...g.worklogsByMonth.values()].flat()) {
       expect(w.date <= "2025-05-15").toBe(true);
