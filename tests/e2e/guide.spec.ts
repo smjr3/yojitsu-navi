@@ -14,7 +14,7 @@ test("⋯ のメニューから使い方を開き、目次で節へ移動でき�
   const toc = page.getByRole("navigation", { name: "目次" });
   const items = toc.getByRole("link");
   expect(await items.count()).toBeGreaterThanOrEqual(5);
-  await toc.getByRole("link", { name: /稼働計画/ }).click();
+  await toc.getByRole("link", { name: /リソース計画/ }).click();
   await expect(page).toHaveURL(/#7$/);
   const h = page.locator(".yn-prose h2#\\37");
   await expect(h).toBeInViewport();

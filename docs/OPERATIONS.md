@@ -128,7 +128,7 @@ npm run fetch:members                           # members.csv を更新
 ```
 
 1. 接続先: 社内 GitLab の CI でビルドすると、`apiBaseUrl`・`projectId` が空ならそのプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）が自動で入る（SPEC §39.1）。別のプロジェクトに保存したいときだけ値を入れる。ローカルのビルドで両方空なら CSV ダウンロードになる。
-2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面（右上の歯車）で登録する。マスタ編集・稼働計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
+2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面（右上の歯車）で登録する。マスタ編集・リソース計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
    既定はそのタブの `sessionStorage` だけ（タブを閉じると消える）。設定画面で「このブラウザに記憶する」を選ぶと `localStorage`。画面に再表示しない・サーバーやリポジトリには保存しない。
 3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)「推奨構成」。`npm run gitlab:setup -- --apply` で設定できる）。
    設定画面の「接続を確認」は、トークンの scope・公開範囲・Pages の閲覧制限・保護ブランチが推奨と違えば「GitLab の設定に N 件の不足があります」と出す（SPEC §39.3）。
@@ -149,7 +149,7 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 コード・設定の変更は要らない（年度は計算基準日から求める。SPEC §49）。データだけ足す。
 
 - `data/holidays.csv` に新しい年の祝日・会社休日を足す。足していない年は国民の祝日だけで計算し、データ確認に「祝日表に無い年」が出る。
-- 新年度の契約を `data/contracts.csv` に別行で足し、稼働計画で新年度の配分を入れる（稼働計画の年度は ◀ ▶ で切り替える）。
+- 新年度の契約を `data/contracts.csv` に別行で足し、リソース計画で新年度の配分を入れる（リソース計画の年度は ◀ ▶ で切り替える）。
 
 ## 実績の種類を追加する
 

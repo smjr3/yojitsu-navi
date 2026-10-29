@@ -3,7 +3,7 @@
  *   - CSV の読み方（空・在籍 = 在籍、退職・left = 退職、それ以外はエラー）
  *   - 検証（退職後の作業実績・退職後のアサインは警告）
  *   - 実績の計算は変えない（退職後の作業も単価は退職の行の役職で数える）
- *   - 稼働計画（退職した月から所属に数えない・退職後の配分を知らせる）
+ *   - リソース計画（退職した月から所属に数えない・退職後の配分を知らせる）
  *   - メンバー別（基準月で退職していれば leftFrom）
  *   - 人事データの取り込み（取り込み元に再び現れたら在籍に戻す。現れない人を退職にはしない）
  */
@@ -117,7 +117,7 @@ describe("検証と計算", () => {
   });
 });
 
-describe("稼働計画（planView）", () => {
+describe("リソース計画（planView）", () => {
   const TEAMS = "team_id,name,parent_team_id,effective_from\nT1,保守,,2026-04\n";
   const MEMBERS = [
     "member_id,name,kind,title,department,section,team_id,effective_from,status",

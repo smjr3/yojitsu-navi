@@ -1,5 +1,5 @@
 /**
- * 稼働計画のセル（SPEC §31.4・§36: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
+ * リソース計画のセル（SPEC §31.4・§36: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
  */
 import type { Page } from "@playwright/test";
 import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.js";

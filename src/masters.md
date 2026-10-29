@@ -15,7 +15,7 @@ import { mastersEditor, LEDGER_VIEWS } from "./components/masters.js";
 ```
 
 ```js
-// アサイン・稼働計画は稼働計画の画面で編集する（§36）。以前のリンク（?view=assignments / plan）はそちらへ
+// アサイン・リソース計画はリソース計画の画面で編集する（§36）。以前のリンク（?view=assignments / plan）はそちらへ
 {
   const v = new URLSearchParams(location.search).get("view");
   if (v === "assignments" || v === "plan") {
