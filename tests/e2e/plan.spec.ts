@@ -1,5 +1,5 @@
 /**
- * 稼働計画 /plan（SPEC §23・§36）と、組織の種別・リーダーの表示（§21・§22）
+ * リソース計画 /plan（SPEC §23・§36）と、組織の種別・リーダーの表示（§21・§22）
  */
 import { test, expect, gotoPage, pickCombo } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
@@ -29,11 +29,11 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
 });
 
-test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", { tag: "@smoke" }, async ({ page }) => {
+test("リソース計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
-  // 稼働計画は 1 画面（タブは出さない）
+  // リソース計画は 1 画面（タブは出さない）
   await expect(page.getByRole("tab")).toHaveCount(0);
-  await expect(page.locator(".yn-tools a", { hasText: "稼働計画" })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".yn-tools a", { hasText: "リソース計画" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator("#yn-me-plan-team")).toHaveValue("S11");
   await expect(page.locator(".yn-me-plan-unit")).toContainText("リーダー: 田中 さくら");
   const expected = planView(planSourcesFromDocs(docs(), PAYLOAD.context.contracts), "S11", FY);
@@ -57,7 +57,7 @@ test("稼働計画: 組織（第1課）を指定して開くと、配下のメ�
   }
 });
 
-test("稼働計画: 時間で入力すると人月に直して保存し、表示は人月", async ({ page }) => {
+test("リソース計画: 時間で入力すると人月に直して保存し、表示は人月", async ({ page }) => {
   await gotoPage(page, "/plan?member=M011");
   await expect(page.locator("#yn-me-plan-team")).toHaveValue("T111");
   const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
@@ -91,7 +91,7 @@ test("稼働計画: 時間で入力すると人月に直して保存し、表示
   expect(serializeMasterDoc(expected).text).toContain("M011,C002,2026-11,2027-03,0.1\n");
 });
 
-test("稼働計画: 単位を切り替えると入っている値を換算して見せる。1.0 人月を超える月は「超過」", async ({ page }) => {
+test("リソース計画: 単位を切り替えると入っている値を換算して見せる。1.0 人月を超える月は「超過」", async ({ page }) => {
   await gotoPage(page, "/plan?member=M011");
   const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
   await row.getByRole("button", { name: /計画を追加/ }).click();
@@ -112,7 +112,7 @@ test("稼働計画: 単位を切り替えると入っている値を換算して
 });
 
 for (const dark of [false, true]) {
-  test(`稼働計画: 1.0 未満の月は青系、1.0 超は黄、0 は色なし（${dark ? "ダーク" : "ライト"}。§41）`, async ({ page }) => {
+  test(`リソース計画: 1.0 未満の月は青系、1.0 超は黄、0 は色なし（${dark ? "ダーク" : "ライト"}。§41）`, async ({ page }) => {
     if (dark) await page.addInitScript(() => localStorage.setItem("yn-theme", "dark"));
     await gotoPage(page, "/plan?member=M011");
     const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');

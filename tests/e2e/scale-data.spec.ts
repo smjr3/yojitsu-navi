@@ -1,6 +1,6 @@
 /**
  * 実運用規模のデータ（退職者・長い名前・0 の月）で崩れないこと（SPEC §35、docs/DUMMY_DATA.md）
- *   - 退職者: 一覧・詳細・稼働計画に「退職」が出る。退職後の計画は警告チップ
+ *   - 退職者: 一覧・詳細・リソース計画に「退職」が出る。退職後の計画は警告チップ
  *   - 値がすべて 0 のグラフ: 棒が全高で描かれず、目盛りが 0.000000 にならない
  *   - 長い案件名・顧客名・作業名: 390px でもページが横にはみ出さない
  */
@@ -44,7 +44,7 @@ test("メンバー一覧: 退職者に退職チップ（色だけに頼らず文
   expect(await left.count()).toBeGreaterThan(0);
 });
 
-test("稼働計画: 退職後に残った計画は行に「退職後の計画」の警告チップ", async ({ page }) => {
+test("リソース計画: 退職後に残った計画は行に「退職後の計画」の警告チップ", async ({ page }) => {
   const docs = {
     teams: parseMasterDoc("teams", PAYLOAD.files.teams.text),
     members: parseMasterDoc("members", PAYLOAD.files.members.text),

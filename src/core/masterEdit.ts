@@ -1128,10 +1128,10 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
 }
 
 // ---------------------------------------------------------------------------
-// 稼働計画タブ（§23）の入力: 編集中の文書 → PlanSources
+// リソース計画タブ（§23）の入力: 編集中の文書 → PlanSources
 // ---------------------------------------------------------------------------
 
-/** 編集中（保存前）の組織・メンバー・アサインと、契約の担当組織から稼働計画の計算の入力を作る */
+/** 編集中（保存前）の組織・メンバー・アサインと、契約の担当組織からリソース計画の計算の入力を作る */
 export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments">, contractsText: string): PlanSources {
   const teams: TeamRecord[] = docs.teams.rows.map((r) => {
     const v = rowRecord(docs.teams, r);

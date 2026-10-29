@@ -168,7 +168,7 @@ describe("parseDataset: 作業実績の取り込み", () => {
   });
 });
 
-describe("稼働計画の入力: CSV と同じ数値規則", () => {
+describe("リソース計画の入力: CSV と同じ数値規則", () => {
   it("0x10・1e-5・Infinity は数値として換算しない（検証でエラーになる文字列のまま）", async () => {
     const { allocationFromInput } = await import("../../src/core/plan.js");
     expect(allocationFromInput("0x10", "hours", 160)).toBe("0x10");
