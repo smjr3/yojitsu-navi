@@ -47,6 +47,12 @@ test("稼働計画: 組織（第1課）を指定して開くと、配下のメ�
     for (const [m, v] of r.monthly.entries()) {
       const total = v + outsideAt(r.memberId, FY[m]!);
       await expect(cells.nth(m)).toHaveText(total > 0 ? total.toFixed(2) : "—");
+      // 色: 1.0 超は黄、0 より多く 1.0 未満は青系、0 とちょうど 1.0 は色なし（§41）
+      const level = total > 1 + 1e-9 ? "is-over" : total > 1e-9 && total < 1 - 1e-9 ? "is-under" : null;
+      for (const c of ["is-over", "is-under"]) {
+        if (c === level) await expect(cells.nth(m)).toHaveClass(new RegExp(`\\b${c}\\b`));
+        else await expect(cells.nth(m)).not.toHaveClass(new RegExp(`\\b${c}\\b`));
+      }
     }
   }
 });
@@ -104,6 +110,43 @@ test("稼働計画: 単位を切り替えると入っている値を換算して
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
   await expect(page.locator(".yn-me-issue-item.is-warning", { hasText: "1.0 を超えています" })).toContainText("小林 玲奈");
 });
+
+for (const dark of [false, true]) {
+  test(`稼働計画: 1.0 未満の月は青系、1.0 超は黄、0 は色なし（${dark ? "ダーク" : "ライト"}。§41）`, async ({ page }) => {
+    if (dark) await page.addInitScript(() => localStorage.setItem("yn-theme", "dark"));
+    await gotoPage(page, "/plan?member=M011");
+    const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
+    await row.getByRole("button", { name: /計画を追加/ }).click();
+    const d = page.locator("dialog.yn-me-dialog[open]");
+    await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
+    await d.locator("#yn-me-f-start_month").fill("2026-11");
+    await d.locator("#yn-me-f-end_month").fill("2026-11");
+    await d.locator("#yn-me-f-allocation").fill("0.5");
+    await d.locator('[data-role="submit"]').click();
+    await expect(d).toHaveCount(0);
+    const cells = row.locator("td.yn-me-plan-cell");
+    const under = row.locator("td.yn-me-plan-cell.is-under").first();
+    const over = row.locator("td.yn-me-plan-cell.is-over").first();
+    await expect(under).toBeVisible();
+    await expect(over).toHaveText("1.40");
+    const style = (l: typeof cells) => l.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, fg: getComputedStyle(el).color }));
+    const u = await style(under);
+    const o = await style(over);
+    expect(u.bg).not.toBe(o.bg);
+    expect(u.fg).not.toBe(o.fg);
+    // 青系（青の成分が赤より大きい）
+    const rgb = (c: string) => c.match(/\d+/g)!.map(Number);
+    const [r, , b] = rgb(u.fg);
+    expect(b).toBeGreaterThan(r!);
+    // 0 の月は色なし
+    const empty = cells.filter({ hasText: "—" }).first();
+    if (await empty.count()) await expect(empty).not.toHaveClass(/is-under|is-over/);
+    // 内訳の行は色を付けない
+    await expect(page.locator('[data-fk="plan:toggle:M011"]')).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator('tr.yn-me-plan-sub[data-member="M011"] td.yn-me-plan-cell').first()).toBeVisible();
+    await expect(page.locator('tr.yn-me-plan-sub[data-member="M011"] td.yn-me-plan-cell.is-under')).toHaveCount(0);
+  });
+}
 
 test("組織の種別とリーダー: チーム一覧の列、チーム詳細の見出し、マスタ編集の組織タブ", async ({ page }) => {
   await gotoPage(page, "/teams");

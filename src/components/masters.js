@@ -1042,8 +1042,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const totals = months.map(() => 0);
     const outsideTotals = months.map(() => 0);
 
+    /** 人の行の月合計の色: 1.0 超は黄、0 より多く 1.0 未満は青系（§41）。0（計画なし）は色を付けない */
+    const allocLevel = (v) => (v > 1 + 1e-9 ? "over" : v > 1e-9 && v < 1 - 1e-9 ? "under" : null);
+
     /** 月のセル（クリックでその場の修正。target を渡すとその対象の欄から始める） */
-    const cellButton = (r, m, v, label, focusTarget, over) => {
+    const cellButton = (r, m, v, label, focusTarget, level = null) => {
       const fk = `plan:cell:${r.memberId}:${focusTarget ? targetId(focusTarget) : "all"}:${m}`;
       const btn = html`<button type="button" class=${editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly"} data-fk=${fk} aria-label=${fmt(T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) })} aria-haspopup=${editable ? "dialog" : null}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-hidden="true">—</span>`}</button>`;
       const tip = () => tooltip.show(btn, cellTip(r, m));
@@ -1059,7 +1062,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       });
       // 退職した月より後（§35）
       const left = r.leftFrom != null && m >= r.leftFrom;
-      return html`<td class=${`num yn-me-plan-cell${over ? " is-over" : v > 0 ? " is-set" : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
+      return html`<td class=${`num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
     };
 
     // 名前・所属・案件で絞り込む（空白区切りの語をすべて含む）
@@ -1116,7 +1119,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
           ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
-        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, monthly[i] > 1 + 1e-9))}
+        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: projectList.length })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(projectList.length) })}${hasOutside ? T.planEdit.toggleOutside : ""} ${open ? "▴" : "▾"}</button>
@@ -1138,7 +1141,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           <th scope="row"><div class="yn-me-plan-who yn-me-plan-sub-who">
             <span class="yn-me-plan-name" title=${sub ? `${label} ・ ${sub}` : label}>${label}</span>${sub ? html`<span class="yn-me-plan-team">${sub}</span>` : null}${stateChips(c.changed, c.added, c.errors)}
           </div></th>
-          ${months.map((m, i) => cellButton({ ...r, name }, m, mv[i], `${name} ${label}`, target, false))}
+          ${months.map((m, i) => cellButton({ ...r, name }, m, mv[i], `${name} ${label}`, target))}
           <td class="num">${pm(mv.reduce((a, b) => a + b, 0))}</td>
           <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
             <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:hist:${k}`} aria-expanded=${histOpen ? "true" : "false"} aria-controls=${histId} aria-label=${fmt(T.planEdit.histAria, { name, target: label, n: entries.length })} onclick=${() => toggleHist(r.memberId, target)}>${fmt(T.planEdit.histToggle, { n: integer(entries.length) })} ${histOpen ? "▴" : "▾"}</button>
