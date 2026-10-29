@@ -8,3 +8,5 @@ playwright-report/
 src/.observablehq/cache/
 tests/e2e/report/
 tests/e2e/test-results/
+packages/core/dist/
+packages/core/*.tgz

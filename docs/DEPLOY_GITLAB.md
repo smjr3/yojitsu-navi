@@ -155,6 +155,26 @@ shell executor しか無い場合は、Runner のマシンに Node.js 20 以上�
 | Pages を誰でも見られる設定です | Pages の閲覧制限がかかっていない |
 | main が保護ブランチではありません／main に直接プッシュできる人がいます／Developer も main にマージできます | 保護ブランチが推奨値と違う（この 3 つは Maintainer の人にだけ出る） |
 
+## 計算コアの npm パッケージ（`@yojitsu-navi/core`）
+
+計算コア（`src/core/`）を、ほかの社内プロジェクトから同じ計算・型で使えるように、このプロジェクトの **Package Registry**（Deploy > Package registry）に npm パッケージとして公開します（SPEC §42）。画面の公開とは独立していて、使わないなら何も設定しなくて構いません。
+
+**最初に 1 回**: Settings > Repository > **Protected tags** で `core-v*` を「Allowed to create = Maintainers」で保護します（公開できる人をリーダーに限るため）。
+
+**公開するたび**:
+
+1. `packages/core/package.json` の `version` を上げる MR を作り、`main` にマージする（互換が崩れる変更は 1 桁目、関数・型の追加は 2 桁目、直しは 3 桁目）。
+2. Maintainer が `main` のそのコミットにタグ `core-v<版>`（例 `core-v0.2.0`）を打つ（Code > Tags > New tag）。
+3. タグのパイプラインで `publish-core` ジョブが、版とタグの一致・型チェック・テストを確かめてから公開する。認証は `CI_JOB_TOKEN` なので CI/CD 変数は要りません。
+
+使う側の設定（`.npmrc` とトークン）は [packages/core/README.md](../packages/core/README.md) にあります。手元で中身を確かめるときは `npm run core:pack`（`packages/core/*.tgz` ができる。`npm install <そのファイル>` で入れられる）。
+
+| 症状 | 原因と対処 |
+|---|---|
+| `publish-core` が「タグと version が一致しません」 | タグの版と `packages/core/package.json` が違う。タグを消して正しい版で打ち直す |
+| `npm publish` が 403 | 同じ版が公開済み（上書きできない）。版を上げてやり直す |
+| 使う側の `npm install` が 404 / 401 | `.npmrc` のスコープ（`@yojitsu-navi`）・グループ ID・トークンの scope（`read_api` か `read_package_registry`）を確認 |
+
 ## 困ったとき
 
 | 症状 | 原因と対処 |

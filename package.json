@@ -21,7 +21,9 @@
     "test:e2e:smoke": "playwright test -c tests/e2e/playwright.config.ts --grep @smoke",
     "check": "npm run typecheck && npm run validate && npm run test",
     "verify:dist": "tsx scripts/verify-dist.ts",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "core:build": "node scripts/build-core.mjs",
+    "core:pack": "node scripts/build-core.mjs --pack"
   },
   "dependencies": {
     "@observablehq/framework": "^1.13.4",

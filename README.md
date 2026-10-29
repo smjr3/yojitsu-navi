@@ -75,6 +75,7 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run screenshots` | `dist/` から README のスクリーンショットを撮り直す |
+| `npm run core:build` / `npm run core:pack` | 計算コアを npm パッケージ `@yojitsu-navi/core` として `packages/core/` に出力する（`pack` は `.tgz` も作る。公開は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)） |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
 
 ビルドは必ず `npm run build` を使います（`npx observable build` を直接使うと、データを直しても古い数字のまま公開されることがあります）。
@@ -103,6 +104,8 @@ GitLab 側の推奨構成（グループ・プロジェクト・保護ブラン�
 
 CI/CD 変数・作業実績 API への切り替え・人事データの取り込み・マスタ編集の設定は [docs/OPERATIONS.md](docs/OPERATIONS.md) にあります。
 画面もビルドも外部 CDN・外部サイトに接続しません。
+
+計算コア（`src/core/`）は、ほかの社内プロジェクトから使えるよう npm パッケージ `@yojitsu-navi/core` として同じ GitLab の Package Registry に公開できます（タグ `core-v<版>` で CI が公開。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)）。
 
 開発用の GitHub Actions（`.github/workflows/ci.yml`）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
 
@@ -133,8 +136,10 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 config.json              計算・表示・取り込み元・マスタ編集の設定
 data/                    CSV データ（docs/DATA.md）
 docs/                    仕様・データ定義・運用手順など（上の「ドキュメント」）
+packages/core/           計算コアの npm パッケージ（package.json と README。中身は src/core からビルド）
 scripts/
   build.ts / dev.ts      ビルド・開発サーバ（入力の指紋でキャッシュを管理）
+  build-core.mjs         計算コアの npm パッケージを作る（npm run core:build）
   verify-dist.ts         ビルド結果の検証
   generate-dummy.ts      ダミーデータ生成（基本シナリオ）。dummy-scale.ts が実運用規模の部分
   fetch-worklogs.ts      作業実績の取得（直近 N か月を書き換え）
@@ -145,7 +150,7 @@ scripts/
   screenshots.mjs        README のスクリーンショット
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）
-src/core/                計算コア（純粋関数。画面に依存しない）
+src/core/                計算コア（純粋関数。画面に依存しない。npm パッケージ @yojitsu-navi/core のソース）
 src/*.md                 画面（Observable Framework）
 src/components/          画面の部品（KPI・表・グラフ・計算根拠・フィルタ・マスタ編集）
 src/data/                データローダ（docs/DATA_LOADERS.md）

@@ -2,6 +2,8 @@
 
 `src/core/` の実装にあたって SPEC.md が曖昧だった点と、採った決定。SPEC を更新する際の参考。
 
+`src/core/` は npm パッケージ `@yojitsu-navi/core` のソースでもあります（SPEC §42）。`src/core/` の中から読んでよいのは `src/core/` と `src/i18n/`（`index.js`・`ja.js`）だけです（ほかを読むとパッケージに入りません。`tests/integration/core-package.test.ts` が検査）。`index.ts` の公開 API を消す・引数を変えるときは `packages/core/package.json` の版の 1 桁目を上げます。
+
 ## 解釈・決定事項
 
 | 箇所 | 曖昧点 | 決定 |

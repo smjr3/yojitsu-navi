@@ -1,0 +1,26 @@
+{
+  "name": "@yojitsu-navi/core",
+  "version": "0.1.0",
+  "description": "予実ナビの計算コア（予算・実績・残予算・着地見込みの計算と型）",
+  "type": "module",
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./*": {
+      "types": "./dist/core/*.d.ts",
+      "import": "./dist/core/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  }
+}
