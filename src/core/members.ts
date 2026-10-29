@@ -6,10 +6,11 @@
  * 画面は aggregateMembers / memberMonthlySeries で期間を合算する（Model はプレーンな JSON のままで動く）。
  * 単価は §6 の rateFor をそのまま使う（原価・着地見込みと同じ関数）。
  */
-import { monthRange } from "./calendar.js";
+import { isValidYearMonth, monthRange } from "./calendar.js";
 import { roundYen } from "./cost.js";
 import { createEffectiveIndex, createMasterIndex, isLeftRecord, leftMonthOf, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { monthStatusFromMeta } from "./status.js";
+import { isOutsideRow, outsideRowId } from "./workTypes.js";
 import type {
   Assignment,
   ContractResult,
@@ -23,6 +24,7 @@ import type {
   MemberRecord,
   MemberTotals,
   Model,
+  OutsidePlan,
   Period,
   YearMonth,
 } from "./types.js";
@@ -32,6 +34,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 interface CellAcc {
+  /** 契約外の行だけ: 種別 */
+  outsideType?: string;
   allocation: number;
   assignmentCount: number;
   actualHours: number;
@@ -55,6 +59,7 @@ export function buildMemberMonths(
   assignments: readonly Assignment[],
   masters: MasterIndex,
   standardHoursPerMonth: number,
+  outside: MemberOutsideInput = {},
 ): MemberMonth[] {
   // (member, month) → (contract → 集計)
   const cells = new Map<string, Map<string, CellAcc>>();
@@ -96,6 +101,26 @@ export function buildMemberMonths(
     }
   }
 
+  // 契約外（§48.3）: 計画 = 契約外予定、実績 = 契約外の作業ログ（種別ごと）
+  const outsideCell = (memberId: string, month: YearMonth, type: string): CellAcc => {
+    const acc = cellOf(memberId, month, outsideRowId(type));
+    acc.outsideType = type;
+    return acc;
+  };
+  for (const o of outside.plans ?? []) {
+    if (!Number.isFinite(o.personMonths) || !isValidYearMonth(o.startMonth) || !isValidYearMonth(o.endMonth) || o.startMonth > o.endMonth) continue;
+    for (const month of monthRange(o.startMonth, o.endMonth)) {
+      const acc = outsideCell(o.memberId, month, o.type);
+      acc.allocation += o.personMonths;
+      acc.assignmentCount += 1;
+    }
+  }
+  for (const a of outside.actuals ?? []) {
+    const acc = outsideCell(a.memberId, a.month, a.type);
+    acc.actualHours += a.hours;
+    acc.worklogName ??= a.memberName;
+  }
+
   const keys = [...cells.keys()].sort();
   const out: MemberMonth[] = [];
   for (const key of keys) {
@@ -116,6 +141,20 @@ export function buildMemberMonths(
       worklogName ??= acc.worklogName;
       const ph = acc.allocation * standardHoursPerMonth;
       const pc = roundYen(ph * rate.hourlyRate);
+      if (acc.outsideType !== undefined) {
+        // 契約外の実績額 = 時間 × 単価（§6 と同じ単価。種別・月ごとに円に丸める）。月の合計には入れない
+        byContract.push({
+          contractId,
+          outsideType: acc.outsideType,
+          allocation: acc.allocation,
+          assignmentCount: acc.assignmentCount,
+          plannedHours: ph,
+          plannedCost: pc,
+          actualHours: acc.actualHours,
+          actualCost: roundYen(acc.actualHours * rate.hourlyRate),
+        });
+        continue;
+      }
       byContract.push({
         contractId,
         allocation: acc.allocation,
@@ -159,6 +198,13 @@ export function buildMemberMonths(
   return out;
 }
 
+/** buildMemberMonths の契約外の入力（§48.3） */
+export interface MemberOutsideInput {
+  plans?: readonly OutsidePlan[];
+  /** 契約外の作業ログの時間（メンバー・月・種別ごと） */
+  actuals?: ReadonlyArray<{ memberId: string; memberName: string; month: YearMonth; type: string; hours: number }>;
+}
+
 // ---------------------------------------------------------------------------
 // 集計（画面側。Model に対して実行する）
 // ---------------------------------------------------------------------------
@@ -173,6 +219,8 @@ export interface MemberScope {
   memberIds?: readonly string[];
   /** 対象契約（byContract を絞る）。省略 = 全契約 */
   contractIds?: readonly string[];
+  /** 契約外の計画・実績も数える（§48.4。既定 false = 契約の分だけ） */
+  includeOutside?: boolean;
 }
 
 /** 所属チームを決める月: 期間の終了月。ただし未来の組織は使わない（§11 と同じ min(period.to, asOfMonth)） */
@@ -192,8 +240,8 @@ function memberIndexOf(members: readonly MemberRecord[]): EffectiveIndex<MemberR
   return index;
 }
 
-function emptyContractTotals(contractId: string): MemberContractTotals {
-  return { contractId, plannedHours: 0, plannedCost: 0, actualHours: 0, actualCost: 0, variance: 0, utilization: null, unplannedHours: 0, unplannedCost: 0, assignedMonths: 0, months: [] };
+function emptyContractTotals(contractId: string, outsideType?: string): MemberContractTotals {
+  return { contractId, ...(outsideType !== undefined ? { outsideType } : {}), plannedHours: 0, plannedCost: 0, actualHours: 0, actualCost: 0, variance: 0, utilization: null, unplannedHours: 0, unplannedCost: 0, assignedMonths: 0, months: [] };
 }
 
 /** 稼働率 = 実績時間 ÷ 計画時間（計画 0 → null） */
@@ -222,7 +270,7 @@ export function aggregateMembers(model: Pick<Model, "meta" | "members" | "member
     let touched = false;
     let entry = byMember.get(mm.memberId);
     for (const row of mm.byContract) {
-      if (contractSet && !contractSet.has(row.contractId)) continue;
+      if (isOutsideRow(row) ? !scope.includeOutside : contractSet && !contractSet.has(row.contractId)) continue;
       if (!entry) {
         entry = {
           t: {
@@ -253,7 +301,7 @@ export function aggregateMembers(model: Pick<Model, "meta" | "members" | "member
       }
       const t = entry.t;
       let c = entry.contracts.get(row.contractId);
-      if (!c) entry.contracts.set(row.contractId, (c = emptyContractTotals(row.contractId)));
+      if (!c) entry.contracts.set(row.contractId, (c = emptyContractTotals(row.contractId, row.outsideType)));
       c.plannedHours += row.plannedHours;
       c.plannedCost += row.plannedCost;
       c.actualHours += row.actualHours;
@@ -273,12 +321,12 @@ export function aggregateMembers(model: Pick<Model, "meta" | "members" | "member
         t.unplannedCost += row.actualCost;
       }
       if (row.actualHours > 0 && monthStatusFromMeta(mm.month, model.meta) === "preliminary") t.includesPreliminary = true;
+      if (mm.rateMissing && (row.actualHours > 0 || row.plannedHours > 0)) t.rateMissing = true;
       touched = true;
     }
     if (touched && entry) {
       const t = entry.t;
       if (t.months[t.months.length - 1] !== mm.month) t.months.push(mm.month);
-      if (mm.rateMissing && (mm.actualHours > 0 || mm.plannedHours > 0)) t.rateMissing = true;
       entry.last = mm;
     }
   }
@@ -327,6 +375,7 @@ export function memberMonthlySeries(
   memberId: string,
   period: Period,
   contractIds?: readonly string[],
+  options: { includeOutside?: boolean } = {},
 ): MemberMonthlyPoint[] {
   const contractSet = contractIds ? new Set(contractIds) : null;
   const points = new Map<YearMonth, MemberMonthlyPoint>();
@@ -338,7 +387,7 @@ export function memberMonthlySeries(
     const p = points.get(mm.month);
     if (!p) continue;
     for (const row of mm.byContract) {
-      if (contractSet && !contractSet.has(row.contractId)) continue;
+      if (isOutsideRow(row) ? !options.includeOutside : contractSet && !contractSet.has(row.contractId)) continue;
       p.plannedHours += row.plannedHours;
       p.plannedCost += row.plannedCost;
       p.actualHours += row.actualHours;

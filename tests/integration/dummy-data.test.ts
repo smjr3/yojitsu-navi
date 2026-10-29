@@ -95,10 +95,17 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);
   });
 
-  it("Model の警告も同じ内訳。除外時間は顧客名が空の行の合計と一致", () => {
+  it("Model の警告も同じ内訳。除外時間は顧客名が空の契約内の行の合計と一致（顧客名が空の契約外 = 会社業務は除外しない §48.2）", () => {
     expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 4, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 * 3, TASK_UNCLASSIFIED: 1 });
-    const expected = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date)).reduce((a, w) => a + w.hours, 0);
-    expect(expected).toBeGreaterThan(1000); // 基本シナリオ約 330 時間 ＋ 実運用規模の部分
+    const noCustomer = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date));
+    const expected = noCustomer.filter((w) => w.task !== "社内会議").reduce((a, w) => a + w.hours, 0);
+    expect(expected).toBe(1.5); // 基本シナリオの固定行 1 件だけ
+    // 社内会議（約 330 時間 ＋ 実運用規模の部分）は契約外の会社業務として工数の明細に入る
+    const meeting = noCustomer.filter((w) => w.task === "社内会議").reduce((a, w) => a + w.hours, 0);
+    expect(meeting).toBeGreaterThan(1000);
+    const workMeeting = model.workRows.filter((r) => r.task === "社内会議").reduce((a, r) => a + r.hours, 0);
+    expect(workMeeting).toBeCloseTo(meeting, 6);
+    expect(model.workRows.filter((r) => r.task === "社内会議").every((r) => r.category === "outside" && r.amount === null)).toBe(true);
     expect(model.excludedHours).toBe(expected);
     expect(model.warnings.find((w) => w.code === "EXCLUDED_NO_CUSTOMER")?.hours).toBe(expected);
   });

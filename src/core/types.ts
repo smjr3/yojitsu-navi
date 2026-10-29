@@ -172,9 +172,11 @@ export interface Assignment {
   allocation: number;
 }
 
-/** 契約外予定（§30.5・§36）: 人 × 期間 × 人月。作業種別は持たない。契約の計画額・着地見込みには入れない */
+/** 契約外予定（§30.5・§36・§48）: 人 × 種別 × 期間 × 人月。契約の計画額・着地見込みには入れない */
 export interface OutsidePlan {
   memberId: string;
+  /** 契約外の種別（§48.1。task-types.csv の group）。空 = 種別なし */
+  type: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
   /** 人月（0〜1.0） */
@@ -244,6 +246,8 @@ export type TaskCategory = "contract" | "outside";
 export interface TaskTypeRule {
   task: string;
   category: TaskCategory;
+  /** 契約外の種別（計画の単位。§48.1）。空・省略 = task と同じ。契約内では使わない */
+  group?: string;
   note?: string;
 }
 
@@ -453,6 +457,8 @@ export interface Model {
    * 画面用の model.json では空にし、data/work-hours.json で別に配る
    */
   workRows: WorkRow[];
+  /** 契約外の種別（§48.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
+  outsideTypes: string[];
 }
 
 /** 工数の明細 1 行（SPEC §30.2）。（月, メンバー, 契約, 顧客, 作業種別, 区分）ごとの合計 */
@@ -485,10 +491,13 @@ export interface WorkRow {
 
 /** メンバー x・月 m・契約 c の計画と実績（MemberMonth.byContract の 1 行） */
 export interface MemberContractMonth {
+  /** 契約ID。契約外の行は outsideRowId(種別)（§48.3） */
   contractId: string;
+  /** 契約外の行だけ: 種別（空 = 種別なし） */
+  outsideType?: string;
   /** その月に掛かるアサインの配分の合計（契約期間外の月・除外された契約は 0） */
   allocation: number;
-  /** 掛かったアサインの件数。0 = アサインなし（この行の実績は unplanned に入る） */
+  /** 掛かったアサイン（契約外は契約外予定）の件数。0 = 計画なし（この行の実績は unplanned に入る） */
   assignmentCount: number;
   /** allocation × standardHoursPerMonth */
   plannedHours: number;
@@ -528,13 +537,15 @@ export interface MemberMonth {
   unplannedCost: number;
   /** plannedCost − actualCost（正 = 計画より原価が少ない） */
   variance: number;
-  /** 契約別の内訳（contractId 昇順） */
+  /** 契約別の内訳（contractId 昇順。契約外の行は末尾。上の合計には契約外を含めない） */
   byContract: MemberContractMonth[];
 }
 
 /** aggregateMembers の契約別の行（期間内の合計） */
 export interface MemberContractTotals {
   contractId: string;
+  /** 契約外の行だけ: 種別（§48.3） */
+  outsideType?: string;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;

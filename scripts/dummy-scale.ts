@@ -34,7 +34,7 @@ export interface ScaleOutput {
   mappings: MappingRow[];
   assignments: AssignmentRow[];
   outsidePlans: OutsidePlanRow[];
-  taskTypes: Array<{ task: string; category: string; note: string }>;
+  taskTypes: Array<{ task: string; category: string; group?: string; note: string }>;
   worklogs: Worklog[];
 }
 
@@ -241,8 +241,8 @@ const TASK_TYPES = [
   { task: "定期メンテナンス作業（月次パッチ適用およびセキュリティ脆弱性対応の事前検証を含む）", category: "契約内", note: "" },
   { task: "障害一次切り分け・ベンダーエスカレーション対応（夜間・休日待機を含む）", category: "契約内", note: "" },
   { task: "運用手順書・設計書の改訂（変更管理委員会への提出資料作成を含む）", category: "契約内", note: "" },
-  { task: "次期システム更改に向けた現行調査および提案資料作成", category: "契約外", note: "更改提案（保守契約の範囲外）" },
-  { task: "要件定義支援（新規案件）", category: "契約外", note: "新規案件の上流支援" },
+  { task: "次期システム更改に向けた現行調査および提案資料作成", category: "契約外", group: "提案", note: "更改提案（保守契約の範囲外）" },
+  { task: "要件定義支援（新規案件）", category: "契約外", group: "設計", note: "新規案件の上流支援" },
   { task: "引き継ぎ", category: "契約内", note: "退職・異動に伴う引き継ぎ" },
 ];
 
@@ -603,6 +603,8 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   // 乱数は他のデータを作り終えてから引く（ほかの行は変わらない）
   const outsidePlans: OutsidePlanRow[] = [];
   const NOTES = ["次期更改の提案", "運用設計の支援", "新規顧客の提案", "移行計画の作成"];
+  // メモ → 種別（§48.1。乱数は増やさない）
+  const TYPE_OF: Record<string, string> = { 次期更改の提案: "提案", 運用設計の支援: "設計", 新規顧客の提案: "提案", 移行計画の作成: "設計" };
   for (const p of people) {
     const used = peakOf.get(p.id);
     if (!used || used.size === 0) continue;
@@ -610,7 +612,11 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     if (busy.length === 0 || !rng.chance(0.12)) continue;
     const from = busy[rng.int(0, Math.max(0, busy.length - 2))]!;
     const to = addMonths(from, rng.int(1, 3));
-    outsidePlans.push({ member_id: p.id, start_month: from, end_month: to > fyTo ? fyTo : to, person_months: rng.pick([0.1, 0.2, 0.3]), note: rng.pick(NOTES) });
+    const start_month = from;
+    const end_month = to > fyTo ? fyTo : to;
+    const person_months = rng.pick([0.1, 0.2, 0.3]);
+    const note = rng.pick(NOTES);
+    outsidePlans.push({ member_id: p.id, type: TYPE_OF[note] ?? "提案", start_month, end_month, person_months, note });
   }
 
   const members = people.flatMap((p) => p.rows);

@@ -9,12 +9,13 @@
  *   team     チームID / "" = 全体 / "__unassigned__" = 未設定
  *   unit     m（百万円）| k（千円）| yen
  *   method   recent3 | all | assignment
+ *   outside  1 = 契約外を含む（メンバー別の計画・実績。§48.4）。0（既定）は URL に書かない
  */
 import { UNITS, fromCoreUnit } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
 import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fiscalYearOf } from "../core/index.js";
 
-export const STATE_KEYS = ["from", "to", "team", "unit", "method"];
+export const STATE_KEYS = ["from", "to", "team", "unit", "method", "outside"];
 // v2: 既定の単位を百万円に変えたとき、以前の既定（円）が保存値として残らないように切り替えた
 export const STORAGE_KEY = "yojitsu-navi:state:v2";
 const METHODS = ["recent3", "all", "assignment"];
@@ -43,6 +44,7 @@ export function defaultState(model) {
     team: "",
     unit: fromCoreUnit(model.config.currency?.defaultUnit),
     method: METHODS.includes(model.config.forecastMethodDefault) ? model.config.forecastMethodDefault : "recent3",
+    outside: "0",
   };
 }
 
@@ -85,6 +87,7 @@ export function sanitize(model, raw) {
   }
   if (UNIT_IDS.includes(raw.unit)) out.unit = raw.unit;
   if (METHODS.includes(raw.method)) out.method = raw.method;
+  if (raw.outside === "1" || raw.outside === 1 || raw.outside === true) out.outside = "1";
   return out;
 }
 
@@ -120,9 +123,15 @@ function writeStorage(state) {
   }
 }
 
+/** 既定のときは URL に書かない値（契約外を含まない） */
+const isDefaultHidden = (k, v) => k === "outside" && v !== "1";
+
 function writeQuery(state) {
   const url = new URL(location.href);
-  for (const k of STATE_KEYS) url.searchParams.set(k, state[k]);
+  for (const k of STATE_KEYS) {
+    if (isDefaultHidden(k, state[k])) url.searchParams.delete(k);
+    else url.searchParams.set(k, state[k]);
+  }
   history.replaceState(history.state, "", url);
 }
 
@@ -174,7 +183,7 @@ export function createStore(model, options = {}) {
 export function buildHref(path, state, extra = {}) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(extra)) if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
-  for (const k of STATE_KEYS) if (state && state[k] !== undefined) q.set(k, state[k]);
+  for (const k of STATE_KEYS) if (state && state[k] !== undefined && !isDefaultHidden(k, state[k])) q.set(k, state[k]);
   const s = q.toString();
   return s ? `${path}?${s}` : path;
 }

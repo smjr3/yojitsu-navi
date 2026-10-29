@@ -71,18 +71,20 @@ const vm = (() => {
   const asOf = model.meta.asOfMonth;
   const allFuture = fullPeriod.from > asOf;
   const period = allFuture ? fullPeriod : { from: fullPeriod.from, to: fullPeriod.to < asOf ? fullPeriod.to : asOf };
-  const agg = aggregateMembers(model, { period, memberIds: [memberId] });
+  // 契約外を含むか（§48.4）
+  const includeOutside = state.outside === "1";
+  const agg = aggregateMembers(model, { period, memberIds: [memberId], includeOutside });
   const totals = agg.members[0] ?? null;
-  const fullTotals = period.to === fullPeriod.to ? totals : (aggregateMembers(model, { period: fullPeriod, memberIds: [memberId] }).members[0] ?? null);
+  const fullTotals = period.to === fullPeriod.to ? totals : (aggregateMembers(model, { period: fullPeriod, memberIds: [memberId], includeOutside }).members[0] ?? null);
   const months = allMonths.filter((mm) => period.from <= mm.month && mm.month <= period.to);
   const fullMonths = allMonths.filter((mm) => fullPeriod.from <= mm.month && mm.month <= fullPeriod.to);
-  const series = memberMonthlySeries(model, memberId, fullPeriod);
+  const series = memberMonthlySeries(model, memberId, fullPeriod, undefined, { includeOutside });
   const baseMonth = memberBaseMonth(model, period);
   const { tree } = treeAt(model, baseMonth);
   // 見出しの名前: 基準月のマスタ → 最新のマスタ → 作業ログの名前
   const rec = [...records].reverse().find((r) => r.effectiveFrom <= baseMonth) ?? records[records.length - 1] ?? null;
   const name = totals?.memberName ?? rec?.name ?? allMonths[allMonths.length - 1]?.memberName ?? memberId;
-  return { period, fullPeriod, allFuture, fullTotals, fullMonths, totals, months, series, baseMonth, tree, rec, name, unit: state.unit, member: { memberId, memberName: name } };
+  return { period, fullPeriod, allFuture, fullTotals, fullMonths, totals, months, series, baseMonth, tree, rec, name, unit: state.unit, includeOutside, member: { memberId, memberName: name } };
 })();
 ```
 
@@ -146,7 +148,7 @@ if (vm) {
 ```
 
 ```js
-if (store && exists) mountFilterBar(store, model, { show: ["period", "unit"] });
+if (store && exists) mountFilterBar(store, model, { show: ["period", "outside", "unit"] });
 ```
 
 ```js
@@ -157,8 +159,8 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   display(
     memberKpiRow([
-        statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.member.plannedSub, { hours: formatHours(t.plannedHours), whole: period.to !== vm.fullPeriod.to && vm.fullTotals ? fmt(T.members.wholePeriodSuffix, { value: money(vm.fullTotals.plannedCost, unit) }) : "" }), breakdown: () => bd.memberPlanSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
-        statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.member.actualSub, { hours: formatHours(t.actualHours), unplanned: t.unplannedHours > 0 ? fmt(T.member.unplannedSuffix, { hours: formatHours(t.unplannedHours) }) : "" }), breakdown: () => bd.memberActualSpec({ model, member, months, unit, subtitle: periodJa(period), contractHref }) }),
+        statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.member.plannedSub, { hours: formatHours(t.plannedHours), whole: period.to !== vm.fullPeriod.to && vm.fullTotals ? fmt(T.members.wholePeriodSuffix, { value: money(vm.fullTotals.plannedCost, unit) }) : "" }), breakdown: () => bd.memberPlanSpec({ model, member, months, includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) }),
+        statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.member.actualSub, { hours: formatHours(t.actualHours), unplanned: t.unplannedHours > 0 ? fmt(T.member.unplannedSuffix, { hours: formatHours(t.unplannedHours) }) : "" }), breakdown: () => bd.memberActualSpec({ model, member, months, includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) }),
         statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: t.plannedCost === 0 && t.actualCost === 0 ? "" : varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: T.members.utilizationTile, value: formatPercent(t.utilization), sub: t.utilization === null ? T.breakdown.utilZero : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
@@ -188,11 +190,11 @@ if (vm) {
   const columns = [
     { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
     { key: "status", label: T.columns.status, type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: STATUS_LABELS[r.status] }), hideOnPhone: true },
-    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
-    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", render: fut((r) => formatHours(r.actualHours)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", render: fut((r) => formatHours(r.actualHours)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: monthJa(r.month), contractHref }) },
     { key: "utilization", label: T.breakdown.utilization, type: "percent", render: fut((r) => formatPercent(r.utilization)), breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: monthJa(r.month) }) },
-    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
-    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", hideOnPhone: true, render: fut((r, u) => money(r.actualCost, u)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), unit, subtitle: monthJa(r.month), contractHref }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: monthRows(r.month), includeOutside: vm.includeOutside, unit, subtitle: monthJa(r.month), contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", hideOnPhone: true, render: fut((r, u) => money(r.actualCost, u)), breakdown: (r) => bd.memberActualSpec({ model, member, months: monthRows(r.month), includeOutside: vm.includeOutside, unit, subtitle: monthJa(r.month), contractHref }) },
     { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "moneyYen", render: fut((r, u) => moneySigned(r.variance, u)), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: monthJa(r.month) }) },
   ];
   const t = vm.totals;
@@ -219,9 +221,12 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   const rows = (totals?.byContract ?? []).map((c) => {
     const k = byId.get(c.contractId);
+    const outside = typeof c.outsideType === "string";
     return {
       ...c,
       key: c.contractId,
+      outside,
+      outsideLabel: outside ? bd.outsideRowLabel(c.outsideType) : "",
       customerName: k?.customerName ?? "",
       projectName: k?.projectName ?? "",
       teamName: k?.teamId ? teamName(model, k.teamId, vm.tree) : T.numbers.unassignedTeam,
@@ -231,18 +236,19 @@ if (vm) {
   });
   const chips = (r) =>
     r.assignedMonths === 0
-      ? [{ kind: "neutral", text: T.member.noAssignment, title: T.member.noAssignmentTitle }]
+      ? [{ kind: "neutral", text: r.outside ? T.member.noOutsidePlan : T.member.noAssignment, title: r.outside ? T.member.noOutsidePlanTitle : T.member.noAssignmentTitle }]
       : r.unplannedHours > 0
         ? [{ kind: "neutral", text: fmt(T.members.chipUnplanned, { hours: formatHours(r.unplannedHours) }), title: T.member.unplannedTitle }]
         : [];
+  const rowName = (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`);
   const columns = [
-    { key: "contractId", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => r.contractId, exportValue: (r) => r.contractId },
-    { key: "contractName", label: T.breakdown.colCustomerProject, type: "text", exportOnly: true, get: (r) => `${r.customerName} / ${r.projectName}` },
-    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}`, contractHref }) },
-    { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "moneyYen", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${r.customerName} / ${r.projectName} ・ ${periodJa(period)}` }) },
+    { key: "contractId", label: T.columns.contract, type: "text", render: (r) => (r.outside ? html`<span class="yn-cell-main">${r.outsideLabel}</span>` : contractNameCell(r)), sortValue: (r) => r.contractId, exportValue: (r) => (r.outside ? "" : r.contractId) },
+    { key: "contractName", label: T.breakdown.colCustomerProject, type: "text", exportOnly: true, get: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${rowName(r)} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, measure: "hours", subtitle: `${rowName(r)} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "moneyYen", breakdown: (r) => bd.memberPlanSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${rowName(r)} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "moneyYen", breakdown: (r) => bd.memberActualSpec({ model, member, months: vm.months, contractIds: [r.contractId], unit, subtitle: `${rowName(r)} ・ ${periodJa(period)}`, contractHref }) },
+    { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "moneyYen", render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: `${rowName(r)} ・ ${periodJa(period)}` }) },
     { key: "status", label: T.breakdown.colAssignment, type: "status", get: chips, sortable: false, hideNarrow: true },
   ];
   if (rows.length === 0) display(emptyState({ title: T.member.noContractsTitle, text: T.member.noContractsText, icon: "○" }));
@@ -255,7 +261,7 @@ if (vm) {
         caption: T.member.byContractCaption,
         exportName: `member_${memberId}_contracts_${period.from}_${period.to}`,
         sort: { key: "actualCost", dir: "desc" },
-        rowHref: (r) => contractHref(r.contractId),
+        rowHref: (r) => (r.outside ? null : contractHref(r.contractId)),
         summary: { name: T.table.total, plannedHours: totals.plannedHours, actualHours: totals.actualHours, plannedCost: totals.plannedCost, actualCost: totals.actualCost, variance: totals.variance, status: null },
       }),
     );

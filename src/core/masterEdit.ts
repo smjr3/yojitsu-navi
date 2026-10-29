@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation";
+  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation" | "outsideType";
   required: boolean;
 }
 
@@ -126,11 +126,13 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     issueFile: "outside-plans.csv",
     label: T.masterFiles.outside,
     history: "period",
-    keyColumns: ["member_id"],
+    keyColumns: ["member_id", "type"],
     valueColumn: "person_months",
     optional: true,
     columns: [
       { name: "member_id", label: T.masterFiles.colMember, input: "member", required: true },
+      // 契約外の種別（§48.1）。省略可（旧ファイルには無い。無ければ見出しの末尾に足す）
+      { name: "type", label: T.masterFiles.colOutsideType, input: "outsideType", required: false },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "person_months", label: T.masterFiles.colPersonMonths, input: "allocation", required: true },
@@ -684,6 +686,8 @@ export interface ContextFiles {
   contracts: string;
   mapping: string;
   holidays: string;
+  /** 作業種別の分類表（契約外の種別の検証用。§48.1）。省略 = 分類なし */
+  taskTypes?: string;
 }
 
 export interface RowIssue extends ValidationIssue {
@@ -721,6 +725,7 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     members: ser.members.text,
     rates: ser.rates.text,
     outsidePlans: ser.outside.text,
+    ...(context.taskTypes !== undefined ? { taskTypes: context.taskTypes } : {}),
     worklogs: [],
   };
   const { issues } = parseDataset(files);

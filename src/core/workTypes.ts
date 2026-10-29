@@ -28,6 +28,8 @@ export function parseTaskCategory(value: string | null | undefined): TaskCategor
 
 export interface TaskClassification {
   category: TaskCategory;
+  /** 契約外の種別（§48.1。group、無ければ分類表の task の表記）。契約内は "" */
+  group: string;
   /** 分類表に無い（契約内として数える）。分類表が空のときは常に false */
   unclassified: boolean;
 }
@@ -40,11 +42,11 @@ export interface TaskClassifier {
 
 /** 分類表から分類器を作る。正規化後に同じ作業種別が複数あれば先の行を使う */
 export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined): TaskClassifier {
-  const index = new Map<string, TaskCategory>();
+  const index = new Map<string, { category: TaskCategory; group: string }>();
   for (const r of rules ?? []) {
     const key = normalizeName(r.task);
     if (key === "" || index.has(key)) continue;
-    index.set(key, r.category);
+    index.set(key, { category: r.category, group: r.category === "outside" ? outsideTypeOf(r) : "" });
   }
   const enabled = index.size > 0;
   const cache = new Map<string, TaskClassification>();
@@ -54,20 +56,57 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined)
       let c = cache.get(task);
       if (c) return c;
       const hit = index.get(normalizeName(task));
-      c = hit ? { category: hit, unclassified: false } : { category: "contract", unclassified: enabled };
+      c = hit ? { category: hit.category, group: hit.group, unclassified: false } : { category: "contract", group: "", unclassified: enabled };
       cache.set(task, c);
       return c;
     },
   };
 }
 
-/** 契約外として契約の紐付けから外す作業ログか（hours・日付が正しく、顧客名があり、分類が契約外） */
+/**
+ * 契約外として契約の紐付けから外す作業ログか（hours・日付が正しく、分類が契約外）。
+ * 顧客名の無い作業（会社業務など）も契約外なら残す（§48.2。契約内の顧客名なしは従来どおり除外）
+ */
 export function isOutsideWorklog(w: Worklog, classifier: TaskClassifier): boolean {
   if (!classifier.enabled) return false;
   if (typeof w.hours !== "number" || !Number.isFinite(w.hours) || w.hours <= 0) return false;
   if (!isValidISODate(w.date)) return false;
-  if (normalizeName(w.customerName) === "") return false;
   return classifier.classify(w.task).category === "outside";
+}
+
+// ---------------------------------------------------------------------------
+// 契約外の種別（§48.1）
+// ---------------------------------------------------------------------------
+
+/** 分類表の行の契約外の種別（group、空なら task の表記） */
+export function outsideTypeOf(rule: Pick<TaskTypeRule, "task" | "group">): string {
+  const g = (rule.group ?? "").trim();
+  return g !== "" ? g : rule.task.trim();
+}
+
+/** 契約外の種別の一覧（契約外の行の種別。正規化して重複を除き、ファイルの順） */
+export function outsideTypes(rules: readonly TaskTypeRule[] | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of rules ?? []) {
+    if (r.category !== "outside") continue;
+    const t = outsideTypeOf(r);
+    const key = normalizeName(t);
+    if (key === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
+/** メンバー別の契約外の行の ID（§48.3。契約ID と重ならない接頭辞） */
+export const OUTSIDE_ROW_PREFIX = "~outside:";
+export function outsideRowId(type: string): string {
+  return `${OUTSIDE_ROW_PREFIX}${type}`;
+}
+/** メンバー別の行が契約外か */
+export function isOutsideRow(row: { outsideType?: string | undefined }): boolean {
+  return typeof row.outsideType === "string";
 }
 
 /** 未分類の作業種別の警告（作業種別ごとに 1 件。時間の多い順） */
@@ -506,7 +545,8 @@ export function aggregateWork(model: Pick<Model, "meta" | "members">, rows: read
 export function outsideInputs(mappings: ReadonlyArray<{ kind: string; worklog: Worklog; month?: YearMonth; contractId?: string }>): OutsideInput[] {
   const out: OutsideInput[] = [];
   for (const m of mappings) {
-    if (m.kind === "ignored" || m.kind === "excluded") continue;
+    // 顧客名なし（excluded）の契約外も残す（§48.2）
+    if (m.kind === "ignored") continue;
     out.push({ worklog: m.worklog, month: m.month ?? monthOfDate(m.worklog.date), contractId: m.kind === "assigned" ? (m.contractId ?? null) : null });
   }
   return out;

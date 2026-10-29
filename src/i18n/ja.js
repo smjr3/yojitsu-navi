@@ -168,6 +168,9 @@ export default {
     teamHelp: "配下のチームを含めて集計",
     method: "着地見込み",
     unit: "単位",
+    // 契約外（提案・会社業務など）を計画と実績に含めるか（メンバー別。§48.4）
+    outsideInclude: "契約外を含む",
+    outsideTitle: "提案・設計・会社業務など契約外の作業を、計画と実績の両方に含める",
     // 期間のプリセット。{fy} は年度の番号（例 2026）
     presets: {
       fy: "今年度（FY{fy}）",
@@ -301,7 +304,8 @@ export default {
     outsideMonthInvalid: "{file} {row} 行目: {column} の形式が不正です: {value}",
     outsidePeriodInverted: "{file} {row} 行目: 開始月 {from} が終了月 {to} より後です",
     outsideOutOfRange: "{file} {row} 行目: person_months は 0〜1 で指定してください: {value}",
-    outsideOverlap: "{file}: メンバー {memberId} の {month} の契約外予定が複数の行（{rows}）にあります。1 か月 1 行にしてください",
+    outsideOverlap: "{file}: メンバー {memberId} の {month} の契約外予定（同じ種別）が複数の行（{rows}）にあります。1 か月 1 行にしてください",
+    outsideUnknownType: "{file} {row} 行目: 種別「{type}」は task-types.csv の契約外の種別にありません",
   },
 
   // ── 計算時の警告（データ確認画面） ─────────────────────────
@@ -443,6 +447,8 @@ export default {
 
   // ── 計算根拠パネル（数値をクリックすると開くダイアログ） ──────────────
   breakdown: {
+    // メンバー別の契約外の行（§48.3）
+    outsideRow: "契約外: {type}",
     close: "閉じる",
     escHint: "Esc で閉じる",
     loadFailed: "明細を読み込めませんでした: {error}",
@@ -983,6 +989,8 @@ export default {
     byContractHint: "{period}{elapsed} にアサインされた案件と作業した案件。「アサインなし」は計画が無く作業だけがある案件（応援など）です。計画と実績は経過月（基準月まで）で比べます。案件名をクリックすると案件詳細へ移動します。",
     noAssignment: "アサインなし",
     noAssignmentTitle: "この期間にアサインが無く、作業だけがある案件",
+    noOutsidePlan: "予定なし",
+    noOutsidePlanTitle: "この期間に契約外予定が無く、作業だけがある種別",
     unplannedTitle: "アサイン期間の外の月に作業した時間",
     noContractsTitle: "この期間の案件はありません",
     noContractsText: "アサインも作業実績もありません。",
@@ -1130,6 +1138,8 @@ export default {
     colAllocation: "配分（人月）",
     outside: "契約外予定",
     colPersonMonths: "契約外予定（人月）",
+    colOutsideType: "種別",
+    outsideNoType: "（種別なし）",
     colNote: "メモ",
     effectRate: "時間単価と、実績・残予算・消化率・着地見込み",
     effectMemberId: "メンバーマスタへの登録の有無（未登録の扱い）",
@@ -1164,9 +1174,9 @@ export default {
     assignmentsWhat: "誰を、どの案件に、何人月（0〜1.0）割り当てるか。",
     assignmentsEffect: "着地見込みの「アサイン方式」と、メンバー別画面の計画（計画時間・計画額）が変わります。1 人の月合計は 1.0 以下にしてください。",
     assignmentsHowto: "期間（開始月〜終了月）と配分を入力します。配分を途中で変えるときは、稼働計画の「＋ 変更」で「何月から何人月」を入れます（期間は画面が分けて保存します）。",
-    outsideWhat: "提案・運用設計など、保守の契約の外で使う見込みの人月（人 × 期間）。作業種別は持たず合計だけ。",
-    outsideEffect: "稼働計画の「1.0 超」の判定だけが変わります。予算・実績・着地見込みは変わりません。",
-    outsideHowto: "稼働計画で人の行を開き、「契約外予定」の行の「＋ 変更」かセルから入れます。",
+    outsideWhat: "提案・設計・会社業務など、保守の契約の外で使う見込みの人月（人 × 種別 × 期間）。種別は task-types.csv の契約外の種別。",
+    outsideEffect: "「1.0 超」の判定と、メンバー別で「契約外を含む」にしたときの計画が変わります。予算・実績・着地見込みは変わりません。",
+    outsideHowto: "稼働計画で人の行を開き、種別の行の「＋ 変更」かセルから入れます。",
     added: "追加",
     changed: "変更",
     unknownTeam: "（存在しないチーム）",
@@ -1498,12 +1508,14 @@ export default {
   // ── 稼働計画: 人 × 案件の行と変更の履歴・契約外予定（§36） ──
   planEdit: {
     title: "稼働計画",
-    helpHistory: "<strong>変更の持ち方:</strong> 人ごとに 1 行。開くと案件ごとの行と「契約外予定」の行が出ます。途中で人月が変わるときは、その行の「＋ 変更」で「何月から何人月」を入れると、画面が期間を分けて保存します（同じ案件が 2 行に増えません）。「変更 n件」を開くと、いつから何人月に変わったかの一覧で確かめ・直せます。",
+    helpHistory: "<strong>変更の持ち方:</strong> 人ごとに 1 行。開くと案件ごとの行と、契約外の種別（提案・会社業務など）ごとの行が出ます。途中で人月が変わるときは、その行の「＋ 変更」で「何月から何人月」を入れると、画面が期間を分けて保存します（同じ案件が 2 行に増えません）。「変更 n件」を開くと、いつから何人月に変わったかの一覧で確かめ・直せます。",
     toggle: "案件 {n}",
     toggleOutside: "＋契約外",
     toggleAria: "{name} の案件ごとの計画（{n} 件）",
     addProject: "＋ 案件",
     outsideSub: "提案など保守の契約外",
+    outsideTypeSub: "契約外",
+    outsideTypeTip: "契約外: {type}",
     outsideOverlapHint: "この月に複数の行があります。変更の履歴から直してください",
     histToggle: "変更 {n}件",
     histAria: "{name} ・ {target} の変更の履歴（{n} 件）",

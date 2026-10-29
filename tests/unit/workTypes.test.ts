@@ -59,14 +59,14 @@ describe("createTaskClassifier", () => {
   it("分類表が空なら無効（すべて契約内・未分類にしない）", () => {
     const c = createTaskClassifier([]);
     expect(c.enabled).toBe(false);
-    expect(c.classify("提案")).toEqual({ category: "contract", unclassified: false });
+    expect(c.classify("提案")).toEqual({ category: "contract", group: "", unclassified: false });
   });
   it("正規化して照合し、無い作業種別は契約内＋未分類", () => {
     const c = createTaskClassifier(TYPES);
-    expect(c.classify("提案")).toEqual({ category: "outside", unclassified: false });
-    expect(c.classify("　提案 ")).toEqual({ category: "outside", unclassified: false });
-    expect(c.classify("勉強会")).toEqual({ category: "contract", unclassified: true });
-    expect(c.classify("")).toEqual({ category: "contract", unclassified: true });
+    expect(c.classify("提案")).toEqual({ category: "outside", group: "提案", unclassified: false });
+    expect(c.classify("　提案 ")).toEqual({ category: "outside", group: "提案", unclassified: false });
+    expect(c.classify("勉強会")).toEqual({ category: "contract", group: "", unclassified: true });
+    expect(c.classify("")).toEqual({ category: "contract", group: "", unclassified: true });
   });
   it("同じ作業種別が複数あれば先の行", () => {
     const c = createTaskClassifier([{ task: "提案", category: "contract" }, { task: "提案", category: "outside" }]);
@@ -108,8 +108,8 @@ describe("buildModel: 契約外は契約の実績に入れない", () => {
       worklog({ date: "2026-04-04", memberId: "M2", customerName: "新規見込み", projectName: "提案書", task: "運用設計", hours: 4 }),
       // 未分類（契約内として数える）
       worklog({ date: "2026-04-05", memberId: "M2", customerName: "ABC", projectName: "保守", task: "勉強会", hours: 1 }),
-      // 顧客名なしは分類より先に除外
-      worklog({ date: "2026-04-06", memberId: "M2", customerName: "", projectName: "", task: "提案", hours: 5 }),
+      // 顧客名なしの契約内は除外（顧客名なしの契約外は残す。§48.2 は別の describe）
+      worklog({ date: "2026-04-06", memberId: "M2", customerName: "", projectName: "", task: "保守", hours: 5 }),
     ],
   });
   const model = buildModel(data, { asOf: "2026-05-20", generatedAt: "x" });
