@@ -16,7 +16,7 @@ GitHub Actions の分数を節約するため、CI は Pull Request では縮小
 
 - `smoke.spec.ts` のすべて（全ページがエラー 0 で開く、404）
 - `screen-text.spec.ts` の各画面の説明文の量
-- 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、稼働計画の表示とセルの修正（plan / plan-cells）、テーマ切替（ui-controls）
+- 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、稼働計画の表示とセルの修正（plan / plan-cells）、検証の一覧から該当の行へ（issue-list）、テーマ切替（ui-controls）
 
 画面幅・ダーク・モンキー・回帰などは全件だけで走る。全件はマージ前にローカルで通す。主要な画面・操作を足したら、その代表のテストに `@smoke` を付ける。
 
@@ -56,6 +56,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄） |
+| `issue-list.spec.ts` | 検証の一覧（1.0 超は警告・名前で示す・押すと該当の行へ（組織・年度・絞り込み・他画面）・8 件超・エラー赤／警告黄・各画面幅・ダーク）。SPEC §39 |
 | `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
 | `screen-text.spec.ts` | 画面の説明文の量（各画面の本文の文章は合計 120 文字・1 段落 70 文字まで。説明は「?」へ）と、GitLab のトークン入力が設定画面だけにあること。SPEC §37 |

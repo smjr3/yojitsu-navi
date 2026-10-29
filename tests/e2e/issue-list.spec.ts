@@ -36,7 +36,7 @@ test("1.0 超は警告: 保存は止めず、人の名前で 1 件（続いた�
   await expect(page.locator('[data-fk="plan:cell:M010:all:2026-11"]')).toBeInViewport();
 });
 
-test("エラーは赤・警告は黄。エラーを先に並べ、押すとその履歴の行へ（絞り込み・組織・年度を合わせる）", async ({ page }) => {
+test("エラーは赤・警告は黄。エラーを先に並べ、押すとその履歴の行へ（絞り込み・組織・年度を合わせる）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2027-05,2027-06,1.5"]);
   const list = page.locator(".yn-me-issue-list > li");
