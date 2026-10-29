@@ -6,7 +6,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const ROOT = join(__dirname, "..", "..");
 const DOCS = ["README.md", "CONTRIBUTING.md", "tests/e2e/README.md", ...readdirSync(join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
@@ -39,19 +40,12 @@ describe.each(DOCS)("%s", (file) => {
   });
 });
 
-/** 生成物・依存・テスト結果は除く（コミットしないもの） */
-const SKIP = new Set([".git", "node_modules", "dist", "test-results", "playwright-report", ".observablehq"]);
-const IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
-
-function images(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    if (SKIP.has(e.name)) return [];
-    const path = join(dir, e.name);
-    if (e.isDirectory()) return images(path);
-    return IMAGE.test(e.name) ? [relative(ROOT, path)] : [];
-  });
-}
+/** コミット済み＋これからコミットされうるファイル（.gitignore の生成物・依存・テスト結果は除く） */
+const repoFiles = () =>
+  execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: ROOT, encoding: "utf-8" })
+    .split("\n")
+    .filter((f) => f && existsSync(join(ROOT, f)));
 
 it("リポジトリに画像ファイルを置いていない", () => {
-  expect(images(ROOT)).toEqual([]);
+  expect(repoFiles().filter((f) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f))).toEqual([]);
 });
