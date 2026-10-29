@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
 });
 
-test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", async ({ page }) => {
+test("稼働計画: 組織（第1課）を指定して開くと、配下のメンバーと月の配分合計（人月）が core と一致", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   // 稼働計画は 1 画面（タブは出さない）
   await expect(page.getByRole("tab")).toHaveCount(0);
@@ -100,7 +100,7 @@ test("稼働計画: 単位を切り替えると入っている値を換算して
   await expect(d).toHaveCount(0);
   await expect(row).toContainText("1.0 超");
   await expect(row.locator("td.yn-me-plan-cell.is-over").first()).toHaveText("1.40");
-  // 1.0 超は警告（保存は止めない。§38）
+  // 1.0 超は警告（保存は止めない。§39）
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
   await expect(page.locator(".yn-me-issue-item.is-warning", { hasText: "1.0 を超えています" })).toContainText("小林 玲奈");
 });

@@ -212,7 +212,7 @@ test.describe("顧客一覧 /customers", () => {
 });
 
 test.describe("顧客詳細 /customer", () => {
-  test("一覧 → 詳細: key は encodeURIComponent、KPI は core と一致、案件一覧・担当チーム別・パンくず", async ({ page }) => {
+  test("一覧 → 詳細: key は encodeURIComponent、KPI は core と一致、案件一覧・担当チーム別・パンくず", { tag: "@smoke" }, async ({ page }) => {
     await go(page, "/customers");
     const g = listed().find((x) => x.contractIds.length >= 2)!;
     const link = tableByCaption(page, "顧客一覧").locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(g.key)}]`) }).locator(".yn-row-link").first();

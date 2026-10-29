@@ -5,8 +5,20 @@
 **画面の数値は必ず core と一致**しなければならない。
 
 ```bash
-npm run test:e2e                      # = playwright test -c tests/e2e/playwright.config.ts
+npm run test:e2e                      # 全件 = playwright test -c tests/e2e/playwright.config.ts
+npm run test:e2e:smoke                # 縮小版 = 上に --grep @smoke
 ```
+
+## 縮小版（`@smoke`）
+
+GitHub Actions の分数を節約するため、CI は Pull Request では縮小版、`main` への push（マージ）では全件を走らせる（`.github/workflows/ci.yml`）。
+縮小版は `{ tag: "@smoke" }` を付けたテストだけ（約 40 件、ローカル 2 workers で 40 秒前後）:
+
+- `smoke.spec.ts` のすべて（全ページがエラー 0 で開く、404）
+- `screen-text.spec.ts` の各画面の説明文の量
+- 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、稼働計画の表示とセルの修正（plan / plan-cells）、テーマ切替（ui-controls）
+
+画面幅・ダーク・モンキー・回帰などは全件だけで走る。全件はマージ前にローカルで通す。主要な画面・操作を足したら、その代表のテストに `@smoke` を付ける。
 
 ## 流れ
 
@@ -36,7 +48,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 
 | ファイル | 内容 |
 |---|---|
-| `smoke.spec.ts` | 全ページがエラー 0・失敗リクエスト 0 で開き、h1 と計算基準日 2026-10-27 がある |
+| `smoke.spec.ts` | 全ページがエラー 0・失敗リクエスト 0 で開き、h1 と計算基準日 2026-10-27 がある（稼働計画・マスタ編集・設定は計算基準日の表示が無いので h1 まで） |
 | `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
 | `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
 | `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |

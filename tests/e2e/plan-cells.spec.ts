@@ -46,7 +46,7 @@ test("セルにマウスを載せると内訳の吹き出し、フォーカス�
   await expect(tip).toContainText("2027年1月");
 });
 
-test("クリックで修正: この月だけ変えると行を月で分け、元の値に戻すと 1 行に戻る", async ({ page }) => {
+test("クリックで修正: この月だけ変えると行を月で分け、元の値に戻すと 1 行に戻る", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   await cell(page, "M010", "2026-12").click();
   const p = pop(page);

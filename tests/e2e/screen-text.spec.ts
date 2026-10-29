@@ -35,7 +35,7 @@ async function proseItems(page: Page): Promise<string[]> {
 }
 
 for (const path of PAGES) {
-  test(`説明文の量: ${path}`, async ({ page }) => {
+  test(`説明文の量: ${path}`, { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, path);
     const items = await proseItems(page);
     const long = items.filter((t) => t.length > ITEM_BUDGET);

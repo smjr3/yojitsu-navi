@@ -146,7 +146,7 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
   await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
 });
 
-test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", async ({ page }) => {
+test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", { tag: "@smoke" }, async ({ page }) => {
   await open(page);
   await addRate(page, "部長", "14000", "2026-11");
   // 今の値は 12000 のまま。予定の変更として見える
@@ -253,7 +253,7 @@ test("必須の未入力はダイアログで止め、検証エラーは行に�
   await team.first().getByRole("button", { name: /履歴を削除/ }).click();
   await page.locator('[data-role="confirm-delete"]').click();
   await expect(page.getByRole("tab", { name: /メンバー/ })).toContainText(/エラー \d+/);
-  // 検証の一覧から、そのメンバーの行へ（§38）
+  // 検証の一覧から、そのメンバーの行へ（§39）
   await page.locator(".yn-me-issue-item.is-error", { hasText: "S11 は存在しません" }).first().getByRole("button").click();
   await expect(page.getByRole("tab", { name: /メンバー/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".yn-me-issue-row.is-error").first()).toContainText("S11 は存在しません");
