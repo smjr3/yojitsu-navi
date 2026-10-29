@@ -6,6 +6,7 @@
 
 - 静的サイト（[Observable Framework](https://observablehq.com/framework/)）。サーバ不要、社内 GitLab Pages に公開
 - データは CSV（`data/`）。Git で履歴管理し、CI で検証してから公開。マスタは画面で編集して GitLab に MR を作る
+- 画面フォントは BIZ UDPゴシック（同梱、外部に取りに行かない。SIL OFL 1.1）
 - 画面の文言は `src/i18n/` にまとめてあり、プログラムを触らずに書き換えられます（[docs/TEXTS.md](docs/TEXTS.md)）
 
 ## 画面
@@ -148,11 +149,13 @@ scripts/
   gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
   ci/push-data-mr.sh     定期取り込みの結果を MR で反映（GitLab CI）
   screenshots.mjs        README のスクリーンショット
+  fonts/build_fonts.py   同梱フォント（src/fonts/）の作り直し（SPEC §44）
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）
 src/core/                計算コア（純粋関数。画面に依存しない。npm パッケージ @yojitsu-navi/core のソース）
 src/*.md                 画面（Observable Framework）
 src/components/          画面の部品（KPI・表・グラフ・計算根拠・フィルタ・マスタ編集）
+src/fonts/               画面フォント BIZ UDPゴシック（woff2）とライセンス（OFL.txt）
 src/data/                データローダ（docs/DATA_LOADERS.md）
 src/i18n/                画面の文言（ja.js）と計算ルール画面の本文（rules.txt）
 src/style.css            デザイントークンとスタイル（ライト／ダーク）

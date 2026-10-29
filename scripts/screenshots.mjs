@@ -64,6 +64,8 @@ try {
       await page.locator(".yn-kpi button").first().click();
       await page.locator("dialog[open]").waitFor();
     }
+    // 同梱フォント（SPEC §44）が読み込まれてから撮る
+    await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
     await page.screenshot({ path: join(OUT, `${name}.png`) });
     console.log(`docs/screenshots/${name}.png`);

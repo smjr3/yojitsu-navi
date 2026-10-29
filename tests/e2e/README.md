@@ -16,6 +16,7 @@ GitHub Actions の分数を節約するため、CI は Pull Request では縮小
 
 - `smoke.spec.ts` のすべて（全ページがエラー 0 で開く、404）
 - `screen-text.spec.ts` の各画面の説明文の量
+- `fonts.spec.ts` の同梱フォントの読み込み
 - 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、稼働計画の表示とセルの修正（plan / plan-cells）、検証の一覧から該当の行へ（issue-list）、テーマ切替（ui-controls）
 
 画面幅・ダーク・モンキー・回帰などは全件だけで走る。全件はマージ前にローカルで通す。主要な画面・操作を足したら、その代表のテストに `@smoke` を付ける。
@@ -58,6 +59,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `plan.spec.ts` / `plan-cells.spec.ts` | 稼働計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
 | `issue-list.spec.ts` | 検証の一覧（1.0 超は警告・名前で示す・押すと該当の行へ（組織・年度・絞り込み・他画面）・8 件超・エラー赤／警告黄・各画面幅・ダーク）。SPEC §40 |
 | `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
+| `fonts.spec.ts` | 画面フォント: 同梱の BIZ UDPゴシック（400・700）が各画面で読み込まれる・外部への通信がない・数字 0〜9 の幅がすべて同じ（ライト/ダーク）。SPEC §44 |
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
 | `screen-text.spec.ts` | 画面の説明文の量（各画面の本文の文章は合計 120 文字・1 段落 70 文字まで。説明は「?」へ）と、GitLab のトークン入力が設定画面だけにあること。SPEC §37 |
 | `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |

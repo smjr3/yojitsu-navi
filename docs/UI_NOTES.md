@@ -119,7 +119,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 ## スタイル（style.css）
 
 - `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。既定はライトで、OS の設定には追従しない。ヘッダー右端の「ダーク表示」ボタンで `<html data-theme="dark">` に切り替え、選択は localStorage `yn-theme` に保存（復元は observablehq.config.js の head スクリプト）。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
-- フォント: `system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, "Noto Sans JP"…`（Web フォント無し）。数値列・KPI は `tabular-nums`。
+- フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §44）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。
 - `@media print` で上部ヘッダ・フィルタ・ボタンを隠し、表の固定ヘッダを解除。

@@ -669,3 +669,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `npm run core:build` が `tsc` で `packages/core/dist/core/`（`.js`＋`.d.ts`）を作り、計算コアが使う文言 `src/i18n/index.js`・`index.d.ts`・`ja.js` を `dist/i18n/` に写す。外部の依存なし、ES Modules のみ、`exports` は `.`（`index`）と `./*`（`gitlab`・`types` など個別のモジュール）。`dist/` は git に入れない。
 - 公開先はこのプロジェクトの GitLab Package Registry。タグ `core-v<版>` の push で `.gitlab-ci.yml` の `publish-core` が、タグと版の一致・型チェック・テスト・ビルドのあと `CI_JOB_TOKEN` で `npm publish` する。`core-v*` は Maintainer だけが作れる保護タグにする。手順は `docs/DEPLOY_GITLAB.md`。
 - 再発防止: `tests/integration/core-package.test.ts`（ビルドが通る・`dist` の公開 API が `src/core/index.ts` と同じ・パッケージに入るのは `dist` と README だけ・別プロジェクトから Node で読み込めて NodeNext で型が解決できる）。
+
+## 44. 画面フォント BIZ UDPゴシック（2026-10-29 shimaさん要望）
+「フォントが AI っぽい」への対応。6 案（Noto Sans JP・BIZ UDPゴシック・IBM Plex Sans JP・M PLUS 2・Zen Kaku Gothic New・LINE Seed JP）を同じ画面で比べ、shimaさんが **BIZ UDPゴシック** を選んだ。
+- フォントファイルは `src/fonts/`（`BIZUDPGothic-Regular.woff2`・`BIZUDPGothic-Bold.woff2`、各約 2MB）に同梱し、外部（Google Fonts など）には取りに行かない。ライセンスは SIL Open Font License 1.1（`src/fonts/OFL.txt`、フォント内の name 表にも同じ本文）。
+- 元のフォントは「1」だけ他の数字より幅が狭く、`tabular-nums` も持たないため、そのままでは表の桁がそろわない。同梱版は **「1」を他の数字と同じ幅にして中央に寄せた** だけで、ほかの字形・ヒンティングは変えていない。作り直しは `scripts/fonts/build_fonts.py`。
+- グリフは間引かない（人名・顧客名の第 2 水準以上の漢字も同じフォントで出す）。太さは 400 と 700 の 2 つ（600 は 700 で表示）。
+- 読み込み: `observablehq.config.js` の head に `<link rel="preload" as="font">` を置き、Framework がハッシュ付きで `dist/_file/fonts/` に出したパスから head スクリプトが `@font-face`（`font-display: swap`）を組み立てる。`--sans-serif` の先頭が `"YN BIZ UDPGothic"`。読み込めないときは端末の BIZ UDPゴシック → システムフォントの順。
+- 字幅が広いぶん、表を少し詰めた（1024px・1280px で横スクロールを出さないため）: セルの左右余白 7px → 6px、数値セルの字間 -0.02em、名前列の上限 `min(40vw, 300px)` → `min(40vw, 260px)`、2 行の名前セル 200px → 160px（1200px 以上は `min(24vw, 320px)` → `min(20vw, 320px)`）。省略した名前は今までどおり title で全文。チーム詳細の作業種別×月の表は円単位・1024px だけ横スクロールになる（13 列の金額のため）。
+- 再発防止: `tests/e2e/fonts.spec.ts`（各画面で同梱フォントが読み込まれる・外部への通信がない・数字 0〜9 の幅がすべて同じ）。
