@@ -47,6 +47,9 @@ describe("parseTaskCategory", () => {
   it("契約内／契約外と英字を受け付け、それ以外は null", () => {
     expect(parseTaskCategory("契約内")).toBe("contract");
     expect(parseTaskCategory(" 契約外 ")).toBe("outside");
+    // 画面の呼び名（§48）も受け付ける
+    expect(parseTaskCategory("運用保守")).toBe("contract");
+    expect(parseTaskCategory("運用保守以外")).toBe("outside");
     expect(parseTaskCategory("CONTRACT")).toBe("contract");
     expect(parseTaskCategory("outside")).toBe("outside");
     expect(parseTaskCategory("保守")).toBeNull();

@@ -26,7 +26,7 @@ function memberWithOutside(): string {
   return hit.memberId;
 }
 
-test("メンバー別: 既定は契約外を含まない。「契約外を含む」で計画・実績の両方が増え、URL に outside=1", { tag: "@smoke" }, async ({ page }) => {
+test("メンバー別: 既定は契約外を含まない。「運用保守以外を含む」で計画・実績の両方が増え、URL に outside=1", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
   const chip = page.locator("#yn-filter-outside");
   await expect(chip).not.toBeChecked();
@@ -35,7 +35,7 @@ test("メンバー別: 既定は契約外を含まない。「契約外を含む
   await expect(kpiValue(page, 1)).toHaveText(yen(off.total.actualCost));
   expect(new URL(page.url()).searchParams.has("outside")).toBe(false);
 
-  await page.getByText("契約外を含む").click();
+  await page.getByText("運用保守以外を含む").click();
   await expect(chip).toBeChecked();
   const on = aggregateMembers(model, { period: CMP, includeOutside: true });
   expect(on.total.plannedCost).toBeGreaterThan(off.total.plannedCost);
@@ -50,7 +50,7 @@ test("メンバー別: 既定は契約外を含まない。「契約外を含む
   // 別の画面へ移っても引き継ぎ、戻すと URL から消える
   await gotoPage(page, `/members?${U}`);
   await expect(page.locator("#yn-filter-outside")).toBeChecked();
-  await page.getByText("契約外を含む").click();
+  await page.getByText("運用保守以外を含む").click();
   await expect(page.locator("#yn-filter-outside")).not.toBeChecked();
   await expect.poll(() => new URL(page.url()).searchParams.has("outside")).toBe(false);
 });
@@ -59,18 +59,18 @@ test("メンバー詳細: 含むと案件別に「契約外: 種別」の行（�
   const id = memberWithOutside();
   await gotoPage(page, `/member?id=${id}&from=${FY.from}&to=${FY.to}&${U}`);
   const table = tableByCaption(page, "案件別の計画と実績");
-  await expect(table.locator("tbody tr", { hasText: "契約外:" })).toHaveCount(0);
-  await page.getByText("契約外を含む").click();
+  await expect(table.locator("tbody tr", { hasText: "運用保守以外:" })).toHaveCount(0);
+  await page.getByText("運用保守以外を含む").click();
   const t = aggregateMembers(model, { period: CMP, memberIds: [id], includeOutside: true }).members[0]!;
   await expect(kpiValue(page, 0)).toHaveText(yen(t.plannedCost));
   await expect(kpiValue(page, 1)).toHaveText(yen(t.actualCost));
   const outside = t.byContract.filter(isOutsideRow);
-  const rows = table.locator("tbody tr", { hasText: "契約外:" });
+  const rows = table.locator("tbody tr", { hasText: "運用保守以外:" });
   await expect(rows).toHaveCount(outside.filter((c) => c.outsideType !== "").length);
   await expect(rows.locator("a")).toHaveCount(0);
   // 根拠パネル: 実績の内訳にも契約外の行
   await kpiValue(page, 1).click();
-  await expect(page.locator("dialog[open]")).toContainText("契約外:");
+  await expect(page.locator("dialog[open]")).toContainText("運用保守以外:");
 });
 
 test("予算の画面（全体・チーム・顧客・案件・工数）には切替を置かない", async ({ page }) => {

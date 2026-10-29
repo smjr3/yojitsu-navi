@@ -43,7 +43,7 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(main).toContainText("1.0 超 3か月");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   const toggle = page.locator('[data-fk="plan:toggle:M010"]');
-  await expect(toggle).toHaveText(/案件 1＋契約外/);
+  await expect(toggle).toHaveText(/案件 1＋運用保守以外/);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const proj = await subRow(page, "M010", "倉庫管理");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -51,7 +51,7 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(proj).toContainText("青葉物流");
   const out = await subRow(page, "M010", "outside:提案");
   await expect(out).toContainText("提案");
-  await expect(out).toContainText("契約外");
+  await expect(out).toContainText("運用保守以外");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-12"]')).toHaveText("0.20");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-10"]')).toHaveText("—");
   // 種別ごとの行（task-types.csv の契約外の種別すべて。§48.3）

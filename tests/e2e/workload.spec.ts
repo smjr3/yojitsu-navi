@@ -34,7 +34,7 @@ test.describe("工数 /workload", () => {
     await kpiValue(page, 1).click();
     const d = dialog(page);
     await expect(d).toBeVisible();
-    expect(await dialogRow(page, "契約外")).toContain(hoursText(totals.outsideHours));
+    expect(await dialogRow(page, "運用保守以外")).toContain(hoursText(totals.outsideHours));
     for (const l of workByTask(inFy).filter((x) => x.category === "outside")) await expect(d).toContainText(l.task);
     await page.keyboard.press("Escape");
   });
@@ -48,7 +48,7 @@ test.describe("工数 /workload", () => {
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(groups.length);
     // 分布のグラフ: 末端の組織だけを並べる（上位は配下の合計で二重になるため）
-    const chart = page.locator('[aria-label="所属チームごとの工数の分布（契約内と契約外の人月の横積み上げ棒）"]');
+    const chart = page.locator('[aria-label="所属チームごとの工数の分布（運用保守と運用保守以外の人月の横積み上げ棒）"]');
     await expect(chart).toBeVisible();
     // 末端が 20 を超えるときは合計の多い上位 20 件（長い名前は … で切れるので先頭 6 文字で照合）
     const leafGroups = groups.filter((g) => !g.hasChildren);
@@ -66,8 +66,8 @@ test.describe("工数 /workload", () => {
     await expect(chart.locator("text", { hasText: "ソリューション事業本部" })).toHaveCount(0);
     for (const g of groups) {
       const row = table.locator(`tbody tr[data-key="${g.key}"]`);
-      expect(await cellText(row, col(h, "契約内"))).toBe(pmText(g.totals.contractHours));
-      expect(await cellText(row, col(h, "契約外"))).toBe(pmText(g.totals.outsideHours));
+      expect(await cellText(row, col(h, "運用保守"))).toBe(pmText(g.totals.contractHours));
+      expect(await cellText(row, col(h, "運用保守以外"))).toBe(pmText(g.totals.outsideHours));
     }
   });
 
@@ -91,7 +91,7 @@ test.describe("工数 /workload", () => {
     await expect(dataRows(mt)).toHaveCount(byMember.length);
     const h = await headerIndex(mt);
     const top = byMember.find((g) => g.totals.outsideHours > 0)!;
-    expect(await cellText(mt.locator(`tbody tr[data-key="${top.key}"]`), col(h, "契約外"))).toBe(pmText(top.totals.outsideHours));
+    expect(await cellText(mt.locator(`tbody tr[data-key="${top.key}"]`), col(h, "運用保守以外"))).toBe(pmText(top.totals.outsideHours));
     // 行クリックでメンバー詳細 → 戻ると軸が復元
     await mt.locator(`tbody tr[data-key="${top.key}"] th`).click();
     await expect(page).toHaveURL(/\/member\?/);
@@ -149,8 +149,8 @@ test.describe("詳細画面の作業種別の内訳", () => {
     const outside = filterWorkRows(rows, { period: FY, contractIds: [id] }).filter((r) => r.category === "outside");
     expect(outside.length).toBeGreaterThan(0);
     // 契約外を実績に含めない旨は本文に出さず、見出しの「?」（§37）
-    await expect(page.locator(".yn-note").filter({ hasText: "契約外の合計" })).toHaveCount(0);
-    await expect(page.locator(".yn-work-section .yn-tip-pop").first()).toContainText("契約外は案件の実績");
+    await expect(page.locator(".yn-note").filter({ hasText: "運用保守以外の合計" })).toHaveCount(0);
+    await expect(page.locator(".yn-work-section .yn-tip-pop").first()).toContainText("運用保守以外は案件の実績");
   });
 
   test("メンバー・チーム・顧客の詳細にも出る", async ({ page }) => {

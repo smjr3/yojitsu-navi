@@ -21,8 +21,9 @@ import { T, fmt } from "../i18n/index.js";
 /** category 列の値 → 区分。不正なら null（契約内／契約外、contract／outside。前後空白・大文字小文字は問わない） */
 export function parseTaskCategory(value: string | null | undefined): TaskCategory | null {
   const v = (value ?? "").normalize("NFKC").trim().toLowerCase();
-  if (v === "契約内" || v === "contract") return "contract";
-  if (v === "契約外" || v === "outside") return "outside";
+  // 画面の呼び名は「運用保守」「運用保守以外」（§48）。旧表記の 契約内・契約外 も受け付ける
+  if (v === "運用保守" || v === "契約内" || v === "contract") return "contract";
+  if (v === "運用保守以外" || v === "契約外" || v === "outside") return "outside";
   return null;
 }
 
