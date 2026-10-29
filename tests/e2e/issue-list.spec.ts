@@ -7,7 +7,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect, gotoPage } from "./helpers/app.js";
 
-/** 稼働計画の CSV にアサインの行を足して反映し、表に戻る */
+/** リソース計画の CSV にアサインの行を足して反映し、表に戻る */
 async function appendAssignments(page: Page, lines: string[]): Promise<void> {
   await page.getByRole("button", { name: "CSV で編集" }).click();
   const area = page.getByRole("textbox", { name: /アサイン の CSV/ });
@@ -73,12 +73,12 @@ test("存在しないメンバーのアサインも名前（ID）で示し、押
   await expect(entry.getByRole("button", { name: /修正/ })).toBeFocused();
 });
 
-test("他の画面のファイルのエラーは、その画面を開いて行へ移動（マスタ編集 → 稼働計画）", async ({ page }) => {
+test("他の画面のファイルのエラーは、その画面を開いて行へ移動（マスタ編集 → リソース計画）", async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   await appendAssignments(page, ["M011,C002,2026-04,2026-05,1.5"]);
   await gotoPage(page, "/masters");
   const err = item(page, "0〜1 で指定してください");
-  await expect(err).toContainText("稼働計画");
+  await expect(err).toContainText("リソース計画");
   const link = err.getByRole("link");
   await expect(link).toHaveAttribute("href", /plan\?jump=assignments:\d+/);
   await link.click();

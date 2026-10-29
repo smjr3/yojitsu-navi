@@ -80,7 +80,7 @@ test("予算の画面（全体・チーム・顧客・案件・工数）には�
   }
 });
 
-test("稼働計画: 種別の行のセルから入れると outside-plans.csv にその種別で入る", async ({ page }) => {
+test("リソース計画: 種別の行のセルから入れると outside-plans.csv にその種別で入る", async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
   const next = model.meta.fiscalYearMonths.find((m) => m > ASOF) ?? model.meta.fiscalYearMonths[model.meta.fiscalYearMonths.length - 1]!;
   await gotoPage(page, "/plan?member=M011");

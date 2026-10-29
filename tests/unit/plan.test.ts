@@ -1,5 +1,5 @@
 /**
- * 組織の種別・リーダー（SPEC §21・§22）と稼働計画（§23）
+ * 組織の種別・リーダー（SPEC §21・§22）とリソース計画（§23）
  */
 import { describe, expect, it } from "vitest";
 import { parseDataset } from "../../src/core/csv.js";
@@ -77,7 +77,7 @@ describe("組織の種別・リーダー（§21・§22）", () => {
   });
 });
 
-describe("稼働計画 planView（§23.1）", () => {
+describe("リソース計画 planView（§23.1）", () => {
   it("組織を選ぶと配下（班まで）の所属メンバーと、組織の契約に入る応援が並ぶ", () => {
     const v = planView(sources(), "S1", FY);
     expect(v.rows.map((r) => [r.memberId, r.support])).toEqual([

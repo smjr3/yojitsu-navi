@@ -1,5 +1,5 @@
 /**
- * 稼働計画の持ち方（SPEC §36）: 人 × 案件の行・「＋ 変更」・変更の履歴・契約外予定、
+ * リソース計画の持ち方（SPEC §36）: 人 × 案件の行・「＋ 変更」・変更の履歴・契約外予定、
  * マスタ編集（台帳）との役割分担（旧 URL の転送・別画面の変更の案内）
  */
 import { readFileSync } from "node:fs";
@@ -216,11 +216,11 @@ test("セルの修正欄で契約外予定も直せる", async ({ page }) => {
   await expect(entries.filter({ hasText: "再開" })).toHaveCount(1);
 });
 
-test("マスタ編集と稼働計画の役割分担: 旧 URL は稼働計画へ。行き来しても編集は続き、別の画面の変更は保存欄で案内して同じ保存に入る", async ({ page }) => {
+test("マスタ編集とリソース計画の役割分担: 旧 URL はリソース計画へ。行き来しても編集は続き、別の画面の変更は保存欄で案内して同じ保存に入る", async ({ page }) => {
   await gotoPage(page, "/masters?view=assignments");
   await expect(page).toHaveURL(/\/plan/);
-  await expect(page.locator("h1")).toHaveText("稼働計画");
-  // 稼働計画で 1 件変える → マスタ編集の保存欄で案内
+  await expect(page.locator("h1")).toHaveText("リソース計画");
+  // リソース計画で 1 件変える → マスタ編集の保存欄で案内
   await cell(page, "M011", "2027-02").click();
   await page.locator("dialog.yn-plan-pop[open] #yn-plan-pop-0").fill("0.4");
   await page.locator("dialog.yn-plan-pop[open] #yn-plan-pop-0").press("Enter");
@@ -230,7 +230,7 @@ test("マスタ編集と稼働計画の役割分担: 旧 URL は稼働計画へ�
   // 同じタブの続きなので「復元しますか」は聞かない
   await expect(page.locator(".yn-me-banner")).toHaveCount(0);
   await expect(page.locator(".yn-me-save")).toContainText("別の画面で編集");
-  await expect(page.locator(".yn-me-save").getByRole("link", { name: /稼働計画を開く/ })).toHaveAttribute("href", /plan/);
+  await expect(page.locator(".yn-me-save").getByRole("link", { name: /リソース計画を開く/ })).toHaveAttribute("href", /plan/);
   await expect(page.getByRole("button", { name: /assignments\.csv をダウンロード/ })).toBeVisible();
 });
 
@@ -276,7 +276,7 @@ test("名前・所属・案件で人を絞り込める（数百人の組織で�
   const rows = page.locator("tr.yn-me-plan-row");
   const all = await rows.count();
   expect(all).toBeGreaterThan(5);
-  const q = page.getByRole("searchbox", { name: /稼働計画の人を/ });
+  const q = page.getByRole("searchbox", { name: /リソース計画の人を/ });
   await q.fill("小林");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("小林 玲奈");

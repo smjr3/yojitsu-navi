@@ -1,13 +1,13 @@
 /**
  * ヘッダーの並び（SPEC §45）
- * - 右上は業務の「稼働計画」「マスタ編集」だけ。使い方・データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる（§47）
+ * - 右上は業務の「リソース計画」「マスタ編集」だけ。使い方・データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる（§47）
  * - メニューは押すと開き、もう一度押す・外を押す・Esc・フォーカスが外れると閉じる。開いている画面なら ⋯ が選択状態
  */
 import { test, expect, gotoPage } from "./helpers/app.js";
 
-test("右上は稼働計画 → マスタ編集の順。使い方・データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
+test("右上はリソース計画 → マスタ編集の順。使い方・データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
-  await expect(page.locator(".yn-tools a.yn-tool")).toHaveText(["稼働計画", /^マスタ編集/]);
+  await expect(page.locator(".yn-tools a.yn-tool")).toHaveText(["リソース計画", /^マスタ編集/]);
   const btn = page.getByRole("button", { name: "その他" });
   const menu = page.locator("#yn-more-menu");
   await expect(menu).toBeHidden();

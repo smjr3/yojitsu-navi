@@ -7,7 +7,7 @@
 |---|---|
 | `data/contracts.csv` | `contract_id, customer_name, project_name, team_id, start_month, end_month, total_amount, note` |
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id` （案件名が空 = その顧客の全工数） |
-| `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation` （人 × 契約 × 期間の配分人月。画面は稼働計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
+| `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation` （人 × 契約 × 期間の配分人月。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |
 | `data/masters/teams.csv` | `team_id, name, parent_team_id, effective_from, level, leader_member_id` （level = 種別「課」「チーム」「班」など自由入力・省略可、leader_member_id = リーダーのメンバーID・省略可。SPEC §21・§22） |
 | `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from, status` （kind = employee / partner。status = 空（在籍）/ `退職`（その月から退職）、列ごと省略可。SPEC §35） |

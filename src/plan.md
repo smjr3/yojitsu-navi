@@ -1,5 +1,5 @@
 ---
-title: 稼働計画
+title: リソース計画
 ---
 
 <div id="page-skeleton" class="yn-skeleton" aria-busy="true" aria-label="読み込み中">

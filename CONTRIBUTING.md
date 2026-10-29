@@ -3,12 +3,12 @@
 ## ドキュメントは同じ変更の中で直す（必須）
 
 画面・データ・計算・手順・用語を変えたら、**同じ PR（MR）の中で** README と docs を実装に合わせて直します。
-古い画像・古い説明・もう無い機能の説明・古い件数やファイル名を残さないでください。後回しにすると誰も直しません。
+古い説明・もう無い機能の説明・古い件数やファイル名を残さないでください。後回しにすると誰も直しません。
 
 PR を出す前に確認すること:
 
 - [ ] `git diff main --stat` で触った領域を確認し、関係する文書を直した
-  - 画面 → README「画面」、[docs/UI_NOTES.md](docs/UI_NOTES.md)、スクリーンショット
+  - 画面 → README「画面」、[docs/UI_NOTES.md](docs/UI_NOTES.md)
   - 計算・仕様 → [docs/SPEC.md](docs/SPEC.md)、[docs/CORE_NOTES.md](docs/CORE_NOTES.md)。`src/core/index.ts` の公開 API を変えたら `packages/core/package.json` の版も上げる（SPEC §43）
   - 社内へ渡す版を作るとき → ルートと `packages/app/package.json` の `version` を同じ値に上げてから `npm run app:pack`（SPEC §44）
   - データの列・ファイル → [docs/DATA.md](docs/DATA.md)
@@ -17,7 +17,7 @@ PR を出す前に確認すること:
   - ビルド・ローダ → [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)
   - 設定・運用・公開 → [docs/OPERATIONS.md](docs/OPERATIONS.md)、[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)
   - テスト → [tests/e2e/README.md](tests/e2e/README.md)
-- [ ] 画面の見た目を変えたら `npm run screenshots` でスクリーンショットを撮り直した（README の画像は常に最新。撮り直さない画像は参照ごと消す）
+- [ ] README・docs に画像（スクリーンショット）を載せていない・リポジトリに画像ファイルを置いていない（画面を変えるたびに古くなるため。画面は `npm run dev` で確かめる）
 - [ ] 文書の中のリンク・ファイル名・コマンドが今も存在する
 - [ ] PR の説明に「ドキュメント: 何を直したか」を書いた（直す必要が無ければ理由）
 

@@ -120,7 +120,7 @@ test("スマホ幅のマスタ編集: 行を追加して表が右へスクロー
   expect(box.x + box.width).toBeLessThanOrEqual(390);
 });
 
-test("稼働計画のセルの編集欄を開いたまま狭い画面に変えても、画面内に収まり操作できる（モンキーテストで発見）", async ({ page }) => {
+test("リソース計画のセルの編集欄を開いたまま狭い画面に変えても、画面内に収まり操作できる（モンキーテストで発見）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   await page.locator('tr.yn-me-plan-row[data-member="M010"] [data-fk="plan:cell:M010:all:2027-01"]').click();
   const pop = page.locator("dialog.yn-plan-pop[open]");
@@ -136,7 +136,7 @@ test("稼働計画のセルの編集欄を開いたまま狭い画面に変え�
   await expect(pop.locator("#yn-plan-pop-new")).toBeFocused();
 });
 
-test("稼働計画のセルの編集欄を開いたまま画面の高さを縮めても、ボタンが画面内に残る（モンキーテストで発見）", async ({ page }) => {
+test("リソース計画のセルの編集欄を開いたまま画面の高さを縮めても、ボタンが画面内に残る（モンキーテストで発見）", async ({ page }) => {
   await page.setViewportSize({ width: 828, height: 985 });
   await gotoPage(page, "/plan?team=T111");
   const btn = page.locator('[data-fk="plan:cell:M010:all:2027-01"]');

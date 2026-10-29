@@ -12,7 +12,7 @@
 
 ## 画面
 
-上部タブ（全体・チーム・顧客・案件・メンバー・工数）と右上のリンク（稼働計画・マスタ編集）、右端のアイコン（テーマ・設定・その他「⋯」）で移動します。使い方（利用者向けのマニュアル）・データ確認・計算ルールは「⋯」のメニューにあります。
+上部タブ（全体・チーム・顧客・案件・メンバー・工数）と右上のリンク（リソース計画・マスタ編集）、右端のアイコン（テーマ・設定・その他「⋯」）で移動します。使い方（利用者向けのマニュアル）・データ確認・計算ルールは「⋯」のメニューにあります。
 
 | パス | 内容 |
 |---|---|
@@ -22,43 +22,15 @@
 | `/contracts` → `/contract?id=` 案件 | 案件ごとの予実（赤 = 消化率 100% 超 または 超過見込み）→ 案件詳細（月ごと・メンバー別・着地 3 方式・作業ログ） |
 | `/members` → `/member?id=` メンバー | 計画と実績・稼働率 → メンバー詳細（月ごと・案件別・単価の変遷・退職） |
 | `/workload` 工数 | 運用保守／運用保守以外の工数（人月）を組織・顧客・メンバー別に。作業種別の内訳 |
-| `/plan` 稼働計画 | リーダーが組織のメンバーの計画を入れる。人ごとに 1 行、開くと案件ごとの行と、運用保守以外の種別（提案・設計・会社業務など）ごとの行。途中で人月が変わるときは「＋ 変更」で「何月から何人月」を入れ、いつ変わったかは「変更の履歴」で見る（人月でも時間でも、保存は人月。SPEC §23・§36・§50） |
-| `/masters` マスタ編集 | メンバー・単価・組織の台帳。1 対象 1 行で今の値、開くと適用開始月ごとの変更の履歴。「＋ 変更」で「何月から何に変わるか」を足す（ID は変えられない）。表／CSV で編集し、稼働計画の変更とあわせて GitLab に MR を作る。リーダーがマージ（SPEC §19・§36） |
+| `/plan` リソース計画 | リーダーが組織のメンバーの計画を入れる。人ごとに 1 行、開くと案件ごとの行と、運用保守以外の種別（提案・設計・会社業務など）ごとの行。途中で人月が変わるときは「＋ 変更」で「何月から何人月」を入れ、いつ変わったかは「変更の履歴」で見る（人月でも時間でも、保存は人月。SPEC §23・§36・§50） |
+| `/masters` マスタ編集 | メンバー・単価・組織の台帳。1 対象 1 行で今の値、開くと適用開始月ごとの変更の履歴。「＋ 変更」で「何月から何に変わるか」を足す（ID は変えられない）。表／CSV で編集し、リソース計画の変更とあわせて GitLab に MR を作る。リーダーがマージ（SPEC §19・§36） |
 | `/data-check` データ確認（「⋯」） | 未紐付けの作業実績・単価なし・退職後の実績などの警告 |
-| `/guide` 使い方（「⋯」） | 利用者向けのマニュアル（画面の移り方・表示条件・数値の読み方・稼働計画・マスタ編集・設定・困ったとき）。アプリの中で完結し、外部の文書へ誘導しない（SPEC §47） |
+| `/guide` 使い方（「⋯」） | 利用者向けのマニュアル（画面の移り方・表示条件・数値の読み方・リソース計画・マスタ編集・設定・困ったとき）。アプリの中で完結し、外部の文書へ誘導しない（SPEC §47） |
 | `/rules` 計算ルール（「⋯」） | 画面の数値の計算方法 |
 | `/settings` 設定 | GitLab の接続（トークンの登録・接続の確認。権限と、本番の設定の不足も出す。GitLab の設定はこの画面だけ）、テーマ（ライト／ダーク） |
 
 数値をクリックすると「式 ＋ 実際に使った値」の計算根拠が開きます。グラフは右上の「拡大」で大きく表示できます（スマホは全画面。SPEC §33）。
 期間・チーム・単位・着地方式は URL（`?from=2026-04&to=2027-03&team=T111&unit=k&method=recent3`）に入るので、URL を共有すると同じ表示を再現できます。詳細から「戻る」と、一覧の絞り込み・並べ替え・スクロール位置はそのまま戻ります（SPEC §42）。
-
-### スクリーンショット
-
-ダミーデータ（[docs/DUMMY_DATA.md](docs/DUMMY_DATA.md)、計算基準日 2026-10-27）で撮影。画面を変えたら `npm run screenshots` で撮り直します。
-
-| 全体 | 案件一覧 |
-|---|---|
-| ![全体](docs/screenshots/index.png) | ![案件一覧](docs/screenshots/contracts.png) |
-
-| チーム一覧 | 案件詳細 |
-|---|---|
-| ![チーム一覧](docs/screenshots/teams.png) | ![案件詳細](docs/screenshots/contract.png) |
-
-| 顧客一覧 | メンバー一覧 |
-|---|---|
-| ![顧客一覧](docs/screenshots/customers.png) | ![メンバー一覧](docs/screenshots/members.png) |
-
-| 工数 | 計算根拠 |
-|---|---|
-| ![工数](docs/screenshots/workload.png) | ![計算根拠](docs/screenshots/breakdown.png) |
-
-| 稼働計画 | マスタ編集 |
-|---|---|
-| ![稼働計画](docs/screenshots/plan.png) | ![マスタ編集](docs/screenshots/masters.png) |
-
-| データ確認 | ダーク | スマートフォン幅 |
-|---|---|---|
-| ![データ確認](docs/screenshots/data-check.png) | ![ダーク](docs/screenshots/index-dark.png) | ![スマートフォン幅](docs/screenshots/index-phone.png) |
 
 ## ローカルで動かす
 
@@ -77,7 +49,6 @@ npm run dev                                           # http://localhost:3000（
 | `npm run test:e2e` | 画面の E2E 全件（Playwright。[tests/e2e/README.md](tests/e2e/README.md)） |
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
-| `npm run screenshots` | `dist/` から README のスクリーンショットを撮り直す |
 | `npm run app:pack` | 社内へ持ち込むパッケージ `packages/app/yojitsu-navi-<版>.tgz` を作る（`-- --with-deps` で依存込み。使い方は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#0-持ち込むもの)） |
 | `npm run core:build` / `npm run core:pack` | 計算コアを npm パッケージ `@yojitsu-navi/core` として `packages/core/` に出力する（`pack` は `.tgz` も作る。公開は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)） |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
@@ -113,7 +84,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 
 計算コア（`src/core/`）は、ほかの社内プロジェクトから使えるよう npm パッケージ `@yojitsu-navi/core` として同じ GitLab の Package Registry に公開できます（タグ `core-v<版>` で CI が公開。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)）。
 
-開発元の GitHub Actions（`.github/workflows/ci.yml`。社内へ持ち込むパッケージには入らない）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
+開発元の GitHub Actions（`.github/workflows/ci.yml`。社内へ持ち込むパッケージには入らない）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・画像を置いていないか）だけが動きます。
 
 ## ドキュメント
 
@@ -155,7 +126,6 @@ scripts/
   validate-data.ts       データ検証（CI）
   gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
   ci/push-data-mr.sh     定期取り込みの結果を MR で反映（GitLab CI）
-  screenshots.mjs        README のスクリーンショット
   fonts/build_fonts.py   同梱フォント（src/fonts/）の作り直し（SPEC §46）
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）

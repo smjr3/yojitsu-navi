@@ -87,7 +87,7 @@ export const FILE_HELP = {
 /**
  * 画面ごとの見せ方（§36）
  *  - マスタ編集（台帳）: メンバー・単価・組織。対象ごとに 1 行、行の中に変更の履歴
- *  - 稼働計画: 人 × 案件 × 月の配分（アサイン）と契約外予定。人ごとに 1 行、案件ごとの行と変更の履歴
+ *  - リソース計画: 人 × 案件 × 月の配分（アサイン）と契約外予定。人ごとに 1 行、案件ごとの行と変更の履歴
  * 下書き・検証・変更内容・保存は 2 つの画面で共通（どちらで保存しても、両方の変更が 1 つのマージリクエストになる）
  */
 export const PLAN_VIEW_ID = "plan";
@@ -219,7 +219,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   let rebasedInfo = {};
   let active = VIEW_IDS.includes(initialView) ? initialView : VIEW_IDS[0];
   const std = config.standardHoursPerMonth;
-  // 稼働計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
+  // リソース計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
   const plan = {
     teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts).members, initialMember, asOfMonth) : null),
     months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
@@ -250,7 +250,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
   let draftSavedAt = null;
   /**
-   * このタブで（マスタ編集 ⇔ 稼働計画を行き来して）書いた下書きは、土台が変わっていなければ黙って続きから。
+   * このタブで（マスタ編集 ⇔ リソース計画を行き来して）書いた下書きは、土台が変わっていなければ黙って続きから。
    * 別のタブ・前の日の下書きだけ「復元 / 破棄」を聞く（§36.1）
    */
   if (pendingDraft && pendingDraft.savedAt && session.get(DRAFT_SESSION_KEY) === pendingDraft.savedAt && staleDraftFiles(pendingDraft, bases).length === 0) {
@@ -405,11 +405,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     commitMany([{ fileId, doc: nextDoc }], focus);
   }
 
-  /** 複数のファイルをまとめて差し替える（稼働計画のセルでアサインと契約外予定を一度に直すとき） */
+  /** 複数のファイルをまとめて差し替える（リソース計画のセルでアサインと契約外予定を一度に直すとき） */
   function commitMany(changes, focus) {
     for (const { fileId, doc } of changes) {
       docs = { ...docs, [fileId]: doc };
-      // 追加・修正した行が見えるよう、その行を含む台帳の対象・稼働計画のメンバーを開く
+      // 追加・修正した行が見えるよう、その行を含む台帳の対象・リソース計画のメンバーを開く
       const m = /^(edit|next|del):(.+)$/.exec(focus ?? "");
       if (m) {
         const row = doc.rows.find((r) => r.id === m[2]);
@@ -537,7 +537,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
 
   // ---- タブ ---------------------------------------------------------------
   function renderTabs() {
-    // 1 つの見せ方だけの画面（稼働計画）はタブを出さない
+    // 1 つの見せ方だけの画面（リソース計画）はタブを出さない
     if (VIEW_IDS.length < 2) {
       parts.tabs.replaceChildren();
       return;
@@ -606,7 +606,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     }
   }
 
-  /** 変更・エラーの数（台帳の対象・稼働計画の行のチップ） */
+  /** 変更・エラーの数（台帳の対象・リソース計画の行のチップ） */
   function stateChips(changed, added, errors) {
     if (!changed && !added && !errors) return null;
     return html`<span class="yn-chip-row">${added ? html`<span class="yn-chip yn-chip-ok">＋ ${T.masters.added}${added > 1 ? ` ${integer(added)}` : ""}</span>` : null}${changed ? html`<span class="yn-chip yn-chip-neutral">✎ ${T.masters.changed}${changed > 1 ? ` ${integer(changed)}` : ""}</span>` : null}${errors ? html`<span class="yn-chip yn-chip-danger"><span aria-hidden="true">!</span> ${T.dataCheck.severityError}${errors > 1 ? ` ${integer(errors)}` : ""}</span>` : null}</span>`;
@@ -915,7 +915,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     </div>`;
   }
 
-  // ---- 稼働計画（§23・§36） ----------------------------------------------------
+  // ---- リソース計画（§23・§36） ----------------------------------------------------
   /** 契約 → 案件（顧客 × 案件名）。ファイルに無い契約は "c:<ID>" の案件として扱う */
   function projectOfContract(contractId) {
     const c = contractById.get(contractId);
@@ -1247,7 +1247,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     </section>`);
   }
 
-  /** 稼働計画の CSV 編集: アサインと契約外予定の 2 つのファイル */
+  /** リソース計画の CSV 編集: アサインと契約外予定の 2 つのファイル */
   function renderPlanCsv() {
     parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan">
       <div class="yn-me-panel-head"><div><h2 class="yn-section-title">${T.planEdit.title}<span class="yn-me-path"> ${data.files.assignments.path} ・ ${data.files.outside.path}</span></h2></div></div>
@@ -1475,7 +1475,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     valueInput()?.focus();
   }
 
-  // ---- 稼働計画のセル: その場で修正（§31.4） -----------------------------------
+  // ---- リソース計画のセル: その場で修正（§31.4） -----------------------------------
   /** 表の中の矢印キーで隣のセルへ（人の行・案件の行・契約外予定の行） */
   function gridKeys(ev) {
     const btn = ev.target.closest?.(".yn-plan-cell-btn");
@@ -2002,7 +2002,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       <div class="yn-dialog-body">${form}</div>
     </div>`);
     if (!dialog.open) dialog.showModal();
-    // 最初の空の入力欄にフォーカス（稼働計画でメンバーを入れて開いたときは配分から）。無ければ最初の欄。
+    // 最初の空の入力欄にフォーカス（リソース計画でメンバーを入れて開いたときは配分から）。無ければ最初の欄。
     // 選択欄（select）は Space でリストが開き Esc がダイアログに届かないので、空でも最初には選ばない
     const fields = [...form.querySelectorAll("input:not([disabled]):not([type=hidden]), select:not([disabled])")];
     (fields.find((el) => el.tagName === "INPUT" && el.value === "") ?? fields[0])?.focus();
@@ -2020,7 +2020,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const rec = rowRecord(before, row);
     const columns = def.columns.filter((c) => before.header.includes(c.name));
     const doDelete = () => {
-      // 削除後は対象の開閉ボタン（台帳の対象・稼働計画の履歴）にフォーカス。無くなっていれば追加ボタン
+      // 削除後は対象の開閉ボタン（台帳の対象・リソース計画の履歴）にフォーカス。無くなっていれば追加ボタン
       returnFocusKey = focus;
       dialog.close();
       commit(fileId, next, returnFocusKey);
@@ -2390,7 +2390,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     </div>`;
   }
 
-  /** 他の画面（マスタ編集 ↔ 稼働計画）で行った変更も一緒に保存されることの案内 */
+  /** 他の画面（マスタ編集 ↔ リソース計画）で行った変更も一緒に保存されることの案内 */
   function otherPageNote() {
     const others = changedFiles().filter((id) => !pageFiles.includes(id));
     if (!others.length) return null;

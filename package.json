@@ -21,7 +21,6 @@
     "test:e2e:smoke": "playwright test -c tests/e2e/playwright.config.ts --grep @smoke",
     "check": "npm run typecheck && npm run validate && npm run test",
     "verify:dist": "tsx scripts/verify-dist.ts",
-    "screenshots": "node scripts/screenshots.mjs",
     "core:build": "node scripts/build-core.mjs",
     "core:pack": "node scripts/build-core.mjs --pack",
     "app:build": "node scripts/build-app.mjs",
