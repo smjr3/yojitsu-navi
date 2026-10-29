@@ -1,7 +1,7 @@
 /**
  * 実操作 QA で見つかった不具合の再発防止
  * - URL の team にプロトタイプのキー（constructor 等）を入れても例外にならず、全体に戻る
- * - 960px 未満でも上部タブがすべて見える（2 段目に回る）
+ * - 1024px 未満でも上部タブがすべて見える（2 段目に回る）。1024px 以上はヘッダーが 1 段（単位のボタンも折り返さない）
  * - 並べ替えは絞り込み・単位の変更や「戻る」で既定に戻らない。絞り込み・検索は「戻る」で復元される
  * - 案件詳細の ID は前後の空白・大文字小文字の違いを許す
  * - 最終 QA（2026-10-29）: 「戻る」でスクロール位置を戻す、「＋ 変更」で ID を変えさせない、色付きの値の読み上げ名、
@@ -23,7 +23,7 @@ for (const team of ["constructor", "__proto__", "toString"]) {
   });
 }
 
-for (const width of [768, 900]) {
+for (const width of [768, 900, 1000]) {
   test(`${width}px 幅で上部タブがすべて見える`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await gotoPage(page, "/contracts");
@@ -37,6 +37,20 @@ for (const width of [768, 900]) {
     expect(visible).toBe(true);
   });
 }
+
+test("1024px 幅ではヘッダーが 1 段（タブ・単位・右上のリンク）で、単位のボタンも折り返さない", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await gotoPage(page, "/");
+  const centers = await page.evaluate(() =>
+    [".yn-brand", ".yn-tabs", ".yn-unit-slot .yn-seg", ".yn-tools"].map((s) => {
+      const r = document.querySelector(s)!.getBoundingClientRect();
+      return Math.round((r.top + r.bottom) / 2);
+    }),
+  );
+  expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(4);
+  const unitTops = await page.locator(".yn-unit-slot .yn-seg-btn").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(unitTops).size).toBe(1);
+});
 
 test("案件一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
   await gotoPage(page, "/contracts");

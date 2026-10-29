@@ -412,7 +412,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - **GitLab 接続**: 接続先（`apiBaseUrl`・`projectId`・`targetBranch` を表示のみ。変更は `config.json`）、個人アクセストークン（scope `api`）の登録・削除、「このブラウザに記憶する」（既定オフ = タブを閉じると消える `sessionStorage`。オンなら `localStorage`）、「接続を確認」（`GET /user` と `GET /projects/:id` で、ユーザー名と権限〈Developer／Maintainer など〉、マージできる立場かを表示）。トークンは画面に再表示しない。
 - **表示**: テーマ（ライト／ダーク）。
 - GitLab に関する設定（トークン・接続先の表示・接続の確認）は **この画面だけ** に置く。マスタ編集・稼働計画・マージ待ちの変更は、トークンが無いとき「設定へ」のリンクを出すだけ（2026-10-28 shimaさん指摘）。
-- ヘッダーのテーマ切替は他のリンク（データ確認など）と見分けられるアイコンボタン（☾／☀）にする。設定画面のテーマと同じ値を切り替える。
+- ヘッダーのテーマ切替は他のリンク（稼働計画など）と見分けられるアイコンボタン（☾／☀）にする。設定画面のテーマと同じ値を切り替える。
 
 ## 29. 試用のデモ（`masterEdit.mode = "demo"`）
 - GitLab に接続せずに §24〜§27 の流れを試すためのモード。GitLab API の代わりにブラウザ内の模擬（`src/core/gitlab-mock.ts`。`localStorage` の `yojitsu-navi:gitlab-demo:v1`）を使う。トークンは任意の文字列でよい。
@@ -669,3 +669,10 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `npm run core:build` が `tsc` で `packages/core/dist/core/`（`.js`＋`.d.ts`）を作り、計算コアが使う文言 `src/i18n/index.js`・`index.d.ts`・`ja.js` を `dist/i18n/` に写す。外部の依存なし、ES Modules のみ、`exports` は `.`（`index`）と `./*`（`gitlab`・`types` など個別のモジュール）。`dist/` は git に入れない。
 - 公開先はこのプロジェクトの GitLab Package Registry。タグ `core-v<版>` の push で `.gitlab-ci.yml` の `publish-core` が、タグと版の一致・型チェック・テスト・ビルドのあと `CI_JOB_TOKEN` で `npm publish` する。`core-v*` は Maintainer だけが作れる保護タグにする。手順は `docs/DEPLOY_GITLAB.md`。
 - 再発防止: `tests/integration/core-package.test.ts`（ビルドが通る・`dist` の公開 API が `src/core/index.ts` と同じ・パッケージに入るのは `dist` と README だけ・別プロジェクトから Node で読み込めて NodeNext で型が解決できる）。
+
+## 45. ヘッダーの並び（2026-10-29 shimaさん要望）
+「データ確認と計算ルールは目立つ場所でなくてよい。稼働計画の方が上」への対応。
+- 右上のリンクは業務で使う **稼働計画 → マスタ編集** の 2 つだけ（`TOOLS`）。
+- **データ確認・計算ルール** は右端のアイコン（テーマ・設定）の後ろの **その他「⋯」** のメニュー（`MORE`）。押すと開き、もう一度押す・外を押す・Esc・フォーカスが外れると閉じる。開いている画面がメニューの中のときは「⋯」を選択状態にする。説明文は足さない（§37）。
+- 2 段のレイアウトにする境目を 960px から 1024px に上げ、1024px 以上はヘッダーを 1 段に収める（単位のボタンも折り返さない）。スマホ幅はロゴと右上のリンク・アイコンを 1 段に収め、タブを 2 段目にする（従来は 3 段）。
+- 再発防止: `tests/e2e/header-nav.spec.ts`（並び・メニューの開閉・選択状態・390／320px で 1 段・はみ出しなし）、`qa-regressions.spec.ts`（1000px でタブがすべて見える・1024px で 1 段）。

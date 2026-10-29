@@ -96,21 +96,24 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   expect(new Set(await rowKeys(tableByCaption(page, "案件一覧")))).toEqual(new Set(expected));
 });
 
-test("上部タブと右上のリンクで全ページに行ける（現在のページは aria-current）", { tag: "@smoke" }, async ({ page }) => {
+test("上部タブ・右上のリンク・「⋯」のメニューで全ページに行ける（現在のページは aria-current）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
   const header = page.locator("#observablehq-header");
   await expect(page.locator("#observablehq-sidebar")).toHaveCount(0);
-  for (const [name, h1] of [
-    ["チーム", "チーム一覧"],
-    ["案件", "案件一覧"],
-    ["計算ルール", "計算ルール"],
-    ["データ確認", "データ確認"],
-    ["全体", "全体サマリー"],
+  for (const [name, h1, inMenu] of [
+    ["チーム", "チーム一覧", false],
+    ["案件", "案件一覧", false],
+    ["稼働計画", "稼働計画", false],
+    ["計算ルール", "計算ルール", true],
+    ["データ確認", "データ確認", true],
+    ["全体", "全体サマリー", false],
   ] as const) {
+    // データ確認・計算ルールは右端「その他」（⋯）のメニューの中（§45）
+    if (inMenu) await header.getByRole("button", { name: "その他" }).click();
     const link = header.getByRole("link", { name, exact: true });
     await link.click();
     await expect(page.locator("h1")).toHaveText(h1);
-    await expect(header.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(header.getByRole("link", { name, exact: true, includeHidden: true })).toHaveAttribute("aria-current", "page");
   }
   // 案件詳細では「案件」タブが選択状態
   await gotoPage(page, "/contract?id=C008");

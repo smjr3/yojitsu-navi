@@ -75,7 +75,8 @@ function contractIds() {
 
 /**
  * 上部ナビゲーション（左サイドバーは使わない）。
- * NAV = 画面の切り替えタブ、TOOLS = 右上の補助・管理リンク。match はタブを選択状態にするパス（詳細画面など）。
+ * NAV = 画面の切り替えタブ、TOOLS = 右上の業務リンク、MORE = 右端「その他」（⋯）のメニューに入れる控えめなリンク。
+ * match はタブを選択状態にするパス（詳細画面など）。
  * 新しい画面はここに足す。href は "/" 始まりで書けば Framework がページごとの相対パスに書き換える。
  */
 const NAV = [
@@ -87,10 +88,13 @@ const NAV = [
   { name: ja.app.nav.workload, path: "/workload", match: ["/workload"] },
 ];
 const TOOLS = [
-  { name: ja.app.nav.dataCheck, path: "/data-check" },
-  { name: ja.app.nav.rules, path: "/rules" },
   { name: ja.app.nav.plan, path: "/plan" },
   { name: ja.app.nav.masters, path: "/masters", badge: true },
+];
+// データ確認・計算ルールはたまに見る画面なので、目立つ場所に置かない（§45）
+const MORE = [
+  { name: ja.app.nav.dataCheck, path: "/data-check" },
+  { name: ja.app.nav.rules, path: "/rules" },
 ];
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -106,12 +110,15 @@ function header({ path }) {
   const moon = `<svg class="yn-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M20.7 14.6A8.5 8.5 0 0 1 9.4 3.3a.8.8 0 0 0-1-.9A10 10 0 1 0 21.6 15.6a.8.8 0 0 0-.9-1z"/></svg>`;
   const sun = `<svg class="yn-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>`;
   const gear = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .3.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>`;
+  const dots = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></g></svg>`;
   const settingsOn = path === "/settings";
+  const moreOn = MORE.some(isOn);
+  const more = `<span class="yn-more"><button type="button" class="yn-icon-btn yn-more-btn${moreOn ? " is-current" : ""}" aria-haspopup="true" aria-expanded="false" aria-controls="yn-more-menu" aria-label="${escapeHtml(ja.app.more)}" title="${escapeHtml(ja.app.more)}">${dots}</button><span class="yn-more-menu" id="yn-more-menu" hidden>${MORE.map((i) => link(i, "yn-more-item")).join("")}</span></span>`;
   return `<div class="yn-topbar">
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
-  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><button type="button" class="yn-icon-btn yn-theme-toggle" aria-pressed="false" aria-label="${escapeHtml(ja.app.themeToggle)}" title="${escapeHtml(ja.app.themeToggle)}">${moon}${sun}</button><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a></span></nav>
+  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><button type="button" class="yn-icon-btn yn-theme-toggle" aria-pressed="false" aria-label="${escapeHtml(ja.app.themeToggle)}" title="${escapeHtml(ja.app.themeToggle)}">${moon}${sun}</button><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a>${more}</span></nav>
 </div>
 <div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
 }
@@ -171,8 +178,35 @@ const SCROLL_SCRIPT = `(() => {
   };
   requestAnimationFrame(tick);
 })();`;
+/** 右端「その他」（⋯）のメニュー: 押すと開閉、外を押す・Esc・フォーカスが外れると閉じる */
+const MORE_SCRIPT = `(() => {
+  const parts = () => { const btn = document.querySelector(".yn-more-btn"); return btn ? [btn, document.getElementById("yn-more-menu")] : []; };
+  const set = (open, focusBtn) => {
+    const [btn, menu] = parts();
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", String(open));
+    menu.hidden = !open;
+    if (open) menu.querySelector("a")?.focus();
+    else if (focusBtn) btn.focus();
+  };
+  document.addEventListener("click", (e) => {
+    const [btn] = parts();
+    if (!btn || !(e.target instanceof Element)) return;
+    if (e.target.closest(".yn-more-btn")) set(btn.getAttribute("aria-expanded") !== "true");
+    else if (!e.target.closest(".yn-more-menu")) set(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    const [btn] = parts();
+    if (e.key === "Escape" && btn?.getAttribute("aria-expanded") === "true") set(false, true);
+  });
+  document.addEventListener("focusout", (e) => {
+    const [btn] = parts();
+    if (btn?.getAttribute("aria-expanded") === "true" && e.relatedTarget instanceof Element && !e.relatedTarget.closest(".yn-more")) set(false);
+  });
+  addEventListener("pageshow", () => set(false));
+})();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
-const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script>`;
+const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark"><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,
