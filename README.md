@@ -66,9 +66,9 @@ Node 20 以上（CI は Node 22）。
 
 ```bash
 npm install
-npx tsx scripts/generate-dummy.ts   # ダミーデータを data/ に生成（seed 固定で毎回同じ。約 10 万行）
-npm run validate                    # データ検証（CI と同じ）
-npm run dev                         # http://localhost:3000（data/ や config.json を変えると自動で作り直す）
+npx tsx scripts/generate-dummy.ts --asOf 2026-10-27   # ダミーデータを data/ に作り直す（リポジトリと同じ。--asOf を省くと今日の年度で作る。約 10 万行）
+npm run validate                                      # データ検証（CI と同じ）
+npm run dev                                           # http://localhost:3000（data/ や config.json を変えると自動で作り直す）
 ```
 
 | コマンド | 内容 |

@@ -12,6 +12,8 @@ export interface FetchOptions {
   from: YearMonth;
   /** 取得終了月（含む） */
   to: YearMonth;
+  /** 取得の基準日 YYYY-MM-DD（dummy アダプタが生成の基準日に使う） */
+  asOf?: string;
   config: Config;
   /** 認証トークンなどは環境変数から受け取る（config.json には書かない） */
   env: NodeJS.ProcessEnv;

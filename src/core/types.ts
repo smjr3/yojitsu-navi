@@ -386,7 +386,8 @@ export type WarningCode =
   | "MAPPING_EXCLUDED_CONTRACT"
   | "MAPPING_AMBIGUOUS"
   | "EXCLUDED_NO_CUSTOMER"
-  | "TASK_UNCLASSIFIED";
+  | "TASK_UNCLASSIFIED"
+  | "HOLIDAYS_AUTO";
 
 export interface Warning {
   code: WarningCode;
