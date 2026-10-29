@@ -116,7 +116,7 @@ describe("buildMemberMonths（§18.1）", () => {
     expect(mm.plannedCost).not.toBe(Math.round(mm.plannedHours * 1234));
   });
 
-  it("allocation の合計が 1.0 を超えても（検証エラーだが）そのまま計画に入る", () => {
+  it("allocation の合計が 1.0 を超えても（検証の警告のまま）そのまま計画に入る", () => {
     const model = build(
       basic({
         assignments: [

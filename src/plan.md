@@ -46,6 +46,7 @@ if (model && mastersData?.error) {
       views: PLAN_VIEWS,
       initialTeam: params.get("team") || null,
       initialMember: params.get("member") || null,
+      initialJump: params.get("jump"),
     }),
   );
 }
