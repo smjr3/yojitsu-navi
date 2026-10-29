@@ -23,7 +23,9 @@
     "verify:dist": "tsx scripts/verify-dist.ts",
     "screenshots": "node scripts/screenshots.mjs",
     "core:build": "node scripts/build-core.mjs",
-    "core:pack": "node scripts/build-core.mjs --pack"
+    "core:pack": "node scripts/build-core.mjs --pack",
+    "app:build": "node scripts/build-app.mjs",
+    "app:pack": "node scripts/build-app.mjs --pack"
   },
   "dependencies": {
     "@observablehq/framework": "^1.13.4",

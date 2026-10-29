@@ -13,7 +13,7 @@ Settings > CI/CD > Variables に登録します。
 | `MEMBER_FETCH_ENABLED` | 任意。`1` でスケジュール実行時に `fetch-members` ジョブも動く（既定は無効） |
 | `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Protected・Masked にする |
 | `GIT_PUSH_TOKEN` | スケジュール実行の取り込み結果を MR にして自動マージするための Project Access Token（**Maintainer** / `write_repository`。Protected・Masked。`main` は直接プッシュ不可のため MR を通す。SPEC §39.4） |
-| `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL |
+| `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL（依存込みのパッケージで作ったプロジェクトは不要。[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md) 手順 0） |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
 

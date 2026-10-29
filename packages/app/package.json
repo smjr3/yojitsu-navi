@@ -1,0 +1,20 @@
+{
+  "name": "yojitsu-navi",
+  "version": "0.1.0",
+  "description": "予実ナビ（保守案件の予算と実績のダッシュボード）一式を社内 GitLab に持ち込むパッケージ",
+  "type": "module",
+  "bin": {
+    "yojitsu-navi": "bin/yojitsu-navi.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "dist",
+    "template",
+    "deps",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

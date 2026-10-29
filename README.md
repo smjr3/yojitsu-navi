@@ -75,6 +75,7 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run screenshots` | `dist/` から README のスクリーンショットを撮り直す |
+| `npm run app:pack` | 社内へ持ち込むパッケージ `packages/app/yojitsu-navi-<版>.tgz` を作る（`-- --with-deps` で依存込み。使い方は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#0-持ち込むもの)） |
 | `npm run core:build` / `npm run core:pack` | 計算コアを npm パッケージ `@yojitsu-navi/core` として `packages/core/` に出力する（`pack` は `.tgz` も作る。公開は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)） |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
 
@@ -98,6 +99,8 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 
 ## 公開（GitLab Pages）
 
+社内へは npm パッケージ（`.tgz` 1 つ）で持ち込みます。`npm run app:pack` で作り、社内で `yojitsu-navi init` するとプロジェクトのフォルダができ、push すれば Pages まで流れます。新しい版は `yojitsu-navi update` で `data/` と `config.json` を残したまま入れ替えます。社内 GitLab の URL はパッケージに入れず、社内で `init` するときに入れます（[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）。
+
 `.gitlab-ci.yml` のパイプラインは `validate → test → build → pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。
 GitLab 側の推奨構成（グループ・プロジェクト・保護ブランチ・権限・トークン）、展開の手順、社内で確認することのチェックリストは [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) にあります。
 プロジェクトの設定は `GITLAB_TOKEN=… npm run gitlab:setup -- --api <URL> --project <グループ/プロジェクト>` で確認でき、`--apply` で推奨値に直せます。
@@ -107,7 +110,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 
 計算コア（`src/core/`）は、ほかの社内プロジェクトから使えるよう npm パッケージ `@yojitsu-navi/core` として同じ GitLab の Package Registry に公開できます（タグ `core-v<版>` で CI が公開。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)）。
 
-開発用の GitHub Actions（`.github/workflows/ci.yml`）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
+開発元の GitHub Actions（`.github/workflows/ci.yml`。社内へ持ち込むパッケージには入らない）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
 
 ## ドキュメント
 
@@ -136,9 +139,11 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 config.json              計算・表示・取り込み元・マスタ編集の設定
 data/                    CSV データ（docs/DATA.md）
 docs/                    仕様・データ定義・運用手順など（上の「ドキュメント」）
+packages/app/            社内へ持ち込む npm パッケージ yojitsu-navi（コマンド yojitsu-navi。中身はリポジトリ一式を写して作る）
 packages/core/           計算コアの npm パッケージ（package.json と README。中身は src/core からビルド）
 scripts/
   build.ts / dev.ts      ビルド・開発サーバ（入力の指紋でキャッシュを管理）
+  build-app.mjs          社内へ持ち込むパッケージを作る（npm run app:pack）
   build-core.mjs         計算コアの npm パッケージを作る（npm run core:build）
   verify-dist.ts         ビルド結果の検証
   generate-dummy.ts      ダミーデータ生成（基本シナリオ）。dummy-scale.ts が実運用規模の部分

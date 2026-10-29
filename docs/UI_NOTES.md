@@ -233,7 +233,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | 行き来 | 下書きの扱い | sessionStorage に最後に書いた下書きの `savedAt` を置き、同じタブ・土台が同じなら黙って続きから（`DRAFT_SESSION_KEY`）。別のタブ・後日だけ「復元 / 破棄」を聞く |
 | 契約外予定 | ファイルが無い | 見出しだけの空ファイルとして扱い、保存時は GitLab に `create`。CSV 編集では 2 ファイル（アサイン・契約外予定）を並べる |
 
-## ドキュメントの更新（2026-10-28 shimaさん指示）
+## ドキュメントの更新（2026-10-28 指示）
 
 画面・データ・操作を変える PR では、**同じ PR で** README・docs（SPEC・DATA・UI_NOTES・TEXTS・DEPLOY_GITLAB）と `tests/e2e/README.md` を直す。README のスクリーンショットは `npm run build && npm run screenshots`（`scripts/screenshots.mjs`）で撮り直す。スクリプトは一覧に無い古い PNG を消す。古い画像・古い説明を残さない。
 
