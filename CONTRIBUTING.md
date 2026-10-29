@@ -22,7 +22,8 @@ PR を出す前に確認すること:
 
 ## テスト
 
-- `npm run check`（型・データ検証・unit / property / integration）と `npm run test:e2e`（Playwright）が通ること
+- `npm run check`（型・データ検証・unit / property / integration）と `npm run test:e2e`（Playwright 全件）が通ること。GitHub Actions は Pull Request では E2E の縮小版（`npm run test:e2e:smoke`）しか走らせないので、全件はマージ前にローカルで通す（`main` へのマージ後に CI が全件を走らせる）
+- 主要な画面・操作を足したら、その代表のテストに `{ tag: "@smoke" }` を付けて縮小版に入れる（[tests/e2e/README.md](tests/e2e/README.md)）
 - 画面を変えたら、実際に操作して確かめる: 画面幅 390 / 768 / 1024 / 1280px、ライト / ダーク、極端な値（0・とても大きい金額・長い名前）、はみ出し
 - 操作の手数・待ち・迷いも見る（分かりにくい・手間が多いものは直すか、PR に書く）
 

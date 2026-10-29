@@ -21,7 +21,7 @@ const chartFills = (page: Page) =>
   page.evaluate(() => [...new Set([...document.querySelectorAll(".yn-chart-card svg [fill]")].map((e) => e.getAttribute("fill")))].sort().join(","));
 
 test.describe("テーマ切替", () => {
-  test("グラフの色もリロードなしで切り替わる（全体サマリー・メンバー詳細）", async ({ page }) => {
+  test("グラフの色もリロードなしで切り替わる（全体サマリー・メンバー詳細）", { tag: "@smoke" }, async ({ page }) => {
     for (const path of ["/", "/member?id=M011"]) {
       await gotoPage(page, path);
       await expect(page.locator(".yn-chart-card svg").first()).toBeVisible();

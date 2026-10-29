@@ -66,7 +66,7 @@ test.describe("全体サマリー", () => {
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "m" });
   });
 
-  test("KPI が core の aggregate / forecastTotals と一致（FY2026・円で厳密）", async ({ page }) => {
+  test("KPI が core の aggregate / forecastTotals と一致（FY2026・円で厳密）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/?unit=yen");
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
     const { totals, fc } = await expectKpis(page, FY, "", "recent3", "yen");
@@ -83,7 +83,7 @@ test.describe("全体サマリー", () => {
     expect(q.get("method")).toBe("recent3");
   });
 
-  test("単位の切替: 百万円 → 千円 → 円 → 百万円 の往復で KPI・URL・aria-pressed・保存が変わる", async ({ page }) => {
+  test("単位の切替: 百万円 → 千円 → 円 → 百万円 の往復で KPI・URL・aria-pressed・保存が変わる", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/");
     expect(query(page).get("unit")).toBe("m");
     for (const unit of ["k", "yen", "m"] as const) {

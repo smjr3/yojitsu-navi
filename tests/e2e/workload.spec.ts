@@ -24,7 +24,7 @@ test.describe("工数 /workload", () => {
     expect(totals.contractHours).toBeGreaterThan(0);
   });
 
-  test("KPI が core と一致し、タブ「工数」が選択される", async ({ page }) => {
+  test("KPI が core と一致し、タブ「工数」が選択される", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}`);
     await expect(page.getByRole("link", { name: "工数", exact: true }).first()).toHaveAttribute("aria-current", "page");
     await expect(kpiValue(page, 0)).toHaveText(pmText(totals.contractHours));

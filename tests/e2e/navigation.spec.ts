@@ -11,7 +11,7 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 const model = getModel();
 const FY = fiscalPeriod(model);
 
-test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧", async ({ page }) => {
+test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/teams");
   const teams = tableByCaption(page, "チーム一覧");
   const leaf = "T111";
@@ -96,7 +96,7 @@ test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る
   expect(new Set(await rowKeys(tableByCaption(page, "案件一覧")))).toEqual(new Set(expected));
 });
 
-test("上部タブと右上のリンクで全ページに行ける（現在のページは aria-current）", async ({ page }) => {
+test("上部タブと右上のリンクで全ページに行ける（現在のページは aria-current）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
   const header = page.locator("#observablehq-header");
   await expect(page.locator("#observablehq-sidebar")).toHaveCount(0);

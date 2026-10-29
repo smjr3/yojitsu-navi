@@ -71,7 +71,8 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 | コマンド | 内容 |
 |---|---|
 | `npm run check` | 型チェック + データ検証 + テスト（unit / property / integration） |
-| `npm run test:e2e` | 画面の E2E（Playwright。[tests/e2e/README.md](tests/e2e/README.md)） |
+| `npm run test:e2e` | 画面の E2E 全件（Playwright。[tests/e2e/README.md](tests/e2e/README.md)） |
+| `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run screenshots` | `dist/` から README のスクリーンショットを撮り直す |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
@@ -101,7 +102,7 @@ npm run dev                         # http://localhost:3000（data/ や config.j
 CI/CD 変数・作業実績 API への切り替え・人事データの取り込み・マスタ編集の設定は [docs/OPERATIONS.md](docs/OPERATIONS.md) にあります。
 画面もビルドも外部 CDN・外部サイトに接続しません。
 
-開発用の GitHub Actions（`.github/workflows/ci.yml`）は、`*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
+開発用の GitHub Actions（`.github/workflows/ci.yml`）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・古いスクリーンショット）だけが動きます。
 
 ## ドキュメント
 
