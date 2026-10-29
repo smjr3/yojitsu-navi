@@ -52,6 +52,8 @@
   --yn-neutral-text: #52514e;
   --yn-neutral-bg: #efeeea;
   --yn-accent-bg: #e4eefb;
+  --yn-under-text: #075e80; /* 稼働計画の 1.0 未満（6.4:1） */
+  --yn-under-bg: #e2f4fb;
 }
 
 :root[data-theme="dark"] {
@@ -93,6 +95,8 @@
   --yn-neutral-text: #c3c2b7;
   --yn-neutral-bg: #2a2a28;
   --yn-accent-bg: #1a2a40;
+  --yn-under-text: #6fc6ea; /* 7.4:1 */
+  --yn-under-bg: #0c2e3b;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2666,7 +2670,12 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-warn-text);
   font-weight: 600;
 }
-/* 退職した月以降（§35）。配分が残っていれば is-over / is-set の色の上に斜線で示す */
+/* 1.0 未満の月（§41）。超過の黄と分けて青系 */
+.yn-me-plan-cell.is-under {
+  background: var(--yn-under-bg);
+  color: var(--yn-under-text);
+}
+/* 退職した月以降（§35）。配分が残っていれば is-over / is-under の色の上に斜線で示す */
 .yn-me-plan-cell.is-left {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--yn-hairline-strong) 6px 7px);
 }
