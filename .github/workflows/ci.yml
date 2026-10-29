@@ -1,6 +1,9 @@
 # 予実ナビ — GitHub Actions（GitHub ミラー／フォーク用。本番の公開は GitLab Pages）
 #
-# push と Pull Request で: 依存インストール → 型チェック → データ検証 → テスト → ビルド → E2E
+# Pull Request と main への push で: 依存インストール → 型チェック → データ検証 → テスト → ビルド → E2E
+# E2E は Pull Request では縮小版（@smoke の付いたテストだけ。npm run test:e2e:smoke）、
+# main への push（マージ）では全件（npm run test:e2e）。Actions の分数を節約するため。
+# 作業ブランチへの push だけでは動かさない（Pull Request で動くので二重に走らせない）。
 # E2E は tests/e2e/playwright.config.ts が存在するときだけ実行する。
 
 name: CI
@@ -11,7 +14,7 @@ name: CI
 # push と pull_request の一覧は同じにしておく。迷うファイルは動かす側に倒す（除外に足すのは、テスト・ビルド・画面に一切影響しないものだけ）。
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "**"
       - "!**/*.md"
@@ -77,9 +80,14 @@ jobs:
         if: steps.e2e.outputs.present == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: E2E テスト
+      - name: E2E テスト（Pull Request は縮小版、main は全件）
         if: steps.e2e.outputs.present == 'true'
-        run: npm run test:e2e
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npm run test:e2e:smoke
+          else
+            npm run test:e2e
+          fi
 
       - name: E2E レポートを保存
         if: steps.e2e.outputs.present == 'true' && always()

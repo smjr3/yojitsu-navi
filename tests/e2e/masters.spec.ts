@@ -146,7 +146,7 @@ test("初期表示: 右上の補助リンクの最後に「マスタ編集」（
   await expect(page.locator(".yn-me-diff-slot")).toContainText("変更はありません");
 });
 
-test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", async ({ page }) => {
+test("download: 未来の単価行の追加は確認なしで反映 → 差分 → ダウンロードした CSV は元 + 1 行（LF・BOM なし・未変更行はそのまま）", { tag: "@smoke" }, async ({ page }) => {
   await open(page);
   await addRate(page, "部長", "14000", "2026-11");
   // 今の値は 12000 のまま。予定の変更として見える

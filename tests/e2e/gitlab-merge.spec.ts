@@ -65,7 +65,7 @@ async function saveRateViaCsv(page: Page, line = "部長,14000,2026-11"): Promis
 }
 
 test.describe("デモ: 保存 → マージ待ち → マージ", () => {
-  test("CSV で編集して保存すると MR になり、一覧とヘッダーの件数に出る。内容を見てマージすると消える", async ({ page }) => {
+  test("CSV で編集して保存すると MR になり、一覧とヘッダーの件数に出る。内容を見てマージすると消える", { tag: "@smoke" }, async ({ page }) => {
     await useDemo(page);
     await saveRateViaCsv(page);
     const mr = page.locator(".yn-mr");
