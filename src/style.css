@@ -1498,12 +1498,14 @@ h3 {
 .yn-table-compact tfoot td {
   position: static;
 }
-/* 計算根拠の表: 長い案件名・メンバー名は折り返し、金額の列を画面外へ押し出さない */
-.yn-bd-section .yn-table-compact td:not(.num) {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  min-width: 8em;
-  max-width: 16em;
+/* 計算根拠の表（スマホ幅）: 先頭列の長い案件名・メンバー名は折り返し、金額の列を画面外へ押し出さない */
+@media (max-width: 640px) {
+  .yn-bd-section .yn-table-compact td:first-child:not(.num) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 8em;
+    max-width: 14em;
+  }
 }
 .yn-table-empty td {
   text-align: center;
