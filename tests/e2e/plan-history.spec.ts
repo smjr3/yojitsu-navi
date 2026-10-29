@@ -157,7 +157,7 @@ test("変更の履歴から直接修正・削除できる（削除後はフォ�
   // 修正: 人月を 0.1 に
   await entries.nth(0).getByRole("button", { name: /を修正/ }).click();
   const d = dialog(page);
-  await expect(d.locator(".yn-me-form-lead")).toContainText("「＋ 変更」");
+  await expect(d.locator(".yn-dialog-head .yn-tip-pop")).toContainText("「＋ 変更」");
   await d.locator("#yn-me-f-person_months").fill("0.1");
   await d.locator('[data-role="submit"]').click();
   // 変わる内容を見せてから適用（過去には及ばない）

@@ -88,3 +88,22 @@ test("GitLab のトークン入力は設定画面だけ", async ({ page }) => {
     await expect(page.locator('input[type="password"]'), path).toHaveCount(0);
   }
 });
+
+test("説明文の量: 別のタブで開いて下書きの復元を聞かれているとき", async ({ page, context }) => {
+  await gotoPage(page, "/plan?team=S11");
+  await page.locator(".yn-me-plan-cell.is-under .yn-plan-cell-btn").first().click();
+  const pop = page.locator("dialog[open]").first();
+  await pop.locator("input").first().fill("0.3");
+  await pop.getByRole("button", { name: "反映" }).click();
+  // 過去の月なら影響を見せてからもう一度押す
+  if (await pop.isVisible()) await pop.getByRole("button", { name: /反映/ }).click();
+  await expect(page.locator(".yn-me-diff-table")).toBeVisible();
+  const other = await context.newPage();
+  await gotoPage(other, "/plan?team=S11");
+  await expect(other.getByRole("button", { name: "下書きを復元する" })).toBeVisible();
+  const items = await proseItems(other);
+  expect(items.filter((t) => t.length > ITEM_BUDGET)).toEqual([]);
+  expect(items.reduce((s, t) => s + t.length, 0), JSON.stringify(items)).toBeLessThanOrEqual(PAGE_BUDGET);
+  // 説明は見出しの「?」の中
+  await expect(other.locator(".yn-me-banner .yn-tip-pop")).toContainText("下書きを復元する");
+});

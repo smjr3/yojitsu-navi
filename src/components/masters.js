@@ -505,8 +505,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       focusKey(`tab:${active}`);
     };
     parts.draft.replaceChildren(html`<section class="yn-me-banner" role="region" aria-labelledby="yn-me-draft-title">
-      <h2 id="yn-me-draft-title" class="yn-me-banner-title">${T.masters.draftTitle}</h2>
-      <p>${dateTimeJst(d.savedAt)} ${T.masters.draftSavedAt} ${counts.join("、")}${T.masters.draftRestoreHint}<strong>${T.masters.draftLocked}</strong></p>
+      <div class="yn-title-with-tip"><h2 id="yn-me-draft-title" class="yn-me-banner-title">${T.masters.draftTitle}</h2>${infoTip(`${T.masters.draftRestoreHint}${T.masters.draftLocked}${T.masters.draftNotSavedUntilChoice}`, { label: T.masters.draftTipLabel })}</div>
+      <p>${dateTimeJst(d.savedAt)} ${T.masters.draftSavedAt} ${counts.join("、")}</p>
       ${stale.length
         ? html`<div class="yn-me-stale" role="alert">
             <p><strong>${T.masters.staleTitle}</strong>（${stale.map((id) => fileName(MASTER_FILES[id].path)).join("、")}${T.masters.staleText1}<strong>${T.masters.staleText2}</strong>${T.masters.staleText3}</p>
@@ -526,7 +526,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         <button type="button" class="yn-btn yn-btn-primary" data-fk="draft:restore" onclick=${restore}>${T.masters.restoreDraft}</button>
         <button type="button" class="yn-btn" data-fk="draft:discard" onclick=${discard}>${T.masters.discardDraft}</button>
       </p>
-      <p class="yn-me-small">${T.masters.draftNotSavedUntilChoice}</p>
     </section>`);
   }
 
@@ -1365,7 +1364,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
               : fmt(T.planEdit.previewAdd, { from, to, after: pm(n) });
     }
     const form = html`<form class="yn-me-form" novalidate>
-      <p class="yn-me-form-lead">${fmt(T.planEdit.changeLead, { name: r.name, target: label })}</p>
       <div class="yn-me-fields">
         <div class="yn-me-field"><label for="yn-me-chg-from">${T.planEdit.fromLabel}<span class="yn-me-req" aria-hidden="true"> *</span></label>${fromInput}<span class="yn-me-field-hint">${T.planEdit.fromHint}</span></div>
         <div class="yn-me-field"><label for="yn-me-f-__value">${T.planEdit.valueLabel}<span class="yn-me-req" aria-hidden="true"> *</span></label>${valueField}<span class="yn-me-field-hint" id="yn-me-f-__value-hint">${T.planEdit.valueHint}</span></div>
@@ -1444,7 +1442,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     });
     dialog.replaceChildren(html`<div class="yn-dialog-inner">
       <header class="yn-dialog-head">
-        <h2 id="yn-me-dialog-title" class="yn-dialog-title">${fmt(T.planEdit.changeTitle, { name: r.name, target: label })}</h2>
+        <div class="yn-title-with-tip"><h2 id="yn-me-dialog-title" class="yn-dialog-title">${fmt(T.planEdit.changeTitle, { name: r.name, target: label })}</h2>${infoTip(fmt(T.planEdit.changeLead, { name: r.name, target: label }), { label: T.masters.dialogTipLabel })}</div>
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">${form}</div>
@@ -1521,10 +1519,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     };
     const form = html`<form class="yn-plan-pop-form" novalidate>
       <header class="yn-plan-pop-head">
-        <h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>
+        <div class="yn-title-with-tip"><h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>${infoTip(T.plan.editLead, { label: T.masters.dialogTipLabel })}</div>
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => cellEditor.close()}>×</button>
       </header>
-      <p class="yn-me-small">${T.plan.editLead}</p>
       ${inputs.length
         ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
             const c = contractById.get(a.contractId);
@@ -1807,6 +1804,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       if (preset) initial = { ...initial, ...preset };
     }
     const lockImported = (name) => fileId === "members" && importMode && MEMBER_IMPORTED_COLUMNS.includes(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template);
+    // 「＋ 変更」（同じ対象の履歴を足す）では対象の ID を変えさせない。変えると別の対象の行になってしまう
+    const lockKey = (name) => mode === "add" && !!template && def.history === "effective" && name === def.keyColumns[0];
     // 対象は名前で呼ぶ（メンバー・組織。ID は前面に出さない）
     const templateKey = template ? ((fileId === "members" || fileId === "teams") && (initial.name ?? "").trim()) || displayValue(fileId, def.keyColumns[0], (initial[def.keyColumns[0]] ?? "").trim()) : "";
     const title =
@@ -1837,14 +1836,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
             : T.masters.addAssignmentLead;
 
     const form = html`<form class="yn-me-form" novalidate>
-      <p class="yn-me-form-lead">${lead}</p>
       <div class="yn-me-fields">
         ${columns.map((c) => {
-          const disabled = lockImported(c.name);
+          const keyLocked = lockKey(c.name);
+          const disabled = keyLocked || lockImported(c.name);
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
             ${fieldFor(fileId, c, (initial[c.name] ?? "").trim(), disabled)}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : (FIELD_HINTS[c.name] ?? "")}</span>
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : (FIELD_HINTS[c.name] ?? "")}</span>
           </div>`;
         })}
       </div>
@@ -1955,7 +1954,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
 
     dialog.replaceChildren(html`<div class="yn-dialog-inner">
       <header class="yn-dialog-head">
-        <h2 id="yn-me-dialog-title" class="yn-dialog-title">${title}<span class="yn-me-path"> ${fileName(def.path)}</span></h2>
+        <div class="yn-title-with-tip"><h2 id="yn-me-dialog-title" class="yn-dialog-title">${title}<span class="yn-me-path"> ${fileName(def.path)}</span></h2>${infoTip(lead, { label: T.masters.dialogTipLabel })}</div>
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">${form}</div>
@@ -2323,7 +2322,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           ${r.commitUrl ? html`<li>${T.masters.commitLabel} <a href=${r.commitUrl} target="_blank" rel="noopener">${r.commitId ? r.commitId.slice(0, 8) : T.masters.open}（GitLab）</a></li>` : null}
           ${r.commitMode === "mr" ? html`<li>${T.masters.branchLabel} <code>${r.branch}</code></li>` : null}
         </ul>
-        <p>${r.commitMode === "mr" ? T.masters.afterMr : T.masters.afterCommit}${T.masters.draftCleared}</p>
+        <p>${r.commitMode === "mr" ? T.masters.afterMrShort : T.masters.afterCommitShort} ${infoTip(r.commitMode === "mr" ? T.masters.afterMr : T.masters.afterCommit, { label: T.masters.afterSaveTipLabel })}</p>
         <p><button type="button" class="yn-btn" data-fk="save:restart" onclick=${() => resetAll()}>${T.masters.startOver}</button></p>
       </div>`;
     }
