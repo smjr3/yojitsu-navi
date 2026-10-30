@@ -263,4 +263,5 @@ test("着地見込み（計画値）の内訳: 残り月のアサイン明細は
   const table = d.locator("table").filter({ hasText: "配分" }).last();
   await expect(table).toContainText("中村 拓也");
   await expect(table).not.toContainText("M010");
+  await expect(table.locator("th").filter({ hasText: "配分" })).toHaveText("配分（人月）");
 });

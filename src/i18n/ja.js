@@ -569,7 +569,7 @@ export default {
     noAssignments: "アサインが 1 件もありません（残り見込み 0）",
     assignmentDetails: "残り月のアサイン明細",
     colMonth: "月",
-    colAllocation: "配分",
+    colAllocation: "配分（人月）",
     recentN: "直近 {n} か月",
     allMonths: "契約開始からの全月",
     fcFormulaAvg: "残り見込み = round(月平均の実績 × 残り月数)",
