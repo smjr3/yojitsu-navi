@@ -112,6 +112,8 @@ export function targetColumn(model, kind, idOf, method) {
     label: T.targets.title,
     type: "text",
     hideNarrow: true,
+    // 1024px 幅では列が収まらないので隠す（目標は各詳細の「目標」で見られる）
+    hideMid: true,
     summary: false,
     get: (row) => evalOf(row)?.gap ?? null,
     sortValue: (row) => evalOf(row)?.gap ?? null,

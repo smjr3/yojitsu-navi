@@ -23,7 +23,8 @@ test.describe("着地見込みの方式", () => {
 
   test("案件詳細の 3 方式の比較も計画値から並ぶ", async ({ page }) => {
     await gotoPage(page, "/contracts");
-    await page.locator("table tbody tr").first().click();
+    // 行の中央は数値のボタン（計算根拠）に当たることがあるので、ボタンの無い状態の列を押す
+    await page.locator("table tbody tr").first().locator("td").last().click();
     await expect(page).toHaveURL(/\/contract\?/);
     const cards = page.locator(".yn-forecast-card");
     await expect(cards).toHaveCount(3);

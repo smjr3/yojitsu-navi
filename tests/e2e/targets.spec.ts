@@ -63,7 +63,7 @@ test("顧客詳細・案件詳細にも目標。目標の無い対象には表�
   await expect(page.locator(".yn-targets")).toHaveCount(0);
 });
 
-test("一覧の「目標」列: チーム・顧客・案件。目標の無い行は —。1280 幅で横スクロールしない", async ({ page }) => {
+test("一覧の「目標」列: チーム・顧客・案件。目標の無い行は —。1280 幅で横スクロールしない、1024 幅では列を隠す", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   for (const [path, label] of [["/teams", "第1事業部"], ["/customers", "こもれび出版"], ["/contracts", "クラウド基盤運用"]] as const) {
     await gotoPage(page, path);
@@ -74,6 +74,18 @@ test("一覧の「目標」列: チーム・顧客・案件。目標の無い行
     const over = await page.locator(".yn-table-wrap").first().evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(over, path).toBeLessThanOrEqual(1);
   }
+  // 1024px 幅では「目標」列を隠して横スクロールを避ける（チーム詳細の表も同じ列）
+  await page.setViewportSize({ width: 1024, height: 900 });
+  for (const path of ["/customers", "/team?id=HQ"]) {
+    await gotoPage(page, path);
+    await expect(page.locator('.yn-table th[data-key="target"]').first()).toBeHidden();
+    for (const wrap of await page.locator(".yn-table-wrap:has(th[data-key=\"target\"])").all()) {
+      expect(await wrap.evaluate((el) => el.scrollWidth - el.clientWidth), path).toBeLessThanOrEqual(1);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoPage(page, "/team?id=D1");
+  await expect(page.locator('.yn-table th[data-key="target"]')).toHaveCount(2);
   await gotoPage(page, "/teams");
   await expect(page.locator(".yn-table tbody tr", { hasText: "ネットワーク保守チーム" }).locator('td:has-text("—")').first()).toBeVisible();
 });
