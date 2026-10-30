@@ -100,6 +100,8 @@ describe("dailyProgress", () => {
 
   it("上限の割合（目標の残予算率 r → 1 − r）", () => {
     expect(dailyProgress(model, daily, ["A", "B"], { capRatio: 0.8 })?.cap).toBeCloseTo(800);
+    // マイナスの目標（超過を -50% までに減らす）は上限が予算を超える: 1 − (−0.5) = 1.5
+    expect(dailyProgress(model, daily, ["A", "B"], { capRatio: 1.5 })?.cap).toBeCloseTo(1500);
   });
 
   it("今月の予算が 0 なら出さない", () => {

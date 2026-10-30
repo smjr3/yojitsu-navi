@@ -51,6 +51,8 @@ describe("目標の読み込み", () => {
     ]);
     expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
     expect(parsePercentCell("-5")).toBe(-0.05);
+    // 超過を減らす目標（マイナス）: 全角・数学のマイナス・会計の ▲ / △ も負の数
+    for (const neg of ["-50", "－50", "\u221250", "▲50", "△50%", "▲ 50"]) expect(parsePercentCell(neg)).toBe(-0.5);
     for (const bad of ["", "abc", "1,5", "%"]) expect(parsePercentCell(bad)).toBeNaN();
   });
 
@@ -119,6 +121,18 @@ describe("目標の評価", () => {
     expect(evaluateTarget(model, target({ remainingRate: 0.55 }), "recent3").status).toBe("atRisk");
     // 計画値（アサインなし）は残りの見込み 0 → 着地 300 万 → 75%
     expect(evaluateTarget(model, target({ remainingRate: 0.55 }), "assignment").rate).toBeCloseTo(0.75);
+  });
+
+  it("マイナスの目標（超過を減らす）: 残予算率が目標以上なら達成。検証エラーにもならない", () => {
+    // 2026-04〜09: 予算 600 万、実績 300 万 → 50%。-50% の目標は達成、60% は未達
+    expect(evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: -0.5 }), "recent3")).toMatchObject({ status: "achieved" });
+    expect(codes(`${HEADER}team,T1,2027-03,-100,,\nproject,C1,2027-03,▲50,,\n`)).toEqual([]);
+    // 超過している対象: 予算の 2 倍使う（月 200 万の実績）と残予算率 -100%。-50% の目標は未達、-150% は達成
+    const over = modelOf("");
+    for (const r of over.contracts) for (const mm of r.months) if (mm.month <= "2026-09" && r.contract.contractId === "C1") mm.cost = mm.budget * 2;
+    expect(evaluateTarget(over, target({ endMonth: "2026-09", remainingRate: -0.5 }), "recent3").rate).toBeCloseTo(-1);
+    expect(evaluateTarget(over, target({ endMonth: "2026-09", remainingRate: -0.5 }), "recent3").status).toBe("missed");
+    expect(evaluateTarget(over, target({ endMonth: "2026-09", remainingRate: -1.5 }), "recent3").status).toBe("achieved");
   });
 
   it("予算 0（対象の案件が無い・期間外）は「予算なし」", () => {
