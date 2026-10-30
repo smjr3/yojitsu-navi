@@ -7,7 +7,9 @@ import { buildCommitPayload } from "../../src/core/gitlab.js";
 import { MASTER_FILES, MASTER_FILE_IDS, addRow, describeImpactEffects, emptyMasterText, impactBetween, parseMasterDoc, updateRow, validateEdited, type MasterDoc, type MasterFileId } from "../../src/core/masterEdit.js";
 import { baseConfig } from "./fixtures.js";
 
+/** 種別の列（§50）が無い旧形式の見出し。読み込みは従来どおり（種別なし） */
 const HEADER = "member_id,start_month,end_month,person_months,note\n";
+const NEW_HEADER = "member_id,type,start_month,end_month,person_months,note\n";
 
 function files(outsidePlans?: string): DatasetFiles {
   return {
@@ -36,7 +38,10 @@ describe("契約外予定の読み込み", () => {
 
   it("行を読み、メモは省略できる", () => {
     const r = parseDataset(files(`${HEADER}M1,2026-11,2027-01,0.2,"提案, 準備"\n`));
-    expect(r.dataset.outsidePlans).toEqual([{ memberId: "M1", startMonth: "2026-11", endMonth: "2027-01", personMonths: 0.2, note: "提案, 準備" }]);
+    expect(r.dataset.outsidePlans).toEqual([{ memberId: "M1", type: "", startMonth: "2026-11", endMonth: "2027-01", personMonths: 0.2, note: "提案, 準備" }]);
+    // 種別の列（§50.1）
+    const typed = parseDataset(files(`${NEW_HEADER}M1,会社業務,2026-11,2027-01,0.2,\n`));
+    expect(typed.dataset.outsidePlans?.[0]).toMatchObject({ memberId: "M1", type: "会社業務", personMonths: 0.2 });
     const r2 = parseDataset(files("member_id,start_month,end_month,person_months\nM1,2026-11,2026-11,1\n"));
     expect(r2.dataset.outsidePlans?.[0]).toMatchObject({ personMonths: 1, note: "" });
     expect(r2.issues.filter((i) => i.severity === "error")).toEqual([]);
@@ -80,8 +85,11 @@ describe("契約外予定の検証", () => {
 describe("マスタ編集での契約外予定", () => {
   it("ファイルの定義: 期間付き・値の列は person_months・省略可", () => {
     expect(MASTER_FILE_IDS).toContain("outside");
-    expect(MASTER_FILES.outside).toMatchObject({ path: "data/outside-plans.csv", history: "period", valueColumn: "person_months", optional: true, keyColumns: ["member_id"] });
-    expect(emptyMasterText("outside")).toBe(HEADER);
+    expect(MASTER_FILES.outside).toMatchObject({ path: "data/outside-plans.csv", history: "period", valueColumn: "person_months", optional: true, keyColumns: ["member_id", "type"] });
+    expect(emptyMasterText("outside")).toBe(NEW_HEADER);
+    // 旧形式のファイルは見出しの末尾に type を足して読む（行は種別なし）
+    const old = parseMasterDoc("outside", `${HEADER}M1,2026-04,2027-03,0.1,\n`);
+    expect(old.header).toEqual(["member_id", "start_month", "end_month", "person_months", "note", "type"]);
   });
 
   const range = { fromMonth: "2026-04", toMonth: "2026-10" };
@@ -110,7 +118,7 @@ describe("マスタ編集での契約外予定", () => {
     const { doc, rowId } = addRow(docs.outside, { member_id: "NOBODY", start_month: "2026-11", end_month: "2026-12", person_months: "0.1" });
     const v = validateEdited({ ...docs, outside: doc }, { contracts: f.contracts, mapping: f.mapping, holidays: f.holidays }, baseConfig);
     expect(v.byRow.outside[rowId]?.map((i) => i.code)).toEqual(["OUTSIDE_UNKNOWN_MEMBER"]);
-    expect(v.texts.outside).toBe(`${HEADER}NOBODY,2026-11,2026-12,0.1,\n`);
+    expect(v.texts.outside).toBe("member_id,start_month,end_month,person_months,note,type\nNOBODY,2026-11,2026-12,0.1,,\n");
   });
 });
 

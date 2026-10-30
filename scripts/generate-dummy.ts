@@ -89,9 +89,11 @@ export interface AssignmentRow {
   allocation: number;
 }
 
-/** 契約外予定（SPEC §36.4）: 人 × 期間 × 人月 */
+/** 契約外予定（SPEC §36.4・§50）: 人 × 種別 × 期間 × 人月 */
 export interface OutsidePlanRow {
   member_id: string;
+  /** 契約外の種別（task-types.csv の group） */
+  type: string;
   start_month: YearMonth;
   end_month: YearMonth;
   person_months: number;
@@ -376,12 +378,17 @@ const assignmentsOf = (c: FyCalendar): AssignmentRow[] => [
   { member_id: "M007", contract_id: "C011", start_month: c.m(0, 4), end_month: c.m(0, 3), allocation: 0.4 },
 ];
 
-/** 契約外予定: 保守の配分との合計が 1.0 を超える月がある人（M010・M013・M020）と、期間を変えた例（M013） */
+/**
+ * 運用保守以外の予定: 保守の配分との合計が 1.0 を超える月がある人（M010・M013・M020）と、期間を変えた例（M013）。
+ * 種別（§50）: 提案・設計のほか、本部長（M001）の会社業務と、同じ人・同じ月に 2 種別ある例（M013 の設計 ＋ 会社業務）
+ */
 const outsidePlansOf = (c: FyCalendar): OutsidePlanRow[] => [
-  { member_id: "M010", start_month: c.m(0, 11), end_month: c.m(0, 1), person_months: 0.2, note: "次期更改の提案" },
-  { member_id: "M013", start_month: c.m(0, 7), end_month: c.m(0, 9), person_months: 0.1, note: "運用設計の支援" },
-  { member_id: "M013", start_month: c.m(0, 10), end_month: c.m(0, 3), person_months: 0.2, note: "運用設計の支援" },
-  { member_id: "M020", start_month: c.m(0, 12), end_month: c.m(0, 2), person_months: 0.3, note: "新規顧客の提案" },
+  { member_id: "M010", type: "提案", start_month: c.m(0, 11), end_month: c.m(0, 1), person_months: 0.2, note: "次期更改の提案" },
+  { member_id: "M013", type: "設計", start_month: c.m(0, 7), end_month: c.m(0, 9), person_months: 0.1, note: "運用設計の支援" },
+  { member_id: "M013", type: "設計", start_month: c.m(0, 10), end_month: c.m(0, 3), person_months: 0.2, note: "運用設計の支援" },
+  { member_id: "M020", type: "提案", start_month: c.m(0, 12), end_month: c.m(0, 2), person_months: 0.3, note: "新規顧客の提案" },
+  { member_id: "M001", type: "会社業務", start_month: c.m(0, 4), end_month: c.m(0, 3), person_months: 0.3, note: "事業計画・部内会議" },
+  { member_id: "M013", type: "会社業務", start_month: c.m(0, 4), end_month: c.m(0, 3), person_months: 0.05, note: "部内会議" },
 ];
 
 const TASKS: ReadonlyArray<readonly [string, number]> = [
@@ -399,9 +406,10 @@ const TASKS: ReadonlyArray<readonly [string, number]> = [
 
 /**
  * 作業種別の分類表（SPEC §30.1）。「勉強会」はわざと載せない（未分類の警告 TASK_UNCLASSIFIED の例）。
- * 「社内会議」は顧客名が空で分類より先に除外されるので載せなくてよい。
+ * 契約外の行の group は計画の種別（§50.1）。「社内会議」（顧客名が空）は契約外の会社業務として数える（§50.2）。
+ * 「構築」は作業実績の無い種別の例（計画だけ入れられる）。
  */
-const TASK_TYPES: Array<{ task: string; category: string; note: string }> = [
+const TASK_TYPES: Array<{ task: string; category: string; group?: string; note: string }> = [
   { task: "定例", category: "契約内", note: "" },
   { task: "問い合わせ対応", category: "契約内", note: "" },
   { task: "障害対応", category: "契約内", note: "" },
@@ -414,9 +422,11 @@ const TASK_TYPES: Array<{ task: string; category: string; note: string }> = [
   { task: "テスト", category: "契約内", note: "" },
   { task: "データ移行", category: "契約内", note: "" },
   { task: "導入準備", category: "契約内", note: "" },
-  { task: "提案", category: "契約外", note: "追加案件・更改の提案" },
-  { task: "運用設計", category: "契約外", note: "新規・更改に伴う運用設計" },
-  { task: "見積", category: "契約外", note: "" },
+  { task: "提案", category: "契約外", group: "提案", note: "追加案件・更改の提案" },
+  { task: "見積", category: "契約外", group: "提案", note: "" },
+  { task: "運用設計", category: "契約外", group: "設計", note: "新規・更改に伴う運用設計" },
+  { task: "構築", category: "契約外", group: "構築", note: "新規案件の環境構築" },
+  { task: "社内会議", category: "契約外", group: "会社業務", note: "顧客に紐付かない会社の業務" },
 ];
 
 /**
@@ -479,7 +489,7 @@ interface Generated {
   assignments: AssignmentRow[];
   outsidePlans: OutsidePlanRow[];
   holidays: Array<{ date: string; name: string }>;
-  taskTypes: Array<{ task: string; category: string; note: string }>;
+  taskTypes: Array<{ task: string; category: string; group?: string; note: string }>;
   /** 月ごとの作業実績 */
   worklogsByMonth: Map<YearMonth, Worklog[]>;
 }
@@ -646,6 +656,10 @@ export function generate(opts: GenOptions): Generated {
   if (opts.asOf >= c.d(0, 5, 12)) {
     push({ date: c.d(0, 5, 12), memberId: "M014", memberName: "佐々木 美月", customerName: "株式会社ひまわり食品", projectName: "受発注システム保守", task: "問い合わせ対応", hours: 0 });
   }
+  // 顧客名が空の契約内の作業（除外される。§4.2-1）。顧客名が空でも契約外（社内会議 = 会社業務）は除外しない（§50.2）
+  if (opts.asOf >= c.d(0, 5, 13)) {
+    push({ date: c.d(0, 5, 13), memberId: "M014", memberName: "佐々木 美月", customerName: "", projectName: "", task: "問い合わせ対応", hours: 1.5 });
+  }
 
   // 実運用規模の部分（別の乱数列・別のメンバーと契約。基本シナリオの数値は変わらない）
   const out = { teams: [...TEAMS], members: [...MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], outsidePlans: [...OUTSIDE_PLANS], taskTypes: [...TASK_TYPES] };
@@ -690,13 +704,13 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
   writeFileSync(join(out, "assignments.csv"), csv(g.assignments, ["member_id", "contract_id", "start_month", "end_month", "allocation"]));
-  writeFileSync(join(out, "outside-plans.csv"), csv(g.outsidePlans, ["member_id", "start_month", "end_month", "person_months", "note"]));
+  writeFileSync(join(out, "outside-plans.csv"), csv(g.outsidePlans, ["member_id", "type", "start_month", "end_month", "person_months", "note"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
   writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
-  writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "note"]));
+  writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "note"]));
 
   // 既存の月次ファイルを消してから書く（asOf を戻したときに古い月が残らないように）
   const wlDir = join(out, "worklogs");

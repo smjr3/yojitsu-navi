@@ -73,22 +73,24 @@ const vm = (() => {
   // 比較は経過月（期間内で基準月以前）で行う。未来月は実績が無く、期間全体の計画と比べると見かけ上よく見えるため（SPEC §18.2）
   const allFuture = fullPeriod.from > model.meta.asOfMonth;
   const period = allFuture ? fullPeriod : { from: fullPeriod.from, to: fullPeriod.to < model.meta.asOfMonth ? fullPeriod.to : model.meta.asOfMonth };
-  const all = aggregateMembers(model, { period });
+  // 契約外を含むか（§50.4。フィルタバーの切替）。計画・実績の両方に効く
+  const includeOutside = state.outside === "1";
+  const all = aggregateMembers(model, { period, includeOutside });
   // 所属チーム（基準月 = 期間の終了月。未来は基準月）で絞る。上位チームは配下を含む。
   // 「未設定」は所属チームが空か、基準月の組織に無いメンバー
   // 対象の人は「期間全体」で決める（経過月だけで決めると、未来月にだけアサインのある人が期間全体の計画から抜ける）
-  const allFull = period.to === fullPeriod.to ? all : aggregateMembers(model, { period: fullPeriod });
+  const allFull = period.to === fullPeriod.to ? all : aggregateMembers(model, { period: fullPeriod, includeOutside });
   const memberIds = memberIdsInTeam(allFull.members, state.team, scope.tree);
-  const agg = memberIds ? aggregateMembers(model, { period, memberIds }) : all;
+  const agg = memberIds ? aggregateMembers(model, { period, memberIds, includeOutside }) : all;
   // 期間全体の計画（未来月を含む）。KPI の補足に出す
-  const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembers(model, { period: fullPeriod, memberIds: memberIds ?? undefined });
+  const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembers(model, { period: fullPeriod, memberIds: memberIds ?? undefined, includeOutside });
   const rows = agg.members.map((m) => ({
     ...m,
     key: m.memberId,
     teamName: m.teamId ? teamName(model, m.teamId, scope.tree) : "",
     searchText: normalizeName(`${m.memberId} ${m.memberName} ${m.title ?? ""}`),
   }));
-  return { scope, period, fullPeriod, allFuture, fullAgg, agg, rows, unit: state.unit, baseMonth: all.baseMonth, includesPreliminary: agg.members.some((m) => m.includesPreliminary) };
+  return { scope, period, fullPeriod, allFuture, fullAgg, agg, rows, includeOutside, unit: state.unit, baseMonth: all.baseMonth, includesPreliminary: agg.members.some((m) => m.includesPreliminary) };
 })();
 ```
 
@@ -107,7 +109,7 @@ if (model) {
 ```
 
 ```js
-if (store) mountFilterBar(store, model, { show: ["period", "team", "unit"] });
+if (store) mountFilterBar(store, model, { show: ["period", "team", "outside", "unit"] });
 ```
 
 ```js
@@ -175,7 +177,7 @@ if (vm) {
   const q = normalizeName(query ?? "");
   const rows = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
   // 合計行は表示中のメンバーを母集団にコアで集計し直す（検索で絞ったときも一致させる）
-  const shown = q ? aggregateMembers(model, { period, memberIds: rows.map((r) => r.memberId) }) : vm.agg;
+  const shown = q ? aggregateMembers(model, { period, memberIds: rows.map((r) => r.memberId), includeOutside: vm.includeOutside }) : vm.agg;
   display(
     sectionTitle(
       T.members.sectionTitle,
@@ -209,11 +211,11 @@ if (vm) {
     { key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true, exportValue: (r) => r.teamName || T.members.noTeam },
     { key: "title", label: T.members.colTitle, type: "text", exportOnly: true },
     { key: "kindLabel", label: T.members.colKind, type: "text", exportOnly: true, get: (r) => (r.memberUnknown ? T.members.chipUnknown : r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
-    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
-    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
     { key: "utilization", label: T.breakdown.utilization, type: "percent", breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: sub(r) }) },
-    { key: "plannedCost", label: T.breakdown.plannedCost, type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
-    { key: "actualCost", label: T.breakdown.actualCost, type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), unit, subtitle: periodJa(period), contractHref }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) },
     { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "money", exportLabel: T.members.varianceExport, render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: sub(r) }) },
     { key: "status", label: T.columns.status, type: "status", get: chips, hideNarrow: true, sortable: false },
   ];

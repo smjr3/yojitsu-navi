@@ -37,7 +37,7 @@ test("セルにマウスを載せると内訳の吹き出し、フォーカス�
   // 契約外予定のある月: 内訳に契約外予定、合計が 1.0 を超えると超過
   await cell(page, "M010", "2026-12").hover();
   await expect(tip).toContainText("2026年12月 合計 1.10 人月");
-  await expect(tip).toContainText("契約外予定");
+  await expect(tip).toContainText("運用保守以外: 提案");
   await expect(tip).toContainText("1.0 人月を 0.10 超えています");
   await page.mouse.move(0, 0);
   await expect(tip).toBeHidden();

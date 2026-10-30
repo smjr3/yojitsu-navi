@@ -319,6 +319,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
       ? []
       : parseTable("outside-plans.csv", files.outsidePlans as string, REQUIRED_COLUMNS.outsidePlans, issues).rows.map((r) => ({
           memberId: r.get("member_id"),
+          type: r.get("type"),
           startMonth: r.get("start_month"),
           endMonth: r.get("end_month"),
           personMonths: parseNumberCell(r.get("person_months")),
@@ -374,7 +375,9 @@ function parseTaskTypes(text: string | undefined, issues: ValidationIssue[]): Ta
     }
     seen.set(key, row);
     const note = r.get("note");
-    out.push(note !== "" ? { task, category, note } : { task, category });
+    // 計画の種別（§50.1）は契約外の行だけ使う
+    const group = category === "outside" ? r.get("group") : "";
+    out.push({ task, category, ...(group !== "" ? { group } : {}), ...(note !== "" ? { note } : {}) });
   });
   return out;
 }

@@ -32,7 +32,7 @@ export interface MasterFilePayload {
 
 export interface MastersPayload {
   files: Record<MasterFileId, MasterFilePayload>;
-  context: { contracts: string; mapping: string; holidays: string };
+  context: { contracts: string; mapping: string; holidays: string; taskTypes: string };
   masterEdit: MasterEditConfig;
   /** memberSource.adapter（§20.2。config に無ければ "none"） */
   memberSourceAdapter: string;
@@ -76,7 +76,7 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
   const adapter = config.memberSource?.adapter;
   return {
     files,
-    context: { contracts: ctx(DATA_FILES.contracts), mapping: ctx(DATA_FILES.mapping), holidays: ctx(DATA_FILES.holidays) },
+    context: { contracts: ctx(DATA_FILES.contracts), mapping: ctx(DATA_FILES.mapping), holidays: ctx(DATA_FILES.holidays), taskTypes: ctx(DATA_FILES.taskTypes) },
     // 接続先が空なら GitLab CI の値（YOJITSU_GITLAB_*）で補う（§39.1）
     masterEdit: resolveMasterEdit(withGitLabEnv(config.masterEdit, process.env) as MasterEditConfig | undefined),
     memberSourceAdapter: adapter ?? "none",

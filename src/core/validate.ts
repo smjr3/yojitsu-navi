@@ -9,7 +9,8 @@ import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } 
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, isLeftRecord, memberAt, rateFor, teamTreeAt } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
-import { createTaskClassifier, isOutsideWorklog, unclassifiedTaskWarnings } from "./workTypes.js";
+import { createTaskClassifier, isOutsideWorklog, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
+import { normalizeName } from "./normalize.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface ValidationIssue {
@@ -138,13 +139,16 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
   flush();
 }
 
-/** 契約外予定（§36）: メンバー・月・人月の形式と、同じ人・同じ月の重複 */
+/** 契約外予定（§36・§50）: メンバー・種別・月・人月の形式と、同じ人・同じ種別・同じ月の重複 */
 function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "outside-plans.csv";
   const seen = new Map<string, number[]>();
+  // 種別は分類表（task-types.csv）の契約外の種別から選ぶ。分類表に契約外の種別が無ければ問わない
+  const types = new Set(outsideTypes(dataset.taskTypes).map((t) => normalizeName(t)));
   (dataset.outsidePlans ?? []).forEach((o, i) => {
     const row = rowOf(i);
     if (!memberIds.has(o.memberId)) push({ severity: "error", code: "OUTSIDE_UNKNOWN_MEMBER", message: fmt(T.checks.outsideUnknownMember, { file, row, memberId: o.memberId }), file, row, ref: { memberId: o.memberId } });
+    if (types.size > 0 && o.type !== "" && !types.has(normalizeName(o.type))) push({ severity: "warning", code: "OUTSIDE_UNKNOWN_TYPE", message: fmt(T.checks.outsideUnknownType, { file, row, type: o.type }), file, row, ref: { memberId: o.memberId, type: o.type } });
     if (!isValidYearMonth(o.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "start_month", value: o.startMonth }), file, row });
     if (!isValidYearMonth(o.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "end_month", value: o.endMonth }), file, row });
     const monthsOk = isValidYearMonth(o.startMonth) && isValidYearMonth(o.endMonth);
@@ -154,7 +158,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     }
     if (!monthsOk || o.startMonth > o.endMonth) return;
     for (const month of monthRange(o.startMonth, o.endMonth)) {
-      const key = `${o.memberId}\u0000${month}`;
+      const key = `${o.memberId}\u0000${normalizeName(o.type)}\u0000${month}`;
       const list = seen.get(key);
       if (list) list.push(row);
       else seen.set(key, [row]);
@@ -164,7 +168,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
   const reported = new Set<string>();
   for (const [key, rows] of seen) {
     if (rows.length < 2) continue;
-    const [memberId, month] = key.split("\u0000") as [string, string];
+    const [memberId, , month] = key.split("\u0000") as [string, string, string];
     const sig = `${memberId}|${rows.join(",")}`;
     if (reported.has(sig)) continue;
     reported.add(sig);

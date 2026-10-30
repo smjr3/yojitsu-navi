@@ -503,22 +503,33 @@ function rateSourceText(mm) {
   return fmt(T.breakdown.rateSourceText, { source: personal ? T.breakdown.personalRate : fmt(T.breakdown.roleRate, { role: mm.rateSource.key }), from: mm.rateSource.effectiveFrom });
 }
 
-function memberRows(months, contractIds) {
+/** 月 × 契約の行。contractIds を渡せばその行だけ（契約外の行 ID も可）。渡さなければ契約の行 ＋ includeOutside なら契約外の行（§50.3） */
+function memberRows(months, contractIds, includeOutside = false) {
   const set = contractIds ? new Set(contractIds) : null;
   const out = [];
-  for (const mm of months) for (const row of mm.byContract) if (!set || set.has(row.contractId)) out.push({ mm, row });
+  for (const mm of months)
+    for (const row of mm.byContract) {
+      const outside = typeof row.outsideType === "string";
+      if (set ? set.has(row.contractId) : !outside || includeOutside) out.push({ mm, row });
+    }
   return out;
 }
 
-function contractCell(model, contractId, contractHref) {
+/** 契約外の行の名前（「契約外: 提案」。種別なしは「契約外予定」） */
+export function outsideRowLabel(type) {
+  return type ? fmt(T.breakdown.outsideRow, { type }) : T.masterFiles.outside;
+}
+
+function contractCell(model, contractId, contractHref, row = null) {
+  if (row && typeof row.outsideType === "string") return outsideRowLabel(row.outsideType);
   const label = contractLabelOf(model, contractId) || contractId;
   return contractHref ? html`<a href=${contractHref(contractId)}>${label}</a>` : label;
 }
 
 /** 計画（時間・原価）の根拠: 契約×月ごとに 配分 × 基準時間 × 単価 */
-export function memberPlanSpec({ model, member, months, contractIds = null, unit, measure = "cost", subtitle = null, contractHref = null }) {
+export function memberPlanSpec({ model, member, months, contractIds = null, includeOutside = false, unit, measure = "cost", subtitle = null, contractHref = null }) {
   unit = memberUnit(unit);
-  const rows = memberRows(months, contractIds).filter(({ row }) => row.assignmentCount > 0);
+  const rows = memberRows(months, contractIds, includeOutside).filter(({ row }) => row.assignmentCount > 0);
   const std = months[0]?.standardHoursPerMonth ?? model?.config?.standardHoursPerMonth ?? 0;
   const hours = rows.reduce((s, { row }) => s + row.plannedHours, 0);
   const cost = rows.reduce((s, { row }) => s + row.plannedCost, 0);
@@ -540,7 +551,7 @@ export function memberPlanSpec({ model, member, months, contractIds = null, unit
             title: T.breakdown.planByContractMonth,
             table: {
               columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContract }, { label: T.breakdown.colAllocation, align: "num" }, { label: T.breakdown.plannedHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colRateSource }, { label: T.breakdown.plannedCost, align: "num" }],
-              rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), decimal(row.allocation, 3), formatHours(row.plannedHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.plannedCost, unit)]),
+              rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref, row), decimal(row.allocation, 3), formatHours(row.plannedHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.plannedCost, unit)]),
               foot: [T.breakdown.total, "", "", formatHours(hours), "", "", money(cost, unit)],
             },
           }
@@ -551,14 +562,15 @@ export function memberPlanSpec({ model, member, months, contractIds = null, unit
 }
 
 /** 実績（時間・原価）の根拠: 契約×月ごとの原価行 → 元の作業ログ */
-export function memberActualSpec({ model, member, months, contractIds = null, unit, measure = "cost", subtitle = null, contractHref = null }) {
+export function memberActualSpec({ model, member, months, contractIds = null, includeOutside = false, unit, measure = "cost", subtitle = null, contractHref = null }) {
   unit = memberUnit(unit);
-  const rows = memberRows(months, contractIds).filter(({ row }) => row.actualHours > 0 || row.actualCost !== 0);
+  const rows = memberRows(months, contractIds, includeOutside).filter(({ row }) => row.actualHours > 0 || row.actualCost !== 0);
   const hours = rows.reduce((s, { row }) => s + row.actualHours, 0);
   const cost = rows.reduce((s, { row }) => s + row.actualCost, 0);
   const unplannedHours = rows.filter(({ row }) => row.assignmentCount === 0).reduce((s, { row }) => s + row.actualHours, 0);
   const label = measure === "hours" ? T.breakdown.actualHours : T.breakdown.actualCost;
-  const ids = [...new Set(rows.map(({ row }) => row.contractId))];
+  // 作業ログの明細は契約ごとのファイル（契約外の作業ログは配っていない）
+  const ids = [...new Set(rows.filter(({ row }) => typeof row.outsideType !== "string").map(({ row }) => row.contractId))];
   const monthSet = new Set(rows.map(({ mm }) => mm.month));
   const sections = [
     rows.length
@@ -566,13 +578,13 @@ export function memberActualSpec({ model, member, months, contractIds = null, un
           title: T.breakdown.costLinesByContractMonth,
           table: {
             columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colContract }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colRateSource }, { label: T.breakdown.cost, align: "num" }, { label: T.breakdown.colAssignment }],
-            rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref), formatHours(row.actualHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.actualCost, unit), row.assignmentCount > 0 ? T.breakdown.present : T.common.none]),
+            rows: rows.map(({ mm, row }) => [monthJa(mm.month), contractCell(model, row.contractId, contractHref, row), formatHours(row.actualHours), money(mm.hourlyRate, "yen"), rateSourceText(mm), money(row.actualCost, unit), row.assignmentCount > 0 ? T.breakdown.present : T.common.none]),
             foot: [T.breakdown.total, "", formatHours(hours), "", "", money(cost, unit), ""],
           },
         }
       : { title: T.breakdown.costLinesByContractMonth, text: T.breakdown.noWorklogsInRange },
   ];
-  if (rows.length) {
+  if (ids.length) {
     sections.push({
       title: T.breakdown.worklogs,
       lazyLabel: T.breakdown.loadWorklogs,

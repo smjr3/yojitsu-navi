@@ -20,12 +20,12 @@ test.beforeEach(async ({ page }) => {
 const cell = (page: Page, member: string, month: string) => page.locator(`[data-fk="plan:cell:${member}:all:${month}"]`);
 const dialog = (page: Page) => page.locator("dialog.yn-me-dialog[open]");
 
-/** 人の行を開いて、案件（または契約外予定）の行を返す */
-async function subRow(page: Page, member: string, target: "outside" | string) {
+/** 人の行を開いて、案件（または契約外予定の種別 "outside:提案"。§50.3）の行を返す */
+async function subRow(page: Page, member: string, target: string) {
   const toggle = page.locator(`[data-fk="plan:toggle:${member}"]`);
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   const rows = page.locator(`tr.yn-me-plan-sub[data-member="${member}"]`);
-  return target === "outside" ? rows.and(page.locator(".is-outside")) : rows.and(page.locator(".is-project")).filter({ hasText: target });
+  return target.startsWith("outside:") ? rows.and(page.locator(`.is-outside[data-target="o:${target.slice(8)}"]`)) : rows.and(page.locator(".is-project")).filter({ hasText: target });
 }
 
 /** 変更の履歴を開いて、項目（li）を返す */
@@ -43,17 +43,20 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(main).toContainText("1.0 超 3か月");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   const toggle = page.locator('[data-fk="plan:toggle:M010"]');
-  await expect(toggle).toHaveText(/案件 1＋契約外/);
+  await expect(toggle).toHaveText(/案件 1＋運用保守以外/);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const proj = await subRow(page, "M010", "倉庫管理");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(proj).toHaveCount(1);
   await expect(proj).toContainText("青葉物流");
-  const out = await subRow(page, "M010", "outside");
-  await expect(out).toContainText("契約外予定");
-  await expect(out).toContainText("提案など保守の契約外");
-  await expect(page.locator('[data-fk="plan:cell:M010:o:2026-12"]')).toHaveText("0.20");
-  await expect(page.locator('[data-fk="plan:cell:M010:o:2026-10"]')).toHaveText("—");
+  const out = await subRow(page, "M010", "outside:提案");
+  await expect(out).toContainText("提案");
+  await expect(out).toContainText("運用保守以外");
+  await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-12"]')).toHaveText("0.20");
+  await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-10"]')).toHaveText("—");
+  // 種別ごとの行（task-types.csv の契約外の種別すべて。§50.3）
+  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"]')).toHaveCount(4);
+  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"] .yn-me-plan-name')).toHaveText(["提案", "設計", "構築", "会社業務"]);
   // 合計の下に「うち契約外予定」
   await expect(page.locator("tr.yn-me-plan-foot-sub")).toContainText("0.20");
   // 案件の行は ID を出さない
@@ -147,7 +150,7 @@ test("＋ 変更: 0 で計画を外すと「計画なし」。この月だけ・
 
 test("変更の履歴から直接修正・削除できる（削除後はフォーカスが履歴の開閉ボタンへ）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
-  const out = await subRow(page, "M010", "outside");
+  const out = await subRow(page, "M010", "outside:提案");
   const entries = await historyOf(page, out);
   await expect(entries).toHaveCount(2);
   await expect(entries.nth(0)).toContainText("2026-11〜2027-01");
@@ -178,7 +181,7 @@ test("変更の履歴から直接修正・削除できる（削除後はフォ�
 
 test("契約外予定: ＋ 変更で入れる → 1.0 超の表示、ダウンロードは outside-plans.csv（予算・着地見込みには入らない）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
-  const out = await subRow(page, "M011", "outside");
+  const out = await subRow(page, "M011", "outside:提案");
   await expect(out.locator('[data-fk^="plan:hist:"]')).toContainText("変更 0件");
   await out.getByRole("button", { name: /人月を、ある月から変える/ }).click();
   const d = dialog(page);
@@ -193,7 +196,7 @@ test("契約外予定: ＋ 変更で入れる → 1.0 超の表示、ダウン�
   // 超えても保存は止めない
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /outside-plans\.csv をダウンロード/ }).click()]);
-  expect(readFileSync((await dl.path())!, "utf-8")).toBe(`${PAYLOAD.files.outside.text}M011,2026-11,2026-11,0.3,\n`);
+  expect(readFileSync((await dl.path())!, "utf-8")).toBe(`${PAYLOAD.files.outside.text}M011,提案,2026-11,2026-11,0.3,\n`);
   await expect(page.getByRole("button", { name: /assignments\.csv をダウンロード/ })).toHaveCount(0);
 });
 
@@ -201,13 +204,13 @@ test("セルの修正欄で契約外予定も直せる", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   await cell(page, "M010", "2026-12").click();
   const p = page.locator("dialog.yn-plan-pop[open]");
-  await expect(p.locator("#yn-plan-pop-out")).toHaveValue("0.2");
-  await p.locator("#yn-plan-pop-out").fill("0");
-  await p.locator("#yn-plan-pop-out").press("Enter");
+  await expect(p.locator("#yn-plan-pop-out-0")).toHaveValue("0.2");
+  await p.locator("#yn-plan-pop-out-0").fill("0");
+  await p.locator("#yn-plan-pop-out-0").press("Enter");
   await expect(p).toHaveCount(0);
   await expect(cell(page, "M010", "2026-12")).toHaveText("0.90");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
-  const entries = await historyOf(page, await subRow(page, "M010", "outside"));
+  const entries = await historyOf(page, await subRow(page, "M010", "outside:提案"));
   // 11 月・1 月の 2 行に分かれ、12 月と 2 月から「計画なし」
   await expect(entries.filter({ hasText: "計画なし" })).toHaveCount(2);
   await expect(entries.filter({ hasText: "再開" })).toHaveCount(1);
@@ -258,7 +261,7 @@ for (const [w, theme] of [[1280, "light"], [768, "dark"], [390, "dark"]] as cons
     await gotoPage(page, "/plan?team=T111");
     const sub = await subRow(page, "M010", "倉庫管理");
     await historyOf(page, sub);
-    await historyOf(page, await subRow(page, "M010", "outside"));
+    await historyOf(page, await subRow(page, "M010", "outside:提案"));
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await sub.getByRole("button", { name: /人月を、ある月から変える/ }).click();
     const box = (await dialog(page).boundingBox())!;

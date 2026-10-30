@@ -13,7 +13,7 @@ import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, memberAt, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
-import { buildWorkRows, createTaskClassifier, isOutsideWorklog, outsideInputs, unclassifiedTaskWarnings } from "./workTypes.js";
+import { buildWorkRows, createTaskClassifier, isOutsideWorklog, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -105,6 +105,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   });
 
   warnings.push(...collectRateWarnings(results, masters));
+  const outsideIn = outsideInputs(outsideMapping);
 
   // チーム階層（asOf 月）
   const team = teamTreeAt(dataset, asOfMonth);
@@ -149,9 +150,13 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     unmapped: mapping.unmapped,
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
-    memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth),
+    memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {
+      plans: dataset.outsidePlans ?? [],
+      actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classify(o.worklog.task).group, hours: o.worklog.hours })),
+    }),
     // 工数の明細（§30.2）
-    workRows: buildWorkRows(results, outsideInputs(outsideMapping), classifier, masters),
+    workRows: buildWorkRows(results, outsideIn, classifier, masters),
+    outsideTypes: outsideTypes(dataset.taskTypes),
   };
 }
 
