@@ -87,7 +87,8 @@ if (model) {
       model,
       title: ${JSON.stringify(title)},
       lead: ${leadKey},
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: ${JSON.stringify(title)} }],
+      // 全体の配下ではない（「⋯」から開く画面）のでパンくずは出さない
+      breadcrumbs: [],
     }),
   );
 }

@@ -38,7 +38,8 @@ if (model) {
       model: null,
       title: T.app.pages.masters,
       lead: T.mastersPage.lead,
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: T.app.pages.masters }],
+      // 全体の配下ではない（「⋯」から開く道具の画面）のでパンくずは出さない
+      breadcrumbs: [],
     }),
   );
 }

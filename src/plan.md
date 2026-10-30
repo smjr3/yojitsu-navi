@@ -26,7 +26,8 @@ if (model) {
       model: null,
       title: T.app.pages.plan,
       lead: T.plan.lead,
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: T.app.pages.plan }],
+      // 全体の配下ではない（上部の「リソース計画」ボタンから開く道具の画面）のでパンくずは出さない
+      breadcrumbs: [],
     }),
   );
 }
