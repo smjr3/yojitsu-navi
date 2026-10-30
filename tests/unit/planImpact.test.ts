@@ -72,6 +72,14 @@ describe("planImpact", () => {
     expect(planImpact(modelOf(), inputs(BASE), inputs("M1,C1,2026-04,2026-06,0.9\nM1,C1,2026-07,2027-09,0.5\nM2,C2,2026-04,2027-09,0.5\n"), FY).rows).toEqual([]);
   });
 
+  it("1 か月の計画を別の月へ動かした（行数・月数が同じ）ときも変更として出す", () => {
+    const before = BASE + "M1,C3,2026-11,2026-11,0.5\n";
+    const after = BASE + "M1,C3,2026-12,2026-12,0.5\n";
+    const r = planImpact(modelOf(), inputs(before), inputs(after), ["2026-11"]);
+    expect(r.rows.map((x) => x.contractId)).toEqual(["C3"]);
+    expect(r.rows[0]!.after.forecastCost).toBeLessThan(r.rows[0]!.before.forecastCost);
+  });
+
   it("計画の無い案件に人を入れる・計画を消すと出す。着地の増減が大きい順", () => {
     const after = "M1,C1,2026-04,2027-09,0.5\nM1,C3,2026-10,2027-03,0.1\n";
     const r = planImpact(modelOf(), inputs(BASE), inputs(after), FY);

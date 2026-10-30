@@ -125,6 +125,9 @@ function samePlan(a: AssignmentPlan, b: AssignmentPlan): boolean {
   const ka = key(a);
   const kb = key(b);
   if (ka.size !== kb.size) return false;
-  for (const [month, v] of ka) if (Math.abs((kb.get(month) ?? NaN) - v) >= EPS) return false;
+  for (const [month, v] of ka) {
+    const w = kb.get(month);
+    if (w === undefined || Math.abs(w - v) >= EPS) return false;
+  }
   return true;
 }
