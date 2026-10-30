@@ -2779,7 +2779,7 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-under-bg);
   color: var(--yn-under-text);
 }
-/* 退職した月以降（§35）。配分が残っていれば is-over / is-under の色の上に斜線で示す */
+/* 離脱した月以降（§35。離脱した月に計画・実績があればその月は除く）。配分が残っていれば is-over / is-under の色の上に斜線で示す */
 .yn-me-plan-cell.is-left {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--yn-hairline-strong) 6px 7px);
 }

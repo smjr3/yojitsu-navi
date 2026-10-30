@@ -185,11 +185,13 @@ describe("fetch-members を通しで", () => {
     const cur = memberRows();
     const latest = new Map<string, Record<string, string>>();
     for (const r of cur) latest.set(r.member_id ?? "", r as Record<string, string>);
-    // 人事データには在籍者だけが載る（退職者 status=退職 は載らない。§35）
-    const retired = [...latest.values()].filter((r) => r.status === "退職").length;
+    // 人事データには在籍者だけが載る（退職・契約終了の人は載らない。休職・育休の人は在籍のまま載る。§35）
+    const gone = (r: Record<string, string>) => r.status === "退職" || r.status === "契約終了";
+    const retired = [...latest.values()].filter(gone).length;
     expect(retired).toBeGreaterThan(0);
+    expect([...latest.values()].some((r) => r.status === "育休")).toBe(true);
     const hr = [...latest.values()]
-      .filter((r) => r.member_id !== "M027" && r.status !== "退職")
+      .filter((r) => r.member_id !== "M027" && !gone(r))
       .map((r) => ({
         社員番号: r.member_id,
         氏名: r.name,

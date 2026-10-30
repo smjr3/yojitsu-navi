@@ -108,8 +108,10 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
       if (v === undefined) continue;
       if ((cur[col] ?? "").trim() !== v) diff.push(col);
     }
-    // 退職の行（§35）の人が取り込み元にいる = 復職。在籍に戻す（取り込み元に無い人を退職にはしない。一時的な欠けで退職扱いにしないため）
-    const rehired = memberStatus(cur.status ?? "").status === "left";
+    // 退職・契約終了の行（§35）の人が取り込み元にいる = 復職。在籍に戻す（取り込み元に無い人を退職にはしない。一時的な欠けで退職扱いにしないため）。
+    // 休職・産休・育休の人は在籍のまま取り込み元にいるので戻さない（復職は台帳で在籍の行を足す）
+    const st = memberStatus(cur.status ?? "");
+    const rehired = st.status === "left" && (st.leaveReason === "退職" || st.leaveReason === "契約終了");
     if (rehired) diff.push("status");
     if (diff.length === 0 && curRec) {
       unchanged++;
