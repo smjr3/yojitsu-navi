@@ -391,6 +391,32 @@ const outsidePlansOf = (c: FyCalendar): OutsidePlanRow[] => [
   { member_id: "M013", type: "会社業務", start_month: c.m(0, 4), end_month: c.m(0, 3), person_months: 0.05, note: "部内会議" },
 ];
 
+export interface TargetRow {
+  target_type: "team" | "customer" | "project";
+  target_id: string;
+  due_month: YearMonth;
+  /** % */
+  remaining_rate: number;
+  start_month: YearMonth | "";
+  note: string;
+}
+
+/**
+ * 目標（§57）: チーム・顧客・案件それぞれ。年度末の目標のほか、期限が過ぎた半期の目標（確定）、
+ * 年度をまたぐ案件の終了時点の目標（累計の開始月あり）、達成・未達・達成見込み・未達見込みのすべてを含む
+ */
+const targetsOf = (c: FyCalendar): TargetRow[] => [
+  { target_type: "team", target_id: "D1", due_month: c.m(0, 3), remaining_rate: 15, start_month: "", note: "事業部の年度目標" },
+  { target_type: "team", target_id: "T111", due_month: c.m(0, 9), remaining_rate: 25, start_month: "", note: "上期" },
+  { target_type: "team", target_id: "T111", due_month: c.m(0, 3), remaining_rate: 12, start_month: "", note: "通期" },
+  { target_type: "team", target_id: "T211", due_month: c.m(0, 9), remaining_rate: 15, start_month: "", note: "上期" },
+  { target_type: "team", target_id: "T211", due_month: c.m(0, 3), remaining_rate: 15, start_month: "", note: "通期" },
+  { target_type: "customer", target_id: "青葉物流", due_month: c.m(0, 3), remaining_rate: 10, start_month: "", note: "" },
+  { target_type: "customer", target_id: "こもれび出版", due_month: c.m(0, 3), remaining_rate: 10, start_month: "", note: "値下げ更新後の立て直し" },
+  { target_type: "project", target_id: "C007", due_month: c.m(0, 3), remaining_rate: 15, start_month: c.m(-1, 4), note: "2 年契約の終了時点" },
+  { target_type: "project", target_id: "C002", due_month: c.m(0, 12), remaining_rate: 25, start_month: "", note: "" },
+];
+
 const TASKS: ReadonlyArray<readonly [string, number]> = [
   ["定例", 3],
   ["問い合わせ対応", 5],
@@ -488,6 +514,7 @@ interface Generated {
   mappings: MappingRow[];
   assignments: AssignmentRow[];
   outsidePlans: OutsidePlanRow[];
+  targets: TargetRow[];
   holidays: Array<{ date: string; name: string }>;
   taskTypes: Array<{ task: string; category: string; group?: string; note: string }>;
   /** 月ごとの作業実績 */
@@ -679,7 +706,7 @@ export function generate(opts: GenOptions): Generated {
   // 月内は日付→メンバー→顧客順に並べて安定させる
   for (const [ym, rows] of worklogsByMonth) worklogsByMonth.set(ym, sortWorklogs(rows));
 
-  return { ...out, holidays, worklogsByMonth };
+  return { ...out, targets: targetsOf(c), holidays, worklogsByMonth };
 }
 
 // ---------------------------------------------------------------------------
@@ -718,6 +745,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
+  writeFileSync(join(out, "targets.csv"), csv(g.targets, ["target_type", "target_id", "due_month", "remaining_rate", "start_month", "note"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));

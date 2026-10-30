@@ -114,6 +114,7 @@ describe("マスタ編集での契約外予定", () => {
       teams: parseMasterDoc("teams", f.teams),
       assignments: parseMasterDoc("assignments", f.assignments),
       outside: parseMasterDoc("outside", HEADER),
+      targets: parseMasterDoc("targets", emptyMasterText("targets")),
     };
     const { doc, rowId } = addRow(docs.outside, { member_id: "NOBODY", start_month: "2026-11", end_month: "2026-12", person_months: "0.1" });
     const v = validateEdited({ ...docs, outside: doc }, { contracts: f.contracts, mapping: f.mapping, holidays: f.holidays }, baseConfig);

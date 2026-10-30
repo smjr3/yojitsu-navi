@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName } from "./normalize.js";
-import type { Assignment, OutsidePlan, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, OutsidePlan, Target, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -122,6 +122,14 @@ export function parseNumberCell(cell: string): number {
   return Number(s);
 }
 
+/** 割合のセル（§57）: "20" / "20%" / "２０％" → 0.2。空・数値でない → NaN */
+export function parsePercentCell(cell: string): number {
+  const t = cell.normalize("NFKC").trim().replace(/\s*%$/, "");
+  if (t === "" || t.includes(",")) return Number.NaN;
+  const n = parseNumberCell(t);
+  return Number.isFinite(n) ? n / 100 : Number.NaN;
+}
+
 /** 空文字 → null */
 function nullable(cell: string): string | null {
   return cell === "" ? null : cell;
@@ -144,6 +152,8 @@ export interface DatasetFiles {
   taskTypes?: string;
   /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: string;
+  /** 目標（§57）。省略・空 = なし */
+  targets?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
   /** worklogs と同じ順のファイル名（警告にファイル名・行番号を出すため。無ければ worklogs[i]） */
@@ -162,6 +172,7 @@ export interface ParsedDataset {
 const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
   taskTypes: ["task", "category"],
   outsidePlans: ["member_id", "start_month", "end_month", "person_months"],
+  targets: ["target_type", "target_id", "due_month", "remaining_rate"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -326,9 +337,23 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           note: r.get("note"),
         }));
 
+  // 目標（§57）: 省略可。残予算率は % の数値（20 = 20%。末尾の % は付けても付けなくてもよい）
+  const targets: Target[] =
+    (files.targets ?? "").trim() === ""
+      ? []
+      : parseTable("targets.csv", files.targets as string, REQUIRED_COLUMNS.targets, issues).rows.map((r) => ({
+          kind: r.get("target_type"),
+          targetId: r.get("target_id"),
+          startMonth: r.get("start_month"),
+          dueMonth: r.get("due_month"),
+          remainingRate: parsePercentCell(r.get("remaining_rate")),
+          note: r.get("note"),
+        }));
+
   const dataset: Dataset = { config: files.config, contracts, mappings, assignments, teams, members, rates, holidays, worklogs };
   if (taskTypes.length > 0) dataset.taskTypes = taskTypes;
   if (outsidePlans.length > 0) dataset.outsidePlans = outsidePlans;
+  if (targets.length > 0) dataset.targets = targets;
   if (files.worklogFetchedAt !== undefined) dataset.worklogFetchedAt = files.worklogFetchedAt;
 
   // 列の欠落・引用符の閉じ忘れがあるファイルは、行ごとのエラーが同じ原因で大量に出るだけなので、元のエラーだけを残す

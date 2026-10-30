@@ -22,6 +22,7 @@ import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { targetSection } from "./components/targets.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS } from "./components/team-detail.js";
 import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
@@ -139,6 +140,14 @@ if (vm && !vm.exists && teamId) {
 if (vm?.exists) {
   display(sectionTitle(T.team.summaryTitle, fmt(T.team.summaryHint, { period: periodJa(vm.period), team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, month: monthJa(vm.treeMonth) })));
   display(summaryKpis({ model, store, scope: vm.scope, totals: vm.totals, forecast: vm.forecast, compare: vm.compare, fy: vm.fy, unit: vm.unit }));
+}
+```
+
+```js
+// 目標（§57）。目標が無ければ何も出さない
+if (vm?.exists && !vm.isUnassigned) {
+  const sec = targetSection({ model, kind: "team", id: vm.teamId, name: vm.name, method: vm.method, unit: vm.unit, detailHref: (id) => store.href("./contract", {}, { id }) });
+  if (sec) display(sec);
 }
 ```
 

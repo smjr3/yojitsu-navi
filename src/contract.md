@@ -24,6 +24,7 @@ import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { targetSection } from "./components/targets.js";
 import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, methodDescription, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
@@ -171,6 +172,14 @@ if (vm) {
           }),
     ].filter(Boolean), { columns: vm.isWhole ? 5 : 6 }),
   );
+}
+```
+
+```js
+// 目標（§57）。目標が無ければ何も出さない
+if (vm) {
+  const sec = targetSection({ model, kind: "project", id: vm.contract.contractId, name: `${vm.contract.customerName} / ${vm.contract.projectName}`, method: vm.method, unit: vm.unit });
+  if (sec) display(sec);
 }
 ```
 

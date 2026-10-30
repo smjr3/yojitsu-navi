@@ -7,7 +7,7 @@
  *  2. 対応しなかった行は、キー列（と適用開始月／開始月）が同じ元の行と順に対にする（変更）
  *  3. 残りは追加。どの行とも対にならなかった元の行は削除
  */
-import { MASTER_FILES, STAMPED_FILES, STAMP_COLUMNS, alignRows, withStampColumns, type MasterDoc, type MasterRow } from "./masterEdit.js";
+import { MASTER_FILES, STAMPED_FILES, STAMP_COLUMNS, alignRows, timeColumnOf, withStampColumns, type MasterDoc, type MasterRow } from "./masterEdit.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface CsvParseError {
@@ -128,7 +128,7 @@ export function docFromCsvText(source: MasterDoc, text: string): CsvImportResult
   const originals = Object.entries(doc.originals).sort((a, b) => a[1].index - b[1].index);
   const map = alignRows(newCells.map(sig), originals.map(([, o]) => sig(o.cells)));
   const keyIdx = def.keyColumns.map((k) => doc.header.indexOf(k));
-  const timeIdx = doc.header.indexOf(def.history === "effective" ? "effective_from" : "start_month");
+  const timeIdx = doc.header.indexOf(timeColumnOf(def));
   const keyOf = (cells: readonly string[]) => keyIdx.map((i) => (cells[i] ?? "").trim()).join("|");
   const timeOf = (cells: readonly string[]) => (timeIdx < 0 ? "" : (cells[timeIdx] ?? "").trim());
   const used = new Set<number>(map.filter((j) => j >= 0));

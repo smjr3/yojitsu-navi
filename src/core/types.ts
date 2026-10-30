@@ -252,6 +252,27 @@ export interface TaskTypeRule {
 }
 
 /** 計算コアへの入力一式 */
+/** 目標の対象（§57）: チーム・顧客・案件 */
+export type TargetKind = "team" | "customer" | "project";
+
+/**
+ * 目標（§57）: 対象 × 期限月 × 残予算率。targets.csv の 1 行。
+ * 残予算率は「開始月〜期限月」の累計（予算 − 実績（期限が先なら着地見込み））÷ 予算
+ */
+export interface Target {
+  /** team / customer / project（不正な値は検証でエラー。そのまま持つ） */
+  kind: string;
+  /** team = チームID、customer = 顧客名、project = 契約ID */
+  targetId: string;
+  /** 累計の開始月。空 = 期限月を含む年度の最初の月 */
+  startMonth: string;
+  /** 期限月 */
+  dueMonth: string;
+  /** 目標の残予算率（割合。CSV の 20 = 20% → 0.2）。数値でなければ NaN */
+  remainingRate: number;
+  note: string;
+}
+
 export interface Dataset {
   config: Config;
   contracts: Contract[];
@@ -266,6 +287,8 @@ export interface Dataset {
   taskTypes?: TaskTypeRule[];
   /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: OutsidePlan[];
+  /** 目標（§57）。省略・空 = なし */
+  targets?: Target[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }
@@ -482,6 +505,8 @@ export interface Model {
   workRows: WorkRow[];
   /** 契約外の種別（§50.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
   outsideTypes: string[];
+  /** 目標（§57）。targets.csv の行（検証エラーの行も含む。評価は targets.ts） */
+  targets: Target[];
 }
 
 /** 工数の明細 1 行（SPEC §30.2）。（月, メンバー, 契約, 顧客, 作業種別, 区分）ごとの合計 */

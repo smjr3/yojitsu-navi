@@ -70,7 +70,7 @@ describe("組織の種別・リーダー（§21・§22）", () => {
   });
 
   it("マスタ編集の検証でもリーダーの誤りを行に結び付ける", () => {
-    const docs = { teams: parseMasterDoc("teams", TEAMS), members: parseMasterDoc("members", MEMBERS), assignments: parseMasterDoc("assignments", ASSIGN), rates: parseMasterDoc("rates", "key,hourly_rate,effective_from\n"), outside: parseMasterDoc("outside", "member_id,start_month,end_month,person_months,note\n") };
+    const docs = { teams: parseMasterDoc("teams", TEAMS), members: parseMasterDoc("members", MEMBERS), assignments: parseMasterDoc("assignments", ASSIGN), rates: parseMasterDoc("rates", "key,hourly_rate,effective_from\n"), outside: parseMasterDoc("outside", "member_id,start_month,end_month,person_months,note\n"), targets: parseMasterDoc("targets", "target_type,target_id,due_month,remaining_rate\n") };
     const { doc, rowId } = addRow(docs.teams, { team_id: "S3", name: "第3課", parent_team_id: "HQ", effective_from: "2026-11", level: "課", leader_member_id: "NOBODY" });
     const v = validateEdited({ ...docs, teams: doc }, { contracts: CONTRACTS, mapping: files.mapping, holidays: files.holidays }, baseConfig);
     expect(v.byRow.teams[rowId]?.map((i) => i.code)).toContain("TEAM_UNKNOWN_LEADER");
