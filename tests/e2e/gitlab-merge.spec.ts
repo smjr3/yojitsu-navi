@@ -102,6 +102,29 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(badge(page)).toBeHidden();
   });
 
+  test("リソース計画の保存: 変えた行に変更者（GitLab のユーザー名）と変更日を書く（§56）", async ({ page }) => {
+    await useDemo(page);
+    await gotoPage(page, "/plan?team=T111");
+    const toggle = page.locator('[data-fk="plan:toggle:M011"]');
+    await toggle.click();
+    const out = page.locator('tr.yn-me-plan-sub[data-member="M011"].is-outside[data-target="o:提案"]');
+    await out.getByRole("button", { name: /人月を、ある月から変える/ }).click();
+    const d = page.locator("dialog.yn-me-dialog[open]");
+    await d.locator("#yn-me-f-__value").fill("0.3");
+    await d.getByLabel("この月だけ").check();
+    await d.getByRole("button", { name: "反映" }).click();
+    await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
+    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+    const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
+    const saved = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("yojitsu-navi:gitlab-demo:v1") ?? "{}") as { branches: Record<string, { files: Record<string, string> }> };
+      return Object.values(s.branches).map((b) => b.files["data/outside-plans.csv"] ?? "").join("");
+    });
+    expect(saved).toContain(`M011,提案,2026-11,2026-11,0.3,,demo-user,${today}\n`);
+    // 変えていない行の記録はそのまま
+    expect(saved).toContain("M010,提案,2026-11,2027-01,0.2,次期更改の提案,sato.k,2026-10-25\n");
+  });
+
   test("取り下げ: 確認して閉じると一覧から消える", async ({ page }) => {
     await useDemo(page);
     await saveRateViaCsv(page);

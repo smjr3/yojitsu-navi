@@ -690,6 +690,19 @@ function csv<T extends object>(rows: T[], columns: Array<keyof T & string>): str
   return csvFormat(rows as unknown as Array<Record<string, string | number>>, columns) + "\n";
 }
 
+/** 変更者・変更日（§56）の例: 今年度に始まる行は開始の前月 25 日（基準日より後なら基準日）に入れた体。前年度以前に始まる行は記録が始まる前に入れた体で空欄 */
+const STAMP_USERS = ["sato.k", "suzuki.a", "takahashi.m"];
+function withStamps<T extends { start_month: YearMonth }>(rows: readonly T[], asOf: string): Array<T & { updated_by: string; updated_at: string }> {
+  const fyStart = new FyCalendar(asOf).m(0, 4);
+  return rows.map((r, i) => {
+    if (r.start_month < fyStart) return { ...r, updated_by: "", updated_at: "" };
+    const [y, m] = r.start_month.split("-").map(Number) as [number, number];
+    const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+    const at = `${prev}-25` < asOf ? `${prev}-25` : asOf;
+    return { ...r, updated_by: STAMP_USERS[i % STAMP_USERS.length] as string, updated_at: at };
+  });
+}
+
 export interface WriteOptions extends GenOptions {
   outDir: string;
 }
@@ -703,8 +716,8 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
 
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
-  writeFileSync(join(out, "assignments.csv"), csv(g.assignments, ["member_id", "contract_id", "start_month", "end_month", "allocation"]));
-  writeFileSync(join(out, "outside-plans.csv"), csv(g.outsidePlans, ["member_id", "type", "start_month", "end_month", "person_months", "note"]));
+  writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
+  writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));

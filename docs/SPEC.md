@@ -798,3 +798,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - リソース計画の人の行のボタンは「案件 n ▾」だけにし、「＋運用保守以外」を添えない（開けば運用保守以外の行が出るため。§50 の表記は廃止）。
 - 再発防止: `tests/e2e/review-comments.spec.ts`。
 
+## 56. リソース計画の変更を誰がいつ入れたか（2026-10-30 試用版のコメント）
+「この変更誰がいつやったか見たい」への対応。
+- `assignments.csv`・`outside-plans.csv` に任意の列 `updated_by`（GitLab のユーザー名）・`updated_at`（保存日 YYYY-MM-DD、JST）。列が無いファイルは、保存するときに見出しの末尾に足す。
+- 保存（GitLab への MR・直接コミット）のとき、追加・変更した行だけに書く（`stampChangedRows`）。変えていない行は元のテキストのまま（前の記録を消さない）。変更者は `GET /user` の username。ダウンロードは変更日だけ（変更者は空）。
+- 変更の履歴の各項目に「YYYY-MM-DD・ユーザー名」を出す。記録の無い行（この機能より前に入れた行）と「計画なし」の項目には出さない。フォームでは編集しない。値は計算に使わない。
+- CSV で編集（§25）: 貼り付けた CSV にこの 2 列が無くても通し、対応する元の行の値を引き継ぐ（`docFromCsvText`）。逆に元ファイルに列が無く、貼り付けた CSV（このアプリのダウンロードなど）にだけあるときは見出しに足して受け入れる。
+- 保存は、検証を通った内容をボタンを押した時点で固定してから変更者を問い合わせる（問い合わせ中の編集を送らない）。
+- ダミーデータは今年度に始まる行に例の記録を持つ（docs/DUMMY_DATA.md）。
+- 再発防止: `tests/unit/masterEdit.test.ts`（stampChangedRows）・`csv-edit.test.ts`、`tests/e2e/plan-history.spec.ts`、`tests/e2e/gitlab-merge.spec.ts`。

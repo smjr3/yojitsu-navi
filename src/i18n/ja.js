@@ -1521,6 +1521,9 @@ export default {
     outsideTypeTip: "運用保守以外: {type}",
     outsideOverlapHint: "この月に複数の行があります。変更の履歴から直してください",
     histToggle: "変更 {n}件",
+    // 変更の履歴の各行: 誰がいつ保存したか（§54）
+    stamp: "{at}・{by}",
+    stampOne: "{v}",
     histAria: "{name} ・ {target} の変更の履歴（{n} 件）",
     histLead: "{target} の変更の履歴（開始月の順）。「修正」で期間・人月を直接直せます。",
     histEmpty: "まだ計画がありません。「＋ 変更」から入れてください。",
