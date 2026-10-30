@@ -94,8 +94,8 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     expect(left.size).toBeGreaterThanOrEqual(12);
     for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);
     // 退職した月の前半まで実績がある人（その月は稼働。警告なし）
-    expect(model.leaveMonthsWorked.length).toBeGreaterThanOrEqual(1);
-    for (const key of model.leaveMonthsWorked) expect(left.has(key.split("|")[0]!)).toBe(true);
+    const worked = new Set(model.worklogMonths);
+    expect(ds.members.some((m) => m.status === "left" && worked.has(`${m.memberId}|${m.effectiveFrom}`))).toBe(true);
     expect(new Set(ds.members.map((m) => m.leaveReason).filter(Boolean))).toEqual(new Set(["退職", "休職", "育休", "契約終了"]));
   });
 

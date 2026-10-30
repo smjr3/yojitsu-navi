@@ -10,7 +10,7 @@ import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
-import { createMasterIndex, leaveMonthsIn, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
+import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
@@ -157,8 +157,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     teamTree: team.tree,
     rootTeamIds: team.rootTeamIds,
     members: dataset.members,
-    // 作業実績のある離脱した月（§35。リソース計画で離脱した月を稼働とみなすのに使う）
-    leaveMonthsWorked: leaveMonthsIn(dataset.members, workedMonthKeys({ worklogs: dataset.worklogs })),
+    // 作業実績のある「メンバー|月」（§35。リソース計画で、編集中の台帳の離脱した月を稼働とみなすかの判定に使う）
+    worklogMonths: [...workedMonthKeys({ worklogs: dataset.worklogs })].sort(),
     teams: dataset.teams,
     holidays: dataset.holidays,
     warnings,

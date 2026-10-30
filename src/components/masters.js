@@ -246,7 +246,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const std = config.standardHoursPerMonth;
   // リソース計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
   const plan = {
-    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []).members, initialMember, asOfMonth) : null),
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []).members, initialMember, asOfMonth) : null),
     months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
     focusMember: initialMember,
     open: new Set(initialMember ? [initialMember] : []),
@@ -1063,7 +1063,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       renderPlanCsv();
       return;
     }
-    const src = planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []);
+    const src = planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []);
     const months = plan.months;
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
@@ -2320,7 +2320,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
       if (/^\d{4}-\d{2}$/.test(start) && !plan.months.includes(start)) plan.months = fiscalMonths(start, config.fiscalYearStartMonth);
       plan.q = "";
-      const src = planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []);
+      const src = planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
         const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];

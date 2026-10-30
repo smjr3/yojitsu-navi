@@ -159,18 +159,6 @@ export function workedMonthKeys(dataset: {
   return keys;
 }
 
-/** 離脱した月（前月は在籍）のうち keys に入っている「メンバー|月」（§35。画面へ実績のある離脱月だけ渡す） */
-export function leaveMonthsIn(members: readonly MemberRecord[], keys: ReadonlySet<string>): string[] {
-  const idx = createEffectiveIndex(members, (m) => m.memberId, (m) => m.effectiveFrom);
-  const out: string[] = [];
-  for (const m of members) {
-    if (!isLeftRecord(m) || !isValidYearMonth(m.effectiveFrom)) continue;
-    const key = memberMonthKey(m.memberId, m.effectiveFrom);
-    if (keys.has(key) && isWorkingAt((id, mo) => idx.at(id, mo), m.memberId, m.effectiveFrom, () => true) && !out.includes(key)) out.push(key);
-  }
-  return out.sort();
-}
-
 /** 離脱した月（離脱の行の effective_from）。離脱していなければ null。復職（離脱の後に在籍の行）があれば最後の離脱以降に在籍の行が無いときだけ */
 export function leftMonthOf(records: readonly Pick<MemberRecord, "status" | "effectiveFrom">[]): YearMonth | null {
   const sorted = [...records].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : a.effectiveFrom > b.effectiveFrom ? 1 : 0));

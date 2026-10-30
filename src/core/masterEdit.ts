@@ -1212,12 +1212,12 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
 
 /**
  * 編集中（保存前）の組織・メンバー・アサイン（・運用保守以外の予定）と、契約の担当組織からリソース計画の計算の入力を作る。
- * workedLeaveMonths は作業実績のある離脱した月（§35。model.json の leaveMonthsWorked）
+ * worklogMonths は作業実績のある「メンバー|月」（§35 の離脱した月の稼働判定。model.json の worklogMonths）
  */
 export function planSourcesFromDocs(
   docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "outside">>,
   contractsText: string,
-  workedLeaveMonths: readonly string[] = [],
+  worklogMonths: readonly string[] = [],
 ): PlanSources {
   const teams: TeamRecord[] = docs.teams.rows.map((r) => {
     const v = rowRecord(docs.teams, r);
@@ -1267,5 +1267,5 @@ export function planSourcesFromDocs(
     const raw = (v.person_months ?? "").trim();
     return { memberId: (v.member_id ?? "").trim(), startMonth: (v.start_month ?? "").trim(), endMonth: (v.end_month ?? "").trim(), personMonths: raw === "" ? Number.NaN : parseNumberCell(raw) };
   });
-  return { teams, members, assignments, contractTeams, outsidePlans, workedLeaveMonths };
+  return { teams, members, assignments, contractTeams, outsidePlans, worklogMonths };
 }

@@ -29,8 +29,8 @@ export interface PlanSources {
   contractTeams: ReadonlyMap<string, string | null>;
   /** 運用保守以外の予定（§50。離脱した月の稼働判定にだけ使う） */
   outsidePlans?: readonly Pick<OutsidePlan, "memberId" | "startMonth" | "endMonth" | "personMonths">[];
-  /** 作業実績のある離脱した月（memberMonthKey。§35。離脱した月の稼働判定に使う） */
-  workedLeaveMonths?: readonly string[];
+  /** 作業実績のある「メンバー|月」（memberMonthKey。§35。離脱した月の稼働判定に使う。編集中に離脱の月を変えても判定できるよう全部） */
+  worklogMonths?: readonly string[];
 }
 
 export interface PlanMemberRow {
@@ -84,7 +84,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   const at = (id: string, m: YearMonth) => memberIdx.at(id, m);
   // 離脱した月は計画（アサイン・運用保守以外）か実績があれば稼働とみなす（§35）
   const workedKeys = workedMonthKeys({ assignments: src.assignments, outsidePlans: src.outsidePlans ?? [] });
-  for (const k of src.workedLeaveMonths ?? []) workedKeys.add(k);
+  for (const k of src.worklogMonths ?? []) workedKeys.add(k);
   const working = (id: string, m: YearMonth) => isWorkingAt(at, id, m, (i, mo) => workedKeys.has(memberMonthKey(i, mo)));
   const scopeAt = new Map<YearMonth, Set<string> | null>();
   for (const m of ms) {
@@ -145,7 +145,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       if (rec && !isLeftRecord(rec)) last = rec;
       if (isLeftRecord(rec)) {
         leftFrom ??= rec!.effectiveFrom;
-        leaveReason ??= leaveReasonOf([rec!]);
+        leaveReason = leaveReasonOf([rec!]); // 産休 → 育休のように続けば新しい理由
       } else if (rec) leftFrom = leaveReason = null; // 復職
     }
     if (!last) last = memberIdx.at(memberId, to) ?? null;

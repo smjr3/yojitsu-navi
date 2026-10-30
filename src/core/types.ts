@@ -508,8 +508,8 @@ export interface Model {
   /** 木構造の最上位チームID一覧（表示順） */
   rootTeamIds: string[];
   members: MemberRecord[];
-  /** 作業実績のある離脱した月（"memberId|YYYY-MM"。§35。リソース計画で離脱した月を稼働とみなすのに使う） */
-  leaveMonthsWorked: string[];
+  /** 作業実績のある「メンバー|月」（"memberId|YYYY-MM"。§35。リソース計画で離脱した月を稼働とみなすかの判定に使う） */
+  worklogMonths: string[];
   /** 画面側で過去月の組織（teamTreeAt）を引くための履歴 */
   teams: TeamRecord[];
   /** 画面側で月の状態・営業日を再計算するための祝日 */

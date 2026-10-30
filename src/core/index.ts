@@ -33,7 +33,6 @@ export {
   isActiveAt,
   isLeftRecord,
   isWorkingAt,
-  leaveMonthsIn,
   memberMonthKey,
   workedMonthKeys,
   leaveReasonOf,
