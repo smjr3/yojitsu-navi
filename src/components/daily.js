@@ -1,11 +1,11 @@
 /**
- * 今月の進み（SPEC §61）: 今月の実績の累計（速報）を、月の上限を営業日で按分した目安と比べる。
+ * 今月の進捗（SPEC §61）: 今月の実績の累計（速報）を、月の上限を営業日で按分した目安と比べる。
  * 全体・チーム・顧客・案件の詳細で、選択中の期間が asOf の月を含むときだけ出す。
  * daily は data/daily.json（core の encodeDaily）。読めなければ何も出さない。
  */
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
-import { dailyMembers, dailyProgress, formatHours } from "../core/index.js";
+import { dailyMembers, dailyProgress, formatHours, formatPercent } from "../core/index.js";
 import { T, fmt } from "../i18n/index.js";
 import { chartColors, chartLegend } from "./charts.js";
 import { chartFigure } from "./chart-zoom.js";
@@ -21,21 +21,36 @@ function money(yen, unit) {
   return fmt(T.numbers.millionYen, { value: m2.format(Math.round(yen / 1e4) / 100) });
 }
 
-/** data/daily.json を読む（無い・壊れているときは null。今月の進みを出さないだけで画面は止めない） */
+/** data/daily.json を読む（無い・壊れているときは null。今月の進捗を出さないだけで画面は止めない） */
 export function loadDaily(attachment) {
   return attachment.json().catch(() => null);
 }
 
-/** 選択中の期間が今月（asOf の月）を含み、今月の予算があるときだけ進みを返す */
-export function dailyFor(model, daily, contractIds, period) {
+/**
+ * 選択中の期間が今月（asOf の月）を含み、今月の予算があるときだけ進みを返す。
+ * target（今月を含む目標。core の targetForMonth）があれば、今月の上限 = 予算 ×（1 − 目標の残予算率）
+ */
+export function dailyFor(model, daily, contractIds, period, target = null) {
   if (!daily || !daily.month || daily.month !== model.meta.asOfMonth) return null;
   if (period.from > daily.month || period.to < daily.month) return null;
-  return dailyProgress(model, daily, contractIds);
+  const p = dailyProgress(model, daily, contractIds, target ? { capRatio: 1 - target.remainingRate } : {});
+  return p && { ...p, target };
+}
+
+/** 目標の残予算率（整数なら小数なし） */
+function ratePct(rate) {
+  return formatPercent(rate, Math.abs(Math.round(rate * 100) - rate * 100) < 1e-9 ? 0 : 1);
 }
 
 /** 根拠（KPI の数字を押したとき） */
 function progressSpec(p, unit, subtitle, emphasisKey) {
   const rows = [
+    ...(p.target
+      ? [
+          { key: "budget", label: T.daily.budgetLabel, value: money(p.budget, unit) },
+          { key: "target", label: T.daily.targetLabel, value: ratePct(p.target.remainingRate) },
+        ]
+      : []),
     { key: "cap", label: T.daily.capLabel, value: money(p.cap, unit) },
     { key: "days", label: T.daily.bizDaysLabel, value: fmt(T.daily.bizDaysValue, { elapsed: p.elapsedBusinessDays, total: p.businessDays }) },
     { key: "pace", label: T.daily.paceLabel, value: money(p.paceToDate, unit) },
@@ -48,7 +63,7 @@ function progressSpec(p, unit, subtitle, emphasisKey) {
   return {
     title: fmt(T.breakdown.labelTitle, { label: T.daily.title }),
     subtitle,
-    formula: T.daily.formulas,
+    formula: p.target ? [T.daily.capFormulaTarget, ...T.daily.formulas] : T.daily.formulas,
     rows,
   };
 }
@@ -60,7 +75,7 @@ export function dailyKpis(p, { unit, subtitle }) {
   const overCap = p.projection > p.cap;
   // 予実の KPI（.yn-kpi-grid）とは別の行。幅が足りれば 4 列、足りなければ 2×2
   return html`<section class="yn-daily-kpis" aria-label=${T.daily.kpiLabel}>${[
-      statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
+      statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: p.target ? fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate) }) : fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
       statTile({
         label: T.daily.actualLabel,
         value: money(p.actual, unit),
@@ -88,13 +103,13 @@ export function dailyKpis(p, { unit, subtitle }) {
     ]}</section>`;
 }
 
-export function dailyLegend(dark) {
+export function dailyLegend(dark, { target = false } = {}) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
-    { label: T.daily.legendProjection, color: c.cost, shape: "line-dashed" },
+    { label: T.daily.legendProjection, color: c.cost, shape: "line-dotted" },
     { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
-    { label: T.daily.legendCap, color: c.danger, shape: "line-dashed" },
+    { label: target ? T.daily.legendCapTarget : T.daily.legendCap, color: c.danger, shape: "line-dashed" },
   ]);
 }
 
@@ -228,7 +243,7 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
     ${chartFigure({
       title,
       subtitle: [monthJa(p.month), subtitle].filter(Boolean).join(" ・ "),
-      legend: dailyLegend(dark),
+      legend: dailyLegend(dark, { target: !!p.target }),
       draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
       after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName })}</details>`,
     })}

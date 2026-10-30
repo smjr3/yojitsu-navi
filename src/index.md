@@ -144,17 +144,6 @@ if (vm) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§61）。読めなければ出さない
-const daily = await loadDaily(FileAttachment("./data/daily.json"));
-```
-
-```js
-if (vm) {
-  display(dailySection(dailyFor(model, daily, vm.scope.contractIds ?? model.contracts.map((c) => c.contract.contractId), vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}` }));
-}
-```
-
-```js
 if (vm) {
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
 }
@@ -169,6 +158,17 @@ if (vm) {
     draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
     after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
   }));
+}
+```
+
+```js
+// 今月の進捗（日別の速報。§61）。読めなければ出さない
+const daily = await loadDaily(FileAttachment("./data/daily.json"));
+```
+
+```js
+if (vm) {
+  display(dailySection(dailyFor(model, daily, vm.scope.contractIds ?? model.contracts.map((c) => c.contract.contractId), vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}` }));
 }
 ```
 
