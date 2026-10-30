@@ -807,3 +807,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 保存は、検証を通った内容をボタンを押した時点で固定してから変更者を問い合わせる（問い合わせ中の編集を送らない）。
 - ダミーデータは今年度に始まる行に例の記録を持つ（docs/DUMMY_DATA.md）。
 - 再発防止: `tests/unit/masterEdit.test.ts`（stampChangedRows）・`csv-edit.test.ts`、`tests/e2e/plan-history.spec.ts`、`tests/e2e/gitlab-merge.spec.ts`。
+
+## 57. リソース計画の人の行のボタンを「作業 n」に（2026-10-30 試用版のコメント）
+「案件じゃなくて、作業がしっくりくる」への対応。開くと案件の行と運用保守以外（提案・会社業務など）の行が出るため、ボタンを「案件 n ▾」から **「作業 n ▾」** にする（§55 の表記を置き換え）。n = 案件の行の数 ＋ その年度に計画がある運用保守以外の種別の数。読み上げは「{名前} の作業ごとの計画（n 件）」。
+- 再発防止: `tests/e2e/plan-history.spec.ts`、`review-comments.spec.ts`。
