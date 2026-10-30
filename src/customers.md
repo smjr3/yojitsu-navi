@@ -19,6 +19,7 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { hasTargets, targetColumn } from "./components/targets.js";
 import { monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
 
@@ -158,8 +159,9 @@ if (vm) {
     { key: "name", label: T.customers.colCustomer, type: "text", sortValue: (r) => r.name },
     ...teamCountColumns(),
     ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
+    hasTargets(model, "customer") ? targetColumn(model, "customer", (r) => r.name, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
-  ];
+  ].filter(Boolean);
   // 合計行は表示中の顧客の契約すべてを母集団にした aggregate() / forecastTotals()（顧客は契約を重複せず分けるので、全体の合計と一致する）
   const shownIds = rows.flatMap((r) => r.contractIds);
   const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });

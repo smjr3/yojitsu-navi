@@ -23,7 +23,7 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 
 | 置き場 | 中身 | 変える人 | 変え方 |
 |---|---|---|---|
-| `data/masters/`（members・rates・teams） | メンバー・単価・組織 | 編集者・リーダー | 画面 `/masters` で編集 → 保存で MR → リーダーがマージ |
+| `data/masters/`（members・rates・teams）・`data/targets.csv` | メンバー・単価・組織・目標 | 編集者・リーダー | 画面 `/masters` で編集 → 保存で MR → リーダーがマージ |
 | `data/assignments.csv`・`data/outside-plans.csv` | リソース計画・運用保守以外の予定 | 編集者・リーダー | 画面 `/plan` で編集（同上） |
 | `data/contracts.csv`・`mapping.csv`・`task-types.csv`・`holidays.csv` | 契約・名称の対応・作業種別・祝日 | 編集者・リーダー | GitLab の画面（Web IDE）でブランチを作って編集 → MR |
 | `data/worklogs/` | 作業実績 | 取り込みの自動処理 | 定期取り込み（本番 API の確認後。下の「将来」） |

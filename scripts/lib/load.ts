@@ -22,6 +22,7 @@ export const DATA_FILES = {
   holidays: "data/holidays.csv",
   taskTypes: "data/task-types.csv",
   outsidePlans: "data/outside-plans.csv",
+  targets: "data/targets.csv",
 } as const;
 
 export interface WorklogMeta {
@@ -94,6 +95,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     taskTypes: readOrEmpty(join(rootDir, DATA_FILES.taskTypes)),
     // 省略可（§36）。無ければ空 = 契約外予定なし
     outsidePlans: readOrEmpty(join(rootDir, DATA_FILES.outsidePlans)),
+    // 省略可（§63）。無ければ空 = 目標なし
+    targets: readOrEmpty(join(rootDir, DATA_FILES.targets)),
     worklogs,
     worklogNames: listed.map((f) => f.name),
     skippedWorklogFiles: skippedWorklogFiles(dir),

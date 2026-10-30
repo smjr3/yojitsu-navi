@@ -87,6 +87,11 @@ export const FILE_HELP = {
     effect: T.masters.outsideEffect,
     howto: T.masters.outsideHowto,
   },
+  targets: {
+    what: T.masters.targetsWhat,
+    effect: T.masters.targetsEffect,
+    howto: T.masters.targetsHowto,
+  },
 };
 
 /**
@@ -96,14 +101,16 @@ export const FILE_HELP = {
  * 下書き・検証・変更内容・保存は 2 つの画面で共通（どちらで保存しても、両方の変更が 1 つのマージリクエストになる）
  */
 export const PLAN_VIEW_ID = "plan";
-export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams"]);
+export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "targets"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
 /** 画面 → その画面で編集するファイル */
-const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], plan: ["assignments", "outside"] };
+const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], targets: ["targets"], plan: ["assignments", "outside"] };
 /** 人ごとの検証（案件の行ではなく人の行で見せる） */
 const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
-const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", assignments: "./plan", outside: "./plan" };
+const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
+/** 目標（§63）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
+const TARGET_FIELD = "__target";
 
 /** 月 m を含む年度の 12 か月 */
 function fiscalMonths(month, startMonth) {
@@ -344,7 +351,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     if ((fileId === "assignments" && column === "member_id") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
     if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
     if (column === "contract_id") return contractText(value);
+    if (column === "remaining_rate") return `${value}%`;
+    if (column === "target_type") return T.targets.kinds[value] ?? value;
     return value;
+  }
+  /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
+  function goalTargetName(kind, id) {
+    if (id === "") return "";
+    if (kind === "team") return teamNames().get(id) ?? `${id}${T.masters.unknownTeam}`;
+    if (kind === "project") return contractText(id);
+    return id;
+  }
+  /** 目標の対象の候補（チーム → 顧客 → 案件） */
+  function targetOptions() {
+    const teams = [...teamNames().entries()].map(([id, name]) => ({ value: `team:${id}`, label: name || id, sub: T.targets.kinds.team, search: id }));
+    const customers = [...new Set(contracts.map((c) => c.customer).filter(Boolean))].map((name) => ({ value: `customer:${name}`, label: name, sub: T.targets.kinds.customer }));
+    const projectsList = contracts.map((c) => ({ value: `project:${c.id}`, label: c.project || c.customer, sub: `${T.targets.kinds.project} ・ ${c.customer} ・ ${c.startMonth}〜${c.endMonth}`, search: c.id }));
+    return [...teams, ...customers, ...projectsList];
   }
   function memberNames() {
     const latest = latestByKey(docs.members, "member_id");
@@ -597,7 +620,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 表の検索の対象（セルの値と、ID の列の名前） */
   function searchText(fileId, doc, r) {
     const rec = rowRecord(doc, r);
-    return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim()))].join(" ").normalize("NFKC").toLowerCase();
+    // 目標（§63）は表に出す対象の名前（チーム名・案件名）でも探せるように
+    const goal = fileId === "targets" ? [goalTargetName((rec.target_type ?? "").trim(), (rec.target_id ?? "").trim())] : [];
+    return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim())), ...goal].join(" ").normalize("NFKC").toLowerCase();
   }
 
   /** 台帳の開いている対象（fileId → キー）。エラーのある対象は、閉じたものを除いて開いて見せる */
@@ -607,9 +632,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 文書の行 → 台帳のまとまり（§36） */
   function groupsOf(fileId) {
     const doc = docs[fileId];
+    // 目標（§63）は 1 行が 1 件（キーの無い列でまとめると行ごとに別になる）
+    const list = MASTER_FILES[fileId].history === "list";
     return ledgerGroups(
       doc.rows.map((r) => ({ id: r.id, record: rowRecord(doc, r) })),
-      MASTER_FILES[fileId].keyColumns[0],
+      list ? "\u0000" : MASTER_FILES[fileId].keyColumns[0],
       asOfMonth,
     );
   }
@@ -650,12 +677,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const q = f.q.normalize("NFKC").toLowerCase().trim();
     const issues = validation.byRow[fileId];
     const keyColumn = def.keyColumns[0];
+    // 1 行が 1 件（目標。§63）: 履歴の列は無く、行ごとに修正・削除する
+    const isList = def.history === "list";
     // 台帳の 1 行: 先頭に対象（名前と ID）、続けて値の列。適用開始月は履歴の側に出す
     const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : null;
-    const columns = def.columns.filter((c) => doc.header.includes(c.name) && c.name !== "effective_from" && c.name !== keyColumn && c.name !== nameColumn);
+    const columns = def.columns.filter((c) => doc.header.includes(c.name) && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
     const keyDef = def.columns.find((c) => c.name === keyColumn);
-    const leadLabel = nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
-    const colCount = columns.length + 4;
+    const leadLabel = isList ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
+    const colCount = columns.length + (isList ? 3 : 4);
     const rowById = new Map(doc.rows.map((r) => [r.id, r]));
     const groups = groupsOf(fileId).filter((g) => {
       const rows = g.entries.map((e) => rowById.get(e.rowId));
@@ -712,7 +741,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const nChanged = states.filter((x) => x === "changed").length;
       const nErrors = rows.reduce((n, r) => n + (issues[r.id] ?? []).filter((i) => i.severity === "error").length, 0);
       const open = ledgerOpen[fileId].has(g.key) || (nErrors > 0 && !ledgerClosed[fileId].has(g.key));
-      const keyText = (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
+      const keyText = (isList && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
       const histId = `yn-me-hist-${fileId}-${g.shown.rowId}`;
       const toggle = () => {
         if (open) {
@@ -731,7 +760,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       };
       const rawKey = g.shown.record[keyColumn] ?? "";
       const keyHint = cellHint(fileId, keyColumn, rawKey);
-      const lead = nameColumn
+      const lead = isList
+        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span></th>`
+        : nameColumn
         ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${nextEl(nameColumn)}</th>`
         : html`<th scope="row">${valueEl(keyColumn, rawKey, "yn-me-val yn-me-lead-name")}${keyHint ? html`<span class="yn-me-hint">${keyHint}</span>` : null}</th>`;
       const cells = [
@@ -739,9 +770,27 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ...columns.map((c) => {
           const raw = g.shown.record[c.name] ?? "";
           const hint = cellHint(fileId, c.name, raw);
-          return html`<td class=${c.input === "number" ? "num" : ""}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
+          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : ""}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
         }),
       ];
+      if (isList) {
+        const r = rowById.get(g.shown.rowId);
+        const st = rowState(doc, r);
+        const list = issues[r.id] ?? [];
+        const invalid = list.some((i) => i.severity === "error");
+        const issueId = `yn-me-issue-${fileId}-${r.id}`;
+        const tr = html`<tr data-key=${r.id} class=${`yn-me-group yn-me-row is-${st}${invalid ? " is-invalid" : ""}`} aria-describedby=${list.length ? issueId : null}>
+          ${cells}
+          <td class="yn-me-state">${stateChips(st === "changed" ? 1 : 0, st === "added" ? 1 : 0, invalid ? 1 : 0)}</td>
+          <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
+            ${st === "changed" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`revert:${r.id}`} disabled=${!editable} onclick=${() => commit(fileId, revertRow(docs[fileId], r.id), `edit:${r.id}`)}>${T.masters.revert}</button>` : null}
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>
+          </div></td>
+        </tr>`;
+        if (list.length === 0) return [tr];
+        return [tr, html`<tr class=${`yn-me-issue-row${invalid ? " is-error" : ""}`}><td colspan=${colCount} id=${issueId}>${issueList(list)}</td></tr>`];
+      }
       const since = g.shown.from;
       const histText = g.entries.length === 1 ? fmt(T.ledger.since, { month: since || "?" }) : fmt(T.ledger.historyCount, { n: integer(g.entries.length) });
       const groupRow = html`<tr class=${`yn-me-group${open ? " is-open" : ""}${nErrors ? " is-invalid" : ""}`} data-group=${g.key}>
@@ -811,9 +860,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         <table class="yn-table yn-table-compact yn-me-table yn-me-ledger">
           <caption class="visually-hidden">${fmt(T.ledger.caption, { file: def.label, path: meta.path })}</caption>
           <thead><tr>
-            <th scope="col"><span class="yn-me-th">${leadLabel}</span><span class="yn-th-sub">${nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn}</span></th>
-            ${columns.map((c) => html`<th scope="col" class=${c.input === "number" ? "num" : ""}><span class="yn-me-th">${c.label}</span><span class="yn-th-sub">${c.name}</span></th>`)}
-            <th scope="col">${T.ledger.colHistory}<span class="yn-th-sub">effective_from</span></th>
+            <th scope="col"><span class="yn-me-th">${leadLabel}</span><span class="yn-th-sub">${isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn}</span></th>
+            ${columns.map((c) => html`<th scope="col" class=${c.input === "number" || c.input === "percent" ? "num" : ""}><span class="yn-me-th">${c.label}</span><span class="yn-th-sub">${c.name}</span></th>`)}
+            ${isList ? null : html`<th scope="col">${T.ledger.colHistory}<span class="yn-th-sub">effective_from</span></th>`}
             <th scope="col">${T.columns.status}</th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
@@ -1837,6 +1886,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const v = value === "" ? "" : c ? projectKey(c.customer, c.project) : `c:${value}`;
       return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
+    if (col.input === "target") {
+      // 目標の対象（§63）: チーム・顧客・案件から 1 つ。値は「種類:ID」
+      const kindOf = (v) => v.slice(0, v.indexOf(":"));
+      const idOf = (v) => v.slice(v.indexOf(":") + 1);
+      return combobox({ id, name: TARGET_FIELD, options: targetOptions(), value, required: req, disabled, placeholder: T.masters.targetPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => `${goalTargetName(kindOf(x), idOf(x))}${T.masters.invalidValue}` });
+    }
+    if (col.input === "percent") {
+      return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode="decimal" aria-describedby=${`${id}-hint`}>`;
+    }
     if (col.input === "member") {
       return combobox({ id, name: col.name, options: memberOptions(), value, required: req, disabled, placeholder: T.masters.memberPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownMemberValue, { id: x }) });
     }
@@ -1915,6 +1973,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
     status: T.masters.statusHint,
+    target_id: T.masters.hintTarget,
+    end_month: T.masters.hintEndMonth,
+    remaining_rate: T.masters.hintRemainingRate,
   };
 
   /**
@@ -1945,6 +2006,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
     const columns = def.columns.filter((c) => doc.header.includes(c.name));
+    // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
+    const shownColumns = columns.filter((c) => c.input !== "targetType");
     const row = rowId ? doc.rows.find((r) => r.id === rowId) : null;
     const isOriginal = !!(row && doc.originals[row.id]);
     let initial = row ? rowRecord(doc, row) : template ? rowRecord(doc, template) : Object.fromEntries(columns.map((c) => [c.name, ""]));
@@ -1971,7 +2034,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           ? template
             ? fmt(T.ledger.addChangeTitle, { key: templateKey })
             : T.ledger.addNew[fileId]
-          : fileId === "outside"
+          : def.history === "list"
+            ? T.ledger.addNew[fileId]
+            : fileId === "outside"
             ? T.planEdit.addOutsideTitle
             : T.masters.addAssignmentTitle;
     const lead =
@@ -1985,19 +2050,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           ? template
             ? T.ledger.addChangeLead
             : T.ledger.addNewLead
-          : fileId === "outside"
+          : def.history === "list"
+            ? FILE_HELP[fileId].howto
+            : fileId === "outside"
             ? T.planEdit.addOutsideLead
             : T.masters.addAssignmentLead;
 
     const form = html`<form class="yn-me-form" novalidate>
       <div class="yn-me-fields">
-        ${columns.map((c) => {
+        ${shownColumns.map((c) => {
           const keyLocked = lockKey(c.name);
           const disabled = keyLocked || lockImported(c.name);
+          const tType = (initial.target_type ?? "").trim();
+          const tId = (initial.target_id ?? "").trim();
+          const value = c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
-            ${fieldFor(fileId, c, (initial[c.name] ?? "").trim(), disabled)}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : (FIELD_HINTS[c.name] ?? "")}</span>
+            ${fieldFor(fileId, c, value, disabled)}
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : (FIELD_HINTS[c.name] ?? "")}</span>
           </div>`;
         })}
       </div>
@@ -2026,8 +2096,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const readValues = () => {
       const values = {};
       for (const c of columns) {
-        const el = form.querySelector(`[name="${c.input === "project" ? PROJECT_FIELD : c.name}"]`);
-        if (el) values[c.name] = String(el.value ?? "").trim();
+        if (c.input === "targetType") continue;
+        const el = form.querySelector(`[name="${c.input === "project" ? PROJECT_FIELD : c.input === "target" ? TARGET_FIELD : c.name}"]`);
+        if (!el) continue;
+        const v = String(el.value ?? "").trim();
+        if (c.input === "target") {
+          // 「種類:ID」→ target_type と target_id（顧客名に : があっても最初の : で分ける）
+          const at = v.indexOf(":");
+          values.target_type = at < 0 ? "" : v.slice(0, at);
+          values[c.name] = at < 0 ? v : v.slice(at + 1);
+        } else values[c.name] = v;
       }
       const unitSel = form.querySelector('[name="__allocation_unit"]');
       if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, std);
@@ -2039,7 +2117,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       confirmBox.replaceChildren();
       form.querySelector(".yn-me-fields").hidden = false;
       submitBtn.textContent = mode === "edit" ? T.masters.confirm : T.masters.add;
-      form.querySelector(`#yn-me-f-${columns[0].name}`)?.focus();
+      form.querySelector(`#yn-me-f-${shownColumns[0].name}`)?.focus();
     };
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
@@ -2051,7 +2129,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         return;
       }
       const values = readValues();
-      const missing = columns.filter((c) => c.required && !lockImported(c.name) && (values[c.name] ?? "") === "");
+      const missing = shownColumns.filter((c) => c.required && !lockImported(c.name) && (values[c.name] ?? "") === "");
       if (missing.length) {
         msg.textContent = fmt(T.masters.required, { fields: missing.map((c) => c.label).join("、") });
         form.querySelector(`#yn-me-f-${missing[0].name}`)?.focus();
@@ -2195,6 +2273,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         const what = i.fileId === "outside" ? outsideLabel(issueRowCell(i, "type")) : contractId ? projectOfContract(contractId).label : "";
         return [who, what].filter(Boolean).join(" ・ ");
       }
+      case "targets":
+        return goalTargetName(issueRowCell(i, "target_type"), issueRowCell(i, "target_id"));
       default:
         return "";
     }
