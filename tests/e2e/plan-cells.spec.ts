@@ -276,8 +276,13 @@ test("下書きの復元待ちのあいだは、セルをクリックしても�
   await expect(cell(page, "M010", "2027-02")).toHaveText("0.40");
   // 下書きが残った状態で開き直す（beforeEach の削除は最初の読み込みだけに効かせる）
   await page.evaluate(() => sessionStorage.setItem("yn-e2e-keep-draft", "1"));
+  // 開き直したあとのスクロール位置の復元（遅れて scroll イベントが来て、出した吹き出しを閉じる）を避けて先頭から開く。
+  // セルも先に画面に入れておく（§57 のグラフで表が下がり、クリック直前のスクロールが要るようになった）
+  await page.evaluate(() => scrollTo(0, 0));
   await page.reload();
   await expect(page.locator("#yn-me-draft-title")).toBeVisible();
+  await cell(page, "M010", "2027-02").scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await cell(page, "M010", "2027-02").click();
   await expect(page.locator("#yn-plan-tip")).toBeVisible();
   await expect(page.locator("#yn-plan-tip")).not.toContainText("クリックで修正");

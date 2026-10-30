@@ -255,3 +255,80 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
   plot.setAttribute("aria-label", ariaLabel ?? T.work.distAria);
   return plot;
 }
+
+/**
+ * リソース計画の月別の合計（SPEC §57）: 運用保守・運用保守以外の人月を積み上げ、人数 × 1.0 人月の破線と、
+ * 1.0 人月を超える人がいる月の人数（「!n人」）を重ねる。data は [{ month, main, outside, capacity, over }]（人月）。
+ */
+export function planLoadChart({ data, dark = false, width = 640, height = 200 }) {
+  const c = workColors(dark);
+  const warn = dark ? "#fab219" : "#7a4a00";
+  const n = data.length;
+  if (n === 0) return html`<div class="yn-chart-empty">${T.charts.noMonths}</div>`;
+  const rows = data.flatMap((d, i) => [
+    { i, kind: "contract", pm: d.main },
+    { i, kind: "outside", pm: d.outside },
+  ]);
+  const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 64) / 44))));
+  const ticks = data.map((_, i) => i).filter((i) => i % every === 0);
+  const half = Math.min(0.35, Math.max(0.12, 12 / Math.max(1, (width - 80) / n)));
+  const pts = data.map((d, i) => ({ ...d, i, total: d.main + d.outside }));
+  const top = Math.max(1, ...pts.map((d) => Math.max(d.total, d.capacity)));
+  const fix = (v) => (Math.round(v * 100) / 100).toFixed(2);
+  // 狭い画面（1 か月の幅が 40px 未満）は「!n」だけにして隣の月と重ねない
+  const slot = (width - 52) / n;
+  const plot = Plot.plot({
+    width,
+    height,
+    marginLeft: 40,
+    marginRight: 12,
+    marginTop: 26,
+    marginBottom: 28,
+    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
+    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", domain: [0, top * 1.12], nice: true, tickSize: 0, line: false },
+    color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
+    marks: [
+      Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
+      Plot.ruleY([0], { stroke: c.axis }),
+      Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "pm", fill: "kind", order: ["contract", "outside"] })),
+      // 人数 × 1.0 人月（退職した月からは数えない）。月ごとの段で描く
+      Plot.link(pts, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "capacity", y2: "capacity", stroke: c.muted, strokeWidth: 1.5, strokeDasharray: "5 4" }),
+      Plot.text(pts.filter((d) => d.over > 0), { x: "i", y: (d) => Math.max(d.total, d.capacity), dy: -9, text: (d) => fmt(slot < 40 ? T.plan.chartOverShort : T.plan.chartOver, { n: d.over }), fill: warn, fontWeight: 700, fontSize: 11 }),
+      Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
+      Plot.tip(
+        pts,
+        Plot.pointerX({
+          x: "i",
+          y: "total",
+          preferredAnchor: "bottom",
+          dy: -6,
+          fill: c.surface,
+          stroke: c.axis,
+          fontSize: 12,
+          channels: {
+            [T.charts.tipMonth]: (d) => monthJa(d.month),
+            [T.work.contract]: (d) => fix(d.main),
+            [T.work.outside]: (d) => fix(d.outside),
+            [T.work.total]: (d) => fix(d.total),
+            [T.plan.chartCapacity]: (d) => fix(d.capacity),
+            [T.plan.chartOverTip]: (d) => fmt(T.work.peopleValue, { n: d.over }),
+          },
+          format: { x: false, y: false },
+        }),
+      ),
+    ],
+  });
+  plot.setAttribute("role", "img");
+  plot.setAttribute("aria-label", T.plan.chartAria);
+  return plot;
+}
+
+export function planLoadLegend(dark) {
+  const c = workColors(dark);
+  return chartLegend([
+    { label: T.work.contract, color: c.contract },
+    { label: T.work.outside, color: c.outside },
+    { label: T.plan.chartCapacity, color: c.muted, shape: "line-dashed" },
+  ]);
+}
