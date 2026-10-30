@@ -243,7 +243,7 @@ describe("ビルド結果の検証（verifyDist）", () => {
     mkdirSync(join(d, "data", "worklogs"), { recursive: true });
     writeFileSync(join(d, "index.html"), "<!doctype html>");
     writeFileSync(join(d, "_file", "data", "model.0123abcd.json"), JSON.stringify({ meta: { asOf: "2026-10-27" }, contracts: ids.map((id) => ({ id })), _build: stamp }));
-    for (const n of ["member-months", "masters", "dataset-issues", "work-hours"]) writeFileSync(join(d, "_file", "data", `${n}.0123abcd.json`), JSON.stringify({ _build: stamp }));
+    for (const n of ["member-months", "masters", "dataset-issues", "work-hours", "daily"]) writeFileSync(join(d, "_file", "data", `${n}.0123abcd.json`), JSON.stringify({ _build: stamp }));
     for (const id of ids) writeFileSync(join(d, "data", "worklogs", `${worklogKey(id)}.json`), JSON.stringify({ contractId: id, months: [], _build: stamp }));
   }
 

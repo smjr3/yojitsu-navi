@@ -18,7 +18,7 @@ import { loadDataset } from "./lib/load.js";
 import { worklogKey } from "../src/components/worklog-key.js";
 
 /** ページが必ず読むローダの出力（dist/_file/data/<name>.<hash>.json） */
-export const REQUIRED_OUTPUTS = ["model", "member-months", "masters", "dataset-issues"] as const;
+export const REQUIRED_OUTPUTS = ["model", "member-months", "masters", "dataset-issues", "daily"] as const;
 
 interface Stamped {
   _build?: { inputHash?: unknown; asOf?: unknown };

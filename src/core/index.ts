@@ -137,3 +137,4 @@ export {
   type WorkTaskLine,
   type WorkTotals,
 } from "./workTypes.js";
+export { dailyMembers, dailyProgress, encodeDaily, progressFromDays, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress } from "./daily.js";
