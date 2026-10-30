@@ -14,7 +14,7 @@
  *   - アサインの頻繁な変更（契約ごとに 1〜3 区間、期中に配分が変わる）。人×月の配分合計は 1.0 以下（0.05 刻み）
  */
 import type { Worklog, YearMonth } from "../src/core/types.js";
-import { addMonths, FyCalendar, monthCount, Rng, splitHours, ymOf } from "./lib/dummy-util.js";
+import { addMonths, DIVISION_NAME, FyCalendar, monthCount, Rng, splitHours, ymOf } from "./lib/dummy-util.js";
 import type { AssignmentRow, ContractRow, MappingRow, MemberRow, OutsidePlanRow, RateRow, TeamRow } from "./generate-dummy.js";
 
 export interface ScaleInput {
@@ -325,7 +325,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const id = kind === "partner" ? `P${pseq++}` : `M${seq++}`;
     const name = newName();
     const d = deptRow(teamId);
-    const p: Person = { id, name, kind, rows: [{ member_id: id, name, kind, title, department: d.department, section: d.section, team_id: teamId, effective_from: from, status: "" }] };
+    const p: Person = { id, name, kind, rows: [{ member_id: id, name, kind, title, division: DIVISION_NAME, department: d.department, section: d.section, team_id: teamId, effective_from: from, status: "" }] };
     people.push(p);
     return p;
   };

@@ -147,3 +147,6 @@ export class FyCalendar {
     return `FY${this.fy + off}`;
   }
 }
+
+/** 所属の 3 段（事業本部・部・課。§60）の最上位。ダミーは全員同じ事業本部 */
+export const DIVISION_NAME = "ソリューション事業本部";

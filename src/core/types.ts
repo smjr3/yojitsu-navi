@@ -122,7 +122,7 @@ export interface WorklogSourceConfig {
 }
 
 /** 所属・役職の取り込み項目（team_id は取り込まない） */
-export type MemberImportField = "memberId" | "name" | "kind" | "title" | "department" | "section";
+export type MemberImportField = "memberId" | "name" | "kind" | "title" | "division" | "department" | "section";
 
 /** 所属・役職の取り込み元（人事系）。adapter が none の間は手入力 */
 export interface MemberSourceConfig {
@@ -204,6 +204,8 @@ export interface MemberRecord {
   kind: MemberKind;
   /** 役職（単価の検索キー） */
   title: string;
+  /** 所属の 3 段: 事業本部（省略可の列 division。§60）・部・課 */
+  division?: string;
   department: string;
   section: string;
   /** 空 = チーム非所属 */
