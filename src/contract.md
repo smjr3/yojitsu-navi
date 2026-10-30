@@ -60,7 +60,7 @@ const vm = (() => {
   const inRange = from <= to;
   const period = inRange ? { from, to } : { from: c.startMonth, to: c.endMonth };
   const scope = { period, contractIds: [c.contractId] };
-  // 着地見込みは選択中の期間（契約期間に収めたもの）の終わりまで。あわせて案件終了時点の着地も出す（§53）
+  // 着地見込みは選択中の期間（契約期間に収めたもの）の終わりまで。あわせて案件終了時点の着地も出す（§54）
   setForecastPeriod(model, period);
   const endForecasts = contractEndForecasts(model, result);
   const isWhole = period.from === c.startMonth && period.to === c.endMonth;

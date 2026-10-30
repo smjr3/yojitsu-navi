@@ -438,7 +438,7 @@ export default {
     withinRange: "範囲内",
     forecast: "着地見込みの差（{method}）",
     forecastSub: "予算 {budget} − 着地実績 {cost}",
-    // 案件詳細: 契約の終了月までの着地（期間が契約の全期間でないときだけ出す。§53）
+    // 案件詳細: 契約の終了月までの着地（期間が契約の全期間でないときだけ出す。§54）
     forecastEnd: "案件終了時点の着地（{method}）",
     forecastEndSub: "{end}まで ・ 着地実績 {cost}",
     deficitCount: "超過見込み {n}件",
@@ -1721,9 +1721,15 @@ export default {
     demoReset: "デモをリセット（マージリクエストをすべて消す）",
     demoResetDone: "デモをリセットしました。",
     displayTitle: "表示",
-    theme: "テーマ",
-    themeLight: "ライト",
-    themeDark: "ダーク",
+    displayHint: "「自動」は、ライト／ダークを PC の設定に、差し色を GitLab のテーマに合わせます。",
+    theme: "表示モード",
+    accent: "差し色",
+    auto: "自動（{value}・{from}）",
+    fromGitlab: "GitLab",
+    fromOs: "PC",
+    fromDefault: "既定",
+    themes: { light: "ライト", dark: "ダーク" },
+    accents: { blue: "ブルー", indigo: "インディゴ", green: "グリーン", red: "レッド", gray: "グレー" },
     toMasters: "マスタ編集へ",
   },
 };

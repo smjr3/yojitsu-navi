@@ -87,7 +87,7 @@ export function contractTeamName(model, contract, tree) {
  */
 export function scopeFor(model, state) {
   const period = { from: state.from, to: state.to };
-  // 着地見込みは選択中の期間の終わりまで（§53）。契約ごとの forecasts を期間に合わせて計算し直す
+  // 着地見込みは選択中の期間の終わりまで（§54）。契約ごとの forecasts を期間に合わせて計算し直す
   setForecastPeriod(model, period);
   const treeMonth = treeMonthFor(model, period);
   const { tree } = treeAt(model, treeMonth);
@@ -111,7 +111,7 @@ export function summarize(model, scope, method) {
 }
 
 /**
- * 残り月ごとの見込み原価（グラフ・月表用）。対象は選んだ期間（§53）。
+ * 残り月ごとの見込み原価（グラフ・月表用）。対象は選んだ期間（§54）。
  * 契約ごとの月割りの合計は必ずコアの remainingCost に一致させる:
  *   recent3/all   remainingCost を残り月で均等割り（端数は最終月）
  *   assignment    明細（assignmentLines）を月で合算（合計 = remainingCost）

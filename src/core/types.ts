@@ -328,7 +328,7 @@ export interface ForecastBreakdown {
   method: ForecastMethod;
   /** asOf の年度 */
   fiscalYear: number;
-  /** 着地を見る対象の月（既定は asOf の年度。画面では選択中の期間、案件詳細では契約の全期間。§53） */
+  /** 着地を見る対象の月（既定は asOf の年度。画面では選択中の期間、案件詳細では契約の全期間。§54） */
   targetMonths: YearMonth[];
   /** 契約期間と対象の両方に含まれる月 */
   contractMonthsInTarget: YearMonth[];
@@ -379,7 +379,7 @@ export interface Forecast {
 export interface ContractResult {
   contract: Contract;
   months: ContractMonth[];
-  /** 方式ごとの着地見込み。Model を作った時点は asOf の年度。画面では setForecastPeriod で選択中の期間に置き換える（§53） */
+  /** 方式ごとの着地見込み。Model を作った時点は asOf の年度。画面では setForecastPeriod で選択中の期間に置き換える（§54） */
   forecasts: Record<ForecastMethod, Forecast>;
   /** リソース計画の明細（期間を変えて着地を計算し直すための材料） */
   assignmentPlan: AssignmentPlan;

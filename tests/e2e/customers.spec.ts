@@ -49,7 +49,7 @@ async function expectRow(page: Page, key: string, ids: readonly string[], method
   expect(await cellText(row, col(h, "残予算"))).toBe(yen(t.grossProfit));
   expect(await cellText(row, col(h, "残予算率"))).toBe(formatPercent(t.grossMargin));
   expect(await cellText(row, col(h, "消化率"))).toContain(formatPercent(t.burnRate));
-  // 着地差は選んだ期間の終わりまで（§53）。期間に案件が無ければ「—」
+  // 着地差は選んだ期間の終わりまで（§54）。期間に案件が無ければ「—」
   if (t.contractCount === 0) expect(await cellText(row, col(h, "着地差"))).toBe("—");
   else expect((await cellText(row, col(h, "着地差"))).replace(/[▲\s]/g, "")).toBe(yen(f.forecastGrossProfit));
 }

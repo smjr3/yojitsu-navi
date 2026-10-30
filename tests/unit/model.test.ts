@@ -294,7 +294,7 @@ describe("buildModel — 境界・警告", () => {
   });
 });
 
-describe("着地見込みの対象を期間に合わせる (SPEC §53)", () => {
+describe("着地見込みの対象を期間に合わせる (SPEC §54)", () => {
   it("setForecastPeriod は forecasts を期間で計算し直し、forecastTotals に期間が出る。同じ期間なら何もしない", () => {
     const model = buildModel(workedExample(), { asOf: "2026-10-27", generatedAt: "2026-10-27T02:00:00Z" });
     const fy = forecastTotals(model, undefined, "recent3");

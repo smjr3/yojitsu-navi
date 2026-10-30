@@ -166,7 +166,7 @@ export function forecastPeriodOf(model: Model): Period | null {
 }
 
 /**
- * 着地見込みの対象を期間に合わせる（§53）。契約ごとの forecasts を、期間内の契約月だけで計算し直して置き換える。
+ * 着地見込みの対象を期間に合わせる（§54）。契約ごとの forecasts を、期間内の契約月だけで計算し直して置き換える。
  * 画面は期間を変えるたびに呼ぶ（scopeFor が呼ぶ）。同じ期間なら何もしない。Model を書き換えるのはここだけ。
  */
 export function setForecastPeriod(model: Model, period: Period): void {
@@ -180,7 +180,7 @@ export function setForecastPeriod(model: Model, period: Period): void {
   Object.defineProperty(model, FORECAST_PERIOD, { value: { from: period.from, to: period.to }, configurable: true, enumerable: false, writable: true });
 }
 
-/** 契約の全期間（案件終了時点）の着地見込み（案件詳細で使う。§53） */
+/** 契約の全期間（案件終了時点）の着地見込み（案件詳細で使う。§54） */
 export function contractEndForecasts(model: Model, r: ContractResult): Record<ForecastMethod, Forecast> {
   const basis = { asOfMonth: model.meta.asOfMonth, fiscalYear: model.meta.fiscalYear, forecastRecentMonths: model.config.forecastRecentMonths };
   return forecastAllMethodsForMonths(basis, r.contract, r.months, r.assignmentPlan, monthRange(r.contract.startMonth, r.contract.endMonth));

@@ -222,7 +222,7 @@ describe("着地見込み (SPEC §10)", () => {
   });
 });
 
-describe("着地見込みの対象の月を指定する (SPEC §53)", () => {
+describe("着地見込みの対象の月を指定する (SPEC §54)", () => {
   // 年度をまたぐ契約: 2026-10 〜 2027-09（12 か月）。asOf = 2027-01
   const X = contract({ contractId: "X1", startMonth: "2026-10", endMonth: "2027-09", totalAmount: 1_200_000 });
   const basis: ForecastBasis = { asOfMonth: "2027-01", fiscalYear: 2026, forecastRecentMonths: 3 };

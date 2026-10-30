@@ -172,7 +172,7 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   await expect(d.locator("#yn-dialog-title")).toContainText("着地見込みの計算根拠");
   await expect(d.locator(".yn-bd-formula")).toContainText("着地差 = 期間の予算 − 着地実績");
   expect(await dialogRow(page, "方式")).toBe("直近実績");
-  // 対象は選んだ期間（既定は今年度）を案件の期間に収めたもの（§53）
+  // 対象は選んだ期間（既定は今年度）を案件の期間に収めたもの（§54）
   const ja = (m: string) => `${Number(m.slice(0, 4))}年${Number(m.slice(5))}月`;
   const inTarget = b.contractMonthsInTarget;
   expect(await dialogRow(page, "対象期間")).toBe(`${ja(inTarget[0]!)}〜${ja(inTarget.at(-1)!)}`);

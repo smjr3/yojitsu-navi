@@ -1,5 +1,5 @@
 /**
- * 着地見込みは選んだ期間の終わりまで（SPEC §53）。案件詳細には案件終了時点の着地も出す。
+ * 着地見込みは選んだ期間の終わりまで（SPEC §54）。案件詳細には案件終了時点の着地も出す。
  * 期待値は計算コア（setForecastPeriod / contractEndForecasts）で作る。
  */
 import { test, expect, gotoPage, kpiValue, tableByCaption, headerIndex, col, cellText } from "./helpers/app.js";

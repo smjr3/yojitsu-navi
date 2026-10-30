@@ -331,6 +331,8 @@ export type ConnectionWarning = "scope" | "visibility" | "pagesPublic" | "unprot
 
 export interface ConnectionInfo {
   user: GitLabUser;
+  /** 配色に使う GitLab のユーザー設定（GET /user の theme_id・color_mode_id。§53） */
+  appearance: { theme_id: number | null; color_mode_id: number | null };
   /** プロジェクトでの権限レベル（プロジェクトとグループの大きいほう。取れなければ null） */
   accessLevel: number | null;
   warnings: ConnectionWarning[];
@@ -357,7 +359,10 @@ export async function fetchCurrentUser(fetchImpl: FetchLike, cfg: MasterEditConf
 export async function checkConnection(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string): Promise<ConnectionInfo> {
   ensureConfigured(cfg);
   const t = token0(token);
-  const user = await fetchCurrentUser(fetchImpl, cfg, t);
+  const me = await request<{ theme_id?: unknown; color_mode_id?: unknown }>(fetchImpl, "user", `${cfg.gitlab.apiBaseUrl}/user`, t, "GET");
+  const user = userOf(me);
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const appearance = { theme_id: num(me?.theme_id), color_mode_id: num(me?.color_mode_id) };
   const project = await request<{
     visibility?: unknown;
     pages_access_level?: unknown;
@@ -372,7 +377,7 @@ export async function checkConnection(fetchImpl: FetchLike, cfg: MasterEditConfi
   if (project.pages_access_level === "public") warnings.push("pagesPublic");
   // 保護ブランチの設定は Maintainer 以上でないと読めない GitLab があるので、リーダーにだけ確かめる
   if (accessLevel !== null && accessLevel >= 40) warnings.push(...(await protectionWarnings(fetchImpl, cfg, t)));
-  return { user, accessLevel, warnings };
+  return { user, appearance, accessLevel, warnings };
 }
 
 /** 失敗しても止めない問い合わせ（古い GitLab に無い API・権限で読めない項目）。失敗は null */

@@ -48,7 +48,7 @@ const state = Generators.observe((notify) => {
 const vm = (() => {
   if (!model || !state) return null;
   const period = { from: state.from, to: state.to };
-  // 着地見込みは選択中の期間の終わりまで（§53）
+  // 着地見込みは選択中の期間の終わりまで（§54）
   setForecastPeriod(model, period);
   const treeMonth = treeMonthFor(model, period);
   const { tree } = treeAt(model, treeMonth);

@@ -103,7 +103,7 @@ export function totalsFor(period: Period, contractIds?: readonly string[], model
   return contractIds ? aggregate(model, { period, contractIds }) : aggregate(model, { period });
 }
 
-/** 着地見込みの合計（対象は period の終わりまで。§53。省略時は今年度 = 画面の既定の期間） */
+/** 着地見込みの合計（対象は period の終わりまで。§54。省略時は今年度 = 画面の既定の期間） */
 export function forecastFor(method: ForecastMethod, contractIds?: readonly string[], model: Model = getModel(), period: Period = fiscalPeriod(model)) {
   setForecastPeriod(model, period);
   return forecastTotals(model, contractIds, method);

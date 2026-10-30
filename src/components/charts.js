@@ -11,7 +11,7 @@ import { dataTable } from "./table.js";
 
 export function chartColors(dark) {
   return dark
-    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1a1a19", text: "#c3c2b7", muted: "#898781", grid: "#2c2c2a", axis: "#383835", danger: "#d03b3b" }
+    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b" }
     : { budget: "#2a78d6", cost: "#eb6834", gp: "#1baf7a", surface: "#fcfcfb", text: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7", danger: "#d03b3b" };
 }
 
