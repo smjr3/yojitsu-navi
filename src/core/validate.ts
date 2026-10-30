@@ -384,7 +384,7 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   const excluded = new Map(dataset.contracts.filter((c) => !valid.has(c)).map((c) => [c.contractId, contractInvalidReason(c) ?? T.calcWarnings.duplicateReason]));
   for (const c of validContracts) excluded.delete(c.contractId); // 重複 ID は 1 行目が有効
   // 契約外の作業（§30）は紐付けの対象外（buildModel と同じ）
-  const classifier = createTaskClassifier(dataset.taskTypes);
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings);
   const inScope = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
   const mapping = mapWorklogs(inScope, dataset.mappings, validContracts, excluded);
   for (const w of unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier)) {

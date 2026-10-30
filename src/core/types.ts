@@ -161,6 +161,10 @@ export interface MappingRule {
   /** 工数側の案件名。空文字 = その顧客の全工数 */
   worklogProjectName: string;
   contractId: string;
+  /** 作業名に含むキーワード（§62。どれか 1 つを含めば対象。省略・空 = 条件なし） */
+  taskInclude?: string[];
+  /** 作業名に含むと対象外にするキーワード（§62。含むより優先） */
+  taskExclude?: string[];
 }
 
 export interface Assignment {
@@ -248,6 +252,8 @@ export interface TaskTypeRule {
   category: TaskCategory;
   /** 契約外の種別（計画の単位。§50.1）。空・省略 = task と同じ。契約内では使わない */
   group?: string;
+  /** 照合の仕方（§62.2）。contains = 作業名に task を含めば該当。省略 = 完全一致 */
+  match?: "contains";
   note?: string;
 }
 
@@ -458,6 +464,19 @@ export interface UnmappedWorklogGroup {
   reason: "NO_RULE" | "OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT";
 }
 
+/** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3）。(顧客名, 案件名, 作業名) を正規化してまとめる（表記は最初の行） */
+export interface KeywordUnmatchedGroup {
+  customerName: string;
+  projectName: string;
+  task: string;
+  /** 運用保守以外の種別 */
+  type: string;
+  hours: number;
+  count: number;
+  firstDate: ISODate;
+  lastDate: ISODate;
+}
+
 export interface ModelMeta {
   /** 計算基準日 */
   asOf: ISODate;
@@ -491,6 +510,8 @@ export interface Model {
   holidays: Holiday[];
   warnings: Warning[];
   unmapped: UnmappedWorklogGroup[];
+  /** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3） */
+  keywordUnmatched: KeywordUnmatchedGroup[];
   /** 顧客なし等で除外した工数の合計 */
   excludedHours: number;
   /**

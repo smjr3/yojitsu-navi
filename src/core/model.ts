@@ -13,7 +13,7 @@ import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, memberAt, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
-import { buildWorkRows, createTaskClassifier, isOutsideWorklog, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
+import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -43,8 +43,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   warnings.push(...partition.warnings);
   const contracts = partition.valid;
 
-  // 作業種別の分類（§30）: 契約外は契約の実績に入れない（関連契約だけ調べ、警告は出さない）
-  const classifier = createTaskClassifier(dataset.taskTypes);
+  // 作業種別の分類（§30）: 契約外は契約の実績に入れない（関連契約だけ調べ、警告は出さない）。
+  // 紐付けルールに作業名のキーワードがあれば、合致しない作業も運用保守以外にする（§62）
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings);
   const inScopeLogs = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
   const outsideLogs = classifier.enabled ? dataset.worklogs.filter((w) => isOutsideWorklog(w, classifier)) : [];
   const excludedContracts = new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason]));
@@ -160,11 +161,12 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     holidays: dataset.holidays,
     warnings,
     unmapped: mapping.unmapped,
+    keywordUnmatched: keywordUnmatchedGroups(outsideLogs, classifier),
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {
       plans: dataset.outsidePlans ?? [],
-      actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classify(o.worklog.task).group, hours: o.worklog.hours })),
+      actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classifyWorklog(o.worklog).group, hours: o.worklog.hours })),
     }),
     // 工数の明細（§30.2）
     workRows: buildWorkRows(results, outsideIn, classifier, masters),
