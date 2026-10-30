@@ -32,8 +32,8 @@ export interface MappingResult {
 interface RuleTarget {
   /** 存在する契約（契約ID昇順） */
   contracts: Contract[];
-  /** 存在する契約を指すルールのキーワード条件（ファイルの順） */
-  entries: Array<{ contract: Contract; cond: KeywordCond }>;
+  /** ルールのキーワード条件（ファイルの順）。存在しない・除外中の契約を指す行は contract が null */
+  entries: Array<{ contract: Contract | null; excluded: boolean; cond: KeywordCond }>;
   /** 存在しない契約IDを指すルールがあった */
   hasUnknownContract: boolean;
   /** 不備で除外中の契約を指すルールがあった（「存在しない」と区別する） */
@@ -118,6 +118,7 @@ function buildRuleIndex(
     }
     const contract = contractsById.get(rule.contractId);
     const excludedReason = excludedContracts.get(rule.contractId);
+    if (!contract) target.entries.push({ contract: null, excluded: excludedReason !== undefined, cond: condOf(rule) });
     if (!contract && excludedReason !== undefined) {
       target.hasExcludedContract = true;
       warnings.push({
@@ -136,7 +137,7 @@ function buildRuleIndex(
       });
       return;
     }
-    target.entries.push({ contract, cond: condOf(rule) });
+    target.entries.push({ contract, excluded: false, cond: condOf(rule) });
     if (!target.contracts.some((c) => c.contractId === contract.contractId)) target.contracts.push(contract);
   });
   for (const target of index.values()) {
@@ -147,14 +148,18 @@ function buildRuleIndex(
 
 /**
  * キーワードの条件に合うルールの契約（契約ID昇順）。キーワードが無い・どれにも合わないときは全契約
- * （合わない作業は運用保守以外として関連契約を探すときだけここに来る。§62.1）
+ * （合わない作業は運用保守以外として関連契約を探すときだけここに来る。§62.1）。
+ * 合った行の契約がすべて存在しない・除外中なら契約は空で、その理由を返す（別の契約に回さない）
  */
-function candidatesFor(target: RuleTarget, taskName: string): Contract[] {
-  if (!target.entries.some((e) => hasKeywords(e.cond))) return target.contracts;
+function candidatesFor(target: RuleTarget, taskName: string): { contracts: Contract[]; reason?: UnmappedReason } {
+  if (!target.entries.some((e) => hasKeywords(e.cond))) return { contracts: target.contracts };
   const task = normalizeKeyword(taskName);
-  const ids = new Set(target.entries.filter((e) => passes(e.cond, task)).map((e) => e.contract.contractId));
-  if (ids.size === 0) return target.contracts;
-  return target.contracts.filter((c) => ids.has(c.contractId));
+  const hits = target.entries.filter((e) => passes(e.cond, task));
+  if (hits.length === 0) return { contracts: target.contracts };
+  const ids = new Set(hits.flatMap((e) => (e.contract ? [e.contract.contractId] : [])));
+  const contracts = target.contracts.filter((c) => ids.has(c.contractId));
+  if (contracts.length > 0) return { contracts };
+  return { contracts, reason: hits.some((e) => e.excluded) ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT" };
 }
 
 interface AmbiguousAcc {
@@ -245,7 +250,13 @@ export function mapWorklogs(
       addUnmapped(w, reason);
       continue;
     }
-    const inPeriod = candidatesFor(target, w.task).filter((c) => c.startMonth <= month && month <= c.endMonth);
+    const candidates = candidatesFor(target, w.task);
+    if (candidates.reason) {
+      mappings.push({ kind: "unmapped", worklog: w, month, reason: candidates.reason });
+      addUnmapped(w, candidates.reason);
+      continue;
+    }
+    const inPeriod = candidates.contracts.filter((c) => c.startMonth <= month && month <= c.endMonth);
     if (inPeriod.length === 0) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: "OUT_OF_PERIOD" });
       addUnmapped(w, "OUT_OF_PERIOD");

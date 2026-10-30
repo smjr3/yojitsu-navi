@@ -134,6 +134,17 @@ describe("buildModel: 作業名のキーワードで運用保守を抜き出す�
     expect([hours("C1"), hours("C2")]).toEqual([2, 3]);
     expect(m.warnings.map((w) => w.code)).not.toContain("MAPPING_AMBIGUOUS");
   });
+  it("合った行の契約が存在しないときは別の契約に回さず未紐付け", () => {
+    const d = dataset({
+      ...data,
+      contracts: [contract({ contractId: "C1", customerName: "ABC", projectName: "基幹" })],
+      mappings: [kwRule("ABC", "基幹", "C1", ["【保守】"]), kwRule("ABC", "基幹", "C9", ["【監視】"])],
+      worklogs: [worklog({ date: "2026-04-02", memberId: "M1", customerName: "ABC", projectName: "基幹", task: "【監視】日次", hours: 8 })],
+    });
+    const m = buildModel(d, { asOf: "2026-05-20", generatedAt: "x" });
+    expect(m.contracts[0]!.months.find((x) => x.month === "2026-04")!.hours).toBe(0);
+    expect(m.unmapped).toMatchObject([{ reason: "UNKNOWN_CONTRACT", hours: 8 }]);
+  });
   it("キーワードを使わなければ一覧は空（従来どおり）", () => {
     const m = buildModel({ ...data, mappings: [rule("ABC", "基幹", "C1")] }, { asOf: "2026-05-20", generatedAt: "x" });
     expect(m.keywordUnmatched).toEqual([]);
