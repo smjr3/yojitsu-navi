@@ -278,7 +278,8 @@ if (vm) {
     { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "money", exportLabel: T.members.varianceExport, render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: sub(r) }) },
     { key: "status", label: T.columns.status, type: "status", get: chips, hideNarrow: true, sortable: false },
   ];
-  const st = shown.total;
+  // 合計行は表示中のメンバーで集計し直す（列の絞り込み後の行が来る）
+  const totalsFor = (shownRows) => (shownRows.length === rows.length ? shown : aggregateMembers(model, { period, memberIds: shownRows.map((r) => r.memberId), includeOutside: vm.includeOutside }));
   display(
     dataTable({
       columns,
@@ -289,10 +290,12 @@ if (vm) {
       sort: { key: "variance", dir: "asc" },
       rowHref: (r) => store.href("./member", {}, { id: r.memberId }),
       emptyText: q ? T.members.emptySearch : T.members.emptyTitle,
-      summary: rows.length
-        ? { memberName: null, name: fmt(T.members.totalRow, { n: rows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, teamName: null, title: null, status: null }
-        : null,
-      summaryBreakdown: (col) => (["plannedHours", "actualHours", "utilization", "plannedCost", "actualCost", "variance"].includes(col.key) ? () => bd.memberTotalsSpec({ members: shown.members, total: st, measure: col.key, unit, period }) : null),
+      summary: (shownRows) => {
+        const agg = totalsFor(shownRows);
+        const st = agg.total;
+        return { memberName: null, name: fmt(T.members.totalRow, { n: shownRows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, teamName: null, title: null, status: null, agg };
+      },
+      summaryBreakdown: (col, { agg }) => (["plannedHours", "actualHours", "utilization", "plannedCost", "actualCost", "variance"].includes(col.key) ? () => bd.memberTotalsSpec({ members: agg.members, total: agg.total, measure: col.key, unit, period }) : null),
     }),
   );
   if (vm.rows.length === 0) display(note(T.members.emptyText));

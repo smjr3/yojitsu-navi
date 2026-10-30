@@ -388,13 +388,7 @@ const worklogSection = (() => {
 })();
 
 function worklogExplorer(entries, unit, id) {
-  const months = [...new Set(entries.map((e) => e.month))].sort();
-  const members = [...new Map(entries.map((e) => [e.memberId, e.memberName])).entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const tasks = [...new Set(entries.map((e) => e.task))].sort((a, b) => a.localeCompare(b, "ja"));
-  const selMonth = html`<select class="yn-select" id="yn-wl-month" aria-label=${T.charts.colMonth}><option value="">${T.contract.allMonths}</option>${months.map((m) => html`<option value=${m}>${monthJa(m)}</option>`)}</select>`;
-  const selMember = html`<select class="yn-select" id="yn-wl-member" aria-label=${T.breakdown.colMember}><option value="">${T.contract.allMembers}</option>${members.map(([mid, name]) => html`<option value=${mid}>${name}</option>`)}</select>`;
-  const selTask = html`<select class="yn-select" id="yn-wl-task" aria-label=${T.breakdown.colTask}><option value="">${T.contract.allTasks}</option>${tasks.map((t) => html`<option value=${t}>${t}</option>`)}</select>`;
-  const tableHolder = html`<div></div>`;
+  // 月・メンバー・作業内容などの絞り込みは表の見出しから（SPEC §67。日付の検索に「2026-10」と入れると月で絞れる）
   const columns = [
     { key: "date", label: T.breakdown.colDate, type: "text" },
     { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => r.memberName },
@@ -402,27 +396,14 @@ function worklogExplorer(entries, unit, id) {
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "hourlyRate", label: T.breakdown.colRate, type: "moneyYen" },
     { key: "amount", label: T.breakdown.colAmount, type: "moneyYen" },
-    { key: "status", label: T.columns.status, type: "text", render: (r) => STATUS_LABELS[r.status], hideOnPhone: true },
+    { key: "status", label: T.columns.status, type: "text", render: (r) => STATUS_LABELS[r.status], exportValue: (r) => STATUS_LABELS[r.status] ?? "", hideOnPhone: true },
   ];
-  const render = () => {
-    const rows = entries
-      .filter((e) => (!selMonth.value || e.month === selMonth.value) && (!selMember.value || e.memberId === selMember.value) && (!selTask.value || e.task === selTask.value))
-      .map((e, i) => ({ ...e, key: i }));
-    const sum = rows.reduce((s, r) => ({ hours: s.hours + r.hours, amount: s.amount + r.amount }), { hours: 0, amount: 0 });
-    tableHolder.replaceChildren(
-      dataTable({ columns, rows, unit, caption: T.contract.worklogCaption, exportName: `contract_${id}_worklogs`, sort: { key: "date", dir: "asc" }, maxHeight: 480, summary: { name: fmt(T.contracts.totalRow, { n: integer(rows.length) }), hours: sum.hours, amount: sum.amount, date: null, memberName: null, task: null, hourlyRate: null, status: null } }),
-    );
+  const rows = entries.map((e, i) => ({ ...e, key: i }));
+  const summary = (shown) => {
+    const sum = shown.reduce((s, r) => ({ hours: s.hours + r.hours, amount: s.amount + r.amount }), { hours: 0, amount: 0 });
+    return { name: fmt(T.contracts.totalRow, { n: integer(shown.length) }), hours: sum.hours, amount: sum.amount, date: null, memberName: null, task: null, hourlyRate: null, status: null };
   };
-  for (const s of [selMonth, selMember, selTask]) s.addEventListener("change", render);
-  render();
-  return html`<div class="yn-worklog">
-    <div class="yn-filters is-compact" role="group" aria-label=${T.contract.worklogFilterLabel}>
-      <div class="yn-filter"><label for="yn-wl-month">${T.charts.colMonth}</label>${selMonth}</div>
-      <div class="yn-filter"><label for="yn-wl-member">${T.breakdown.colMember}</label>${selMember}</div>
-      <div class="yn-filter"><label for="yn-wl-task">${T.breakdown.colTask}</label>${selTask}</div>
-    </div>
-    ${tableHolder}
-  </div>`;
+  return html`<div class="yn-worklog">${dataTable({ columns, rows, unit, caption: T.contract.worklogCaption, exportName: `contract_${id}_worklogs`, sort: { key: "date", dir: "asc" }, maxHeight: 480, summary })}</div>`;
 }
 ```
 

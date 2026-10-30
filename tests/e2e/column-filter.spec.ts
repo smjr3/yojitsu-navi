@@ -1,0 +1,145 @@
+/**
+ * 表の列ごとの絞り込み（SPEC §67）
+ *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は下限〜上限（表示単位で入力、元の値で比較）
+ *   - 件数「n 件 / 全 m 件」と「絞り込みを解除」、合計行は絞り込み後の行で作り直す
+ *   - 並べ替えと同じくタブ単位で覚える（詳細から戻っても残る）。木構造の表には付けない
+ *   - 作業ログ・作業別の内訳にも付く。狭い画面・ダークでも吹き出しが画面内
+ */
+import type { Locator, Page } from "@playwright/test";
+import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, parseNumber, useDarkTheme } from "./helpers/app.js";
+
+function filterBtn(table: Locator, key: string): Locator {
+  return table.locator(`thead th[data-key="${key}"] .yn-filter-btn`);
+}
+const pop = (page: Page) => page.locator(".yn-filter-pop");
+const count = (table: Locator) => table.locator("xpath=ancestor::div[contains(@class,'yn-table-block')]").locator(".yn-table-count");
+const clearAll = (table: Locator) => table.locator("xpath=ancestor::div[contains(@class,'yn-table-block')]").getByRole("button", { name: "絞り込みを解除" });
+
+async function columnValues(table: Locator, label: string): Promise<string[]> {
+  const idx = col(await headerIndex(table), label);
+  const rows = dataRows(table);
+  const n = await rows.count();
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) out.push(await cellText(rows.nth(i), idx));
+  return out;
+}
+
+test.describe("案件一覧", () => {
+  test("状態で絞ると件数・合計行が絞り込み後になり、解除で戻る。詳細から戻っても残る", { tag: "@smoke" }, async ({ page }) => {
+    await gotoPage(page, "/contracts?unit=yen");
+    const table = tableByCaption(page, "案件一覧");
+    const total = await dataRows(table).count();
+    await expect(count(table)).toHaveText(`${total} 件`);
+    await expect(clearAll(table)).toBeHidden();
+
+    await filterBtn(table, "status").click();
+    await expect(pop(page)).toBeVisible();
+    // いったん全部外してから「超過見込み」だけ選ぶ
+    await pop(page).getByLabel("（すべて）").uncheck();
+    await expect(dataRows(table)).toHaveCount(0);
+    await expect(table.locator(".yn-table-empty")).toHaveText("絞り込みに一致する行がありません");
+    await pop(page).locator(".yn-filter-item", { hasText: "超過見込み" }).first().locator("input").check();
+    const shown = await dataRows(table).count();
+    expect(shown).toBeGreaterThan(0);
+    expect(shown).toBeLessThan(total);
+    await expect(count(table)).toHaveText(`${shown} 件 / 全 ${total} 件`);
+    for (const s of await columnValues(table, "状態")) expect(s).toContain("超過見込み");
+    await expect(filterBtn(table, "status")).toHaveClass(/is-active/);
+    // 合計行は表示中の行の合計（予算は案件ごとの和と一致）
+    const budgets = (await columnValues(table, "予算")).map((t) => parseNumber(t) ?? 0);
+    const foot = table.locator("tfoot tr");
+    await expect(foot.locator("td").first()).toHaveText(`合計（${shown}件）`);
+    const idx = col(await headerIndex(table), "予算");
+    expect(parseNumber(await cellText(foot, idx))).toBe(budgets.reduce((a, b) => a + b, 0));
+
+    // Esc で閉じてボタンへ戻る
+    await page.keyboard.press("Escape");
+    await expect(pop(page)).toHaveCount(0);
+    await expect(filterBtn(table, "status")).toBeFocused();
+
+    // 詳細へ行って戻っても残る
+    await dataRows(table).first().locator("a").first().click();
+    await page.waitForURL(/\/contract\?/);
+    await page.goBack();
+    await expect(dataRows(tableByCaption(page, "案件一覧"))).toHaveCount(shown);
+
+    await clearAll(tableByCaption(page, "案件一覧")).click();
+    await expect(dataRows(tableByCaption(page, "案件一覧"))).toHaveCount(total);
+    await expect(clearAll(tableByCaption(page, "案件一覧"))).toBeHidden();
+  });
+
+  test("数値は表示単位（百万円）で下限を入れ、元の値で比べる。検索語は部分一致", async ({ page }) => {
+    await gotoPage(page, "/contracts?unit=m");
+    const table = tableByCaption(page, "案件一覧");
+    const total = await dataRows(table).count();
+    await filterBtn(table, "budget").click();
+    await expect(pop(page).locator(".yn-filter-unit")).toHaveText("百万円");
+    await pop(page).getByLabel("予算 下限").fill("10");
+    await expect(count(table)).toContainText("/ 全");
+    for (const t of await columnValues(table, "予算")) expect(parseNumber(t)!).toBeGreaterThanOrEqual(9.95); // 表示は 0.1 百万円単位に丸め
+    await pop(page).getByRole("button", { name: "解除" }).click();
+    await expect(dataRows(table)).toHaveCount(total);
+    await expect(pop(page).getByLabel("予算 下限")).toHaveValue("");
+
+    // 案件列の検索（顧客名の一部）
+    await pop(page).getByRole("button", { name: "閉じる" }).click();
+    const first = (await columnValues(table, "案件"))[0]!;
+    const word = first.split(" / ")[0]!.slice(0, 3);
+    await filterBtn(table, "name").click();
+    await pop(page).getByRole("searchbox").fill(word);
+    await expect(async () => {
+      const names = await columnValues(table, "案件");
+      expect(names.length).toBeGreaterThan(0);
+      for (const n of names) expect(n).toContain(word);
+    }).toPass();
+    // 吹き出しの外を押すと閉じる
+    await page.locator("h1").click();
+    await expect(pop(page)).toHaveCount(0);
+  });
+});
+
+test("案件詳細の作業ログ: 作業内容で絞ると合計行が絞り込み後の時間になる（スマホ幅・ダーク）", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await useDarkTheme(page);
+  await gotoPage(page, "/contract?id=C008");
+  await page.getByRole("button", { name: "作業ログを読み込む" }).click();
+  const table = tableByCaption(page, "作業ログ");
+  await expect(dataRows(table).first()).toBeVisible();
+  const total = await dataRows(table).count();
+  await filterBtn(table, "task").click();
+  const p = pop(page);
+  await expect(p).toBeVisible();
+  // 吹き出しは画面内
+  const box = (await p.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+  await p.getByLabel("（すべて）").uncheck();
+  const firstItem = p.locator(".yn-filter-list .yn-filter-item").first();
+  const task = ((await firstItem.locator(".yn-filter-item-text").textContent()) ?? "").trim();
+  await firstItem.locator("input").check();
+  await page.keyboard.press("Escape");
+  const tasks = await columnValues(table, "作業内容");
+  expect(tasks.length).toBeLessThan(total);
+  expect(new Set(tasks)).toEqual(new Set([task]));
+  const hours = (await columnValues(table, "時間")).map((t) => parseNumber(t) ?? 0).reduce((a, b) => a + b, 0);
+  const idx = col(await headerIndex(table), "時間");
+  expect(parseNumber(await cellText(table.locator("tfoot tr"), idx))).toBeCloseTo(hours, 2);
+  await expect(table.locator("tfoot td").first()).toHaveText(`合計（${tasks.length}件）`);
+
+  // 日付の検索に年月を入れると月で絞れる
+  await filterBtn(table, "date").click();
+  const ym = (await columnValues(table, "日付"))[0]!.slice(0, 7);
+  await pop(page).getByRole("searchbox").fill(ym);
+  await expect(async () => {
+    for (const d of await columnValues(table, "日付")) expect(d.startsWith(ym)).toBe(true);
+  }).toPass();
+});
+
+test("作業別の内訳と木構造の表: 作業別には付き、チーム一覧（木構造）には付かない", async ({ page }) => {
+  await gotoPage(page, "/contract?id=C008");
+  const work = tableByCaption(page, "作業種別の内訳");
+  await expect(filterBtn(work, "task")).toBeVisible();
+  await gotoPage(page, "/teams");
+  await expect(page.locator("table.yn-table").first()).toBeVisible();
+  await expect(page.locator("table.yn-table").first().locator(".yn-filter-btn")).toHaveCount(0);
+});
