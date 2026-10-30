@@ -11,6 +11,10 @@ test("メンバー別に「計画とのずれ」が出て、行からメンバ�
   const table = page.getByRole("table", { name: "計画とのずれ" });
   await expect(table.locator("tbody tr").first()).toBeVisible();
   await expect(table.locator("tbody tr").first()).toContainText(/計画なし|実績なし|多い|少ない/);
+  // メンバーごとの計画と実績の表より下に置く（§68）
+  const membersTable = page.getByRole("table", { name: "メンバー別の計画と実績" });
+  const membersBox = (await membersTable.boundingBox())!;
+  expect((await head.boundingBox())!.y).toBeGreaterThan(membersBox.y + membersBox.height);
   await table.locator("tbody tr").first().click();
   await expect(page).toHaveURL(/\/member\?/);
 });
