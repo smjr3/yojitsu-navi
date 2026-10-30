@@ -3901,3 +3901,64 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-chart .yn-chart-plot {
   min-height: 200px;
 }
+
+/* ── 今月の進み: メンバー×日の表（SPEC §59） ───────────── */
+.yn-dg-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+.yn-dg {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  max-width: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.yn-dg th,
+.yn-dg td {
+  border-bottom: 1px solid var(--yn-hairline);
+  padding: 4px 2px;
+  white-space: nowrap;
+}
+.yn-dg thead th {
+  font-weight: normal;
+  color: var(--yn-text-muted);
+}
+.yn-dg-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--yn-card);
+  text-align: left;
+  font-weight: normal;
+  padding: 4px 8px !important;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-dg-day {
+  min-width: 24px;
+  text-align: center;
+}
+.yn-dg-day.is-off {
+  background: var(--yn-wash);
+}
+.yn-dg-day.is-future {
+  background: transparent;
+}
+.yn-dg-l1 { background: color-mix(in srgb, var(--yn-series-cost) 12%, transparent); }
+.yn-dg-l2 { background: color-mix(in srgb, var(--yn-series-cost) 22%, transparent); }
+.yn-dg-l3 { background: color-mix(in srgb, var(--yn-series-cost) 34%, transparent); }
+.yn-dg-l4 { background: color-mix(in srgb, var(--yn-series-cost) 48%, transparent); }
+.yn-dg-num {
+  text-align: right;
+  padding: 4px 8px !important;
+}
+.yn-dg-last {
+  border-right: 1px solid var(--yn-hairline-strong);
+}
+.yn-dg-num.is-over {
+  color: var(--yn-danger-text);
+  font-weight: bold;
+}

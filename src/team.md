@@ -19,6 +19,7 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
+import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -139,6 +140,17 @@ if (vm && !vm.exists && teamId) {
 if (vm?.exists) {
   display(sectionTitle(T.team.summaryTitle, fmt(T.team.summaryHint, { period: periodJa(vm.period), team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, month: monthJa(vm.treeMonth) })));
   display(summaryKpis({ model, store, scope: vm.scope, totals: vm.totals, forecast: vm.forecast, compare: vm.compare, fy: vm.fy, unit: vm.unit }));
+}
+```
+
+```js
+// 今月の進み（日別の速報。§59）。読めなければ出さない
+const daily = await loadDaily(FileAttachment("./data/daily.json"));
+```
+
+```js
+if (vm?.exists) {
+  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
 }
 ```
 

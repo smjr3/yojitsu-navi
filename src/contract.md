@@ -21,6 +21,7 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
+import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -171,6 +172,17 @@ if (vm) {
           }),
     ].filter(Boolean), { columns: vm.isWhole ? 5 : 6 }),
   );
+}
+```
+
+```js
+// 今月の進み（日別の速報。§59）。読めなければ出さない
+const daily = await loadDaily(FileAttachment("./data/daily.json"));
+```
+
+```js
+if (vm) {
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
 }
 ```
 
