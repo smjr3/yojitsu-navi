@@ -9,8 +9,9 @@
  *
  * 画面用には data/daily.json（encodeDaily）で配り、dailyProgress で対象の案件を合算する。
  */
-import { daysInMonth, isBusinessDay, parseYearMonth, toHolidaySet, type HolidayLookup } from "./calendar.js";
-import type { ISODate, Model, YearMonth } from "./types.js";
+import { daysInMonth, isBusinessDay, parseYearMonth, type HolidayLookup } from "./calendar.js";
+import { HolidaySet } from "./holidays.js";
+import type { Holiday, ISODate, Model, YearMonth } from "./types.js";
 
 /** data/daily.json の中身。days[contractId] = [日, 実績額（円・小数）, 時間][] */
 export interface DailyFile {
@@ -135,7 +136,8 @@ export function progressFromDays(
 ): DailyProgress {
   const { year, month: mm } = parseYearMonth(month);
   const total = daysInMonth(year, mm);
-  const set = toHolidaySet(holidays);
+  // 行の無い年は国民の祝日で補う（§49。buildModel と同じ HolidaySet）。Set を渡されたらそのまま使う
+  const set = holidays instanceof Set ? holidays : new HolidaySet(holidays as readonly Holiday[]);
   const lastDay = lastDate && lastDate.slice(0, 7) === month ? Number(lastDate.slice(8, 10)) : 0;
   const dates = Array.from({ length: total }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
   const bizFlags = dates.map((d) => isBusinessDay(d, set));

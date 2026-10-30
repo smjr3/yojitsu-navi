@@ -169,10 +169,10 @@ export function dailyTable(p, { unit, exportName }) {
     .map((d) => ({ key: d.date, date: d.date, day: d.day, off: !d.businessDay, amount: d.amount, hours: d.hours, cumulative: d.cumulative, pace: d.pace }));
   const columns = [
     { key: "date", label: T.daily.colDate, type: "text", render: (r) => fmt(T.daily.colDateValue, { d: r.day, off: r.off ? T.daily.offDay : "" }), sortValue: (r) => r.date, exportValue: (r) => r.date },
-    { key: "amount", label: T.daily.colAmount, type: "money" },
+    { key: "amount", label: T.daily.colAmount, type: "money", render: (r, u) => money(r.amount, u) },
     { key: "hours", label: T.columns.hours, type: "hours" },
-    { key: "cumulative", label: T.daily.colCumulative, type: "money" },
-    { key: "pace", label: T.daily.colPace, type: "money" },
+    { key: "cumulative", label: T.daily.colCumulative, type: "money", render: (r, u) => money(r.cumulative, u) },
+    { key: "pace", label: T.daily.colPace, type: "money", render: (r, u) => money(r.pace, u) },
   ];
   return dataTable({ columns, rows, unit, caption: T.daily.title, exportName, sort: { key: "date", dir: "asc" } });
 }

@@ -132,3 +132,12 @@ describe("dailyProgress", () => {
     expect(dailyMembers(withPlan, daily, p, ["B"]).map((r) => r.memberId)).toEqual(["M2", "M1"]);
   });
 });
+
+describe("祝日の補完（§49）", () => {
+  it("holidays.csv に今年の行が無ければ国民の祝日で補う（buildModel と同じ）", () => {
+    // 1 月は元日が必ず祝日。前年の行だけを渡す
+    const month = `${YEAR}-01`;
+    const p = progressFromDays(month, null, 100, 100, new Map(), [{ date: `${YEAR - 1}-05-03`, name: "前年" }] as never);
+    expect(p.points[0]!.businessDay).toBe(false);
+  });
+});
