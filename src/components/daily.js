@@ -1,5 +1,5 @@
 /**
- * 今月の進み（SPEC §61）: 今月の実績の累計（速報）を、月の上限を営業日で按分した目安と比べる。
+ * 今月の進捗（SPEC §61）: 今月の実績の累計（速報）を、月の上限を営業日で按分した目安と比べる。
  * 全体・チーム・顧客・案件の詳細で、選択中の期間が asOf の月を含むときだけ出す。
  * daily は data/daily.json（core の encodeDaily）。読めなければ何も出さない。
  */
@@ -21,7 +21,7 @@ function money(yen, unit) {
   return fmt(T.numbers.millionYen, { value: m2.format(Math.round(yen / 1e4) / 100) });
 }
 
-/** data/daily.json を読む（無い・壊れているときは null。今月の進みを出さないだけで画面は止めない） */
+/** data/daily.json を読む（無い・壊れているときは null。今月の進捗を出さないだけで画面は止めない） */
 export function loadDaily(attachment) {
   return attachment.json().catch(() => null);
 }

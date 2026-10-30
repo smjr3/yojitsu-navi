@@ -1,5 +1,5 @@
 /**
- * 今月の進み（SPEC §61）: 今月を含む期間だけ、全体・チーム・顧客・案件の詳細に出る。KPI の値は core の計算と一致し、
+ * 今月の進捗（SPEC §61）: 今月を含む期間だけ、全体・チーム・顧客・案件の詳細に出る。KPI の値は core の計算と一致し、
  * チーム詳細にはメンバー×日の表が出る。各画面幅・ダークで画面からはみ出さない
  */
 import type { Page } from "@playwright/test";
@@ -19,20 +19,20 @@ async function kpiYen(page: Page, id: string): Promise<number | null> {
   return parseNumber((await page.locator(`#${id} .yn-kpi-value`).first().textContent()) ?? "");
 }
 
-test("今月の進み: 全体・チーム・顧客・案件の詳細に出る（今年度）", { tag: "@smoke" }, async ({ page }) => {
+test("今月の進捗: 全体・チーム・顧客・案件の詳細に出る（今年度）", { tag: "@smoke" }, async ({ page }) => {
   const contract = teamIds.find((id) => dailyProgress(model, daily, [id]) !== null)!;
   for (const path of ["/", `/team?id=${TEAM}`, `/contract?id=${contract}`]) {
     await gotoPage(page, path);
-    await expect(section(page).locator("h2").first()).toContainText("今月の進み");
+    await expect(section(page).locator("h2").first()).toContainText("今月の進捗");
     await expect(section(page).locator(".yn-kpi")).toHaveCount(4);
     await expect(section(page).locator('svg[role="img"]')).toBeVisible();
   }
   await gotoPage(page, "/customers");
   await page.locator("table tbody tr a").first().click();
-  await expect(section(page).locator("h2").first()).toContainText("今月の進み");
+  await expect(section(page).locator("h2").first()).toContainText("今月の進捗");
 });
 
-test("今月の進み: KPI の値が core の計算と一致し、表の最後の累計が今日までの実績", async ({ page }) => {
+test("今月の進捗: KPI の値が core の計算と一致し、表の最後の累計が今日までの実績", async ({ page }) => {
   const p = dailyProgress(model, daily, teamIds)!;
   await gotoPage(page, `/team?id=${TEAM}&unit=yen`);
   expect(await kpiYen(page, "yn-daily-cap")).toBe(Math.round(p.cap));
@@ -49,7 +49,7 @@ test("今月の進み: KPI の値が core の計算と一致し、表の最後�
   await expect(page.locator("dialog[open]")).toContainText("このペースの月末 =");
 });
 
-test("今月の進み: 今月を含まない期間（前年度・先月）では出さない", async ({ page }) => {
+test("今月の進捗: 今月を含まない期間（前年度・先月）では出さない", async ({ page }) => {
   await gotoPage(page, `/team?id=${TEAM}`);
   await expect(section(page)).toHaveCount(1);
   for (const preset of ["prevFy", "lastMonth"]) {
@@ -64,7 +64,7 @@ test("今月の進み: 今月を含まない期間（前年度・先月）では
   await expect(section(page)).toHaveCount(1);
 });
 
-test("今月の進み: チーム詳細のメンバー×日の表（累計・計画・残り/日）", async ({ page }) => {
+test("今月の進捗: チーム詳細のメンバー×日の表（累計・計画・残り/日）", async ({ page }) => {
   const p = dailyProgress(model, daily, teamIds)!;
   const rows = dailyMembers(model, daily, p, teamIds);
   await gotoPage(page, `/team?id=${TEAM}`);
@@ -89,7 +89,7 @@ for (const [w, dark] of [
   [1280, false],
   [1024, true],
 ] as const) {
-  test(`今月の進み: ${w}px${dark ? "・ダーク" : ""}ではみ出さない`, async ({ page }) => {
+  test(`今月の進捗: ${w}px${dark ? "・ダーク" : ""}ではみ出さない`, async ({ page }) => {
     if (dark) await useDarkTheme(page);
     await page.setViewportSize({ width: w, height: 900 });
     await gotoPage(page, `/team?id=${TEAM}&unit=yen`);

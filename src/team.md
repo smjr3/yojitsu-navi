@@ -144,17 +144,6 @@ if (vm?.exists) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§61）。読めなければ出さない
-const daily = await loadDaily(FileAttachment("./data/daily.json"));
-```
-
-```js
-if (vm?.exists) {
-  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
-}
-```
-
-```js
 if (vm?.exists) {
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(chartFigure({
@@ -164,6 +153,17 @@ if (vm?.exists) {
     draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
     after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
   }));
+}
+```
+
+```js
+// 今月の進捗（日別の速報。§61）。読めなければ出さない
+const daily = await loadDaily(FileAttachment("./data/daily.json"));
+```
+
+```js
+if (vm?.exists) {
+  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
 }
 ```
 

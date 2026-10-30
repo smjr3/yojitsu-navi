@@ -176,17 +176,6 @@ if (vm) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§61）。読めなければ出さない
-const daily = await loadDaily(FileAttachment("./data/daily.json"));
-```
-
-```js
-if (vm) {
-  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
-}
-```
-
-```js
 if (vm) {
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(chartFigure({
@@ -195,6 +184,17 @@ if (vm) {
     legend: monthlyLegend(dark),
     draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
   }));
+}
+```
+
+```js
+// 今月の進捗（日別の速報。§61）。読めなければ出さない
+const daily = await loadDaily(FileAttachment("./data/daily.json"));
+```
+
+```js
+if (vm) {
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
 }
 ```
 
