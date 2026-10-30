@@ -29,7 +29,7 @@
 `npm run build` は最後に `dist/` を検証し、1 つでも合わなければ **`dist/` を消して** 失敗します（古い・壊れたサイトを公開しない）。
 
 - `index.html` があり、`_file/data/*.json` がすべて読めて、`_build` の指紋・基準日が今回のものと一致する
-- 必須の出力（`model`・`member-months`・`masters`・`dataset-issues`）がちょうど 1 つずつある
+- 必須の出力（`model`・`member-months`・`masters`・`dataset-issues`・`daily`）がちょうど 1 つずつある
 - `model` の契約数が `contracts.csv` と一致し、作業ログ（`dist/data/worklogs/<契約ID>.json`）が契約ごとに 1 つずつある
 - ビルド中に入力が変わっていない（ビルド後に指紋を取り直して比べる）
 
