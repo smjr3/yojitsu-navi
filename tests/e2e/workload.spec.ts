@@ -24,9 +24,9 @@ test.describe("工数 /workload", () => {
     expect(totals.contractHours).toBeGreaterThan(0);
   });
 
-  test("KPI が core と一致し、タブ「工数」が選択される", { tag: "@smoke" }, async ({ page }) => {
+  test("KPI が core と一致し、タブ「稼働実績」が選択される", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}`);
-    await expect(page.getByRole("link", { name: "工数", exact: true }).first()).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("link", { name: "稼働実績", exact: true }).first()).toHaveAttribute("aria-current", "page");
     await expect(kpiValue(page, 0)).toHaveText(pmText(totals.contractHours));
     await expect(kpiValue(page, 1)).toHaveText(pmText(totals.outsideHours));
     await expect(kpiValue(page, 2)).toHaveText(`${totals.memberCount}人`);
@@ -44,11 +44,11 @@ test.describe("工数 /workload", () => {
     const tree = treeAt(FY.to < model.meta.asOfMonth ? FY.to : model.meta.asOfMonth);
     const rootTeamIds = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
     const groups = aggregateWork(model, inFy, { period: FY, axis: "team", tree, rootTeamIds, unassignedLabel: "未所属" });
-    const table = tableByCaption(page, "所属チームごとの工数");
+    const table = tableByCaption(page, "所属チームごとの稼働実績");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(groups.length);
     // 分布のグラフ: 末端の組織だけを並べる（上位は配下の合計で二重になるため）
-    const chart = page.locator('[aria-label="所属チームごとの工数の分布（運用保守と運用保守以外の人月の横積み上げ棒）"]');
+    const chart = page.locator('[aria-label="所属チームごとの稼働実績の分布（運用保守と運用保守以外の人月の横積み上げ棒）"]');
     await expect(chart).toBeVisible();
     // 末端が 20 を超えるときは合計の多い上位 20 件（長い名前は … で切れるので先頭 6 文字で照合）
     const leafGroups = groups.filter((g) => !g.hasChildren);
@@ -77,7 +77,7 @@ test.describe("工数 /workload", () => {
     await expect(axisBtn(page, "customer")).toHaveAttribute("aria-pressed", "true");
     expect(query(page).get("axis")).toBe("customer");
     const byCustomer = aggregateWork(model, inFy, { period: FY, axis: "customer", unassignedLabel: "-" });
-    const table = tableByCaption(page, "顧客ごとの工数");
+    const table = tableByCaption(page, "顧客ごとの稼働実績");
     await expect(dataRows(table)).toHaveCount(byCustomer.length);
     // 案件の無い顧客（契約外だけ）は詳細へのリンクにしない
     const onlyOutside = byCustomer.find((g) => g.totals.contractHours === 0);
@@ -87,7 +87,7 @@ test.describe("工数 /workload", () => {
     await axisBtn(page, "member").click();
     expect(query(page).get("axis")).toBe("member");
     const byMember = aggregateWork(model, inFy, { period: FY, axis: "member", unassignedLabel: "-" });
-    const mt = tableByCaption(page, "メンバーごとの工数");
+    const mt = tableByCaption(page, "メンバーごとの稼働実績");
     await expect(dataRows(mt)).toHaveCount(byMember.length);
     const h = await headerIndex(mt);
     const top = byMember.find((g) => g.totals.outsideHours > 0)!;

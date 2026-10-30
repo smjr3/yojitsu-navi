@@ -26,31 +26,37 @@ test.describe("テーマ切替", () => {
       await gotoPage(page, path);
       await expect(page.locator(".yn-chart-card svg").first()).toBeVisible();
       const light = await chartFills(page);
-      await page.locator(".yn-theme-toggle").click();
+      // 切替は設定画面のラジオと同じ関数（ヘッダーにボタンは置かない）
+      await page.evaluate(() => (window as unknown as { ynSetTheme: (t: string) => void }).ynSetTheme("dark"));
       await expect.poll(() => chartFills(page)).not.toBe(light);
-      await page.locator(".yn-theme-toggle").click();
+      await page.evaluate(() => (window as unknown as { ynSetTheme: (t: string) => void }).ynSetTheme("light"));
       await expect.poll(() => chartFills(page)).toBe(light);
     }
   });
 
-  test("キーボード（Tab で移動して Enter）で切り替えられる", async ({ page }) => {
+  test("ヘッダーにテーマの切替ボタンは無い（設定画面だけで切り替える）", async ({ page }) => {
     await gotoPage(page, "/teams");
-    const toggle = page.locator(".yn-theme-toggle");
-    await toggle.focus();
-    await page.keyboard.press("Enter");
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".yn-theme-toggle")).toHaveCount(0);
+    await expect(page.locator(".yn-icon-tools .yn-icon-btn")).toHaveCount(2);
+  });
+
+  test("設定画面のラジオはキーボード（矢印キー）で切り替えられる", async ({ page }) => {
+    await gotoPage(page, "/settings");
+    await page.getByRole("radio", { name: "ライト" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await bgLum(page)).toBeLessThan(0.25);
-    await page.keyboard.press("Space");
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });
 
   test("ストレージが使えなくても既定のライトで表示され、切替は効く", async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, "localStorage", { get: () => { throw new Error("blocked"); } });
     });
-    await gotoPage(page, "/");
+    await gotoPage(page, "/settings");
     expect(await bgLum(page)).toBeGreaterThan(0.75);
-    await page.locator(".yn-theme-toggle").click();
+    await page.getByRole("radio", { name: "ダーク" }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 
@@ -58,7 +64,6 @@ test.describe("テーマ切替", () => {
     await page.addInitScript(() => localStorage.setItem("yn-theme", "purple"));
     await gotoPage(page, "/");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await expect(page.locator(".yn-theme-toggle")).toHaveAttribute("aria-pressed", "false");
   });
 });
 

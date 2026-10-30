@@ -201,26 +201,25 @@ test.describe("ダークモード", () => {
 });
 
 test.describe("テーマ切替", () => {
-  // OS がダークでも既定はライト。ヘッダーのボタンでダークにし、ページを移っても保たれる
+  // OS がダークでも既定はライト。設定画面でダークにし、ページを移っても保たれる
   test.use({ colorScheme: "dark" });
-  test("既定はライト、ボタンでダーク・ライトを切り替えて保持する", async ({ page }) => {
+  test("既定はライト、設定画面でダーク・ライトを切り替えて保持する", async ({ page }) => {
     const bgLum = () =>
       page.evaluate(() => {
         const m = getComputedStyle(document.documentElement).backgroundColor.match(/\d+/g)!.map(Number);
         return (0.2126 * m[0]! + 0.7152 * m[1]! + 0.0722 * m[2]!) / 255;
       });
     await gotoPage(page, "/");
-    const toggle = page.locator(".yn-theme-toggle");
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(await bgLum()).toBeGreaterThan(0.75);
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await gotoPage(page, "/settings");
+    await page.getByRole("radio", { name: "ダーク" }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await bgLum()).toBeLessThan(0.25);
     await gotoPage(page, "/teams");
-    await expect(page.locator(".yn-theme-toggle")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await bgLum()).toBeLessThan(0.25);
-    await page.locator(".yn-theme-toggle").click();
+    await gotoPage(page, "/settings");
+    await page.getByRole("radio", { name: "ライト" }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     expect(await bgLum()).toBeGreaterThan(0.75);
   });

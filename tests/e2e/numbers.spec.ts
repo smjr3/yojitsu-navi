@@ -25,6 +25,8 @@ import {
 
 const model = getModel();
 const FY = fiscalPeriod(model);
+/** 着地見込みの方式の既定（config.json。§51 で計画値に変更） */
+const DEFAULT_METHOD = model.config.forecastMethodDefault as ForecastMethod;
 
 function uniq<T>(xs: T[]): T[] {
   return [...new Set(xs)];
@@ -34,7 +36,7 @@ function uniq<T>(xs: T[]): T[] {
  * 全体サマリーの KPI 5 枚を core の値と比べる。unit は「画面が今出している単位」（省略 = 画面の既定単位）。
  * 厳密に見たい（丸めで差が隠れてほしくない）テストは URL に unit=yen を付けて "yen" で比べる。
  */
-async function expectKpis(page: import("@playwright/test").Page, period: Period, teamId = "", method: ForecastMethod = "recent3", unit: Unit = DEFAULT_UNIT) {
+async function expectKpis(page: import("@playwright/test").Page, period: Period, teamId = "", method: ForecastMethod = DEFAULT_METHOD, unit: Unit = DEFAULT_UNIT) {
   const ids = teamContractIds(teamId, period, model);
   const totals = totalsFor(period, ids, model);
   const fc = forecastFor(method, ids, model);
@@ -60,7 +62,7 @@ test.describe("全体サマリー", () => {
     await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget, "m"));
     await expect(kpiValue(page, 0)).toHaveText(/^-?[\d,]+\.\d百万円$/);
     await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, "m"));
-    await expectKpis(page, FY, "", "recent3", "m");
+    await expectKpis(page, FY, "", DEFAULT_METHOD, "m");
     // 保存された状態が無い（localStorage 空）ことが前提なので、保存もこの単位になる
     const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "m" });
@@ -69,7 +71,7 @@ test.describe("全体サマリー", () => {
   test("KPI が core の aggregate / forecastTotals と一致（FY2026・円で厳密）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/?unit=yen");
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
-    const { totals, fc } = await expectKpis(page, FY, "", "recent3", "yen");
+    const { totals, fc } = await expectKpis(page, FY, "", DEFAULT_METHOD, "yen");
     // 補足: 案件数、残予算率、赤字件数
     await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
     await expect(page.locator(".yn-kpi").nth(2)).toContainText(formatPercent(totals.grossMargin));
@@ -80,7 +82,7 @@ test.describe("全体サマリー", () => {
     expect(q.get("from")).toBe(FY.from);
     expect(q.get("to")).toBe(FY.to);
     expect(q.get("unit")).toBe("yen");
-    expect(q.get("method")).toBe("recent3");
+    expect(q.get("method")).toBe(DEFAULT_METHOD);
   });
 
   test("単位の切替: 百万円 → 千円 → 円 → 百万円 の往復で KPI・URL・aria-pressed・保存が変わる", { tag: "@smoke" }, async ({ page }) => {
@@ -91,7 +93,7 @@ test.describe("全体サマリー", () => {
       for (const u of ["m", "k", "yen"] as const) {
         await expect(page.locator(`.yn-seg-btn[data-unit=${u}]`)).toHaveAttribute("aria-pressed", String(u === unit));
       }
-      await expectKpis(page, FY, "", "recent3", unit);
+      await expectKpis(page, FY, "", DEFAULT_METHOD, unit);
       await expect(kpiValue(page, 0)).toContainText(UNIT_LABEL[unit]);
       expect(query(page).get("unit")).toBe(unit);
       const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
@@ -108,7 +110,7 @@ test.describe("全体サマリー", () => {
       await expect(btn).toHaveAttribute("aria-pressed", "true");
       await expect(page.locator("#yn-filter-from")).toHaveValue(period.from);
       await expect(page.locator("#yn-filter-to")).toHaveValue(period.to);
-      await expectKpis(page, period, "", "recent3", "yen");
+      await expectKpis(page, period, "", DEFAULT_METHOD, "yen");
       expect(query(page).get("from")).toBe(period.from);
       expect(query(page).get("to")).toBe(period.to);
     });
@@ -119,17 +121,17 @@ test.describe("全体サマリー", () => {
     const period = { from: "2026-06", to: "2026-09" };
     await page.locator("#yn-filter-from").selectOption(period.from);
     await page.locator("#yn-filter-to").selectOption(period.to);
-    await expectKpis(page, period, "", "recent3", "yen");
+    await expectKpis(page, period, "", DEFAULT_METHOD, "yen");
     expect(query(page).get("from")).toBe(period.from);
     expect(query(page).get("to")).toBe(period.to);
     // 逆転（終了 < 開始）は入れ替わる
     await page.locator("#yn-filter-to").selectOption("2026-05");
     await expect(page.locator("#yn-filter-from")).toHaveValue("2026-05");
     await expect(page.locator("#yn-filter-to")).toHaveValue("2026-05");
-    await expectKpis(page, { from: "2026-05", to: "2026-05" }, "", "recent3", "yen");
+    await expectKpis(page, { from: "2026-05", to: "2026-05" }, "", DEFAULT_METHOD, "yen");
     // 既定単位（百万円）の画面でも同じ期間の KPI が core の値（百万円表記）になる
     await page.locator(".yn-seg-btn[data-unit=m]").click();
-    await expectKpis(page, { from: "2026-05", to: "2026-05" }, "", "recent3", "m");
+    await expectKpis(page, { from: "2026-05", to: "2026-05" }, "", DEFAULT_METHOD, "m");
   });
 
   test("カレンダーで選んだ日付はその月として期間に入る", async ({ page }) => {
@@ -138,7 +140,7 @@ test.describe("全体サマリー", () => {
     await page.locator("#yn-filter-to-date").fill("2026-09-03");
     await expect(page.locator("#yn-filter-from")).toHaveValue("2026-06");
     await expect(page.locator("#yn-filter-to")).toHaveValue("2026-09");
-    await expectKpis(page, { from: "2026-06", to: "2026-09" }, "", "recent3", "yen");
+    await expectKpis(page, { from: "2026-06", to: "2026-09" }, "", DEFAULT_METHOD, "yen");
     // 日付欄は期間の初日・末日を指す
     await expect(page.locator("#yn-filter-from-date")).toHaveValue("2026-06-01");
     await expect(page.locator("#yn-filter-to-date")).toHaveValue("2026-09-30");
@@ -156,7 +158,7 @@ test.describe("全体サマリー", () => {
       await expectKpis(page, FY, "", method, "yen");
       expect(query(page).get("method")).toBe(method);
       await expect(page.locator(".yn-kpi").nth(4).locator(".yn-kpi-label")).toContainText(
-        { recent3: "直近実績", all: "全期間平均", assignment: "アサイン計画" }[method],
+        { recent3: "直近実績", all: "全期間平均", assignment: "計画値" }[method],
       );
     });
   }
@@ -166,7 +168,7 @@ test.describe("全体サマリー", () => {
       await gotoPage(page, "/?unit=yen");
       await page.locator("#yn-filter-team").selectOption(teamId);
       await expect(page.locator("#yn-filter-team")).toHaveValue(teamId);
-      const { totals } = await expectKpis(page, FY, teamId, "recent3", "yen");
+      const { totals } = await expectKpis(page, FY, teamId, DEFAULT_METHOD, "yen");
       const ids = teamContractIds(teamId, FY, model)!;
       expect(totals.contractCount).toBeLessThanOrEqual(ids.length);
       await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
@@ -201,19 +203,19 @@ test.describe("全体サマリー", () => {
     // 不正な値は既定に戻る（優先順位は URL > localStorage > 既定。クエリに無いキーは localStorage から来るので先に消す）
     await page.evaluate(() => localStorage.clear());
     await gotoPage(page, "/?from=xxxx&to=2027-99&team=NOPE&unit=gold&method=magic");
-    await expectKpis(page, FY, "", "recent3", DEFAULT_UNIT);
+    await expectKpis(page, FY, "", DEFAULT_METHOD, DEFAULT_UNIT);
     const q = query(page);
     expect(q.get("from")).toBe(FY.from);
     expect(q.get("to")).toBe(FY.to);
     expect(q.get("team")).toBe("");
     expect(q.get("unit")).toBe(DEFAULT_UNIT);
-    expect(q.get("method")).toBe("recent3");
+    expect(q.get("method")).toBe(DEFAULT_METHOD);
     // クエリに無いキーは localStorage の値が使われる（from だけ指定 → to は保存値）
     await gotoPage(page, url);
     await page.evaluate(() => localStorage.clear());
     await gotoPage(page, "/?from=2026-06&to=2026-09&unit=k");
     await gotoPage(page, "/?from=2026-05");
-    await expectKpis(page, { from: "2026-05", to: "2026-09" }, "", "recent3", "k");
+    await expectKpis(page, { from: "2026-05", to: "2026-09" }, "", DEFAULT_METHOD, "k");
   });
 
   test("localStorage で状態が別ページにも引き継がれる", async ({ page }) => {
@@ -247,7 +249,7 @@ test.describe("全体サマリー", () => {
     // 新しいコンテキスト相当: localStorage を消すと既定に戻る
     await page.evaluate(() => localStorage.clear());
     await gotoPage(page, "/");
-    await expectKpis(page, FY, "", "recent3", DEFAULT_UNIT);
+    await expectKpis(page, FY, "", DEFAULT_METHOD, DEFAULT_UNIT);
     expect(query(page).get("unit")).toBe(DEFAULT_UNIT);
   });
 
@@ -259,7 +261,7 @@ test.describe("全体サマリー", () => {
     });
     await gotoPage(page, "/");
     expect(query(page).get("unit")).toBe(DEFAULT_UNIT);
-    await expectKpis(page, FY, "", "recent3", DEFAULT_UNIT);
+    await expectKpis(page, FY, "", DEFAULT_METHOD, DEFAULT_UNIT);
   });
 });
 
@@ -274,7 +276,7 @@ test.describe("チーム一覧", () => {
     const keys = (await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-key")))) as string[];
     const tree = treeAt(FY.to, model);
     expect(new Set(keys)).toEqual(new Set([...Object.keys(tree), UNASSIGNED_TEAM_ID]));
-    const fc = "recent3";
+    const fc = DEFAULT_METHOD;
     for (const key of keys) {
       const row = table.locator(`tbody tr[data-key="${key}"]`);
       const ids = teamContractIds(key, FY, model)!;
@@ -312,7 +314,7 @@ test.describe("案件一覧", () => {
     for (const r of expected) {
       const id = r.contract.contractId;
       const row = table.locator(`tbody tr[data-key="${id}"]`);
-      const e = contractRowExpected(r, FY, "recent3", model);
+      const e = contractRowExpected(r, FY, DEFAULT_METHOD, model);
       sumBudget += e.totals.budget;
       sumCost += e.totals.cost;
       expect(await cellText(row, col(h, "予算")), `${id} 予算`).toBe(yen(e.totals.budget, unit));
@@ -353,7 +355,7 @@ test.describe("案件一覧", () => {
     for (const r of contractsInPeriod(FY, undefined, model)) {
       const id = r.contract.contractId;
       const row = table.locator(`tbody tr[data-key="${id}"]`);
-      const e = contractRowExpected(r, FY, "recent3", model);
+      const e = contractRowExpected(r, FY, DEFAULT_METHOD, model);
       expect(await cellText(row, col(h, "予算")), `${id} 予算`).toBe(yen(e.totals.budget, "k"));
       expect(await cellText(row, col(h, "実績")), `${id} 実績`).toBe(yen(e.totals.cost, "k"));
     }
@@ -363,7 +365,7 @@ test.describe("案件一覧", () => {
 test.describe("案件詳細", () => {
   for (const unit of uniq<Unit>(["yen", DEFAULT_UNIT])) {
   test(`C008: KPI と月ごとの予実が core の ContractMonth と一致（${UNIT_LABEL[unit]}）`, async ({ page }) => {
-    await gotoPage(page, `/contract?id=C008&unit=${unit}`);
+    await gotoPage(page, `/contract?id=C008&unit=${unit}&method=recent3`);
     const r = contractResult("C008", model);
     const t = totalsFor(FY, ["C008"], model);
     const f = r.forecasts.recent3;
@@ -420,7 +422,7 @@ test.describe("案件詳細", () => {
     expect(sumCost).toBe(t.cost);
     // 3 方式の着地カード: 選択中が強調され、値が core と一致
     for (const method of ["recent3", "all", "assignment"] as const) {
-      const card = page.locator(".yn-forecast-card").filter({ hasText: { recent3: "直近実績", all: "全期間平均", assignment: "アサイン計画" }[method] });
+      const card = page.locator(".yn-forecast-card").filter({ hasText: { recent3: "直近実績", all: "全期間平均", assignment: "計画値" }[method] });
       await expect(card.locator(".yn-kpi-value")).toHaveText(yen(r.forecasts[method].forecastGrossProfit, unit));
     }
     await expect(page.locator(".yn-forecast-card.is-selected")).toHaveCount(1);

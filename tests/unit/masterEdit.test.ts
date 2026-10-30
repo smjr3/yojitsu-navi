@@ -572,7 +572,7 @@ describe("影響ダイアログの「何が変わるか」", () => {
     expect(describeImpactEffects("rates", imp.columns).costChanges).toBe(true);
     expect(describeImpactEffects("teams", ["name"]).effects).toEqual(["チーム名の表示"]);
     expect(describeImpactEffects("teams", ["parent_team_id"]).effects[0]).toContain("上位組織の合計");
-    expect(describeImpactEffects("assignments", ["allocation"]).effects[0]).toContain("着地見込み（アサイン方式）");
+    expect(describeImpactEffects("assignments", ["allocation"]).effects[0]).toContain("着地見込み（計画値）");
     expect(describeImpactEffects("rates", [])).toEqual({ effects: ["その月の行の値"], costChanges: false, note: null });
   });
 });

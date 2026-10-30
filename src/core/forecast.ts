@@ -6,7 +6,7 @@ import { roundYen } from "./cost.js";
 import { rateFor, type MasterIndex } from "./masters.js";
 import type { Assignment, Config, Contract, ContractMonth, Forecast, ForecastBreakdown, ForecastMethod, YearMonth } from "./types.js";
 
-export const FORECAST_METHODS: readonly ForecastMethod[] = ["recent3", "all", "assignment"];
+export const FORECAST_METHODS: readonly ForecastMethod[] = ["assignment", "recent3", "all"];
 
 export interface ForecastContext {
   asOfMonth: YearMonth;

@@ -20,6 +20,8 @@ async function go(page: Page, path: string) {
 }
 
 const model = getModel();
+/** 着地見込みの方式の既定（config.json。§51 で計画値） */
+const DEFAULT_METHOD = model.config.forecastMethodDefault;
 const FY = fiscalPeriod(model);
 const groups = groupByCustomer(model.contracts.map((r) => r.contract));
 const inFy = (ids: readonly string[]) => aggregate(model, { period: FY, contractIds: ids as string[] });
@@ -34,7 +36,7 @@ const listed = (restrict?: readonly string[]) => {
 const rowByKey = (page: Page, caption: string, key: string) => tableByCaption(page, caption).locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(key)}]`) });
 
 /** 顧客一覧の 1 行を core の値と比べる */
-async function expectRow(page: Page, key: string, ids: readonly string[], method: "recent3" = "recent3") {
+async function expectRow(page: Page, key: string, ids: readonly string[], method = DEFAULT_METHOD) {
   const table = tableByCaption(page, "顧客一覧");
   const h = await headerIndex(table);
   const row = table.locator("tbody tr[data-key]").filter({ has: page.locator(`xpath=self::tr[@data-key=${JSON.stringify(key)}]`) });
@@ -223,7 +225,7 @@ test.describe("顧客詳細 /customer", () => {
     await expect(page.locator("h1")).toHaveText(g.label);
     // KPI
     const t = inFy(g.contractIds);
-    const f = forecastFor("recent3", g.contractIds, model);
+    const f = forecastFor(DEFAULT_METHOD, g.contractIds, model);
     await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
     await expect(kpiValue(page, 0)).toHaveText(yen(t.budget));
     await expect(kpiValue(page, 1)).toHaveText(yen(t.cost));
@@ -422,10 +424,10 @@ test.describe("画面の作法", () => {
     const dangerText = await page.locator("tbody .yn-danger-text").evaluateAll((els) => els.map((e) => (e.textContent ?? "").replace(/[▲\s]/g, "")));
     for (const t of dangerText) expect(t.length).toBeGreaterThan(0);
     // 超過見込みの案件を持つ顧客に『赤字 N件』が出る
-    const deficitCustomers = listed().filter((g) => forecastFor("recent3", g.ids, model).deficitContractIds.length > 0);
+    const deficitCustomers = listed().filter((g) => forecastFor(DEFAULT_METHOD, g.ids, model).deficitContractIds.length > 0);
     expect(deficitCustomers.length).toBeGreaterThan(0);
     for (const g of deficitCustomers) {
-      const n = forecastFor("recent3", g.ids, model).deficitContractIds.length;
+      const n = forecastFor(DEFAULT_METHOD, g.ids, model).deficitContractIds.length;
       await expect(rowByKey(page, "顧客一覧", g.key)).toContainText(`超過見込み ${n}件`);
     }
   });

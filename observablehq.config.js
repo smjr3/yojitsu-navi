@@ -107,9 +107,7 @@ function header({ path }) {
   const badge = `<span class="yn-mr-badge" hidden><span class="yn-mr-badge-n" aria-hidden="true"></span><span class="yn-mr-badge-sr visually-hidden"></span></span>`;
   const link = (item, cls) =>
     `<a class="${cls}" href="${item.path}"${isOn(item) ? ' aria-current="page"' : ""}>${escapeHtml(item.name)}${item.badge ? badge : ""}</a>`;
-  // テーマ切替と設定は、他のリンクと見分けられるアイコンのボタン（§28）
-  const moon = `<svg class="yn-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M20.7 14.6A8.5 8.5 0 0 1 9.4 3.3a.8.8 0 0 0-1-.9A10 10 0 1 0 21.6 15.6a.8.8 0 0 0-.9-1z"/></svg>`;
-  const sun = `<svg class="yn-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>`;
+  // 設定と「⋯」は、他のリンクと見分けられるアイコンのボタン（§28。テーマの切替は設定画面だけ）
   const gear = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .3.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>`;
   const dots = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></g></svg>`;
   const settingsOn = path === "/settings";
@@ -119,13 +117,13 @@ function header({ path }) {
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
-  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><button type="button" class="yn-icon-btn yn-theme-toggle" aria-pressed="false" aria-label="${escapeHtml(ja.app.themeToggle)}" title="${escapeHtml(ja.app.themeToggle)}">${moon}${sun}</button><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a>${more}</span></nav>
+  <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a>${more}</span></nav>
 </div>
 <div id="yn-filterbar-slot" class="yn-filterbar-slot"></div>`;
 }
 
 /**
- * テーマ（既定ライト）。描画前に localStorage の選択を <html data-theme> に戻し、ヘッダーの切替ボタンで保存する。
+ * テーマ（既定ライト）。描画前に localStorage の選択を <html data-theme> に戻す。切り替えは設定画面（§28）だけ。
  * Framework の dark（グラフの配色）は body の color-scheme を見て自動で追従する（style.css の :root[data-theme="dark"]）。
  */
 const THEME_SCRIPT = `(() => {
@@ -134,7 +132,6 @@ const THEME_SCRIPT = `(() => {
   const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
   const apply = (t) => {
     root.dataset.theme = t === "dark" ? "dark" : "light";
-    for (const b of document.querySelectorAll(".yn-theme-toggle")) b.setAttribute("aria-pressed", String(t === "dark"));
   };
   const choose = (t) => {
     try { localStorage.setItem(KEY, t); } catch {}
@@ -142,13 +139,9 @@ const THEME_SCRIPT = `(() => {
     window.dispatchEvent(new CustomEvent("yn-theme", { detail: root.dataset.theme }));
   };
   apply(read());
-  // 設定画面（§28）からも同じ方法で切り替える
+  // 設定画面（§28）が切り替えに使う
   window.ynSetTheme = choose;
   document.addEventListener("DOMContentLoaded", () => apply(read()));
-  document.addEventListener("click", (e) => {
-    if (!(e.target instanceof Element) || !e.target.closest(".yn-theme-toggle")) return;
-    choose(root.dataset.theme === "dark" ? "light" : "dark");
-  });
 })();`;
 /**
  * 戻る・再読み込みでスクロール位置を戻す。画面はデータを読んでから描くため、ブラウザ任せだと一番上に戻ってしまう。

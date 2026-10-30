@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
 
 const model = getModel();
+/** 着地見込みの方式の既定（config.json。§51 で計画値） */
+const DEFAULT_METHOD = model.config.forecastMethodDefault;
 const FY = fiscalPeriod(model);
 const tree = treeAt(FY.to, model);
 
@@ -31,7 +33,7 @@ test("T111: パンくず・見出し・KPI 5 枚が core の集計と一致す�
   }
   const ids = teamContractIds("T111", FY, model)!;
   const totals = totalsFor(FY, ids, model);
-  const fc = forecastFor("recent3", ids, model);
+  const fc = forecastFor(DEFAULT_METHOD, ids, model);
   await expect(page.locator(".yn-kpi-grid .yn-kpi")).toHaveCount(5);
   await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget));
   await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost));
@@ -96,7 +98,7 @@ test("案件一覧: 期間内の案件だけ。列順は案件一覧と同じ。
   expect(labelsHere).toEqual(labelsThere);
   await gotoPage(page, "/team?id=S21&unit=yen");
   for (const r of expected) {
-    const e = contractRowExpected(r, FY, "recent3", model);
+    const e = contractRowExpected(r, FY, DEFAULT_METHOD, model);
     const row = table.locator(`tbody tr[data-key="${r.contract.contractId}"]`);
     expect(parseNumber(await cellText(row, col(h, "予算")))).toBe(e.totals.budget);
     expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(e.totals.cost);

@@ -151,6 +151,15 @@ function safeStorage(kind) {
   }
 }
 
+// リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
+const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+const PLAN_NAME_W_MIN = 100;
+const PLAN_NAME_W_MAX = 480;
+function clampPlanNameW(w) {
+  if (w == null || !Number.isFinite(w)) return null;
+  return Math.round(Math.min(PLAN_NAME_W_MAX, Math.max(PLAN_NAME_W_MIN, w)));
+}
+
 function fileName(path) {
   return path.split("/").pop();
 }
@@ -229,6 +238,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     hist: new Set(),
     /** 名前・所属・案件での絞り込み（数百人の組織で人を探す） */
     q: "",
+    /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
+    nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
   };
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
@@ -1181,6 +1192,68 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       ].map((x, i) => (i === 1 && !x.id ? ((x.id = detailId), x) : x));
     });
 
+    /**
+     * 名前列の幅を変える境目（列見出しの右端）。ドラッグ、または矢印キー（Shift で大きく）で変え、ダブルクリック・Home で既定に戻す。
+     * 表は描き直さず、表の CSS 変数だけを変える（描き直すとドラッグが途切れるため）。覚えるのは離したとき
+     */
+    function planNameResizer() {
+      const handle = html`<span class="yn-col-resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label=${T.plan.nameResize} title=${T.plan.nameResize} aria-valuemin=${PLAN_NAME_W_MIN}></span>`;
+      const table = () => handle.closest("table");
+      const current = () => Math.round(handle.closest("th").getBoundingClientRect().width);
+      // 上限は 480px か、表示幅の 6 割の狭い方（CSS の --yn-plan-name-w-eff と同じ）
+      const maxNow = () => Math.max(PLAN_NAME_W_MIN, Math.min(PLAN_NAME_W_MAX, Math.floor(window.innerWidth * 0.6)));
+      const apply = (w, save) => {
+        plan.nameW = w == null ? null : clampPlanNameW(Math.min(w, maxNow()));
+        const t = table();
+        if (t) {
+          t.classList.toggle("is-name-sized", plan.nameW != null);
+          if (plan.nameW != null) t.style.setProperty("--yn-plan-name-w", `${plan.nameW}px`);
+          else t.style.removeProperty("--yn-plan-name-w");
+        }
+        handle.setAttribute("aria-valuemax", String(maxNow()));
+        if (plan.nameW != null) handle.setAttribute("aria-valuenow", String(plan.nameW));
+        else handle.removeAttribute("aria-valuenow");
+        if (save) plan.nameW != null ? local.set(PLAN_NAME_W_KEY, String(plan.nameW)) : local.remove(PLAN_NAME_W_KEY);
+      };
+      handle.setAttribute("aria-valuemax", String(maxNow()));
+      if (plan.nameW != null) handle.setAttribute("aria-valuenow", String(Math.min(plan.nameW, maxNow())));
+      handle.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        const startX = ev.clientX;
+        const startW = current();
+        handle.setPointerCapture?.(ev.pointerId);
+        handle.classList.add("is-dragging");
+        const move = (e) => apply(startW + e.clientX - startX, false);
+        const up = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", up);
+          handle.removeEventListener("pointercancel", up);
+          handle.classList.remove("is-dragging");
+          apply(plan.nameW, true);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up);
+        handle.addEventListener("pointercancel", up);
+      });
+      handle.addEventListener("dblclick", () => apply(null, true));
+      // 列見出しの並べ替えなどへ伝わらないように（この表の見出しは押しても何も起きないが念のため）
+      handle.addEventListener("click", (ev) => ev.stopPropagation());
+      handle.addEventListener("keydown", (ev) => {
+        const step = ev.shiftKey ? 40 : 10;
+        if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          apply(current() + (ev.key === "ArrowRight" ? step : -step), true);
+        } else if (ev.key === "Home") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          apply(null, true);
+        }
+      });
+      return handle;
+    }
+
     /** セルの吹き出し: その月の案件ごとの人月・契約外予定・合計・空き */
     function cellTip(r, m) {
       const aRows = memberPeriodRows("assignments", r.memberId).filter((x) => x.startMonth <= m && m <= x.endMonth);
@@ -1225,10 +1298,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria} onkeydown=${gridKeys}>
-        <table class="yn-table yn-table-compact yn-me-table yn-me-plan-table">
+        <table class=${`yn-table yn-table-compact yn-me-table yn-me-plan-table${plan.nameW ? " is-name-sized" : ""}`} style=${plan.nameW ? `--yn-plan-name-w: ${plan.nameW}px` : ""}>
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
           <thead><tr>
-            <th scope="col">${T.plan.colMember}</th>
+            <th scope="col" class="yn-me-plan-name-th">${T.plan.colMember}${planNameResizer()}</th>
             ${months.map((m) => html`<th scope="col" class="num">${fmt(T.plan.colMonth, { m: Number(m.slice(5)) })}</th>`)}
             <th scope="col" class="num">${T.plan.colFyTotal}<span class="yn-th-sub">${T.plan.unitPersonMonth}</span></th>
             <th scope="col">${T.masters.colActions}</th>

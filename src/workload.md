@@ -1,5 +1,5 @@
 ---
-title: 工数
+title: 稼働実績
 ---
 
 <div id="page-skeleton" class="yn-skeleton" aria-busy="true" aria-label="読み込み中">

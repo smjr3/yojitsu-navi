@@ -73,7 +73,7 @@ describe("メンバー別: ダミーデータ全体", () => {
     }
   });
 
-  it("アサイン計画方式の残り原価 = 残り月のメンバー計画原価の合計（ダミーデータは同じメンバー×契約のアサインが 1 行ずつ）", () => {
+  it("計画値方式の残り原価 = 残り月のメンバー計画原価の合計（ダミーデータは同じメンバー×契約のアサインが 1 行ずつ）", () => {
     for (const r of model.contracts) {
       const f = r.forecasts.assignment;
       const remaining = new Set(f.breakdown.remainingMonths);

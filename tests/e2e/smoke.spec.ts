@@ -18,7 +18,7 @@ const PAGES: Array<{ path: string; h1: string; extra?: string; noMeta?: boolean 
   { path: "/customers", h1: "顧客" },
   { path: "/members", h1: "メンバー" },
   { path: "/member?id=M011", h1: "" },
-  { path: "/workload", h1: "工数" },
+  { path: "/workload", h1: "稼働実績" },
   { path: "/plan?team=S11", h1: "リソース計画", noMeta: true },
   { path: "/masters", h1: "マスタ編集", noMeta: true },
   { path: "/settings", h1: "設定", noMeta: true },
