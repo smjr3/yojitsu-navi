@@ -257,7 +257,7 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
 }
 
 /**
- * リソース計画の月別の合計（SPEC §57）: 運用保守・運用保守以外の人月を積み上げ、人数 × 1.0 人月の破線と、
+ * リソース計画の月別の合計（SPEC §58）: 運用保守・運用保守以外の人月を積み上げ、人数 × 1.0 人月の破線と、
  * 1.0 人月を超える人がいる月の人数（「!n人」）を重ねる。data は [{ month, main, outside, capacity, over }]（人月）。
  */
 export function planLoadChart({ data, dark = false, width = 640, height = 200 }) {

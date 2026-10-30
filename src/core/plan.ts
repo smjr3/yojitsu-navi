@@ -47,7 +47,7 @@ export interface PlanMemberRow {
   leftFrom: YearMonth | null;
   /** 退職した月以降に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
-  /** months と同じ順の在籍（その月の台帳の行があり、退職していない。復職後は在籍に戻る。§57 の人数 × 1.0） */
+  /** months と同じ順の在籍（その月の台帳の行があり、退職していない。復職後は在籍に戻る。§58 の人数 × 1.0） */
   activeMonths: boolean[];
 }
 

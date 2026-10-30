@@ -284,7 +284,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   let draftMsg = "";
 
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
-  /** 月別の合計グラフ（§57）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
+  /** 月別の合計グラフ（§58）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
   let planChartBuild = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
@@ -1075,7 +1075,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     };
     const totals = months.map(() => 0);
     const outsideTotals = months.map(() => 0);
-    // 月別の合計グラフ（§57）: 人数 × 1.0 人月（その月に在籍している人。退職中・入社前は数えない）と、1.0 人月を超える人の数
+    // 月別の合計グラフ（§58）: 人数 × 1.0 人月（その月に在籍している人。退職中・入社前は数えない）と、1.0 人月を超える人の数
     const capacity = months.map(() => 0);
     const overCounts = months.map(() => 0);
 
@@ -1127,7 +1127,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       }, 150);
     });
 
-    /** 表の上の月別の合計（§57）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
+    /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
     const planChart = () => {
       const isDark = () => document.documentElement.dataset.theme === "dark";
       const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
@@ -1166,6 +1166,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const projectList = [...byProject.values()].filter((g) => g.rows.some((x) => inFy(x) || !/^\d{4}-\d{2}$/.test(x.startMonth) || !/^\d{4}-\d{2}$/.test(x.endMonth)));
       const counts = rowCounts("assignments", aRows);
       const oCounts = rowCounts("outside", oRows);
+      // 開くと出る作業の数 = 案件 ＋ その年度に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
+      const workCount = projectList.length + new Set(oRows.filter(inFy).map((x) => x.type ?? "")).size;
       const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
@@ -1176,7 +1178,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: projectList.length })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(projectList.length) })} ${open ? "▴" : "▾"}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(workCount) })} ${open ? "▴" : "▾"}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addProject}</button>
         </div></td>
       </tr>`;
@@ -2606,7 +2608,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   // 設定画面でトークンを登録して「戻る」で戻ったとき（ページがキャッシュから復元されたとき）は、保存の欄とマージ待ちを読み直す
-  // 月別の合計グラフ（§57）は描いたときの配色なので、テーマが変わったら（自動で PC の設定が変わったときなど）描き直す
+  // 月別の合計グラフ（§58）は描いたときの配色なので、テーマが変わったら（自動で PC の設定が変わったときなど）描き直す
   addEventListener("yn-theme", () => {
     const old = root.querySelector(".yn-me-plan-chart");
     if (old && planChartBuild) old.replaceWith(planChartBuild());

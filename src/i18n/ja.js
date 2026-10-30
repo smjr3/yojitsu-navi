@@ -1427,7 +1427,7 @@ export default {
     toggle: "計画 {n}件",
     support: "応援",
     overChip: "1.0 超 {n}か月",
-    // 表の上の月別の合計グラフ（§57）
+    // 表の上の月別の合計グラフ（§58）
     chartTitle: "月別の合計",
     chartCapacity: "人数 × 1.0",
     chartOver: "!{n}人",
@@ -1520,8 +1520,8 @@ export default {
   planEdit: {
     title: "リソース計画",
     helpHistory: "<strong>変更の持ち方:</strong> 人ごとに 1 行。開くと案件ごとの行と、運用保守以外の種別（提案・会社業務など）ごとの行が出ます。途中で人月が変わるときは、その行の「＋ 変更」で「何月から何人月」を入れると、画面が期間を分けて保存します（同じ案件が 2 行に増えません）。「変更 n件」を開くと、いつから何人月に変わったかの一覧で確かめ・直せます。",
-    toggle: "案件 {n}",
-    toggleAria: "{name} の案件ごとの計画（{n} 件）",
+    toggle: "作業 {n}",
+    toggleAria: "{name} の作業ごとの計画（{n} 件）",
     addProject: "＋ 案件",
     outsideSub: "提案など運用保守以外",
     outsideTypeSub: "運用保守以外",
