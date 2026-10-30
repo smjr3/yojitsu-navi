@@ -107,7 +107,7 @@ export function dailyLegend(dark, { target = false } = {}) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
-    { label: T.daily.legendProjection, color: c.cost, shape: "line-dashed" },
+    { label: T.daily.legendProjection, color: c.cost, shape: "line-dotted" },
     { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
     { label: target ? T.daily.legendCapTarget : T.daily.legendCap, color: c.danger, shape: "line-dashed" },
   ]);

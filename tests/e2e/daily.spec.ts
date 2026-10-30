@@ -99,6 +99,8 @@ test("グラフの目標: 月次推移に「目標の上限」（予算 ×（1 �
   const cap = parseNumber((await row.locator("td, th").nth(ti).textContent()) ?? "")!;
   expect(Math.abs(cap - budget * (1 - t.remainingRate))).toBeLessThanOrEqual(1);
   await expect(section(page).locator(".yn-legend")).toContainText("上限（目標）");
+  // 月末見込みはグラフも凡例も点線（目安・上限の破線と見分ける）
+  await expect(section(page).locator(".yn-legend li", { hasText: "月末見込み" }).locator(".yn-legend-line-dotted")).toHaveCount(1);
   // 目標の無いチームは凡例・列を増やさない
   const without = teams.find((id) => !Object.values(model.targets ?? []).some((x) => x.kind === "team" && x.targetId === id));
   if (without) {

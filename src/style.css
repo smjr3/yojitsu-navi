@@ -1164,6 +1164,11 @@ h3 {
   border-top: 2px dashed var(--c);
   border-radius: 0;
 }
+.yn-legend-line-dotted {
+  height: 0;
+  border-top: 2px dotted var(--c);
+  border-radius: 0;
+}
 .yn-details {
   margin-top: 8px;
   border-top: 1px solid var(--yn-hairline);
