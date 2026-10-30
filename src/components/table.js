@@ -433,7 +433,7 @@ export function teamCountColumns() {
   ];
 }
 
-/** まとめた行（チーム・顧客）の超過見込み: 配下に超過見込みの案件があり、合計の着地もマイナス（§66） */
+/** まとめた行（チーム・顧客）の超過見込み: 配下に超過見込みの案件があり、合計の着地もマイナス（§67） */
 const teamDeficit = (row) => row.deficitCount > 0 && (row.forecastGrossProfit ?? 0) < 0;
 /** 行を赤にする超過見込み（案件の行は案件の超過見込み、まとめた行は teamDeficit） */
 function rowDeficit(row) {
@@ -451,7 +451,7 @@ export function rowStatus(row) {
     chips.push(isTeam ? { kind: "danger", text: fmt(T.table.chipTeamDeficit, { n: row.deficitCount }), title: fmt(T.table.chipTeamDeficitTitle, { n: row.deficitCount }) } : { kind: "danger", text: T.table.chipDeficit, title: T.table.chipDeficitTitle });
   }
   if (row.isOverBudget) chips.push({ kind: "danger", text: T.table.chipOverBudget, title: T.table.chipOverBudgetTitle });
-  // まとめた行の合計がマイナスでなければ、超過見込みの案件があっても赤にしない（件数は灰色で出す。§66）
+  // まとめた行の合計がマイナスでなければ、超過見込みの案件があっても赤にしない（件数は灰色で出す。§67）
   if (isTeam && !teamDeficit(row) && row.deficitCount > 0) chips.push({ kind: "neutral", text: fmt(T.table.chipTeamDeficitWithin, { n: row.deficitCount }), title: fmt(T.table.chipTeamDeficitWithinTitle, { n: row.deficitCount }) });
   if (chips.length) return chips;
   if (row.includesPreliminary) return [{ kind: "prelim", text: T.table.chipPrelim, title: T.table.chipPrelimTitle }];

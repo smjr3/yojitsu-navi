@@ -53,7 +53,7 @@ export function statusChip(kind, text, title = null) {
 }
 
 /**
- * 着地見込みの差（まとめた単位）の状態。合計がマイナスのときだけ赤（§66）。
+ * 着地見込みの差（まとめた単位）の状態。合計がマイナスのときだけ赤（§67）。
  * 合計がプラスでも、個々に超過見込みの案件があれば件数を灰色で出す。
  */
 export function forecastStatus(forecast) {

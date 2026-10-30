@@ -76,7 +76,7 @@ test.describe("全体サマリー", () => {
     await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
     await expect(page.locator(".yn-kpi").nth(2)).toContainText(formatPercent(totals.grossMargin));
     const deficit = fc.deficitContractIds.length;
-    // 合計の着地がマイナスのときだけ赤（§66）。プラスなら超過見込みの案件の件数を灰色で
+    // 合計の着地がマイナスのときだけ赤（§67）。プラスなら超過見込みの案件の件数を灰色で
     const chip = page.locator(".yn-kpi").nth(4).locator(".yn-chip");
     if (fc.forecastGrossProfit < 0) await expect(chip).toHaveText(new RegExp(`超過見込み ${deficit}件`));
     else if (deficit > 0) {

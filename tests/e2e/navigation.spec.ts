@@ -131,7 +131,7 @@ test("フィルタはヘッダの固定バーにあり、スクロールして�
   await expect(page.locator("#yn-filter-from")).toBeInViewport();
 });
 
-test("作業実績の取得日時は上段（単位の左）に常に出し、スクロールしても見える。入らない幅では出さない（§65）", async ({ page }) => {
+test("作業実績の取得日時は上段（単位の左）に常に出し、スクロールしても見える。入らない幅では出さない（§66）", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 800 });
   await gotoPage(page, "/contracts");
   const fetched = page.locator(".yn-topbar .yn-filter-fetched");
@@ -147,7 +147,7 @@ test("作業実績の取得日時は上段（単位の左）に常に出し、�
   await expect(fetched).toBeVisible();
 });
 
-test("見た目の揃え: タブの文字・カレンダーのアイコンが上下の中央、狭い幅でもタブが切れない、フッターは中央（§65）", async ({ page }) => {
+test("見た目の揃え: タブの文字・カレンダーのアイコンが上下の中央、狭い幅でもタブが切れない、フッターは中央（§66）", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 800 });
   await gotoPage(page, "/");
   const mid = (b: { y: number; height: number }) => b.y + b.height / 2;

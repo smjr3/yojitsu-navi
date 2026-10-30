@@ -174,7 +174,7 @@ export function mountFilterBar(store, model, options = {}) {
   slot.replaceChildren(form);
   slot.classList.add("is-filled");
   // 表示単位は「見せ方」の設定なので、絞り込みとは分けて上段（右上）に置く
-  // 作業実績の取得日時も、スクロールしても見えるよう同じ上段に置く（§65）
+  // 作業実績の取得日時も、スクロールしても見えるよう同じ上段に置く（§66）
   const unit = form.querySelector(".yn-filter-unit");
   const fetched = form.querySelector(".yn-filter-fetched");
   const unitSlot = document.getElementById("yn-unit-slot");

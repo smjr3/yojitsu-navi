@@ -454,7 +454,7 @@ export default {
     forecastEndSub: "{end}まで ・ 着地実績 {cost}",
     deficitCount: "超過見込み {n}件",
     noDeficit: "超過見込みなし",
-    // 合計はプラスで、個々に超過見込みの案件がある（赤にしない。§66）
+    // 合計はプラスで、個々に超過見込みの案件がある（赤にしない。§67）
     deficitWithin: "超過見込みの案件 {n}件",
   },
 

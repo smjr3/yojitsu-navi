@@ -350,7 +350,7 @@ body {
     font-size: 13px;
   }
 }
-/* 狭い幅（ブラウザの左右に余白がある・コメント欄を開いたなど）でもタブが切れないよう詰める（§65） */
+/* 狭い幅（ブラウザの左右に余白がある・コメント欄を開いたなど）でもタブが切れないよう詰める（§66） */
 @media (max-width: 479px) {
   .yn-tabs {
     gap: 0;
@@ -425,7 +425,7 @@ body {
   color: var(--yn-text-muted);
   overflow: hidden;
 }
-/* アイコンは行の高さに引きずられないよう箱ごと中央に置く（文字のベースラインで数 px 上にずれていた。§65） */
+/* アイコンは行の高さに引きずられないよう箱ごと中央に置く（文字のベースラインで数 px 上にずれていた。§66） */
 .yn-date-pick-icon,
 .yn-date-pick-icon svg {
   display: block;
@@ -3555,7 +3555,7 @@ html:has(dialog.yn-dialog[open]) {
   cursor: pointer;
 }
 .yn-seg-radio input {
-  margin: 0; /* 既定の上の余白でラジオが文字より下がるのを防ぐ（§65） */
+  margin: 0; /* 既定の上の余白でラジオが文字より下がるのを防ぐ（§66） */
 }
 .yn-seg-radio:has(input:checked) {
   background: var(--yn-accent-bg);
