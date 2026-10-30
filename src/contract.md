@@ -13,7 +13,7 @@ title: 案件詳細
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } from "./core/index.js";
-import { customerKey } from "./core/index.js";
+import { customerKey, targetForMonth } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
@@ -22,7 +22,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
+import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
@@ -185,25 +185,26 @@ if (vm) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§61）。読めなければ出さない
+if (vm) {
+  const series = withTargets(vm.series, (m) => targetForMonth(model, "project", vm.contract.contractId, m));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
+  display(chartFigure({
+    title: T.charts.monthlyTitle,
+    subtitle: periodJa(vm.period),
+    legend: monthlyLegend(dark, series),
+    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+  }));
+}
+```
+
+```js
+// 今月の進捗（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
 ```
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
-}
-```
-
-```js
-if (vm) {
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(chartFigure({
-    title: T.charts.monthlyTitle,
-    subtitle: periodJa(vm.period),
-    legend: monthlyLegend(dark),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-  }));
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
 }
 ```
 
