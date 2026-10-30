@@ -269,6 +269,25 @@ for (const width of [1280, 1024, 768, 390]) {
   });
 }
 
+for (const width of [1440, 1366, 1280, 1024, 768]) {
+  test(`フィルタ: 着地見込みだけが次の行に落ちない（チームと同じ行。${width}px）`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await gotoPage(page, "/");
+    const box = async (sel: string) => (await page.locator(sel).first().boundingBox())!;
+    const period = await box(".yn-filter-period");
+    const team = await box(".yn-filter-team");
+    const method = await box(".yn-filter-method");
+    expect(Math.abs(team.y + team.height / 2 - (method.y + method.height / 2))).toBeLessThanOrEqual(2);
+    // 1366px 以上は 1 行、それより狭いと期間の下にチームと着地見込みが並ぶ
+    if (width >= 1366) expect(Math.abs(period.y - team.y)).toBeLessThanOrEqual(4);
+    else expect(team.y).toBeGreaterThan(period.y + period.height - 1);
+    // チームの見出しは折り返さない
+    const label = await box(".yn-filter-team label");
+    expect(label.height).toBeLessThan(24);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}
+
 test("下書きの復元待ちのあいだは、セルをクリックしても内訳を見せるだけ（編集欄は開かない）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   await cell(page, "M010", "2027-02").click();
