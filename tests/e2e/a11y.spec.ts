@@ -200,7 +200,7 @@ test.describe("ダークモード", () => {
   }
 });
 
-test.describe("配色（§52）", () => {
+test.describe("配色（§53）", () => {
   const bgLum = (page: import("@playwright/test").Page) =>
     page.evaluate(() => {
       const m = getComputedStyle(document.documentElement).backgroundColor.match(/\d+/g)!.map(Number);

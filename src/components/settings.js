@@ -1,5 +1,5 @@
 /**
- * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・差し色、§52）
+ * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・差し色、§53）
  *
  *   settingsPanel({ masterEdit, fetchImpl }) → HTMLElement
  */
@@ -65,7 +65,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     renderGitlab();
     try {
       check = { info: await checkConnection(doFetch, cfg, getToken()) };
-      // GitLab のテーマを配色に使う（§52）
+      // GitLab のテーマを配色に使う（§53）
       window.ynAppearance?.setGitlabUser(check.info.appearance);
     } catch (e) {
       check = { error: { message: e?.message ?? String(e), detail: e?.detail ?? "" } };

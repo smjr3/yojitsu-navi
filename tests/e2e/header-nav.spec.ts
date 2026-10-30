@@ -1,20 +1,24 @@
 /**
- * ヘッダーの並び（SPEC §45）
- * - 右上は業務の「リソース計画」「マスタ編集」だけ。使い方・データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる（§47）
+ * ヘッダーの並び（SPEC §45・§52）
+ * - 右上は業務の「リソース計画」だけ（大きめのボタン）。マスタ編集・使い方・データ確認・計算ルールは右端「その他」（⋯）のメニューに入れる（§47）
  * - メニューは押すと開き、もう一度押す・外を押す・Esc・フォーカスが外れると閉じる。開いている画面なら ⋯ が選択状態
  */
 import { test, expect, gotoPage } from "./helpers/app.js";
 
-test("右上はリソース計画 → マスタ編集の順。使い方・データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
+test("右上はリソース計画だけ。マスタ編集・使い方・データ確認・計算ルールは ⋯ のメニューから開ける", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
-  await expect(page.locator(".yn-tools a.yn-tool")).toHaveText(["リソース計画", /^マスタ編集/]);
+  await expect(page.locator(".yn-tools a.yn-tool")).toHaveText(["リソース計画"]);
+  // よく使うので大きめ（文字 14px・高さ 32px 以上）
+  const tool = page.locator(".yn-tools a.yn-tool");
+  expect(await tool.evaluate((e) => getComputedStyle(e).fontSize)).toBe("14px");
+  expect((await tool.boundingBox())!.height).toBeGreaterThanOrEqual(32);
   const btn = page.getByRole("button", { name: "その他" });
   const menu = page.locator("#yn-more-menu");
   await expect(menu).toBeHidden();
   await expect(btn).not.toHaveClass(/is-current/);
   await btn.click();
   await expect(btn).toHaveAttribute("aria-expanded", "true");
-  await expect(menu.locator("a")).toHaveText(["使い方", "データ確認", "計算ルール"]);
+  await expect(menu.locator("a")).toHaveText([/^マスタ編集/, "使い方", "データ確認", "計算ルール"]);
   await expect(menu.locator("a").first()).toBeFocused();
   await btn.click();
   await expect(menu).toBeHidden();
@@ -27,9 +31,7 @@ test("右上はリソース計画 → マスタ編集の順。使い方・デー
   await expect(btn).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
   await expect(menu).toBeHidden();
   await btn.click();
   await menu.getByRole("link", { name: "計算ルール" }).click();

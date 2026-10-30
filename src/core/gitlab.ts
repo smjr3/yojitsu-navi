@@ -331,7 +331,7 @@ export type ConnectionWarning = "scope" | "visibility" | "pagesPublic" | "unprot
 
 export interface ConnectionInfo {
   user: GitLabUser;
-  /** 配色に使う GitLab のユーザー設定（GET /user の theme_id・color_mode_id。§52） */
+  /** 配色に使う GitLab のユーザー設定（GET /user の theme_id・color_mode_id。§53） */
   appearance: { theme_id: number | null; color_mode_id: number | null };
   /** プロジェクトでの権限レベル（プロジェクトとグループの大きいほう。取れなければ null） */
   accessLevel: number | null;

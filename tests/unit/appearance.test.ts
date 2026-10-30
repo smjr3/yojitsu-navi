@@ -1,5 +1,5 @@
 /**
- * 配色（SPEC §52）: 表示モード・差し色の決め方、GitLab の設定の読み取り、描画前スクリプト
+ * 配色（SPEC §53）: 表示モード・差し色の決め方、GitLab の設定の読み取り、描画前スクリプト
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

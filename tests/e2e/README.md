@@ -63,7 +63,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
 | `screen-text.spec.ts` | 画面の説明文の量（各画面の本文の文章は合計 120 文字・1 段落 70 文字まで。説明は「?」へ）と、GitLab のトークン入力が設定画面だけにあること。SPEC §37 |
 | `guide.spec.ts` | 使い方（「⋯」から開く・目次で節へ移動して見出しが固定ヘッダーに隠れない・リンクがすべてアプリ内で開ける・スマホ幅ではみ出さない）。SPEC §47 |
-| `header-nav.spec.ts` | ヘッダーの並び（右上はリソース計画 → マスタ編集、使い方・データ確認・計算ルールは「⋯」のメニュー・開閉・選択状態・スマホ幅で 1 段）。SPEC §45 |
+| `header-nav.spec.ts` | ヘッダーの並び（右上はリソース計画だけで大きめ、マスタ編集・使い方・データ確認・計算ルールは「⋯」のメニュー・開閉・選択状態・スマホ幅で 1 段）。SPEC §45・§52 |
 | `scale-data.spec.ts` | 実運用規模のデータ: 退職者の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
 | `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |
