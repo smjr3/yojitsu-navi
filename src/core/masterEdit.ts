@@ -356,21 +356,23 @@ export const STAMPED_FILES: readonly MasterFileId[] = ["assignments", "outside"]
  * 追加・変更した行に変更者（GitLab のユーザー名。分からなければ空）と変更日（YYYY-MM-DD）を書き込む（§56）。
  * 列が無いファイルには見出しの末尾に足す。変更していない行はそのまま（元のテキストで書き出す）
  */
+/** 変更者・変更日の列が見出しに無ければ末尾に足す（元の行も列数を揃える。行の値・状態は変えない） */
+export function withStampColumns(doc: MasterDoc): MasterDoc {
+  const missing = [STAMP_COLUMNS.by, STAMP_COLUMNS.at].filter((c) => !doc.header.includes(c));
+  if (missing.length === 0) return doc;
+  const header = [...doc.header, ...missing];
+  const width = header.length;
+  const originals: MasterDoc["originals"] = {};
+  for (const [id, o] of Object.entries(doc.originals)) originals[id] = { ...o, cells: padCells(o.cells, width) };
+  return { ...doc, header, headerRaw: null, originals, rows: doc.rows.map((r) => ({ id: r.id, cells: padCells(r.cells, width) })) };
+}
+
 export function stampChangedRows(doc: MasterDoc, by: string, at: string): MasterDoc {
   if (!STAMPED_FILES.includes(doc.fileId)) return doc;
   const targets = doc.rows.filter((r) => rowState(doc, r) !== "unchanged" && !isBlankRow(r.cells));
   if (targets.length === 0) return doc;
-  const header = doc.header.slice();
-  let headerRaw = doc.headerRaw;
-  for (const c of [STAMP_COLUMNS.by, STAMP_COLUMNS.at]) {
-    if (!header.includes(c)) {
-      header.push(c);
-      headerRaw = null;
-    }
-  }
+  const { header, headerRaw, originals } = withStampColumns(doc);
   const width = header.length;
-  const originals: MasterDoc["originals"] = {};
-  for (const [id, o] of Object.entries(doc.originals)) originals[id] = { ...o, cells: padCells(o.cells, width) };
   const iBy = header.indexOf(STAMP_COLUMNS.by);
   const iAt = header.indexOf(STAMP_COLUMNS.at);
   const ids = new Set(targets.map((r) => r.id));

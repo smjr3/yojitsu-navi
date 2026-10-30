@@ -7,7 +7,7 @@
  *  2. 対応しなかった行は、キー列（と適用開始月／開始月）が同じ元の行と順に対にする（変更）
  *  3. 残りは追加。どの行とも対にならなかった元の行は削除
  */
-import { MASTER_FILES, STAMPED_FILES, STAMP_COLUMNS, alignRows, type MasterDoc, type MasterRow } from "./masterEdit.js";
+import { MASTER_FILES, STAMPED_FILES, STAMP_COLUMNS, alignRows, withStampColumns, type MasterDoc, type MasterRow } from "./masterEdit.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface CsvParseError {
@@ -91,17 +91,20 @@ function sameCells(a: readonly string[], b: readonly string[]): boolean {
  * 書き換えた CSV を文書に取り込む。見出しは doc と同じ列名の集合でなければならない（順序は自由）。
  * 戻り値の doc は元ファイル（doc.originals）に対する行 id を保つので、差分・影響月・下書きはそのまま使える
  */
-export function docFromCsvText(doc: MasterDoc, text: string): CsvImportResult {
+export function docFromCsvText(source: MasterDoc, text: string): CsvImportResult {
   const empty = { added: 0, changed: 0, removed: 0, unchanged: 0 };
   const parsed = parseCsvOrTsv(text);
   if (!parsed.table) return { doc: null, errors: parsed.errors, stats: empty, delimiter: "," };
   const { header, rows, delimiter } = parsed.table;
+  // 変更者・変更日の列（§56）が貼り付けた側にだけあれば（このアプリのダウンロードなど）、文書の見出しに足して受け入れる
+  const stamped = STAMPED_FILES.includes(source.fileId);
+  const doc = stamped && [STAMP_COLUMNS.by, STAMP_COLUMNS.at].some((c) => header.includes(c) && !source.header.includes(c)) ? withStampColumns(source) : source;
   const errors: CsvParseError[] = [];
   const seen = new Set<string>();
   const dup = header.filter((h) => (seen.has(h) ? true : (seen.add(h), false)));
   const unknown = header.filter((h) => h !== "" && !doc.header.includes(h));
   // 変更者・変更日の列（§56）は無くてもよい（Excel で列を消して貼っても通す）。元の行の値を引き継ぐ
-  const carried = STAMPED_FILES.includes(doc.fileId) ? [STAMP_COLUMNS.by, STAMP_COLUMNS.at].filter((c) => doc.header.includes(c) && !header.includes(c)) : [];
+  const carried = stamped ? [STAMP_COLUMNS.by, STAMP_COLUMNS.at].filter((c) => doc.header.includes(c) && !header.includes(c)) : [];
   const missing = doc.header.filter((h) => !header.includes(h) && !(carried as string[]).includes(h));
   if (dup.length) errors.push({ line: 1, message: fmt(T.csvEdit.duplicateColumns, { cols: [...new Set(dup)].join(", ") }) });
   if (unknown.length) errors.push({ line: 1, message: fmt(T.csvEdit.unknownColumns, { cols: unknown.join(", ") }) });

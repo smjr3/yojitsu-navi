@@ -2357,11 +2357,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     saving = true;
     outcome = null;
     renderSave();
+    // 検証を通った内容をここで固定する（変更者を問い合わせているあいだに編集されても、検証していない内容を送らない）
+    const snapshot = changedFiles().map((id) => ({ id, doc: docs[id], text: validation.texts[id] }));
+    const message = (messageInput || "").trim() || commitMessage();
+    const description = mrDescription();
     try {
       // 追加・変更した行に変更者と変更日を書き込む（§56。リソース計画の変更の履歴に出す）
-      const by = changedFiles().some((id) => STAMPED_FILES.includes(id)) ? (await fetchCurrentUser(gitlab, data.masterEdit, token)).username : "";
-      const files = changedFiles().map((id) => ({ path: data.files[id].repoPath ?? MASTER_FILES[id].path, content: stampedText(id, by), lastCommitId: bases[id].lastCommitId, create: data.files[id].exists === false }));
-      const result = await saveToGitLab(gitlab, { config: data.masterEdit, token, files, message: (messageInput || "").trim() || commitMessage(), description: mrDescription(), now: now() });
+      const by = snapshot.some((f) => STAMPED_FILES.includes(f.id)) ? (await fetchCurrentUser(gitlab, data.masterEdit, token)).username : "";
+      const files = snapshot.map((f) => ({ path: data.files[f.id].repoPath ?? MASTER_FILES[f.id].path, content: stampedText(f.id, by, f.doc, f.text), lastCommitId: bases[f.id].lastCommitId, create: data.files[f.id].exists === false }));
+      const result = await saveToGitLab(gitlab, { config: data.masterEdit, token, files, message, description, now: now() });
       outcome = { kind: "ok", result };
       locked = true;
       // 保存できたら下書きは不要
@@ -2387,10 +2391,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   /** 保存する CSV（追加・変更した行に変更者・変更日を書く。§56） */
-  function stampedText(id, by) {
-    if (!STAMPED_FILES.includes(id)) return validation.texts[id];
+  function stampedText(id, by, doc = docs[id], text = validation.texts[id]) {
+    if (!STAMPED_FILES.includes(id)) return text;
     const at = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(now());
-    return serializeMasterDoc(stampChangedRows(docs[id], by, at)).text;
+    return serializeMasterDoc(stampChangedRows(doc, by, at)).text;
   }
 
   function download(id) {

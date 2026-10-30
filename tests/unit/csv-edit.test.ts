@@ -99,6 +99,13 @@ describe("変更者・変更日の列（§56）", () => {
       "member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\nM1,C1,2025-04,2025-09,0.5,hanako,2025-04-01\nM2,C1,2025-04,2025-09,0.4,hanako,2025-04-01\nM3,C1,2025-10,2025-10,0.2,,\n",
     );
   });
+  it("列の無い元ファイルにも、列のある CSV（このアプリのダウンロード）を貼れる", () => {
+    const doc = parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation\nM1,C1,2025-04,2025-09,0.5\nM2,C1,2025-04,2025-09,0.3\n");
+    const r = docFromCsvText(doc, "member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\nM1,C1,2025-04,2025-09,0.5\nM2,C1,2025-04,2025-09,0.4,,2025-10-01\n");
+    expect(r.errors).toEqual([]);
+    expect(r.stats).toEqual({ added: 0, changed: 1, removed: 0, unchanged: 1 });
+    expect(serializeMasterDoc(r.doc!).text).toBe("member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\nM1,C1,2025-04,2025-09,0.5\nM2,C1,2025-04,2025-09,0.4,,2025-10-01\n");
+  });
   it("対象外のファイルでは、無い列はこれまでどおりエラー", () => {
     const r = docFromCsvText(base(), "key,hourly_rate\n部長,12000\n");
     expect(r.errors.length).toBeGreaterThan(0);
