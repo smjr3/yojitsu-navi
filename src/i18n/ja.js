@@ -1727,7 +1727,7 @@ export default {
     demoReset: "デモをリセット（マージリクエストをすべて消す）",
     demoResetDone: "デモをリセットしました。",
     displayTitle: "表示",
-    displayHint: "「自動」は GitLab のユーザー設定（カラーモード・テーマ）に合わせ、GitLab に接続していなければ PC の設定に合わせます。",
+    displayHint: "「自動」は、ライト／ダークを PC の設定に、差し色を GitLab のテーマに合わせます。",
     theme: "表示モード",
     accent: "差し色",
     auto: "自動（{value}・{from}）",

@@ -137,6 +137,11 @@ describe("runAppearance（描画前スクリプト）", () => {
     await tick();
     expect(calls).toHaveLength(1);
   });
+  it("トークンが無ければ保存してある GitLab の設定を使わない（タブを閉じてトークンが消えた後）", () => {
+    const look = JSON.stringify({ mode: "dark", accent: "red", at: Date.now() });
+    expect(run(fakeWindow({ local: { [GITLAB_LOOK_KEY]: look } })).get()).toMatchObject({ theme: "light", accent: "blue" });
+    expect(run(fakeWindow({ local: { [GITLAB_LOOK_KEY]: look, [TOKEN_STORAGE_KEY]: "tok" } })).get()).toMatchObject({ theme: "dark", accent: "red" });
+  });
   it("読めなければ前の値のまま", async () => {
     const f = fakeWindow({ session: { [TOKEN_STORAGE_KEY]: "tok" }, fetch: async () => ({ ok: false, json: async () => ({}) }) });
     run(f, "https://g/api/v4");

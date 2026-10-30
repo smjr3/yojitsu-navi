@@ -48,7 +48,7 @@ export interface DemoOptions {
   targetBranch?: string;
 }
 
-/** theme_id 1 = GitLab の既定テーマ（Indigo）。カラーモードは未設定（PC の設定に合わせる） */
+/** theme_id 1 = GitLab の既定テーマ（Indigo）。カラーモードは返さない（本物の GitLab と同じ。PC の設定に合わせる） */
 export const DEMO_USER = { username: "demo-user", name: "デモ利用者", theme_id: 1 };
 
 export function emptyDemoStore(): DemoStore {

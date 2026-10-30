@@ -2,7 +2,8 @@
  * 配色（SPEC §52）: 表示モード（ライト／ダーク）と差し色
  *
  * 決め方（上から順に、決まったものを使う）
- *   表示モード: 設定画面で選んだライト／ダーク → GitLab のユーザー設定（カラーモード）→ PC（OS）の設定 → ライト
+ *   表示モード: 設定画面で選んだライト／ダーク → GitLab（旧ダークテーマ・API が返す場合のカラーモード）→ PC（OS）の設定 → ライト
+ *   （GitLab の GET /user は現行版でカラーモードを返さないので、多くの場合は PC の設定に合わせることになる）
  *   差し色:     設定画面で選んだ色 → GitLab のユーザー設定（テーマ）→ 既定（ブルー）
  * GitLab の設定は「接続を確認」と、トークンがあるときのページ表示（1 時間に 1 回）で GET /user から読み、localStorage に置く。
  *
@@ -20,7 +21,8 @@ export const DEFAULT_ACCENT = "blue";
 
 /**
  * GitLab の GET /user → { mode, accent }（決まらない項目は null）
- *  color_mode_id: 1 ライト / 2 ダーク / 3 自動（GitLab 16 以降）。無い古い GitLab は theme_id 11（ダーク）で判断
+ *  color_mode_id: 1 ライト / 2 ダーク / 3 自動。現行の GitLab の API は返さない（UserPublic に無い）が、返す版があれば使う。
+ *  古い GitLab のダークテーマ theme_id 11 はダーク
  *  theme_id: 1 Indigo / 6 Light Indigo / 4 Blue / 7 Light Blue / 5 Green / 8 Light Green / 9 Red / 10 Light Red / 2 Gray / 3 Light Gray
  */
 export function lookFromGitlab(u) {
@@ -87,9 +89,17 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
       return null;
     }
   }
+  // GitLab のトークン（無ければ GitLab の設定は使わない。タブを閉じてトークンが消えたら PC の設定・既定の色に戻る）
+  var token = "";
+  try {
+    token = w.sessionStorage.getItem("yojitsu-navi:gitlab-token") || "";
+  } catch (e) {
+    /* 無視 */
+  }
+  if (!token) token = lget("yojitsu-navi:gitlab-token") || "";
   // 状態（ストレージが使えないときもページ内では切り替わるよう、選んだ値を持っておく）
   var pref = { theme: lget("yn-theme"), accent: lget("yn-accent") };
-  var mem = { gitlab: cached() };
+  var mem = { gitlab: token ? cached() : null };
   function state() {
     return { theme: pref.theme, accent: pref.accent, gitlab: mem.gitlab, osDark: osDark() };
   }
@@ -155,13 +165,6 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
     /* 無視 */
   }
   // GitLab の設定を読み直す（本物の GitLab に接続済みのときだけ。デモは「接続を確認」で読む）
-  var token = "";
-  try {
-    token = w.sessionStorage.getItem("yojitsu-navi:gitlab-token") || "";
-  } catch (e) {
-    /* 無視 */
-  }
-  if (!token) token = lget("yojitsu-navi:gitlab-token") || "";
   if (cfg && cfg.api && token && w.fetch && !(mem.gitlab && Date.now() - Number(mem.gitlab.at) < TTL)) {
     w.fetch(cfg.api + "/user", { headers: { "PRIVATE-TOKEN": token } })
       .then(function (res) {

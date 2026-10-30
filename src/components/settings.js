@@ -65,7 +65,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     renderGitlab();
     try {
       check = { info: await checkConnection(doFetch, cfg, getToken()) };
-      // GitLab のテーマ・カラーモードを配色に使う（§52）
+      // GitLab のテーマを配色に使う（§52）
       window.ynAppearance?.setGitlabUser(check.info.appearance);
     } catch (e) {
       check = { error: { message: e?.message ?? String(e), detail: e?.detail ?? "" } };
