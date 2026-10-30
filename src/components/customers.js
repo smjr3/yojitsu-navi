@@ -73,7 +73,7 @@ export function contractBreakdowns({ model, store, period, unit }) {
     grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: sub(r) }),
     margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: sub(r) }),
     burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold, asOfMonth: model.meta.asOfMonth, subtitle: sub(r) }),
-    forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
+    forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
   };
 }
 

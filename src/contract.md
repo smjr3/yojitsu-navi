@@ -158,7 +158,7 @@ if (vm) {
         value: inTarget ? money(f.forecastGrossProfit, unit) : "—",
         sub: inTarget ? fmt(T.kpi.forecastSub, { budget: money(f.targetBudget, unit), cost: money(f.forecastCost, unit) }) : T.contract.notInTarget,
         status: !inTarget ? { kind: "neutral", text: T.contract.outOfScope } : f.isDeficit ? { kind: "danger", text: T.breakdown.deficitForecast } : { kind: "ok", text: T.breakdown.surplusForecast },
-        breakdown: () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config }),
+        breakdown: () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config, model }),
         emphasis: true,
       }),
       // 期間が契約の全期間でなければ、契約の終了月までの着地も並べる（年度をまたぐ案件の収支を見るため）
@@ -169,7 +169,7 @@ if (vm) {
             value: money(fEnd.forecastGrossProfit, unit),
             sub: fmt(T.kpi.forecastEndSub, { end: monthJa(c.endMonth), budget: money(fEnd.targetBudget, unit), cost: money(fEnd.forecastCost, unit) }),
             status: fEnd.isDeficit ? { kind: "danger", text: T.breakdown.deficitForecast } : { kind: "ok", text: T.breakdown.surplusForecast },
-            breakdown: () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config }),
+            breakdown: () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config, model }),
           }),
     ].filter(Boolean), { columns: vm.isWhole ? 5 : 6 }),
   );
@@ -239,7 +239,7 @@ if (vm) {
     { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
     { key: "status", label: T.columns.status, type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: STATUS_LABELS[r.status], title: null }), sortValue: (r) => r.status },
     { key: "budget", label: T.columns.budget, type: "money", breakdown: (r) => bd.budgetMonthSpec({ contract: c, cm: r.cm, unit }) },
-    { key: "cost", label: T.columns.cost, type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, subtitle: fmt(T.contract.forecastMonthSubtitle, { month: monthJa(r.month), remaining: money(forecast.breakdown.remainingCost, unit), n: forecast.breakdown.remainingMonths.length }) }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
+    { key: "cost", label: T.columns.cost, type: "money", render: (r, u) => fcCell(r, money(r.cost, u), true), breakdown: (r) => (r.isForecast ? bd.forecastSpec({ forecast, contract: c, unit, config: model.config, model, subtitle: fmt(T.contract.forecastMonthSubtitle, { month: monthJa(r.month), remaining: money(forecast.breakdown.remainingCost, unit), n: forecast.breakdown.remainingMonths.length }) }) : bd.costMonthSpec({ contract: c, cm: r.cm, unit, model })) },
     { key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => fcCell(r, money(r.grossProfit, u)), breakdown: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${c.customerName} / ${c.projectName} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` }) },
     { key: "grossMargin", label: T.columns.grossMargin, type: "percent", render: (r) => fcCell(r, formatPercent(r.grossMargin)), breakdown: (r) => bd.marginSpec({ budget: r.budget, cost: r.cost, grossMargin: r.grossMargin, unit, subtitle: `${c.customerName} / ${c.projectName} ${monthJa(r.month)}${r.isForecast ? T.contract.forecastSuffix : ""}` }) },
     { key: "hours", label: T.columns.hours, type: "hours", hideNarrow: true },
@@ -338,7 +338,7 @@ if (vm) {
     btn.addEventListener("click", () => store.set({ method: m }));
     return html`<article class=${`yn-card yn-forecast-card${selected ? " is-selected" : ""}${f.isDeficit && inTarget ? " is-danger" : ""}`} aria-current=${selected ? "true" : null}>
       <h3 class="yn-forecast-title">${METHOD_LABELS[m]}</h3>
-      <div class="yn-forecast-value">${inTarget ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config }), { className: "yn-kpi-value", ariaLabel: fmt(T.contract.forecastAria, { method: METHOD_LABELS[m] }) }) : html`<span class="yn-kpi-value">—</span>`}
+      <div class="yn-forecast-value">${inTarget ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config, model }), { className: "yn-kpi-value", ariaLabel: fmt(T.contract.forecastAria, { method: METHOD_LABELS[m] }) }) : html`<span class="yn-kpi-value">—</span>`}
         ${inTarget ? statusChip(f.isDeficit ? "danger" : "ok", f.isDeficit ? T.breakdown.deficitForecast : T.breakdown.surplusForecast) : statusChip("neutral", T.contract.notInTargetChip)}</div>
       <dl class="yn-forecast-facts">
         <div><dt>${T.breakdown.targetBudget}</dt><dd class="num">${money(f.targetBudget, unit)}</dd></div>
@@ -347,7 +347,7 @@ if (vm) {
         <div><dt>${T.breakdown.forecastCost}</dt><dd class="num">${money(f.forecastCost, unit)}</dd></div>
         ${vm.isWhole
           ? null
-          : html`<div class="yn-forecast-end"><dt>${fmt(T.contract.endForecastFact, { end: monthJa(c.endMonth) })}</dt><dd class="num">${bd.numberButton(money(fEnd.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config }), { className: fEnd.isDeficit ? "yn-num-inline yn-danger-text" : "yn-num-inline", ariaLabel: fmt(T.contract.endForecastAria, { method: METHOD_LABELS[m] }) })}</dd></div>`}
+          : html`<div class="yn-forecast-end"><dt>${fmt(T.contract.endForecastFact, { end: monthJa(c.endMonth) })}</dt><dd class="num">${bd.numberButton(money(fEnd.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config, model }), { className: fEnd.isDeficit ? "yn-num-inline yn-danger-text" : "yn-num-inline", ariaLabel: fmt(T.contract.endForecastAria, { method: METHOD_LABELS[m] }) })}</dd></div>`}
       </dl>
       ${warn ? html`<p class="yn-note yn-note-warn">${warn}</p>` : null}
       ${btn}
