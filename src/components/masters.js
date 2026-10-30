@@ -8,7 +8,7 @@
  */
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { LEAVE_REASONS, addMonths, memberStatus, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory } from "../core/index.js";
+import { LEAVE_REASONS, addMonths, createMasterIndex, memberStatus, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory, planImpact } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -45,7 +45,9 @@ import { allocationFromInput, contractSegments, editMonthAllocation, flattenTeam
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateTimeJst, integer, monthJa } from "./format.js";
+import { dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { buildHref, savedState } from "./state.js";
+import { targetChip } from "./targets.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
@@ -103,6 +105,8 @@ export const FILE_HELP = {
 export const PLAN_VIEW_ID = "plan";
 export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "targets"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
+/** 計画の明細（着地見込みの計画値）に効くファイル（§65） */
+const IMPACT_FILES = Object.freeze(["assignments", "members", "rates"]);
 /** 画面 → その画面で編集するファイル */
 const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], targets: ["targets"], plan: ["assignments", "outside"] };
 /** 人ごとの検証（案件の行ではなく人の行で見せる） */
@@ -197,7 +201,7 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWorked = [], views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, model = null, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
   const VIEW_IDS = [...views];
   /** この画面で編集するファイル */
   const pageFiles = VIEW_IDS.flatMap((v) => VIEW_FILES[v] ?? []);
@@ -242,7 +246,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
   const std = config.standardHoursPerMonth;
   // リソース計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
   const plan = {
-    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked).members, initialMember, asOfMonth) : null),
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []).members, initialMember, asOfMonth) : null),
     months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
     focusMember: initialMember,
     open: new Set(initialMember ? [initialMember] : []),
@@ -299,6 +303,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
     panel: html`<div class="yn-me-panel-slot"></div>`,
     check: html`<div class="yn-me-check-slot"></div>`,
     diff: html`<div class="yn-me-diff-slot"></div>`,
+    impact: html`<div class="yn-me-impact-slot"></div>`,
     save: html`<div class="yn-me-save-slot"></div>`,
   };
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-me-dialog-title"></dialog>`;
@@ -1058,7 +1063,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
       renderPlanCsv();
       return;
     }
-    const src = planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked);
+    const src = planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []);
     const months = plan.months;
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
@@ -2315,7 +2320,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
       if (/^\d{4}-\d{2}$/.test(start) && !plan.months.includes(start)) plan.months = fiscalMonths(start, config.fiscalYearStartMonth);
       plan.q = "";
-      const src = planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked);
+      const src = planSourcesFromDocs(docs, data.context.contracts, model?.leaveMonthsWorked ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
         const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];
@@ -2430,6 +2435,100 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
       <div class="yn-title-with-tip"><h2 id="yn-me-diff-title" class="yn-section-title">${T.masters.diffTitle}</h2>${infoTip(T.masters.diffNote, { label: fmt(T.layout.aboutSection, { title: T.masters.diffTitle }) })}</div>
       ${body}
     </section>`);
+  }
+
+  // ---- 変更の影響（§65） -----------------------------------------------------
+  /** 編集前のマスタで作る計画の材料（土台は変わらないので 1 回だけ） */
+  let impactBase = null;
+  const planInputsOf = (dataset) => ({ masters: createMasterIndex(dataset), assignments: dataset.assignments });
+  function renderImpact() {
+    // リソース計画の画面だけ。計画の明細に効くファイル（アサイン・メンバー・単価）に変更が無ければ出さない
+    if (!model || !VIEW_IDS.includes(PLAN_VIEW_ID) || !IMPACT_FILES.some((id) => diffMasterDoc(docs[id]).count > 0)) {
+      parts.impact.replaceChildren();
+      return;
+    }
+    impactBase ??= planInputsOf(validateEdited(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)])), data.context, config).dataset);
+    const st = savedState(model);
+    // 期間は表示条件の期間（§54）。基準月より前で終わる期間（実績で確定）なら、基準月の年度
+    const period = st.to >= asOfMonth ? { from: st.from, to: st.to } : { from: model.meta.fiscalYearMonths[0], to: model.meta.fiscalYearMonths.at(-1) };
+    const r = planImpact(model, impactBase, planInputsOf(validation.dataset), monthRange(period.from, period.to));
+    const unit = st.unit;
+    const href = (id) => buildHref("./contract", st, { id });
+    const neg = (v) => (v < 0 ? "is-neg" : null);
+    const amount = (v) => html`<span class=${neg(v)}>${money(v, unit)}</span>`;
+    const pair = (b, a, f) => html`<span class="yn-me-impact-before">${f(b)}</span> <span aria-hidden="true">${T.plan.impact.arrow}</span><span class="visually-hidden">${T.plan.impact.arrowSr}</span> ${f(a)}`;
+    const rate = (gp, budget) => (budget > 0 ? gp / budget : null);
+    const pct = (v) => html`<span class=${v !== null && v < 0 ? "is-neg" : null}>${formatPercent(v)}</span>`;
+    const head = html`<div class="yn-title-with-tip"><h2 id="yn-me-impact-title" class="yn-section-title">${T.plan.impact.title}</h2>${infoTip(fmt(T.plan.impact.tip, { period: periodJa(period) }), { label: fmt(T.layout.aboutSection, { title: T.plan.impact.title }) })}</div>`;
+    if (r.rows.length === 0 && r.targets.length === 0) {
+      parts.impact.replaceChildren(html`<section class="yn-me-section yn-me-impact" aria-labelledby="yn-me-impact-title">${head}<p class="yn-me-empty" data-role="impact-none">${T.plan.impact.none}</p></section>`);
+      return;
+    }
+    const sum = (f) => r.rows.reduce((t, x) => t + f(x), 0);
+    const tot = {
+      delta: sum((x) => x.after.forecastCost - x.before.forecastCost),
+      budget: sum((x) => x.before.targetBudget),
+      gpB: sum((x) => x.before.forecastGrossProfit),
+      gpA: sum((x) => x.after.forecastGrossProfit),
+      endB: sum((x) => x.endBefore.forecastGrossProfit),
+      endA: sum((x) => x.endAfter.forecastGrossProfit),
+    };
+    const rowsTable = r.rows.length
+      ? html`<div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-me-impact-table" data-role="impact-rows">
+          <caption class="visually-hidden">${T.plan.impact.caption}</caption>
+          <thead><tr>
+            <th scope="col">${T.plan.impact.colProject}</th>
+            <th scope="col" class="num">${T.plan.impact.colDelta}</th>
+            <th scope="col" class="num">${T.plan.impact.colRemaining}</th>
+            <th scope="col" class="num hide-phone">${T.plan.impact.colRate}</th>
+            <th scope="col" class="num">${T.plan.impact.colEnd}</th>
+          </tr></thead>
+          <tbody>${r.rows.map((x) => {
+            const d = x.after.forecastCost - x.before.forecastCost;
+            return html`<tr data-contract=${x.contractId} class=${x.after.forecastGrossProfit < 0 || x.endAfter.forecastGrossProfit < 0 ? "is-danger" : null}>
+              <th scope="row"><a href=${href(x.contractId)}>${x.customerName} / ${x.projectName}</a></th>
+              <td class="num"><span class=${d > 0 ? "is-neg" : null}>${moneySigned(d, unit)}</span></td>
+              <td class="num">${pair(x.before.forecastGrossProfit, x.after.forecastGrossProfit, amount)}</td>
+              <td class="num hide-phone">${pair(rate(x.before.forecastGrossProfit, x.before.targetBudget), rate(x.after.forecastGrossProfit, x.after.targetBudget), pct)}</td>
+              <td class="num">${pair(x.endBefore.forecastGrossProfit, x.endAfter.forecastGrossProfit, amount)}</td>
+            </tr>`;
+          })}</tbody>
+          ${r.rows.length > 1
+            ? html`<tfoot><tr>
+                <th scope="row">${fmt(T.plan.impact.total, { n: integer(r.rows.length) })}</th>
+                <td class="num"><span class=${tot.delta > 0 ? "is-neg" : null}>${moneySigned(tot.delta, unit)}</span></td>
+                <td class="num">${pair(tot.gpB, tot.gpA, amount)}</td>
+                <td class="num hide-phone">${pair(rate(tot.gpB, tot.budget), rate(tot.gpA, tot.budget), pct)}</td>
+                <td class="num">${pair(tot.endB, tot.endA, amount)}</td>
+              </tr></tfoot>`
+            : null}
+        </table></div>`
+      : null;
+    const targetName = (t) => {
+      const ev = t.before;
+      const name = t.kind === "team" ? (model.teamTree[ev.target.targetId]?.name ?? ev.target.targetId) : t.kind === "project" ? contractText(ev.target.targetId) : ev.target.targetId;
+      return fmt(T.plan.impact.targetName, { kind: T.targets.kinds[t.kind], name, due: monthJa(ev.period.to) });
+    };
+    const targetsTable = r.targets.length
+      ? html`<div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-me-impact-table" data-role="impact-targets">
+          <caption class="visually-hidden">${T.plan.impact.targetsCaption}</caption>
+          <thead><tr>
+            <th scope="col">${T.plan.impact.colTarget}</th>
+            <th scope="col" class="num">${T.plan.impact.colGoal}</th>
+            <th scope="col" class="num">${T.plan.impact.colRate}</th>
+            <th scope="col" class="num hide-phone">${T.plan.impact.colGap}</th>
+            <th scope="col">${T.plan.impact.colStatus}</th>
+          </tr></thead>
+          <tbody>${r.targets.map((t) => html`<tr class=${t.after.status === "atRisk" ? "is-danger" : null}>
+            <th scope="row">${targetName(t)}</th>
+            <td class="num">${formatPercent(t.before.target.remainingRate)}</td>
+            <td class="num">${pair(t.before.rate, t.after.rate, pct)}</td>
+            <td class="num hide-phone">${pointsSigned(t.after.gap)}</td>
+            <td>${t.before.status === t.after.status ? targetChip(t.after) : pair(t.before, t.after, targetChip)}</td>
+          </tr>`)}</tbody>
+        </table></div>`
+      : null;
+    parts.impact.replaceChildren(html`<section class="yn-me-section yn-me-impact" aria-labelledby="yn-me-impact-title">${head}${rowsTable}${targetsTable}</section>`);
   }
 
   // ---- 保存 ---------------------------------------------------------------
@@ -2685,6 +2784,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
     renderPanel();
     renderCheck();
     renderDiff();
+    renderImpact();
     renderSave();
   }
 
@@ -2699,7 +2799,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWo
     renderSave();
     mrPanel.refresh();
   });
-  root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.save, dialog, tooltip.el, cellEditor.el);
+  root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.impact, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   mrPanel.refresh();
   // 他の画面の検証の一覧から来たとき（?jump=ファイル:行番号）は、その行を見せる（§40）

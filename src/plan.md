@@ -41,9 +41,9 @@ if (model && mastersData?.error) {
     mastersEditor({
       data: mastersData,
       config: model.config,
+      model,
       asOfMonth: model.meta.asOfMonth,
       minMonth: model.meta.minMonth,
-      leaveMonthsWorked: model.leaveMonthsWorked,
       views: PLAN_VIEWS,
       initialTeam: params.get("team") || null,
       initialMember: params.get("member") || null,
