@@ -284,6 +284,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   let draftMsg = "";
 
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
+  /** 月別の合計グラフ（§57）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
+  let planChartBuild = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
     tabs: html`<div class="yn-me-tabs-slot"></div>`,
@@ -1073,7 +1075,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     };
     const totals = months.map(() => 0);
     const outsideTotals = months.map(() => 0);
-    // 月別の合計グラフ（§57）: 人数 × 1.0 人月（退職した月からは数えない）と、1.0 人月を超える人の数
+    // 月別の合計グラフ（§57）: 人数 × 1.0 人月（その月に在籍している人。退職中・入社前は数えない）と、1.0 人月を超える人の数
     const capacity = months.map(() => 0);
     const overCounts = months.map(() => 0);
 
@@ -1125,10 +1127,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       }, 150);
     });
 
-    /** 表の上の月別の合計（§57）。表の合計行と同じ値。配色はテーマを描くときに読む（テーマは設定画面でだけ変わる） */
+    /** 表の上の月別の合計（§57）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
     const planChart = () => {
       const isDark = () => document.documentElement.dataset.theme === "dark";
       const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
+      planChartBuild = planChart;
       return chartFigure({
         title: T.plan.chartTitle,
         subtitle: `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`,
@@ -1148,7 +1151,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       monthly.forEach((v, i) => (totals[i] += v));
       outsideMonthly.forEach((v, i) => (outsideTotals[i] += v));
       months.forEach((m, i) => {
-        if (r.leftFrom == null || m < r.leftFrom) capacity[i] += 1;
+        if (r.activeMonths[i]) capacity[i] += 1;
         if (monthly[i] > 1 + 1e-9) overCounts[i] += 1;
       });
       const overMonths = months.filter((_, i) => monthly[i] > 1 + 1e-9);
@@ -2603,6 +2606,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   // 設定画面でトークンを登録して「戻る」で戻ったとき（ページがキャッシュから復元されたとき）は、保存の欄とマージ待ちを読み直す
+  // 月別の合計グラフ（§57）は描いたときの配色なので、テーマが変わったら（自動で PC の設定が変わったときなど）描き直す
+  addEventListener("yn-theme", () => {
+    const old = root.querySelector(".yn-me-plan-chart");
+    if (old && planChartBuild) old.replaceWith(planChartBuild());
+  });
   addEventListener("pageshow", (e) => {
     if (!e.persisted) return;
     renderSave();

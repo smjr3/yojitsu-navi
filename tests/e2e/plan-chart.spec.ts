@@ -83,3 +83,16 @@ for (const [width, dark] of [[390, false], [768, true], [1280, true]] as const) 
     for (let i = 1; i < boxes.length; i++) expect(boxes[i]!.l).toBeGreaterThanOrEqual(boxes[i - 1]!.r);
   });
 }
+
+test("月別の合計: 表示モードが自動で PC の設定がダークに変わると、グラフもダークの配色で描き直す", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await gotoPage(page, "/plan?team=S11");
+  const svg = chart(page).locator('svg[role="img"]');
+  const color = () => svg.evaluate((el) => getComputedStyle(el).color);
+  await expect(svg).toBeVisible();
+  const light = await color();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
+  await expect.poll(color).not.toBe(light);
+  await expect(chart(page)).toHaveCount(1);
+});
