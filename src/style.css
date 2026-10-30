@@ -1,7 +1,7 @@
 /* 予実ナビ スタイル
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
- * 表示モードと差し色（§53）は head のスクリプト（components/appearance.js）が描画前に <html data-theme data-accent> に当てる。
- * 表示モードは 設定画面 → GitLab（旧ダークテーマ等）→ PC の設定、差し色は 設定画面 → GitLab のテーマ → ブルー の順に決める。
+ * 表示モードとテーマカラー（§53）は head のスクリプト（components/appearance.js）が描画前に <html data-theme data-accent> に当てる。
+ * 表示モードは 設定画面 → GitLab（旧ダークテーマ等）→ PC の設定、テーマカラーは 設定画面 → GitLab のテーマ → ブルー の順に決める。
  * ダークは真っ黒にせず、ネイビー寄りのグレーの面にする。
  * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§46）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
  */
@@ -33,7 +33,7 @@
   --yn-grid: #e1e0d9;
   --yn-wash: rgba(11, 11, 11, 0.04);
   --yn-wash-strong: rgba(11, 11, 11, 0.08);
-  /* 差し色（リンク・フォーカス・選択中・主ボタン）。色は下の :root[data-accent] */
+  /* テーマカラー（リンク・フォーカス・選択中・主ボタン）。色は下の :root[data-accent] */
   --yn-accent: #1c5cab;
   --theme-foreground-focus: var(--yn-accent);
   --yn-focus: var(--yn-accent);
@@ -103,7 +103,7 @@
   --yn-under-bg: #0c2e3b;
 }
 
-/* 差し色（GitLab のテーマの色合い）。文字に使うのでカード・ページの面に対して 6:1 以上（tests/unit/appearance.test.ts） */
+/* テーマカラー（GitLab のテーマの色合い）。文字に使うのでカード・ページの面に対して 6:1 以上（tests/unit/appearance.test.ts） */
 :root[data-accent="indigo"] { --yn-accent: #4b4ba8; }
 :root[data-accent="green"] { --yn-accent: #1b6b3f; }
 :root[data-accent="red"] { --yn-accent: #a82f1d; }
@@ -112,7 +112,7 @@
 :root[data-theme="dark"][data-accent="green"] { --yn-accent: #5cc98f; }
 :root[data-theme="dark"][data-accent="red"] { --yn-accent: #f19280; }
 :root[data-theme="dark"][data-accent="gray"] { --yn-accent: #b8b8c2; }
-/* 設定画面の色見本（選んでいる差し色に関係なく、その色を出す） */
+/* 設定画面の色見本（選んでいるテーマカラーに関係なく、その色を出す） */
 .yn-swatch { width: 14px; height: 14px; border-radius: 4px; background: var(--sw); flex: none; }
 .yn-swatch[data-accent="blue"] { --sw: #1c5cab; }
 .yn-swatch[data-accent="indigo"] { --sw: #4b4ba8; }

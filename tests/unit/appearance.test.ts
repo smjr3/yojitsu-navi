@@ -1,5 +1,5 @@
 /**
- * 配色（SPEC §53）: 表示モード・差し色の決め方、GitLab の設定の読み取り、描画前スクリプト
+ * 配色（SPEC §53）: 表示モード・テーマカラーの決め方、GitLab の設定の読み取り、描画前スクリプト
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -42,7 +42,7 @@ const run = (f: ReturnType<typeof fakeWindow>, api = "") => {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe("lookFromGitlab（GET /user）", () => {
-  it("テーマ ID を差し色に、カラーモード ID を表示モードにする", () => {
+  it("テーマ ID をテーマカラーに、カラーモード ID を表示モードにする", () => {
     expect(lookFromGitlab({ theme_id: 1 })).toEqual({ mode: null, accent: "indigo" });
     expect(lookFromGitlab({ theme_id: 10, color_mode_id: 2 })).toEqual({ mode: "dark", accent: "red" });
     expect(lookFromGitlab({ theme_id: 7, color_mode_id: 1 })).toEqual({ mode: "light", accent: "blue" });
@@ -171,7 +171,7 @@ describe("埋め込み", () => {
   });
 });
 
-describe("差し色の色（style.css）", () => {
+describe("テーマカラーの色（style.css）", () => {
   const css = readFileSync(new URL("../../src/style.css", import.meta.url), "utf8");
   const L = (h: string) => {
     const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -183,7 +183,7 @@ describe("差し色の色（style.css）", () => {
   };
   const token = (block: string, name: string) => block.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})`))?.[1];
   const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf(":root[data-theme=\"dark\"] {"));
-  const darkBlock = css.slice(css.indexOf(":root[data-theme=\"dark\"] {"), css.indexOf("/* 差し色（GitLab"));
+  const darkBlock = css.slice(css.indexOf(":root[data-theme=\"dark\"] {"), css.indexOf("/* テーマカラー（GitLab"));
   const surfaces = {
     light: [token(lightBlock, "--yn-card")!, token(lightBlock, "--theme-background-a")!],
     dark: [token(darkBlock, "--yn-card")!, token(darkBlock, "--theme-background-a")!],

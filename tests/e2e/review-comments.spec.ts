@@ -152,3 +152,21 @@ test("リソース計画の検証: 手でビルドが要るように読める説
   await gotoPage(page, "/plan");
   await expect(page.locator("#observablehq-main")).not.toContainText("ビルド");
 });
+
+test("設定の表示: 「自動」に今の色や由来を添えない、「差し色」と書かない（§55）", async ({ page }) => {
+  await gotoPage(page, "/settings");
+  const main = page.locator("#observablehq-main");
+  await expect(main).not.toContainText("差し色");
+  await expect(main).toContainText("テーマカラー");
+  for (const name of ["yn-set-theme", "yn-set-accent"]) {
+    await expect(page.locator(`input[name="${name}"][value="auto"]`).locator("xpath=..")).toHaveText("自動");
+  }
+});
+
+test("設定画面は「表示」が一番上、リソース計画の人の行のボタンに「＋運用保守以外」を添えない（§55）", async ({ page }) => {
+  await gotoPage(page, "/settings");
+  await expect(page.locator(".yn-settings-section").first()).toHaveAttribute("aria-label", "表示");
+  await gotoPage(page, "/plan");
+  await expect(page.locator('[data-fk^="plan:toggle:"]').first()).toBeVisible();
+  await expect(page.locator(".yn-me-plan-row").filter({ hasText: "運用保守以外" }).locator('[data-fk^="plan:toggle:"]')).toHaveCount(0);
+});
