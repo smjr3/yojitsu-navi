@@ -247,6 +247,7 @@ body {
   display: flex;
   align-items: center;
   padding: 0 12px;
+  border-top: 2px solid transparent; /* 下線（border-bottom）と釣り合わせ、文字を上下の中央に置く */
   color: var(--yn-text-2) !important;
   text-decoration: none;
   white-space: nowrap;
@@ -276,6 +277,21 @@ body {
   align-items: center;
   gap: 6px;
   margin: 0;
+}
+.yn-filter-fetched {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 20px;
+  color: var(--yn-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* 上段に入らない幅では出さない（ページ見出しの下の「作業実績の取得」で見られる） */
+@media (max-width: 879px), (min-width: 1024px) and (max-width: 1279px) {
+  .yn-filter-fetched {
+    display: none;
+  }
 }
 .yn-unit-slot .yn-seg {
   flex-wrap: nowrap;
@@ -331,6 +347,17 @@ body {
   }
   .yn-tool {
     padding: 4px 16px;
+    font-size: 13px;
+  }
+}
+/* 狭い幅（ブラウザの左右に余白がある・コメント欄を開いたなど）でもタブが切れないよう詰める（§65） */
+@media (max-width: 479px) {
+  .yn-tabs {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .yn-tab {
+    padding: 0 min(10px, 1.5vw);
     font-size: 13px;
   }
 }
@@ -397,6 +424,11 @@ body {
   border-radius: 6px;
   color: var(--yn-text-muted);
   overflow: hidden;
+}
+/* アイコンは行の高さに引きずられないよう箱ごと中央に置く（文字のベースラインで数 px 上にずれていた。§65） */
+.yn-date-pick-icon,
+.yn-date-pick-icon svg {
+  display: block;
 }
 .yn-date-pick:hover {
   color: var(--yn-link);
@@ -487,6 +519,7 @@ body {
 #observablehq-footer {
   margin-top: 64px;
   color: var(--yn-text-muted);
+  text-align: center;
 }
 a[href] {
   color: var(--yn-link);
@@ -3520,6 +3553,9 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-card);
   font-size: 14px;
   cursor: pointer;
+}
+.yn-seg-radio input {
+  margin: 0; /* 既定の上の余白でラジオが文字より下がるのを防ぐ（§65） */
 }
 .yn-seg-radio:has(input:checked) {
   background: var(--yn-accent-bg);
