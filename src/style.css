@@ -4048,7 +4048,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-th-inner {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 .yn-th-main {
   flex: 1 1 auto;
@@ -4059,11 +4059,12 @@ html:has(dialog.yn-dialog[open]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 14px; /* 列が多い一覧（1024px）でも横スクロールを増やさない幅 */
   height: 20px;
+  margin-right: -2px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--yn-text-muted);
   opacity: 0.55;
@@ -4176,4 +4177,8 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-filter-clear-all[hidden] {
   display: none;
+}
+/* 漏斗の分だけ見出しが広がらないよう、右の余白を詰める */
+.yn-table thead th.has-filter {
+  padding-right: 2px;
 }

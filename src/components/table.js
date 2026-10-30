@@ -207,7 +207,7 @@ function isActiveFilter(f) {
   return !!f && ((typeof f.q === "string" && f.q !== "") || Array.isArray(f.values) || typeof f.min === "number" || typeof f.max === "number");
 }
 
-const FILTER_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
+const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
 
 let filterPopSeq = 0;
 
