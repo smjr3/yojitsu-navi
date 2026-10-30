@@ -63,7 +63,7 @@
 | トークン | ヘッダにだけ載せる。ログは URL のオリジン+パスだけ。例外メッセージ・ログ・4xx 本文の先頭 200 文字のすべてに `redact`（トークンとその URL エンコード形を `***` に置換）を通す |
 | 文字コード | `encoding` は CSV 応答だけ。`auto` は UTF-8 として厳密に読めなければ Shift_JIS（既存の `decodeAuto`）。JSON は常に UTF-8 |
 | `--dry-run` | 取得とマッピングは実際に行い、ファイル（月 CSV・`_meta.json`・members.csv）を一切書かない。列の対応表（使う列・見つからない列）、応答行数、filters 除外数、先頭 N 行（`--sample=N`、既定 5）を表示 |
-| memberSource の列 | `memberId` / `name` は必須。`kind` / `title` / `department` / `section` は省略可で、**省略した項目は取り込まず現在の値を引き継ぐ**（新規メンバーは kind=employee、他は空）。`kindMap` で人事側の区分値を employee/partner に読み替え（未知の区分値はエラー）。`filters` は csv・http 共通で `memberSource` 直下 |
+| memberSource の列 | `memberId` / `name` は必須。`kind` / `title` / `division` / `department` / `section` は省略可で、**省略した項目は取り込まず現在の値を引き継ぐ**（新規メンバーは kind=employee、他は空）。`kindMap` で人事側の区分値を employee/partner に読み替え（未知の区分値はエラー）。`filters` は csv・http 共通で `memberSource` 直下 |
 | memberSource の http | トークンは `MEMBER_API_TOKEN`（作業実績とは別）。`{from}` `{to}` には実行月が入る |
 | members.csv の追記 | 「現在の有効レコード」= `effective_from <= 実行月` で最新の行（無ければ最新の行）。取り込んだ項目に差がある人だけ `effective_from = 実行月` の行を追加し、他の列（team_id など）は現在の有効レコードから引き継ぐ。**その人の実行月の行が既にあれば追加せず更新**（同じ月に 2 行にしない）。取り込み元に無い人は削除せず件数だけ表示。取り込み元にいて members.csv に居ない人は team_id 空で追加。社員番号重複は先頭を採用、社員番号空の行は除外（件数をログ）。変化が無いときはファイルを書き換えない |
 | 別オーナーとの共有 | `Config` に `memberSource?` を追加（`masterEdit` は別担当が追加）。`WorklogSourceConfig.http.columns` の値は `string \| string[]`（`string` のみの既存設定はそのまま型が通る） |

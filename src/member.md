@@ -125,7 +125,7 @@ if (vm) {
     <div><dt>${T.members.colKind}</dt><dd>${unknown ? statusChip("neutral", T.members.chipUnknown, T.member.unknownTitle) : rec?.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee}${leftMonthOf(records) ? html` ${statusChip("neutral", `${T.members.chipLeft} ${monthJa(leftMonthOf(records))}`, fmt(T.members.chipLeftTitle, { month: monthJa(leftMonthOf(records)) }))}` : null}</dd></div>
     <div><dt>${fmt(T.member.teamAt, { team: model.config.labels?.team ?? T.columns.team, month: monthJa(vm.baseMonth) })}</dt><dd>${isLeftRecord(rec) ? fmt(T.members.leftLastTeam, { team: teamText(rec.teamId) }) : rec?.teamId ? html`<a href=${store.href("./members", { team: rec.teamId })}>${teamText(rec.teamId)}</a>` : T.members.noTeam}</dd></div>
     <div><dt>${T.members.colTitle}</dt><dd>${rec?.title || EMPTY_VALUE}</dd></div>
-    ${rec?.department ? html`<div><dt>${T.member.department}</dt><dd>${rec.department}${rec.section ? ` ${rec.section}` : ""}</dd></div>` : null}
+    ${rec?.division || rec?.department || rec?.section ? html`<div><dt>${T.member.department}</dt><dd>${[rec.division, rec.department, rec.section].filter(Boolean).join(" ")}</dd></div>` : null}
   </dl>`);
   if (records.length > 1) {
     display(html`<details class="yn-details yn-member-history">

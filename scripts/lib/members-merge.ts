@@ -5,7 +5,7 @@
  * - 現在の有効レコード = そのメンバーの effective_from <= 実行月 で最新の行。
  *   未来日付の行しか無い人は、いちばん早い行を土台に実行月の行を足す
  * - 実行月より後の行は残すが、旧値をそのまま引き継いでいる項目は新しい値に揃える
- * - name / kind / title / department / section のどれかが違う人だけ、effective_from = 実行月の行を追加
+ * - name / kind / title / division / department / section のどれかが違う人だけ、effective_from = 実行月の行を追加
  *   （team_id など取り込まない列は直前の有効レコードを引き継ぐ）
  * - 実行月の行がすでにある人が同じ月にまた変わったときは、その行を更新する（同じ月に 2 行にしない）
  * - 取り込み元に無い既存メンバーは削除しない
@@ -16,7 +16,7 @@ import { csvFormat } from "d3-dsv";
 import type { MemberImport } from "../adapters/members.js";
 import { memberStatus } from "../../src/core/csv.js";
 
-export const MEMBER_CSV_COLUMNS = ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"] as const;
+export const MEMBER_CSV_COLUMNS = ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status"] as const;
 
 export type MemberCsvRow = Record<string, string>;
 
@@ -41,6 +41,7 @@ const FIELD_COLUMN: Array<[keyof MemberImport, string]> = [
   ["name", "name"],
   ["kind", "kind"],
   ["title", "title"],
+  ["division", "division"],
   ["department", "department"],
   ["section", "section"],
 ];
@@ -85,6 +86,7 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
         name: m.name ?? "",
         kind: m.kind ?? "employee",
         title: m.title ?? "",
+        division: m.division ?? "",
         department: m.department ?? "",
         section: m.section ?? "",
         team_id: "",

@@ -518,8 +518,8 @@ describe("rebaseDraftFile（古い下書きを最新の土台に当て直す）"
     expect(r.conflicts[0]!.mine).toMatchObject({ member_id: "E2", team_id: "S11", note: "y" });
     expect(r.conflicts[0]!.columns).toEqual(["team_id"]);
     const m = rebaseDraftFile("members", f, latest, { [r.conflicts[0]!.id]: "mine" });
-    // 末尾は省略可の列 status（§35。どちらの版にも無いので空）
-    expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x,", "E2,佐藤,employee,課長,,,S11,2025-04,y,"]);
+    // 末尾は省略可の列 division（§60）と status（§35）。どちらの版にも無いので空
+    expect(keys(m.doc)).toEqual(["E1,山田,employee,主任,,,S11,2025-04,x,,", "E2,佐藤,employee,課長,,,S11,2025-04,y,,"]);
   });
 
   it("土台にない行番号は無視する（壊れた下書きでも落ちない）", () => {
@@ -549,7 +549,8 @@ describe("影響ダイアログの「何が変わるか」", () => {
   it("部署・課だけ → 部署・課の表示。役職 → 単価と実績・残予算・消化率・着地見込み（先頭）", () => {
     const dept = updateRow(m, "o0", { department: "第2事業部", section: "2課" });
     expect(impactBetween(m, dept, range).columns).toEqual(["department", "section"]);
-    expect(describeImpactEffects("members", ["department", "section"]).effects).toEqual(["メンバー詳細の部署・課の表示"]);
+    expect(describeImpactEffects("members", ["department", "section"]).effects).toEqual(["メンバー詳細の事業本部・部・課の表示"]);
+    expect(describeImpactEffects("members", ["division"]).effects).toEqual(["メンバー詳細の事業本部・部・課の表示"]);
     const title = updateRow(m, "o0", { title: "課長", team_id: "S12" });
     const cols = impactBetween(m, title, range).columns;
     expect(cols).toEqual(["title", "team_id"]);
