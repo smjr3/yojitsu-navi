@@ -161,6 +161,27 @@ test("マスタ編集「目標」: 対象・終了月・率の未入力は止め
   await expect(page.locator(".yn-me-check")).toContainText("エラー");
 });
 
+test("マイナスの目標（超過を減らす）: 案件詳細に -50% の目標と判定。▲50 も入力できる", async ({ page }) => {
+  await gotoPage(page, "/contract?id=C117");
+  await expectTargetTable(page, "project", "C117");
+  await expect(page.locator(".yn-targets-table")).toContainText("-50%");
+  const ev = evaluateTarget(model, targetsOf(model, "project", "C117")[0]!, "assignment");
+  expect(ev.target.remainingRate).toBe(-0.5);
+  expect(ev.status).toBe("atRisk");
+  await gotoPage(page, "/contract?id=C143");
+  await expect(page.locator(".yn-targets-table .yn-chip")).toHaveText(/達成見込み$/);
+
+  await gotoPage(page, "/masters?view=targets");
+  await page.getByRole("button", { name: "＋ 新しい目標" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await pickCombo(d.locator("#yn-me-f-target_id"), "C013");
+  await d.locator("#yn-me-f-end_month").fill("2027-03");
+  await d.locator("#yn-me-f-remaining_rate").fill("▲50");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
+});
+
 test("390px・ダーク: 詳細の目標・マスタ編集の目標タブで横スクロールしない", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await useDarkTheme(page);
