@@ -3902,6 +3902,24 @@ html:has(dialog.yn-dialog[open]) {
   min-height: 200px;
 }
 
+/* ── 今月の進み（SPEC §59）: KPI 4 枚は幅が足りれば 4 列、足りなければ 2×2、スマホは 1 列 ── */
+.yn-daily-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+}
+@container (min-width: 760px) {
+  .yn-daily-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .yn-daily-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ── 今月の進み: メンバー×日の表（SPEC §59） ───────────── */
 .yn-dg-wrap {
   overflow-x: auto;

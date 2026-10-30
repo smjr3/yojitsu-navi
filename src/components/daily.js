@@ -9,7 +9,7 @@ import { dailyMembers, dailyProgress, formatHours } from "../core/index.js";
 import { T, fmt } from "../i18n/index.js";
 import { chartColors, chartLegend } from "./charts.js";
 import { chartFigure } from "./chart-zoom.js";
-import { kpiRow, statTile } from "./kpi.js";
+import { statTile } from "./kpi.js";
 import { sectionTitle } from "./layout.js";
 import { dataTable } from "./table.js";
 import { money as moneyBase, monthJa, toCoreUnit } from "./format.js";
@@ -58,8 +58,8 @@ export function dailyKpis(p, { unit, subtitle }) {
   const spec = (key) => () => progressSpec(p, unit, subtitle, key);
   const overPace = p.actual > p.paceToDate;
   const overCap = p.projection > p.cap;
-  return kpiRow(
-    [
+  // 予実の KPI（.yn-kpi-grid）とは別の行。幅が足りれば 4 列、足りなければ 2×2
+  return html`<section class="yn-daily-kpis" aria-label=${T.daily.kpiLabel}>${[
       statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
       statTile({
         label: T.daily.actualLabel,
@@ -85,9 +85,7 @@ export function dailyKpis(p, { unit, subtitle }) {
         id: "yn-daily-projection",
         emphasis: true,
       }),
-    ],
-    { columns: 4 },
-  );
+    ]}</section>`;
 }
 
 export function dailyLegend(dark) {
@@ -220,7 +218,8 @@ export function dailyMemberTable(p, rows, { nameOf, hrefOf }) {
  * members を渡すと（チーム詳細）、下にメンバー×日の表を足す。
  */
 export function dailySection(p, { unit, dark, subtitle, exportName, members = null }) {
-  if (!p) return null;
+  // display(null) は「null」と表示されるので、出さないときは空の断片を返す
+  if (!p) return document.createDocumentFragment();
   const memberRows = members ? dailyMembers(members.model, members.daily, p, members.contractIds) : [];
   const title = fmt(T.daily.sectionTitle, { month: monthJa(p.month) });
   return html`<section class="yn-daily" id="yn-daily">
@@ -228,7 +227,7 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
     ${dailyKpis(p, { unit, subtitle })}
     ${chartFigure({
       title,
-      subtitle,
+      subtitle: [monthJa(p.month), subtitle].filter(Boolean).join(" ・ "),
       legend: dailyLegend(dark),
       draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
       after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName })}</details>`,

@@ -57,6 +57,8 @@ test("今月の進み: 今月を含まない期間（前年度・先月）では
     if ((await btn.count()) === 0 || (await btn.isDisabled())) continue;
     await btn.click();
     await expect(section(page)).toHaveCount(0);
+    // 出さないときに「null」の文字を出さない
+    await expect(page.locator("#observablehq-main")).not.toContainText("null");
   }
   await page.locator('button[data-preset="thisMonth"]').click();
   await expect(section(page)).toHaveCount(1);
