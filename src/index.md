@@ -144,7 +144,7 @@ if (vm) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§59）。読めなければ出さない
+// 今月の進み（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
 ```
 

@@ -228,7 +228,7 @@ test.describe("顧客詳細 /customer", () => {
     await expect(kpiValue(page, 2)).toHaveText(yen(t.grossProfit));
     await expect(kpiValue(page, 3)).toHaveText(formatPercent(t.burnRate));
     await expect(kpiValue(page, 4)).toHaveText(yen(f.forecastGrossProfit));
-    // 見出しの順: KPI → 今月の進み（今月の予算がある顧客だけ。§59）→ 月次推移 → 案件 → 担当チーム別 → 作業種別の内訳（工数の明細は後から読む）
+    // 見出しの順: KPI → 今月の進み（今月の予算がある顧客だけ。§61）→ 月次推移 → 案件 → 担当チーム別 → 作業種別の内訳（工数の明細は後から読む）
     await expect(page.locator("h2.yn-section-title", { hasText: "作業種別の内訳" })).toBeVisible();
     const heads = await page.locator("h2.yn-section-title").allTextContents();
     const daily = dailyProgress(model, encodeDaily(model), g.contractIds) ? [`今月の進み（${model.meta.asOfMonth.slice(0, 4)}年${Number(model.meta.asOfMonth.slice(5, 7))}月・速報）`] : [];

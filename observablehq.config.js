@@ -1,6 +1,7 @@
 // Observable Framework 設定
 // https://observablehq.com/framework/config
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { worklogKey } from "./src/components/worklog-key.js";
 
 /** UTF-8（BOM 可）で読めなければ Shift_JIS（scripts/lib/encoding.ts の decodeAuto と同じ判定） */
@@ -204,7 +205,32 @@ const MORE_SCRIPT = `(() => {
   addEventListener("pageshow", (e) => { if (e.persisted) set(false); });
 })();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
-const head = `<link rel="icon" href="data:,"><meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
+/**
+ * バージョン情報（設定画面に出す、§59）: package.json の version・ビルドしたコミット・ビルド日時（JST）。
+ * コミットは CI の変数か git から取る。取れなければ空（設定画面ではその行を出さない）
+ */
+function buildInfo() {
+  let version = "";
+  try {
+    version = JSON.parse(decode(readFileSync(new URL("./package.json", import.meta.url)))).version ?? "";
+  } catch {}
+  let commit = process.env.CI_COMMIT_SHORT_SHA ?? "";
+  if (!commit) {
+    try {
+      commit = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], { cwd: new URL(".", import.meta.url), stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch {}
+  }
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value]),
+  );
+  const builtAt = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  return { version, commit, builtAt };
+}
+const BUILD = buildInfo();
+const BUILD_META = `<meta name="yn-build" data-version="${escapeHtml(BUILD.version)}" data-commit="${escapeHtml(BUILD.commit)}" data-built-at="${escapeHtml(BUILD.builtAt)}">`;
+const head = `<link rel="icon" href="data:,">${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,

@@ -1,5 +1,5 @@
 /**
- * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・テーマカラー、§53）
+ * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・テーマカラー、§53）・バージョン情報（§59）
  *
  *   settingsPanel({ masterEdit, fetchImpl }) → HTMLElement
  */
@@ -9,6 +9,21 @@ import { ACCESS_LEVELS, checkConnection, effectiveSaveMode } from "../core/gitla
 import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
 import { infoTip, sectionTitle } from "./layout.js";
 import { ACCENTS } from "./appearance.js";
+
+/** ビルド時に head へ入れたバージョン情報（observablehq.config.js の buildInfo）。無い項目は出さない */
+export function versionSection(doc = document) {
+  const meta = doc.querySelector('meta[name="yn-build"]');
+  const rows = [
+    [T.settings.version, meta?.dataset.version, "version"],
+    [T.settings.commit, meta?.dataset.commit, "commit"],
+    [T.settings.builtAt, meta?.dataset.builtAt, "built-at"],
+  ].filter(([, v]) => v);
+  if (rows.length === 0) return null;
+  return html`<section class="yn-settings-section" aria-label=${T.settings.versionTitle} data-role="version">
+    ${sectionTitle(T.settings.versionTitle)}
+    <dl class="yn-settings-target">${rows.map(([dt, dd, key]) => html`<div><dt>${dt}</dt><dd data-version=${key}><code>${dd}</code></dd></div>`)}</dl>
+  </section>`;
+}
 
 export function settingsPanel({ masterEdit, fetchImpl = null }) {
   const cfg = masterEdit;
@@ -186,6 +201,8 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
   renderGitlab();
   renderDisplay();
   root.append(displaySlot, gitlabSlot);
+  const version = versionSection();
+  if (version) root.append(version);
   if (usable && getToken() === "") publishMrCount(null);
   return root;
 }

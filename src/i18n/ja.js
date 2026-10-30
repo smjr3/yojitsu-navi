@@ -700,7 +700,7 @@ export default {
     zoomRotateHint: "スマホは横向きにすると月ごとの棒が広く見られます。",
   },
 
-  // ── 今月の進み（日別の速報。SPEC §59） ─────────────────────
+  // ── 今月の進み（日別の速報。SPEC §61） ─────────────────────
   daily: {
     title: "今月の進み",
     kpiLabel: "今月の進みの指標",
@@ -1789,5 +1789,10 @@ export default {
     themes: { light: "ライト", dark: "ダーク" },
     accents: { blue: "ブルー", indigo: "インディゴ", green: "グリーン", red: "レッド", gray: "グレー" },
     toMasters: "マスタ編集へ",
+    // バージョン情報（§59）。値はビルド時に入る
+    versionTitle: "バージョン情報",
+    version: "バージョン",
+    commit: "コミット",
+    builtAt: "ビルド日時",
   },
 };
