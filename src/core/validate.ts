@@ -179,7 +179,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
 }
 
 /**
- * 目標（§60）: 種別・対象・月・残予算率の形式と、同じ対象・同じ終了月の重複。
+ * 目標（§63）: 種別・対象・月・残予算率の形式と、同じ対象・同じ終了月の重複。
  * 対象が見つからないのは警告（チームの廃止・案件の終了後も、過去の目標の行は残せるように）
  */
 function validateTargets(dataset: Dataset, teamIds: ReadonlySet<string>, contractIds: ReadonlySet<string>, push: IssueSink): void {

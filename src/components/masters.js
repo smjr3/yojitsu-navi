@@ -109,7 +109,7 @@ const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], t
 const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
 const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
-/** 目標（§60）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
+/** 目標（§63）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
 const TARGET_FIELD = "__target";
 
 /** 月 m を含む年度の 12 か月 */
@@ -334,8 +334,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
       const left = memberStatus(get("status")).status === "left";
-      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
-      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}`, left };
+      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left };
     })
       // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
       .sort((a, b) => Number(a.left) - Number(b.left));
@@ -620,7 +620,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 表の検索の対象（セルの値と、ID の列の名前） */
   function searchText(fileId, doc, r) {
     const rec = rowRecord(doc, r);
-    // 目標（§60）は表に出す対象の名前（チーム名・案件名）でも探せるように
+    // 目標（§63）は表に出す対象の名前（チーム名・案件名）でも探せるように
     const goal = fileId === "targets" ? [goalTargetName((rec.target_type ?? "").trim(), (rec.target_id ?? "").trim())] : [];
     return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim())), ...goal].join(" ").normalize("NFKC").toLowerCase();
   }
@@ -632,7 +632,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 文書の行 → 台帳のまとまり（§36） */
   function groupsOf(fileId) {
     const doc = docs[fileId];
-    // 目標（§60）は 1 行が 1 件（キーの無い列でまとめると行ごとに別になる）
+    // 目標（§63）は 1 行が 1 件（キーの無い列でまとめると行ごとに別になる）
     const list = MASTER_FILES[fileId].history === "list";
     return ledgerGroups(
       doc.rows.map((r) => ({ id: r.id, record: rowRecord(doc, r) })),
@@ -677,7 +677,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const q = f.q.normalize("NFKC").toLowerCase().trim();
     const issues = validation.byRow[fileId];
     const keyColumn = def.keyColumns[0];
-    // 1 行が 1 件（目標。§60）: 履歴の列は無く、行ごとに修正・削除する
+    // 1 行が 1 件（目標。§63）: 履歴の列は無く、行ごとに修正・削除する
     const isList = def.history === "list";
     // 台帳の 1 行: 先頭に対象（名前と ID）、続けて値の列。適用開始月は履歴の側に出す
     const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : null;
@@ -1887,7 +1887,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
     if (col.input === "target") {
-      // 目標の対象（§60）: チーム・顧客・案件から 1 つ。値は「種類:ID」
+      // 目標の対象（§63）: チーム・顧客・案件から 1 つ。値は「種類:ID」
       const kindOf = (v) => v.slice(0, v.indexOf(":"));
       const idOf = (v) => v.slice(v.indexOf(":") + 1);
       return combobox({ id, name: TARGET_FIELD, options: targetOptions(), value, required: req, disabled, placeholder: T.masters.targetPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => `${goalTargetName(kindOf(x), idOf(x))}${T.masters.invalidValue}` });

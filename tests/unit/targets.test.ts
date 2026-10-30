@@ -1,5 +1,5 @@
 /**
- * 目標（SPEC §60）: targets.csv の読み込み・検証・評価（達成／未達／達成見込み／未達見込み）・一覧に出す 1 件
+ * 目標（SPEC §63）: targets.csv の読み込み・検証・評価（達成／未達／達成見込み／未達見込み）・一覧に出す 1 件
  */
 import { describe, expect, it } from "vitest";
 import { buildModel } from "../../src/core/model.js";

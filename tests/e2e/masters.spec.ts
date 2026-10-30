@@ -596,7 +596,7 @@ test("取り込みモード（memberSource.adapter = csv）: メンバーの取�
   await expect(row.getByRole("button", { name: /履歴を削除/ })).toHaveCount(0);
   await row.first().getByRole("button", { name: /履歴を修正/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  for (const name of ["name", "kind", "title", "department", "section"]) await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
+  for (const name of ["name", "kind", "title", "division", "department", "section"]) await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
   await expect(d.locator('[name="team_id"]')).toBeEnabled();
   await expect(d.locator('[name="effective_from"]')).toBeEnabled();
   await page.keyboard.press("Escape");
@@ -631,8 +631,8 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
 
   const t = page.locator("table.yn-me-table");
   await expect(t.locator("caption")).toHaveCount(1);
-  // 名前（ID）・区分・役職・部署・課・所属チーム・在籍区分・変更の履歴・状態・操作
-  await expect(t.locator("thead th[scope=col]")).toHaveCount(10);
+  // 名前（ID）・区分・役職・事業本部・部・課・所属チーム・在籍区分・変更の履歴・状態・操作（§60）
+  await expect(t.locator("thead th[scope=col]")).toHaveCount(11);
   const g = t.locator("tbody tr.yn-me-group").first();
   await expect(g.locator("th[scope=row]")).toHaveCount(1);
   // 行の操作ボタンは「誰の行か」を名前で含む（ID ではなく）

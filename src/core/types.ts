@@ -122,7 +122,7 @@ export interface WorklogSourceConfig {
 }
 
 /** 所属・役職の取り込み項目（team_id は取り込まない） */
-export type MemberImportField = "memberId" | "name" | "kind" | "title" | "department" | "section";
+export type MemberImportField = "memberId" | "name" | "kind" | "title" | "division" | "department" | "section";
 
 /** 所属・役職の取り込み元（人事系）。adapter が none の間は手入力 */
 export interface MemberSourceConfig {
@@ -208,6 +208,8 @@ export interface MemberRecord {
   kind: MemberKind;
   /** 役職（単価の検索キー） */
   title: string;
+  /** 所属の 3 段: 事業本部（省略可の列 division。§60）・部・課 */
+  division?: string;
   department: string;
   section: string;
   /** 空 = チーム非所属 */
@@ -258,11 +260,11 @@ export interface TaskTypeRule {
 }
 
 /** 計算コアへの入力一式 */
-/** 目標の対象（§60）: チーム・顧客・案件 */
+/** 目標の対象（§63）: チーム・顧客・案件 */
 export type TargetKind = "team" | "customer" | "project";
 
 /**
- * 目標（§60）: 対象 × 期間（開始月〜終了月）× 残予算率。targets.csv の 1 行。
+ * 目標（§63）: 対象 × 期間（開始月〜終了月）× 残予算率。targets.csv の 1 行。
  * 残予算率は期間の累計（予算 − 実績（終了月が先なら着地見込み））÷ 予算。月ごとの目標は開始月 = 終了月
  */
 export interface Target {
@@ -293,7 +295,7 @@ export interface Dataset {
   taskTypes?: TaskTypeRule[];
   /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: OutsidePlan[];
-  /** 目標（§60）。省略・空 = なし */
+  /** 目標（§63）。省略・空 = なし */
   targets?: Target[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
@@ -526,7 +528,7 @@ export interface Model {
   workRows: WorkRow[];
   /** 契約外の種別（§50.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
   outsideTypes: string[];
-  /** 目標（§60）。targets.csv の行（検証エラーの行も含む。評価は targets.ts） */
+  /** 目標（§63）。targets.csv の行（検証エラーの行も含む。評価は targets.ts） */
   targets: Target[];
 }
 

@@ -2,7 +2,7 @@
  * メンバー（所属・役職）の取り込みアダプタ: config.memberSource
  *
  * 作業実績の http アダプタと同じ仕組み（./http-source.ts）で、人事系の元データから
- * memberId, name, kind, title, department, section を取得する。team_id は取り込まない。
+ * memberId, name, kind, title, division, department, section を取得する。team_id は取り込まない。
  *
  *   adapter "csv"   人事の CSV を置く運用。memberSource.csv.path（rootDir 相対）、encoding 既定 auto
  *   adapter "http"  人事 API。memberSource.http は worklogSource.http と同じ設定項目
@@ -10,7 +10,7 @@
  *
  * 環境変数: MEMBER_API_TOKEN（http のみ。ログ・例外には出さない）
  *
- * columns の memberId と name は必須。kind / title / department / section は省略可で、
+ * columns の memberId と name は必須。kind / title / division / department / section は省略可で、
  * 省略した項目は「取り込まない」＝現在の値を引き継ぐ。
  */
 import { readFileSync } from "node:fs";
@@ -38,6 +38,8 @@ export interface MemberImport {
   name?: string;
   kind?: MemberKind;
   title?: string;
+  /** 事業本部（§60） */
+  division?: string;
   department?: string;
   section?: string;
 }
@@ -57,7 +59,7 @@ export interface MemberAdapter {
   fetch(opts: MemberFetchOptions): Promise<MemberImport[]>;
 }
 
-const OPTIONAL_FIELDS: Array<Exclude<MemberImportField, "memberId" | "name">> = ["kind", "title", "department", "section"];
+const OPTIONAL_FIELDS: Array<Exclude<MemberImportField, "memberId" | "name">> = ["kind", "title", "division", "department", "section"];
 
 /** 1 行 → MemberImport（kindMap で区分を読み替え） */
 export function mapMemberRow(row: RawRow, ms: MemberSourceConfig): MemberImport | null {

@@ -25,7 +25,7 @@ import type { Worklog, YearMonth } from "../src/core/types.js";
 import { allHolidays } from "./lib/holidays.js";
 import { formatWorklogCsv, sortWorklogs } from "./lib/csv.js";
 import { resolveAsOf } from "./lib/inputs.js";
-import { eachDay, FyCalendar, monthCount, Rng, splitHours, weekday, ymOf } from "./lib/dummy-util.js";
+import { DIVISION_NAME, eachDay, FyCalendar, monthCount, Rng, splitHours, weekday, ymOf } from "./lib/dummy-util.js";
 import { generateScale } from "./dummy-scale.js";
 
 export { mulberry32 } from "./lib/dummy-util.js";
@@ -50,6 +50,8 @@ export interface MemberRow {
   name: string;
   kind: "employee" | "partner";
   title: string;
+  /** 事業本部（§60） */
+  division: string;
   department: string;
   section: string;
   team_id: string;
@@ -126,7 +128,7 @@ const teamsOf = (c: FyCalendar): TeamRow[] => [
 ];
 
 const DEPT: Record<string, { department: string; section: string }> = {
-  HQ: { department: "ソリューション事業本部", section: "" },
+  HQ: { department: "", section: "" },
   D1: { department: "第1事業部", section: "" },
   D2: { department: "第2事業部", section: "" },
   S11: { department: "第1事業部", section: "第1課" },
@@ -151,7 +153,7 @@ function member(
   deptOverride?: { department: string; section: string },
 ): MemberRow {
   const d = deptOverride ?? DEPT[team_id] ?? { department: "", section: "" };
-  return { member_id, name, kind, title, department: d.department, section: d.section, team_id, effective_from, status: "" };
+  return { member_id, name, kind, title, division: DIVISION_NAME, department: d.department, section: d.section, team_id, effective_from, status: "" };
 }
 
 const membersOf = (c: FyCalendar): MemberRow[] => [
@@ -404,7 +406,7 @@ export interface TargetRow {
 }
 
 /**
- * 目標（§60）: チーム・顧客・案件それぞれ。年度末の目標のほか、終了月が過ぎた半期の目標（確定）、
+ * 目標（§63）: チーム・顧客・案件それぞれ。年度末の目標のほか、終了月が過ぎた半期の目標（確定）、
  * 年度をまたぐ案件の終了時点の目標（開始月あり）、達成・未達・達成見込み・未達見込みのすべてを含む
  */
 const targetsOf = (c: FyCalendar): TargetRow[] => [
@@ -756,7 +758,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
-  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"]));
+  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
   writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "match", "note"]));
 

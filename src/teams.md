@@ -103,7 +103,7 @@ if (vm) {
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
       },
     }),
-    // 目標（§60）。目標が 1 件も無ければ列を出さない
+    // 目標（§63）。目標が 1 件も無ければ列を出さない
     hasTargets(model, "team") ? targetColumn(model, "team", (r) => r.teamId, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), hideNarrow: true },
   ].filter(Boolean);

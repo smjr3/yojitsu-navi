@@ -645,7 +645,7 @@ export default {
   },
 
   // ── チーム詳細（メンバー別実績の根拠・組織の変遷） ─────────────────
-  // ── 目標（§60） ───────────────────────────────────
+  // ── 目標（§63） ───────────────────────────────────
   targets: {
     kinds: { team: "チーム", customer: "顧客", project: "案件" },
     title: "目標",
@@ -1053,7 +1053,7 @@ export default {
   member: {
     factsLabel: "メンバーの基本情報",
     teamAt: "所属{team}（{month}）",
-    department: "部署",
+    department: "所属組織",
     historySummary: "所属・役職の変遷（{n}件）",
     pageTitle: "メンバー詳細",
     noIdCrumb: "（社員番号未指定）",
@@ -1211,8 +1211,9 @@ export default {
     colName: "氏名",
     colKind: "区分",
     colTitle: "役職",
-    colDepartment: "部署",
+    colDepartment: "部",
     colSection: "課",
+    colDivision: "事業本部",
     colTeamId: "所属チーム",
     colEffectiveFrom: "適用開始月",
     colStatus: "在籍",
@@ -1248,7 +1249,7 @@ export default {
     effectRate: "時間単価と、実績・残予算・消化率・着地見込み",
     effectMemberId: "メンバーマスタへの登録の有無（未登録の扱い）",
     effectTeamId: "所属チームによる組織別の集計（メンバー別の所属・チームでの絞り込み、チーム詳細の応援の区別）",
-    effectDepartment: "メンバー詳細の部署・課の表示",
+    effectDepartment: "メンバー詳細の事業本部・部・課の表示",
     effectName: "氏名の表示",
     effectKind: "区分（社員／パートナー）の表示",
     effectTeamTree: "組織の木とチーム別の集計",

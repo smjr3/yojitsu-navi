@@ -44,7 +44,7 @@ export interface MasterFileDef {
    * 履歴の種類
    *  - effective: effective_from 付きの履歴（§5）。キー列ごとに「月 m の有効レコード」を引く
    *  - period:    start_month〜end_month の期間（アサイン）
-   *  - list:      1 行が 1 件（目標。§60）。履歴を持たず、過去の月の数値にも影響しない
+   *  - list:      1 行が 1 件（目標。§63）。履歴を持たず、過去の月の数値にも影響しない
    */
   history: "effective" | "period" | "list";
   /** 影響範囲を判定するキー列 */
@@ -68,6 +68,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "name", label: T.masterFiles.colName, input: "text", required: true },
       { name: "kind", label: T.masterFiles.colKind, input: "kind", required: true },
       { name: "title", label: T.masterFiles.colTitle, input: "title", required: false },
+      // 所属の 3 段（事業本部・部・課）。事業本部は省略可（旧ファイルには無い。無ければ見出しの末尾に足す。§60）
+      { name: "division", label: T.masterFiles.colDivision, input: "text", required: false },
       { name: "department", label: T.masterFiles.colDepartment, input: "text", required: false },
       { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
       { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
@@ -173,7 +175,7 @@ export function emptyMasterText(fileId: MasterFileId): string {
 }
 
 /** memberSource で取り込む列（§20.2。team_id は取り込まない） */
-export const MEMBER_IMPORTED_COLUMNS: readonly string[] = ["name", "kind", "title", "department", "section"];
+export const MEMBER_IMPORTED_COLUMNS: readonly string[] = ["name", "kind", "title", "division", "department", "section"];
 
 // ---------------------------------------------------------------------------
 // CSV: 行テキストを保ったまま読む
@@ -599,7 +601,7 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
  */
 export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
   const def = MASTER_FILES[fileId];
-  // 目標（§60）は計算の値を変えない
+  // 目標（§63）は計算の値を変えない
   if (def.history === "list") return { months: [], keys: [], columns: [] };
   if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [], columns: [] };
   // 触れたキー: 片方にしか無い行（値まで含めて比べる）のキー
@@ -698,6 +700,7 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
     title: [0, T.masterFiles.effectRate, true],
     member_id: [1, T.masterFiles.effectMemberId, false],
     team_id: [2, T.masterFiles.effectTeamId, false],
+    division: [3, T.masterFiles.effectDepartment, false],
     department: [3, T.masterFiles.effectDepartment, false],
     section: [3, T.masterFiles.effectDepartment, false],
     name: [4, T.masterFiles.effectName, false],
@@ -1224,6 +1227,7 @@ export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, 
       name: (v.name ?? "").trim(),
       kind: (v.kind ?? "").trim() as MemberRecord["kind"],
       title: (v.title ?? "").trim(),
+      ...((v.division ?? "").trim() ? { division: (v.division ?? "").trim() } : {}),
       department: (v.department ?? "").trim(),
       section: (v.section ?? "").trim(),
       teamId: (v.team_id ?? "").trim() || null,

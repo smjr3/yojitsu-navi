@@ -9,9 +9,9 @@
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude]` （案件名が空 = その顧客の全工数。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation[, updated_by, updated_at]` （人 × 契約 × 期間の配分人月。updated_by・updated_at は保存した人の GitLab ユーザー名と保存日（YYYY-MM-DD）。画面が保存時に追加・変更した行へ書く。列なし・空欄 = 記録なし。SPEC §56。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note[, updated_by, updated_at]` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。updated_by・updated_at は assignments.csv と同じ。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |
-| `data/targets.csv` | `target_type, target_id, end_month, remaining_rate, start_month, note` （目標。省略可。target_type = `team` / `customer` / `project`、target_id = チームID / 顧客名 / 契約ID、end_month = 終了月、remaining_rate = 目標の残予算率（%。`20` = 20%、100 以下）、start_month = 開始月（空 = 終了月を含む年度の最初の月）、note 省略可。同じ対象・同じ終了月の重複はエラー、見つからない対象は警告。数値の計算には使わない。画面はマスタ編集の「目標」。SPEC §60） |
+| `data/targets.csv` | `target_type, target_id, end_month, remaining_rate, start_month, note` （目標。省略可。target_type = `team` / `customer` / `project`、target_id = チームID / 顧客名 / 契約ID、end_month = 終了月、remaining_rate = 目標の残予算率（%。`20` = 20%、100 以下）、start_month = 開始月（空 = 終了月を含む年度の最初の月）、note 省略可。同じ対象・同じ終了月の重複はエラー、見つからない対象は警告。数値の計算には使わない。画面はマスタ編集の「目標」。SPEC §63） |
 | `data/masters/teams.csv` | `team_id, name, parent_team_id, effective_from, level, leader_member_id` （level = 種別「課」「チーム」「班」など自由入力・省略可、leader_member_id = リーダーの社員番号・省略可。SPEC §21・§22） |
-| `data/masters/members.csv` | `member_id, name, kind, title, department, section, team_id, effective_from, status` （kind = employee / partner。status = 空（在籍）/ `退職`（その月から退職）、列ごと省略可。SPEC §35） |
+| `data/masters/members.csv` | `member_id, name, kind, title, division, department, section, team_id, effective_from, status` （所属は division = 事業本部・department = 部・section = 課の 3 段。division は列ごと省略可（SPEC §60）。kind = employee / partner。status = 空（在籍）/ `退職`（その月から退職）、列ごと省略可。SPEC §35） |
 | `data/masters/rates.csv` | `key, hourly_rate, effective_from` （key = 役職名 または member_id） |
 | `data/holidays.csv` | `date, name` （祝日・会社休日。行の無い年は国民の祝日を計算で補い、データ確認に `HOLIDAYS_AUTO` を出す。全体が空なら祝日なし。SPEC §49） |
 | `data/task-types.csv` | `task, category, group[, match], note` （match = 空なら完全一致、`含む` なら作業名に task を含めば該当（完全一致が先、次にファイルの順）。作業種別の分類表。category = 運用保守 / 運用保守以外（旧表記の 契約内 / 契約外 も可）。group = 運用保守以外の種別（計画の単位。省略可、空なら task と同じ）。ファイルが無ければすべて運用保守。運用保守以外は顧客名が空でも数える。SPEC §30・§50） |
@@ -48,7 +48,7 @@
 | `adapter` | `none`（既定。members.csv は手入力）/ `csv`（人事の CSV を置く）/ `http` |
 | `csv.path`, `csv.encoding` | `adapter: "csv"` の CSV のパス（リポジトリ相対）と文字コード |
 | `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ） |
-| `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, department, section` は省略可（省略した項目は取り込まず現在の値を引き継ぐ）。入れ子・複数候補は上と同じ |
+| `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, division, department, section` は省略可（事業本部を取り込むときは `"division": "<元の列名>"` を足す）（省略した項目は取り込まず現在の値を引き継ぐ）。入れ子・複数候補は上と同じ |
 | `kindMap` | 区分値の読み替え。例 `{ "正社員": "employee", "委託": "partner" }` |
 | `filters` | 取り込まない行の条件（退職者の除外など）。csv・http 共通 |
 
