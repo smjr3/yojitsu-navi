@@ -30,6 +30,9 @@ import {
   restoreRow,
   revertRow,
   serializeMasterDoc,
+  stampChangedRows,
+  STAMPED_FILES,
+  STAMP_COLUMNS,
   rebaseDraftFile,
   rowRecord,
   rowState,
@@ -40,7 +43,7 @@ import {
 } from "../core/masterEdit.js";
 import { allocationFromInput, contractSegments, editMonthAllocation, flattenTeamTree, hoursFromAllocation, memberTeamAt, mergeAdjacent, planView, projectKey } from "../core/plan.js";
 import { teamTreeAt } from "../core/masters.js";
-import { effectiveSaveMode, saveToGitLab, webFileUrl } from "../core/gitlab.js";
+import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
 import { dateTimeJst, integer, monthJa } from "./format.js";
 import { infoTip } from "./layout.js";
@@ -1337,6 +1340,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const pmText = (v) => (Number.isFinite(v) ? fmt(T.planEdit.pmValue, { pm: pm(v) }) : T.plan.allocNotNumber);
     // 「YYYY-MM から計画なし」は、その月より後に始まる最初の履歴の手前（無ければ最後）に置く（重なりのある履歴の間に挟まないため）
     const ends = [];
+    /** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。無ければ出さない */
+    const stampOf = (row) => {
+      if (!row) return null;
+      const by = cellOf(doc, row, STAMP_COLUMNS.by);
+      const at = cellOf(doc, row, STAMP_COLUMNS.at);
+      if (!by && !at) return null;
+      return html`<span class="yn-me-hint yn-me-plan-stamp" data-role="stamp">${by && at ? fmt(T.planEdit.stamp, { by, at }) : fmt(T.planEdit.stampOne, { v: by || at })}</span>`;
+    };
     const items = entries.flatMap((e) => {
       const row = doc.rows.find((x) => x.id === e.rowId);
       const st = row ? rowState(doc, row) : "unchanged";
@@ -1356,6 +1367,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         <span class="yn-me-plan-period">${period}</span>
         <span class="yn-me-plan-alloc">${pmText(e.value)}</span>
         <span class=${`yn-me-plan-kind${e.kind === "overlap" || e.kind === "invalid" ? " is-warn" : e.kind === "change" ? " is-change" : ""}`}>${e.kind === "overlap" || e.kind === "invalid" ? html`<span aria-hidden="true">! </span>` : null}${what}</span>
+        ${stampOf(row)}
         ${contract ? html`<span class="yn-me-hint">${fmt(T.planEdit.contractPeriod, { from: contract.startMonth, to: contract.endMonth })}</span>` : null}
         ${fileId === "outside" && row && cellOf(doc, row, "note") ? html`<span class="yn-me-hint yn-me-plan-note" title=${cellOf(doc, row, "note")}>${cellOf(doc, row, "note")}</span>` : null}
         ${stateChips(st === "changed" ? 1 : 0, st === "added" ? 1 : 0, list.some((i) => i.severity === "error") ? 1 : 0)}
@@ -2345,8 +2357,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     saving = true;
     outcome = null;
     renderSave();
-    const files = changedFiles().map((id) => ({ path: data.files[id].repoPath ?? MASTER_FILES[id].path, content: validation.texts[id], lastCommitId: bases[id].lastCommitId, create: data.files[id].exists === false }));
     try {
+      // 追加・変更した行に変更者と変更日を書き込む（§56。リソース計画の変更の履歴に出す）
+      const by = changedFiles().some((id) => STAMPED_FILES.includes(id)) ? (await fetchCurrentUser(gitlab, data.masterEdit, token)).username : "";
+      const files = changedFiles().map((id) => ({ path: data.files[id].repoPath ?? MASTER_FILES[id].path, content: stampedText(id, by), lastCommitId: bases[id].lastCommitId, create: data.files[id].exists === false }));
       const result = await saveToGitLab(gitlab, { config: data.masterEdit, token, files, message: (messageInput || "").trim() || commitMessage(), description: mrDescription(), now: now() });
       outcome = { kind: "ok", result };
       locked = true;
@@ -2372,8 +2386,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     }
   }
 
+  /** 保存する CSV（追加・変更した行に変更者・変更日を書く。§56） */
+  function stampedText(id, by) {
+    if (!STAMPED_FILES.includes(id)) return validation.texts[id];
+    const at = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(now());
+    return serializeMasterDoc(stampChangedRows(docs[id], by, at)).text;
+  }
+
   function download(id) {
-    const text = validation.texts[id];
+    // ダウンロードでは GitLab のユーザー名が分からないので変更日だけ書く
+    const text = stampedText(id, "");
     const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

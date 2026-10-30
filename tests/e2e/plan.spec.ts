@@ -88,7 +88,7 @@ test("リソース計画: 時間で入力すると人月に直して保存し、
   // 保存されるのは人月
   const expected = addRow(parseMasterDoc("assignments", PAYLOAD.files.assignments.text), { member_id: "M011", contract_id: "C002", start_month: "2026-11", end_month: "2027-03", allocation: "0.1" }).doc;
   await expect(page.locator(".yn-me-diff-slot")).toContainText(/小林 玲奈 ・ 青葉物流 \/ 倉庫管理システム保守 ・ 2026-11 ・ 2027-03 ・ 0\.1/);
-  expect(serializeMasterDoc(expected).text).toContain("M011,C002,2026-11,2027-03,0.1\n");
+  expect(serializeMasterDoc(expected).text).toContain("M011,C002,2026-11,2027-03,0.1,,\n");
 });
 
 test("リソース計画: 単位を切り替えると入っている値を換算して見せる。1.0 人月を超える月は「超過」", async ({ page }) => {

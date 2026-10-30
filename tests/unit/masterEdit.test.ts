@@ -29,6 +29,7 @@ import {
   rowState,
   serializeMasterDoc,
   splitCsvRecords,
+  stampChangedRows,
   staleDraftFiles,
   updateRow,
   validateEdited,
@@ -574,5 +575,46 @@ describe("影響ダイアログの「何が変わるか」", () => {
     expect(describeImpactEffects("teams", ["parent_team_id"]).effects[0]).toContain("上位組織の合計");
     expect(describeImpactEffects("assignments", ["allocation"]).effects[0]).toContain("着地見込み（計画値）");
     expect(describeImpactEffects("rates", [])).toEqual({ effects: ["その月の行の値"], costChanges: false, note: null });
+  });
+});
+
+describe("stampChangedRows（変更者・変更日、§56）", () => {
+  const ASSIGN = "member_id,contract_id,start_month,end_month,allocation\nM1,C1,2025-04,2025-09,0.5\n\"M2\",C1,2025-04,2025-09,0.3\n";
+
+  it("見出しに列を足し、追加・変更した行だけに書く。変えていない行は元のテキストのまま", () => {
+    let doc = parseMasterDoc("assignments", ASSIGN);
+    doc = updateRow(doc, "o0", { allocation: "0.6" });
+    doc = addRow(doc, { member_id: "M3", contract_id: "C1", start_month: "2025-10", end_month: "2025-10", allocation: "0.2" }).doc;
+    const text = serializeMasterDoc(stampChangedRows(doc, "taro", "2025-10-01")).text;
+    expect(text).toBe(
+      "member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\n" +
+        "M1,C1,2025-04,2025-09,0.6,taro,2025-10-01\n" +
+        '"M2",C1,2025-04,2025-09,0.3\n' +
+        "M3,C1,2025-10,2025-10,0.2,taro,2025-10-01\n",
+    );
+  });
+
+  it("列が既にあれば見出しはそのまま。前の記録は上書きする", () => {
+    let doc = parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\nM1,C1,2025-04,2025-09,0.5,hanako,2025-04-01\nM2,C1,2025-04,2025-09,0.3,hanako,2025-04-01\n");
+    doc = updateRow(doc, "o1", { allocation: "0.4" });
+    const text = serializeMasterDoc(stampChangedRows(doc, "taro", "2025-10-01")).text;
+    expect(text).toBe("member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at\nM1,C1,2025-04,2025-09,0.5,hanako,2025-04-01\nM2,C1,2025-04,2025-09,0.4,taro,2025-10-01\n");
+  });
+
+  it("変更が無い・対象外のファイルは何もしない", () => {
+    const doc = parseMasterDoc("assignments", ASSIGN);
+    expect(stampChangedRows(doc, "taro", "2025-10-01")).toBe(doc);
+    let rates = parseMasterDoc("rates", RATES);
+    rates = updateRow(rates, "o0", { hourly_rate: "16000" });
+    expect(stampChangedRows(rates, "taro", "2025-10-01")).toBe(rates);
+  });
+
+  it("元の文書は変えない", () => {
+    let doc = parseMasterDoc("outside", "member_id,type,start_month,end_month,person_months,note\nM1,提案,2025-04,2025-04,0.1,\n");
+    doc = updateRow(doc, "o0", { person_months: "0.2" });
+    const before = JSON.stringify(doc);
+    const stamped = stampChangedRows(doc, "", "2025-10-01");
+    expect(JSON.stringify(doc)).toBe(before);
+    expect(serializeMasterDoc(stamped).text).toBe("member_id,type,start_month,end_month,person_months,note,updated_by,updated_at\nM1,提案,2025-04,2025-04,0.2,,,2025-10-01\n");
   });
 });

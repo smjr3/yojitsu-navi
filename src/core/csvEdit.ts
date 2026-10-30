@@ -7,7 +7,7 @@
  *  2. 対応しなかった行は、キー列（と適用開始月／開始月）が同じ元の行と順に対にする（変更）
  *  3. 残りは追加。どの行とも対にならなかった元の行は削除
  */
-import { MASTER_FILES, alignRows, type MasterDoc, type MasterRow } from "./masterEdit.js";
+import { MASTER_FILES, STAMPED_FILES, STAMP_COLUMNS, alignRows, type MasterDoc, type MasterRow } from "./masterEdit.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface CsvParseError {
@@ -100,7 +100,9 @@ export function docFromCsvText(doc: MasterDoc, text: string): CsvImportResult {
   const seen = new Set<string>();
   const dup = header.filter((h) => (seen.has(h) ? true : (seen.add(h), false)));
   const unknown = header.filter((h) => h !== "" && !doc.header.includes(h));
-  const missing = doc.header.filter((h) => !header.includes(h));
+  // 変更者・変更日の列（§56）は無くてもよい（Excel で列を消して貼っても通す）。元の行の値を引き継ぐ
+  const carried = STAMPED_FILES.includes(doc.fileId) ? [STAMP_COLUMNS.by, STAMP_COLUMNS.at].filter((c) => doc.header.includes(c) && !header.includes(c)) : [];
+  const missing = doc.header.filter((h) => !header.includes(h) && !(carried as string[]).includes(h));
   if (dup.length) errors.push({ line: 1, message: fmt(T.csvEdit.duplicateColumns, { cols: [...new Set(dup)].join(", ") }) });
   if (unknown.length) errors.push({ line: 1, message: fmt(T.csvEdit.unknownColumns, { cols: unknown.join(", ") }) });
   if (missing.length) errors.push({ line: 1, message: fmt(T.csvEdit.missingColumns, { cols: missing.join(", ") }) });
@@ -118,7 +120,8 @@ export function docFromCsvText(doc: MasterDoc, text: string): CsvImportResult {
   });
 
   const def = MASTER_FILES[doc.fileId];
-  const sig = (cells: readonly string[]) => doc.header.map((_, i) => (cells[i] ?? "").trim()).join("\u0001");
+  const skip = new Set(carried.map((c) => doc.header.indexOf(c)));
+  const sig = (cells: readonly string[]) => doc.header.map((_, i) => (skip.has(i) ? "" : (cells[i] ?? "").trim())).join("\u0001");
   const originals = Object.entries(doc.originals).sort((a, b) => a[1].index - b[1].index);
   const map = alignRows(newCells.map(sig), originals.map(([, o]) => sig(o.cells)));
   const keyIdx = def.keyColumns.map((k) => doc.header.indexOf(k));
@@ -156,7 +159,10 @@ export function docFromCsvText(doc: MasterDoc, text: string): CsvImportResult {
     if (j >= 0) {
       const [id, o] = originals[j] as [string, MasterDoc["originals"][string]];
       // 内容が同じなら元のセル（空白・引用符の付け方も元のまま書き戻す）
-      return { id, cells: sig(cells) === sig(o.cells) ? o.cells.slice() : cells.length < width ? [...cells, ...new Array(width - cells.length).fill("")] : cells };
+      if (sig(cells) === sig(o.cells)) return { id, cells: o.cells.slice() };
+      const out = cells.length < width ? [...cells, ...new Array(width - cells.length).fill("")] : cells.slice();
+      for (const i of skip) out[i] = o.cells[i] ?? "";
+      return { id, cells: out };
     }
     const reuse = addedBySig.get(sig(cells))?.shift();
     return { id: reuse ?? `n${nextId++}`, cells };

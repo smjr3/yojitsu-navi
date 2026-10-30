@@ -347,6 +347,44 @@ export function serializeMasterDoc(doc: MasterDoc): SerializedDoc {
   return { text: lines.join("\n") + "\n", rowIds };
 }
 
+/** 変更者・変更日の列（リソース計画の変更の履歴に出す。§56）。保存するときに画面が書き込み、フォームでは編集しない */
+export const STAMP_COLUMNS = { by: "updated_by", at: "updated_at" } as const;
+/** 変更者・変更日を書き込むファイル */
+export const STAMPED_FILES: readonly MasterFileId[] = ["assignments", "outside"];
+
+/**
+ * 追加・変更した行に変更者（GitLab のユーザー名。分からなければ空）と変更日（YYYY-MM-DD）を書き込む（§56）。
+ * 列が無いファイルには見出しの末尾に足す。変更していない行はそのまま（元のテキストで書き出す）
+ */
+export function stampChangedRows(doc: MasterDoc, by: string, at: string): MasterDoc {
+  if (!STAMPED_FILES.includes(doc.fileId)) return doc;
+  const targets = doc.rows.filter((r) => rowState(doc, r) !== "unchanged" && !isBlankRow(r.cells));
+  if (targets.length === 0) return doc;
+  const header = doc.header.slice();
+  let headerRaw = doc.headerRaw;
+  for (const c of [STAMP_COLUMNS.by, STAMP_COLUMNS.at]) {
+    if (!header.includes(c)) {
+      header.push(c);
+      headerRaw = null;
+    }
+  }
+  const width = header.length;
+  const originals: MasterDoc["originals"] = {};
+  for (const [id, o] of Object.entries(doc.originals)) originals[id] = { ...o, cells: padCells(o.cells, width) };
+  const iBy = header.indexOf(STAMP_COLUMNS.by);
+  const iAt = header.indexOf(STAMP_COLUMNS.at);
+  const ids = new Set(targets.map((r) => r.id));
+  const rows = doc.rows.map((r) => {
+    const cells = padCells(r.cells, width);
+    if (ids.has(r.id)) {
+      cells[iBy] = by;
+      cells[iAt] = at;
+    }
+    return { id: r.id, cells };
+  });
+  return { ...doc, header, headerRaw, rows, originals };
+}
+
 /** 編集が 1 つも無いか（行の並び・値とも元どおり） */
 export function isPristine(doc: MasterDoc): boolean {
   const originalIds = Object.keys(doc.originals);
