@@ -106,7 +106,7 @@ describe("目標の評価", () => {
   it("期限が過ぎた目標は実績で確定（ちょうど目標なら達成）", () => {
     // 2026-04〜09: 予算 600 万、実績 300 万 → 残予算率 50%
     const ok = evaluateTarget(model, target({ dueMonth: "2026-09", remainingRate: 0.5 }), "recent3");
-    expect(ok).toMatchObject({ period: { from: "2026-04", to: "2026-09" }, budget: 6_000_000, actualCost: 3_000_000, forecastCost: 3_000_000, settled: true, status: "achieved" });
+    expect(ok).toMatchObject({ period: { from: "2026-04", to: "2026-09" }, contractIds: ["C1"], budget: 6_000_000, actualCost: 3_000_000, forecastCost: 3_000_000, settled: true, status: "achieved" });
     expect(ok.rate).toBeCloseTo(0.5);
     expect(evaluateTarget(model, target({ dueMonth: "2026-09", remainingRate: 0.6 }), "recent3").status).toBe("missed");
   });
@@ -123,7 +123,7 @@ describe("目標の評価", () => {
 
   it("予算 0（対象の案件が無い・期間外）は「予算なし」", () => {
     expect(evaluateTarget(model, target({ kind: "project", targetId: "C9" }), "recent3")).toMatchObject({ rate: null, gap: null, status: "noBudget" });
-    expect(evaluateTarget(model, target({ dueMonth: "2025-12", startMonth: "2025-06" }), "recent3").status).toBe("noBudget");
+    expect(evaluateTarget(model, target({ dueMonth: "2025-12", startMonth: "2025-06" }), "recent3")).toMatchObject({ status: "noBudget", contractIds: [] });
   });
 
   it("targetsOf は計算できる目標だけを期限月の順に。一覧の 1 件は基準月以降で最も近い期限、無ければ最後", () => {

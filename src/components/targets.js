@@ -6,9 +6,14 @@ import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import { evaluateTarget, headlineTarget, targetsOf } from "../core/index.js";
 import { sectionTitle } from "./layout.js";
-import { statusChip } from "./kpi.js";
+import { chipIcon, statusChip } from "./kpi.js";
 import * as bd from "./breakdown.js";
 import { formatPercent, money, monthJa, pointsSigned, METHOD_LABELS } from "./format.js";
+
+/** 目標の率（入れた値どおり。20 → "20%"、12.5 → "12.5%"） */
+function targetPct(rate) {
+  return formatPercent(rate, Math.abs(Math.round(rate * 100) - rate * 100) < 1e-9 ? 0 : 1);
+}
 
 const STATUS_KIND = { achieved: "ok", onTrack: "ok", missed: "danger", atRisk: "danger", noBudget: "neutral" };
 
@@ -29,7 +34,7 @@ export function targetSpec({ model, ev, name, unit, detailHref = null }) {
       { label: T.targets.rowRemaining, value: money(ev.forecastCost - ev.actualCost, unit) },
       { label: T.targets.rowLanding, value: money(ev.forecastCost, unit) },
       { label: T.targets.rowRate, value: formatPercent(ev.rate), emphasis: true },
-      { label: T.targets.rowTarget, value: formatPercent(ev.target.remainingRate) },
+      { label: T.targets.rowTarget, value: targetPct(ev.target.remainingRate) },
       { label: T.targets.rowGap, value: pointsSigned(ev.gap) },
     ],
     sections: [
@@ -60,9 +65,9 @@ export function targetSection({ model, kind, id, name, method, unit, detailHref 
     return html`<tr class=${ev.status === "missed" || ev.status === "atRisk" ? "is-danger" : null}>
       <th scope="row">${monthJa(ev.period.to)}${ev.target.note ? html`<span class="yn-cell-sub">${ev.target.note}</span>` : null}</th>
       <td class="hide-narrow">${monthJa(ev.period.from)}〜${monthJa(ev.period.to)}</td>
-      <td class="num">${formatPercent(ev.target.remainingRate)}</td>
-      <td class="num">${bd.numberButton(rateText, () => targetSpec({ model, ev, name, unit, detailHref }), { ariaLabel: fmt(T.targets.listTitle, { month: monthJa(ev.period.to), target: formatPercent(ev.target.remainingRate), kind: ev.settled ? T.targets.rateActual : T.targets.rateForecast, rate: rateText }) })}<span class="yn-cell-sub">${ev.settled ? T.targets.rateActual : T.targets.rateForecast}</span></td>
-      <td class="num">${pointsSigned(ev.gap)}</td>
+      <td class="num">${targetPct(ev.target.remainingRate)}</td>
+      <td class="num">${bd.numberButton(rateText, () => targetSpec({ model, ev, name, unit, detailHref }), { ariaLabel: fmt(T.targets.listTitle, { month: monthJa(ev.period.to), target: targetPct(ev.target.remainingRate), kind: ev.settled ? T.targets.rateActual : T.targets.rateForecast, rate: rateText }) })}<span class="yn-cell-sub">${ev.settled ? T.targets.rateActual : T.targets.rateForecast}</span></td>
+      <td class="num hide-phone">${pointsSigned(ev.gap)}</td>
       <td>${targetChip(ev)}</td>
     </tr>`;
   });
@@ -74,7 +79,7 @@ export function targetSection({ model, kind, id, name, method, unit, detailHref 
         <th scope="col" class="hide-narrow">${T.targets.colPeriod}</th>
         <th scope="col" class="num">${T.targets.colTarget}</th>
         <th scope="col" class="num">${T.targets.colRate}</th>
-        <th scope="col" class="num">${T.targets.colGap}</th>
+        <th scope="col" class="num hide-phone">${T.targets.colGap}</th>
         <th scope="col">${T.targets.colStatus}</th>
       </tr></thead>
       <tbody>${rows}</tbody>
@@ -101,7 +106,7 @@ export function targetColumn(model, kind, idOf, method) {
     cache.set(id, ev);
     return ev;
   };
-  const text = (ev) => (ev ? `${fmt(T.targets.listCell, { rate: formatPercent(ev.rate), target: formatPercent(ev.target.remainingRate) })} ${T.targets.status[ev.status]}` : "");
+  const text = (ev) => (ev ? `${fmt(T.targets.listCell, { rate: formatPercent(ev.rate), target: targetPct(ev.target.remainingRate) })} ${T.targets.status[ev.status]}` : "");
   return {
     key: "target",
     label: T.targets.title,
@@ -114,8 +119,10 @@ export function targetColumn(model, kind, idOf, method) {
     render: (row) => {
       const ev = evalOf(row);
       if (!ev) return html`<span class="yn-muted">—</span>`;
-      const title = fmt(T.targets.listTitle, { month: monthJa(ev.period.to), target: formatPercent(ev.target.remainingRate), kind: ev.settled ? T.targets.rateActual : T.targets.rateForecast, rate: formatPercent(ev.rate) });
-      return html`<span class="yn-target-cell" title=${title}>${targetChip(ev)}<span class="yn-cell-sub">${fmt(T.targets.listCell, { rate: formatPercent(ev.rate), target: formatPercent(ev.target.remainingRate) })}</span></span>`;
+      const title = fmt(T.targets.listTitle, { month: monthJa(ev.period.to), target: targetPct(ev.target.remainingRate), kind: ev.settled ? T.targets.rateActual : T.targets.rateForecast, rate: formatPercent(ev.rate) });
+      // 一覧は幅が限られるので、チップではなく色付きの文字（記号つき。色だけに頼らない）
+      const kind = STATUS_KIND[ev.status];
+      return html`<span class="yn-target-cell" title=${title}><span class=${`yn-target-status is-${kind}`}><span aria-hidden="true">${chipIcon(kind)}</span>${T.targets.status[ev.status]}</span><span class="yn-cell-sub">${fmt(T.targets.listCell, { rate: formatPercent(ev.rate), target: targetPct(ev.target.remainingRate) })}</span></span>`;
     },
   };
 }

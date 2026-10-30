@@ -55,6 +55,7 @@ export interface TargetEvaluation {
   target: Target;
   /** 累計の期間（両端含む） */
   period: { from: YearMonth; to: YearMonth };
+  /** 対象の案件のうち、期間に掛かるもの */
   contractIds: string[];
   /** 期間内の予算の合計（円） */
   budget: number;
@@ -79,8 +80,9 @@ export function evaluateTarget(model: Model, target: Target, method: ForecastMet
   const from = targetStartMonth(target, model.config.fiscalYearStartMonth);
   const to = target.dueMonth;
   const months = from <= to ? monthRange(from, to) : [];
-  const contractIds = targetContractIds(model, kind, target.targetId, tree);
-  const ids = new Set(contractIds);
+  const ids = new Set(targetContractIds(model, kind, target.targetId, tree));
+  // 期間に 1 か月でも掛かる案件だけ（根拠に出す）
+  const contractIds: string[] = [];
   const basis = { asOfMonth: model.meta.asOfMonth, fiscalYear: model.meta.fiscalYear, forecastRecentMonths: model.config.forecastRecentMonths };
   let budget = 0;
   let actualCost = 0;
@@ -88,6 +90,8 @@ export function evaluateTarget(model: Model, target: Target, method: ForecastMet
   for (const r of model.contracts) {
     if (!ids.has(r.contract.contractId)) continue;
     const f = forecastForMonths(basis, r.contract, r.months, r.assignmentPlan, method, months);
+    if (f.breakdown.contractMonthsInTarget.length === 0) continue;
+    contractIds.push(r.contract.contractId);
     budget += f.targetBudget;
     actualCost += f.breakdown.actualCost;
     forecastCost += f.forecastCost;

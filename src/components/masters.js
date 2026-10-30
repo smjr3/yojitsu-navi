@@ -352,7 +352,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     return value;
   }
   /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
-  function targetLabel(kind, id) {
+  function goalTargetName(kind, id) {
     if (id === "") return "";
     if (kind === "team") return teamNames().get(id) ?? `${id}${T.masters.unknownTeam}`;
     if (kind === "project") return contractText(id);
@@ -735,7 +735,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const nChanged = states.filter((x) => x === "changed").length;
       const nErrors = rows.reduce((n, r) => n + (issues[r.id] ?? []).filter((i) => i.severity === "error").length, 0);
       const open = ledgerOpen[fileId].has(g.key) || (nErrors > 0 && !ledgerClosed[fileId].has(g.key));
-      const keyText = (isList && targetLabel(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
+      const keyText = (isList && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
       const histId = `yn-me-hist-${fileId}-${g.shown.rowId}`;
       const toggle = () => {
         if (open) {
@@ -1860,7 +1860,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       // 目標の対象（§57）: チーム・顧客・案件から 1 つ。値は「種類:ID」
       const kindOf = (v) => v.slice(0, v.indexOf(":"));
       const idOf = (v) => v.slice(v.indexOf(":") + 1);
-      return combobox({ id, name: TARGET_FIELD, options: targetOptions(), value, required: req, disabled, placeholder: T.masters.targetPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => `${targetLabel(kindOf(x), idOf(x))}${T.masters.invalidValue}` });
+      return combobox({ id, name: TARGET_FIELD, options: targetOptions(), value, required: req, disabled, placeholder: T.masters.targetPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => `${goalTargetName(kindOf(x), idOf(x))}${T.masters.invalidValue}` });
     }
     if (col.input === "percent") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode="decimal" aria-describedby=${`${id}-hint`}>`;
@@ -2244,7 +2244,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         return [who, what].filter(Boolean).join(" ・ ");
       }
       case "targets":
-        return targetLabel(issueRowCell(i, "target_type"), issueRowCell(i, "target_id"));
+        return goalTargetName(issueRowCell(i, "target_type"), issueRowCell(i, "target_id"));
       default:
         return "";
     }
