@@ -1513,6 +1513,27 @@ export default {
 
   // ── リソース計画（画面と、マスタ編集の「リソース計画」タブ） ─────────────────
   plan: {
+    // 変更の影響（§65）
+    impact: {
+      title: "変更の影響",
+      tip: "保存すると、着地見込み（計画値）と残予算がこう変わります（実績・予算は変わりません）。期間は表示条件の {period}。案件終了時点は案件の全期間です。目標は残予算率が変わるものだけ出します。",
+      none: "着地見込みは変わりません",
+      caption: "変更で着地見込みが変わる案件",
+      colProject: "案件",
+      colDelta: "着地の増減",
+      colRemaining: "残予算",
+      colRate: "残予算率",
+      colEnd: "案件終了時点の残予算",
+      total: "合計 {n}件",
+      arrow: "→",
+      arrowSr: "から",
+      targetsCaption: "変更で残予算率が変わる目標",
+      colTarget: "目標",
+      colGoal: "目標値",
+      colGap: "目標との差",
+      colStatus: "状況",
+      targetName: "{kind} {name}（{due}）",
+    },
     // 退職（§35）
     afterLeftChip: "退職後の計画 {n}か月",
     afterLeftTitle: "退職した月以降にもアサインが残っています。終了月を退職の前月にしてください",
