@@ -21,7 +21,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
+import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
@@ -196,13 +196,14 @@ if (vm) {
 
 ```js
 if (vm) {
+  const series = withTargets(vm.series, (m) => targetForMonth(model, "customer", group.label, m));
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(chartFigure({
     title: T.charts.monthlyTitle,
     subtitle: periodJa(vm.scope.period),
-    legend: monthlyLegend(dark),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
+    legend: monthlyLegend(dark, series),
+    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
   }));
 }
 ```

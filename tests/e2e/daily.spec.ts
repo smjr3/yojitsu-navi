@@ -76,6 +76,39 @@ test("今月の進捗: 今月を含む目標があれば、上限 = 予算 ×（
   }
 });
 
+test("グラフの目標: 月次推移に「目標の上限」（予算 ×（1 − 目標の残予算率））、今月の進捗の凡例は「上限（目標）」", async ({ page }) => {
+  const tree = teamTreeForMonth(model, asOfMonth);
+  const ids = (id: string) => contractsForTeam(model, id, tree).map((c) => c.contractId);
+  const teams = Object.keys(tree).filter((id) => dailyProgress(model, daily, ids(id)));
+  const withTarget = teams.find((id) => targetForMonth(model as Model, "team", id, asOfMonth))!;
+  const t = targetForMonth(model as Model, "team", withTarget, asOfMonth)!;
+  await gotoPage(page, `/team?id=${withTarget}&unit=yen`);
+  const monthly = page.locator(".yn-chart-card").filter({ hasText: "月次推移" }).first();
+  await expect(monthly.locator(".yn-legend")).toContainText("目標の上限");
+  // 赤の破線が描かれている
+  await expect(monthly.locator('svg[role="img"] line[stroke-dasharray="4 2"], svg[role="img"] g[stroke-dasharray="4 2"] line').first()).toBeAttached();
+  await monthly.locator("summary", { hasText: "表で見る" }).click();
+  const table = monthly.locator("table").first();
+  const headers = (await table.locator("thead th").allTextContents()).map((x) => x.trim());
+  const ti = headers.findIndex((h) => h.startsWith("目標の上限"));
+  const bi = headers.findIndex((h) => h.startsWith("予算"));
+  expect(ti).toBeGreaterThan(0);
+  const [y, m] = asOfMonth.split("-");
+  const row = table.locator("tbody tr").filter({ hasText: `${y}年${Number(m)}月` }).first();
+  const budget = parseNumber((await row.locator("td, th").nth(bi).textContent()) ?? "")!;
+  const cap = parseNumber((await row.locator("td, th").nth(ti).textContent()) ?? "")!;
+  expect(Math.abs(cap - budget * (1 - t.remainingRate))).toBeLessThanOrEqual(1);
+  await expect(section(page).locator(".yn-legend")).toContainText("上限（目標）");
+  // 目標の無いチームは凡例・列を増やさない
+  const without = teams.find((id) => !Object.values(model.targets ?? []).some((x) => x.kind === "team" && x.targetId === id));
+  if (without) {
+    await gotoPage(page, `/team?id=${without}`);
+    const m2 = page.locator(".yn-chart-card").filter({ hasText: "月次推移" }).first();
+    await expect(m2.locator(".yn-legend")).not.toContainText("目標");
+    await expect(section(page).locator(".yn-legend")).not.toContainText("目標");
+  }
+});
+
 test("今月の進捗: 今月を含まない期間（前年度・先月）では出さない", async ({ page }) => {
   await gotoPage(page, `/team?id=${TEAM}`);
   await expect(section(page)).toHaveCount(1);

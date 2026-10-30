@@ -103,13 +103,13 @@ export function dailyKpis(p, { unit, subtitle }) {
     ]}</section>`;
 }
 
-export function dailyLegend(dark) {
+export function dailyLegend(dark, { target = false } = {}) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
     { label: T.daily.legendProjection, color: c.cost, shape: "line-dashed" },
     { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
-    { label: T.daily.legendCap, color: c.danger, shape: "line-dashed" },
+    { label: target ? T.daily.legendCapTarget : T.daily.legendCap, color: c.danger, shape: "line-dashed" },
   ]);
 }
 
@@ -243,7 +243,7 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
     ${chartFigure({
       title,
       subtitle: [monthJa(p.month), subtitle].filter(Boolean).join(" ・ "),
-      legend: dailyLegend(dark),
+      legend: dailyLegend(dark, { target: !!p.target }),
       draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
       after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName })}</details>`,
     })}

@@ -20,7 +20,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
+import { monthlyChart, monthlyLegend, seriesTable, withTargets } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
@@ -154,13 +154,14 @@ if (vm?.exists && !vm.isUnassigned) {
 
 ```js
 if (vm?.exists) {
+  const series = withTargets(vm.series, vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m));
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(chartFigure({
     title: T.charts.monthlyTitle,
     subtitle: periodJa(vm.period),
-    legend: monthlyLegend(dark),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
+    legend: monthlyLegend(dark, series),
+    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
   }));
 }
 ```

@@ -22,7 +22,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
+import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
@@ -186,12 +186,13 @@ if (vm) {
 
 ```js
 if (vm) {
+  const series = withTargets(vm.series, (m) => targetForMonth(model, "project", vm.contract.contractId, m));
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
   display(chartFigure({
     title: T.charts.monthlyTitle,
     subtitle: periodJa(vm.period),
-    legend: monthlyLegend(dark),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    legend: monthlyLegend(dark, series),
+    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
   }));
 }
 ```
