@@ -179,6 +179,11 @@ export function createStore(model, options = {}) {
   };
 }
 
+/** 保存してある表示条件（URL・保存先は書き換えない。リソース計画の変更の影響 §65 で期間・単位を引き継ぐ） */
+export function savedState(model) {
+  return sanitize(model, readStorage() ?? {});
+}
+
 /** 状態を引き継いだ相対リンク。path は "./contracts" のようにページ名 */
 export function buildHref(path, state, extra = {}) {
   const q = new URLSearchParams();
