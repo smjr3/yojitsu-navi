@@ -255,7 +255,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ## 19. マスタ編集 `/masters`
 
-対象: `data/masters/members.csv`（所属・役職・チーム）、`data/masters/rates.csv`（単価）、`data/masters/teams.csv`（チーム）、`data/targets.csv`（目標。§57）。アサイン（`data/assignments.csv`）と契約外予定（`data/outside-plans.csv`）はリソース計画 `/plan` で編集する（§36.1）。編集はリーダー層（GitLab の Developer 以上）だけが実際に保存できる。閲覧は誰でも可。
+対象: `data/masters/members.csv`（所属・役職・チーム）、`data/masters/rates.csv`（単価）、`data/masters/teams.csv`（チーム）、`data/targets.csv`（目標。§60）。アサイン（`data/assignments.csv`）と契約外予定（`data/outside-plans.csv`）はリソース計画 `/plan` で編集する（§36.1）。編集はリーダー層（GitLab の Developer 以上）だけが実際に保存できる。閲覧は誰でも可。
 
 ### 19.1 編集の考え方
 - 履歴マスタ（§5）は **行を追加する** のが基本操作（「4月から単価変更」= 新しい `effective_from` の行を足す）。既存行の修正・削除もできるが、過去月の数値が変わる操作には確認ダイアログで「過去の計算結果が変わります（影響: N か月）」と出す。
@@ -808,10 +808,10 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - ダミーデータは今年度に始まる行に例の記録を持つ（docs/DUMMY_DATA.md）。
 - 再発防止: `tests/unit/masterEdit.test.ts`（stampChangedRows）・`csv-edit.test.ts`、`tests/e2e/plan-history.spec.ts`、`tests/e2e/gitlab-merge.spec.ts`。
 
-## 57. チーム・顧客・案件の目標（2026-10-30 要望）
+## 60. チーム・顧客・案件の目標（2026-10-30 要望）
 「各チームごとに目標値を設定できるか。いつにどの値を目指す、みたいな」「チームでも、顧客でも案件でも」への対応。指標は残予算率だけ（2026-10-30 決定。実績額・稼働の目標は持たない）。
 
-### 57.1 データ `data/targets.csv`（省略可）
+### 60.1 データ `data/targets.csv`（省略可）
 | 列 | 内容 |
 |---|---|
 | `target_type` | `team` / `customer` / `project` |
@@ -825,7 +825,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 検証: 種類の誤り `TARGET_INVALID_KIND`・対象が空 `TARGET_MISSING_ID`・月の形式 `INVALID_MONTH`・開始月 > 期限月 `TARGET_PERIOD_INVERTED`・率 `TARGET_RATE_INVALID` はエラー。対象が見つからない（チームの廃止・案件の削除）は `TARGET_UNKNOWN`（警告。画面には出さない）。
 - 数値の計算（予算・実績・着地見込み）には使わない。
 
-### 57.2 判定（`src/core/targets.ts` の `evaluateTarget`）
+### 60.2 判定（`src/core/targets.ts` の `evaluateTarget`）
 ```
 期間      = start_month（空なら期限月を含む年度の最初の月）〜 due_month
 対象の案件 = team: 基準月の組織で配下を含む担当案件（§11 と同じ）/ customer: 顧客名が同じ案件 / project: その契約
@@ -837,7 +837,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ```
 - 画面の期間（表示条件）には左右されない（目標の期間で数える）。方式を変えると見込みの判定は変わる。
 
-### 57.3 画面
+### 60.3 画面
 - マスタ編集に「目標」タブ（台帳の 4 つ目）。1 行 = 1 件で履歴は持たない。対象はチーム・顧客・案件を 1 つの欄で検索して選ぶ（保存時に `target_type` と `target_id` に分ける）。保存は他のマスタと同じ MR（§24）。過去の月の数値は変わらないので影響の確認は出さない。
 - チーム詳細・顧客詳細・案件詳細: KPI の下に「目標」の表（期限・累計の期間・目標・残予算率（実績／見込み）・差・状況）。残予算率を押すと計算根拠（予算・実績・見込み・着地・対象の案件）。目標が無い対象には表を出さない。説明は見出し横の「?」だけ。
 - チーム・顧客・案件の一覧: 「目標」列（基準月以降で最も近い期限の目標。無ければ最後の目標）。状況のチップと「残予算率／目標」。並べ替えは目標との差。目標が 1 件も無い一覧では列を出さない。Excel にも出す。

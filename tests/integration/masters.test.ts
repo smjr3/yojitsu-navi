@@ -112,7 +112,7 @@ describe("ダミーデータのマスタで往復", () => {
       docs.assignments = deleteRow(docs.assignments, removed.id);
       // 契約外予定（§36）: 1 行追加（ファイルが無ければ新しく作る）
       docs.outside = addRow(docs.outside, { member_id: memberId, start_month: "2026-11", end_month: "2027-01", person_months: "0.2", note: "提案, 準備" }).doc;
-      // 目標（§57）: 1 行追加
+      // 目標（§60）: 1 行追加
       docs.targets = addRow(docs.targets, { target_type: "team", target_id: anyTeam, due_month: "2027-06", remaining_rate: "18", start_month: "", note: "通期, 目標" }).doc;
 
       const v = validateEdited(docs, p.context, loadDataset(dir).dataset.config);

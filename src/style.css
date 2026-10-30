@@ -3894,7 +3894,7 @@ html:has(dialog.yn-dialog[open]) {
   vertical-align: middle;
 }
 
-/* 目標（§57）: 詳細の表と一覧の列 */
+/* 目標（§60）: 詳細の表と一覧の列 */
 .yn-targets-table .yn-cell-sub {
   display: block;
 }

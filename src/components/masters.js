@@ -107,7 +107,7 @@ const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], t
 const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
 const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
-/** 目標（§57）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
+/** 目標（§60）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
 const TARGET_FIELD = "__target";
 
 /** 月 m を含む年度の 12 か月 */
@@ -626,7 +626,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 文書の行 → 台帳のまとまり（§36） */
   function groupsOf(fileId) {
     const doc = docs[fileId];
-    // 目標（§57）は 1 行が 1 件（キーの無い列でまとめると行ごとに別になる）
+    // 目標（§60）は 1 行が 1 件（キーの無い列でまとめると行ごとに別になる）
     const list = MASTER_FILES[fileId].history === "list";
     return ledgerGroups(
       doc.rows.map((r) => ({ id: r.id, record: rowRecord(doc, r) })),
@@ -671,7 +671,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     const q = f.q.normalize("NFKC").toLowerCase().trim();
     const issues = validation.byRow[fileId];
     const keyColumn = def.keyColumns[0];
-    // 1 行が 1 件（目標。§57）: 履歴の列は無く、行ごとに修正・削除する
+    // 1 行が 1 件（目標。§60）: 履歴の列は無く、行ごとに修正・削除する
     const isList = def.history === "list";
     // 台帳の 1 行: 先頭に対象（名前と ID）、続けて値の列。適用開始月は履歴の側に出す
     const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : null;
@@ -1857,7 +1857,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
     if (col.input === "target") {
-      // 目標の対象（§57）: チーム・顧客・案件から 1 つ。値は「種類:ID」
+      // 目標の対象（§60）: チーム・顧客・案件から 1 つ。値は「種類:ID」
       const kindOf = (v) => v.slice(0, v.indexOf(":"));
       const idOf = (v) => v.slice(v.indexOf(":") + 1);
       return combobox({ id, name: TARGET_FIELD, options: targetOptions(), value, required: req, disabled, placeholder: T.masters.targetPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => `${goalTargetName(kindOf(x), idOf(x))}${T.masters.invalidValue}` });

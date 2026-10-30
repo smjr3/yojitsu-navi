@@ -122,7 +122,7 @@ export function parseNumberCell(cell: string): number {
   return Number(s);
 }
 
-/** 割合のセル（§57）: "20" / "20%" / "２０％" → 0.2。空・数値でない → NaN */
+/** 割合のセル（§60）: "20" / "20%" / "２０％" → 0.2。空・数値でない → NaN */
 export function parsePercentCell(cell: string): number {
   const t = cell.normalize("NFKC").trim().replace(/\s*%$/, "");
   if (t === "" || t.includes(",")) return Number.NaN;
@@ -152,7 +152,7 @@ export interface DatasetFiles {
   taskTypes?: string;
   /** 契約外予定（§36）。省略・空 = なし */
   outsidePlans?: string;
-  /** 目標（§57）。省略・空 = なし */
+  /** 目標（§60）。省略・空 = なし */
   targets?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
@@ -337,7 +337,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           note: r.get("note"),
         }));
 
-  // 目標（§57）: 省略可。残予算率は % の数値（20 = 20%。末尾の % は付けても付けなくてもよい）
+  // 目標（§60）: 省略可。残予算率は % の数値（20 = 20%。末尾の % は付けても付けなくてもよい）
   const targets: Target[] =
     (files.targets ?? "").trim() === ""
       ? []

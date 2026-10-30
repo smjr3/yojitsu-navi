@@ -95,7 +95,7 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     taskTypes: readOrEmpty(join(rootDir, DATA_FILES.taskTypes)),
     // 省略可（§36）。無ければ空 = 契約外予定なし
     outsidePlans: readOrEmpty(join(rootDir, DATA_FILES.outsidePlans)),
-    // 省略可（§57）。無ければ空 = 目標なし
+    // 省略可（§60）。無ければ空 = 目標なし
     targets: readOrEmpty(join(rootDir, DATA_FILES.targets)),
     worklogs,
     worklogNames: listed.map((f) => f.name),

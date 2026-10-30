@@ -176,7 +176,7 @@ if (vm) {
 ```
 
 ```js
-// 目標（§57）。目標が無ければ何も出さない
+// 目標（§60）。目標が無ければ何も出さない
 if (vm) {
   const sec = targetSection({ model, kind: "project", id: vm.contract.contractId, name: `${vm.contract.customerName} / ${vm.contract.projectName}`, method: vm.method, unit: vm.unit });
   if (sec) display(sec);
