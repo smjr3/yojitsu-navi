@@ -134,6 +134,17 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
 });
 
+test("マスタ編集「目標」: 表に出る対象の名前（チーム名・案件名）で探せる", async ({ page }) => {
+  await gotoPage(page, "/masters?view=targets");
+  const rows = page.locator("table.yn-me-table tbody tr.yn-me-group");
+  const q = page.locator("#yn-me-q-targets");
+  await q.fill("インフラ保守チーム");
+  await expect(rows).toHaveCount(targetsOf(model, "team", "T111").length);
+  await q.fill("クラウド基盤運用");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("北斗建設");
+});
+
 test("マスタ編集「目標」: 対象・終了月・率の未入力は止め、100% 超はエラー", async ({ page }) => {
   await gotoPage(page, "/masters?view=targets");
   await page.getByRole("button", { name: "＋ 新しい目標" }).click();

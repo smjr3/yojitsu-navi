@@ -620,7 +620,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   /** 表の検索の対象（セルの値と、ID の列の名前） */
   function searchText(fileId, doc, r) {
     const rec = rowRecord(doc, r);
-    return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim()))].join(" ").normalize("NFKC").toLowerCase();
+    // 目標（§60）は表に出す対象の名前（チーム名・案件名）でも探せるように
+    const goal = fileId === "targets" ? [goalTargetName((rec.target_type ?? "").trim(), (rec.target_id ?? "").trim())] : [];
+    return [...r.cells, ...Object.entries(rec).map(([k, v]) => displayValue(fileId, k, v.trim())), ...goal].join(" ").normalize("NFKC").toLowerCase();
   }
 
   /** 台帳の開いている対象（fileId → キー）。エラーのある対象は、閉じたものを除いて開いて見せる */
