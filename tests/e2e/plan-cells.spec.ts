@@ -232,8 +232,9 @@ test("候補の入力欄: 打った文字で絞り込み、候補に無い文字
 
 test("ID を前面に出さない: メンバー一覧・案件一覧・案件詳細・メンバー詳細", async ({ page }) => {
   await gotoPage(page, "/members");
-  await expect(page.locator("table.yn-table tbody")).toContainText("小林 玲奈");
-  await expect(page.locator("table.yn-table tbody")).not.toContainText("M011");
+  // メンバー別には「計画とのずれ」（§64）とメンバー一覧の 2 つの表がある。どちらにも ID を出さない
+  await expect(page.getByRole("table", { name: "メンバー別の計画と実績" }).locator("tbody")).toContainText("小林 玲奈");
+  for (const body of await page.locator("table.yn-table tbody").all()) await expect(body).not.toContainText("M011");
   await gotoPage(page, "/contracts");
   await expect(page.locator("table.yn-table tbody")).not.toContainText(/C0\d\d/);
   await gotoPage(page, "/contract?id=C002");
@@ -246,8 +247,8 @@ test("ID を前面に出さない: メンバー一覧・案件一覧・案件詳
 
 test("パートナーの会社名は出さない", async ({ page }) => {
   await gotoPage(page, "/members");
-  await expect(page.locator("table.yn-table tbody")).toContainText("岡田 浩二");
-  await expect(page.locator("table.yn-table tbody")).not.toContainText("（テクノブリッジ）");
+  await expect(page.getByRole("table", { name: "メンバー別の計画と実績" }).locator("tbody")).toContainText("岡田 浩二");
+  for (const body of await page.locator("table.yn-table tbody").all()) await expect(body).not.toContainText("（テクノブリッジ）");
 });
 
 for (const width of [1280, 1024, 768, 390]) {

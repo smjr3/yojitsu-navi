@@ -116,3 +116,7 @@
 ### 性能
 
 `tests/unit/members.perf.test.ts`: perf.test.ts と同じ規模（作業ログ 5 万件 × 契約 100 件 × 200 人）＋アサイン 400 行で、memberMonths を含む Model 構築 2 秒以内（実測 約 0.6〜1 秒）、`buildMemberMonths` 単体 300ms 以内、`aggregateMembers` 200 回 ＋ 月次推移 200 人分で 2 秒以内。
+
+## 計画と実績のずれ（SPEC §64）— `src/core/planGaps.ts`
+
+`planGaps(model, { period, memberIds, includeOutside })` は、期間を `confirmedPeriodOf`（〜 `meta.lastFinalMonth`）で切ってから `aggregateMembers` の `byContract` を 1 行ずつ `planGapKindOf` で判定するだけ（計画・実績の計算は §18.1 と共有、重複実装なし）。メンバーの絞り込みは画面の `memberIdsInTeam` の結果を渡す（一覧と同じ母集団）。

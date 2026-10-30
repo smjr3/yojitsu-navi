@@ -76,6 +76,7 @@ export {
   type MemberRateSegment,
   type MemberScope,
 } from "./members.js";
+export { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, confirmedPeriodOf, planGapKindOf, planGaps, type PlanGapKind, type PlanGapResult, type PlanGapRow, type PlanGapScope } from "./planGaps.js";
 export {
   UNASSIGNED_TEAM_ID,
   UNASSIGNED_TEAM_LABEL,
