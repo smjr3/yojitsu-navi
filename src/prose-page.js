@@ -87,7 +87,7 @@ if (model) {
       model,
       title: ${JSON.stringify(title)},
       lead: ${leadKey},
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: ${JSON.stringify(title)} }],
+      breadcrumbs: [{ label: ${JSON.stringify(title)} }], // 全体サマリーの配下ではない（§69）
     }),
   );
 }

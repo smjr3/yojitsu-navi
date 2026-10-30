@@ -390,3 +390,11 @@ test("見出し横の「?」: カーソルで説明が開き、Esc で閉じる�
   await expect(pop).toBeVisible();
   await expect(tip.locator(".yn-tip-btn")).toHaveAttribute("aria-expanded", "true");
 });
+
+test("タブにないページ（リソース計画・マスタ編集・データ確認・使い方・計算ルール）は全体サマリーを親にしない（§69）", async ({ page }) => {
+  for (const path of ["/plan", "/masters", "/data-check", "/guide", "/rules"]) {
+    await gotoPage(page, path);
+    await expect(page.locator("h1").first()).toBeVisible();
+    await expect(page.locator('nav[aria-label="パンくず"]'), path).toHaveCount(0);
+  }
+});

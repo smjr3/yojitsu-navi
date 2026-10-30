@@ -26,7 +26,7 @@ if (model) {
       model: null,
       title: T.app.pages.plan,
       lead: T.plan.lead,
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: T.app.pages.plan }],
+      breadcrumbs: [{ label: T.app.pages.plan }], // 全体サマリーの配下ではないので親を付けない（§69）
     }),
   );
 }
