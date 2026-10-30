@@ -47,6 +47,8 @@ export interface PlanMemberRow {
   leftFrom: YearMonth | null;
   /** 退職した月以降に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
+  /** months と同じ順の在籍（その月の台帳の行があり、退職していない。復職後は在籍に戻る。§58 の人数 × 1.0） */
+  activeMonths: boolean[];
 }
 
 export interface PlanView {
@@ -146,6 +148,10 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       assignments: list,
       leftFrom,
       afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m))),
+      activeMonths: ms.map((m) => {
+        const rec = memberIdx.at(memberId, m);
+        return !!rec && !isLeftRecord(rec);
+      }),
     };
   });
   return { months: ms, rows, totals };

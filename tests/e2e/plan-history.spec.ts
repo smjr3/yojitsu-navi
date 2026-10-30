@@ -44,7 +44,8 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(main).toContainText("1.0 超 3か月");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   const toggle = page.locator('[data-fk="plan:toggle:M010"]');
-  await expect(toggle).toHaveText(/^案件 1\s*▾$/);
+  // 案件 1 ＋ 運用保守以外の提案 1 = 作業 2（§57）
+  await expect(toggle).toHaveText(/^作業 2\s*▾$/);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const proj = await subRow(page, "M010", "倉庫管理");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
