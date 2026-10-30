@@ -7,6 +7,7 @@
  * 単価は §6 の rateFor をそのまま使う（原価・着地見込みと同じ関数）。
  */
 import { isValidYearMonth, monthRange } from "./calendar.js";
+import { normalizeName } from "./normalize.js";
 import { roundYen } from "./cost.js";
 import { createEffectiveIndex, createMasterIndex, isLeftRecord, leftMonthOf, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { monthStatusFromMeta } from "./status.js";
@@ -103,8 +104,9 @@ export function buildMemberMonths(
 
   // 契約外（§50.3）: 計画 = 契約外予定、実績 = 契約外の作業ログ（種別ごと）
   const outsideCell = (memberId: string, month: YearMonth, type: string): CellAcc => {
-    const acc = cellOf(memberId, month, outsideRowId(type));
-    acc.outsideType = type;
+    // 表記ゆれ（全角・半角、大文字・小文字）は同じ種別として 1 行にまとめる（検証・リソース計画と同じ正規化）。表示名は最初の表記
+    const acc = cellOf(memberId, month, outsideRowId(normalizeName(type)));
+    acc.outsideType ??= type;
     return acc;
   };
   for (const o of outside.plans ?? []) {
