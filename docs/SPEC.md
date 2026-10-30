@@ -821,6 +821,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 配色は稼働実績のグラフと同じ（運用保守＝青、運用保守以外＝紫）。表示モードが自動で PC の設定が変わったとき（`yn-theme`）は描き直す。グラフに説明文は付けない。
 - 再発防止: `tests/e2e/plan-chart.spec.ts`（1.0 超の人数が表の黄色のセルの数と一致・絞り込みに連動・390/768/1280px とダークではみ出しと重なりがない・テーマの切替で描き直す）、`tests/unit/retirement.test.ts`（activeMonths。復職）。
 
+## 59. 設定画面のバージョン情報（2026-10-30 要望）
+「設定画面にバージョン情報を表示して」への対応。
+- 設定画面の一番下に **バージョン情報**（バージョン・コミット・ビルド日時）を出す。説明文は付けない。他の画面には出さない。
+- バージョン = ルートの `package.json` の `version`。コミット = ビルドしたコミットの短いハッシュ（GitLab CI は `CI_COMMIT_SHORT_SHA`、それ以外は `git rev-parse --short=8 HEAD`）。ビルド日時 = ビルドした時刻（JST、`YYYY-MM-DD HH:mm`）。
+- `observablehq.config.js` の `buildInfo()` がビルド時に求め、全ページの head に `<meta name="yn-build" data-version data-commit data-built-at>` として入れる。設定画面（`versionSection`）はそれを読む。取れない項目（git の無い環境のコミットなど）の行は出さない。
+- 再発防止: `tests/e2e/version.spec.ts`。
 
 ## 60. チーム・顧客・案件の目標（2026-10-30 要望）
 「各チームごとに目標値を設定できるか。いつにどの値を目指す、みたいな」「チームでも、顧客でも案件でも」への対応。指標は残予算率だけ（2026-10-30 決定。実績額・稼働の目標は持たない）。
