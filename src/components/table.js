@@ -284,7 +284,7 @@ export function dataTable({
 
   function renderRow(row, i) {
     const href = rowHref ? rowHref(row) : null;
-    const danger = row.isDanger || row.isDeficit || row.isOverBudget;
+    const danger = row.isDanger || rowDeficit(row) || row.isOverBudget;
     const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
@@ -433,6 +433,13 @@ export function teamCountColumns() {
   ];
 }
 
+/** まとめた行（チーム・顧客）の超過見込み: 配下に超過見込みの案件があり、合計の着地もマイナス（§66） */
+const teamDeficit = (row) => row.deficitCount > 0 && (row.forecastGrossProfit ?? 0) < 0;
+/** 行を赤にする超過見込み（案件の行は案件の超過見込み、まとめた行は teamDeficit） */
+function rowDeficit(row) {
+  return typeof row.deficitCount === "number" ? teamDeficit(row) : Boolean(row.isDeficit);
+}
+
 /**
  * 行の状態（チップの配列）。赤は 消化率超過 と 赤字着地 だけ。
  * 契約: 「赤字見込み」「予算超過」。チーム（deficitCount を持つ行）: 「赤字 N件」「予算超過」。
@@ -440,10 +447,12 @@ export function teamCountColumns() {
 export function rowStatus(row) {
   const chips = [];
   const isTeam = typeof row.deficitCount === "number";
-  if (isTeam ? row.deficitCount > 0 : row.isDeficit) {
+  if (isTeam ? teamDeficit(row) : row.isDeficit) {
     chips.push(isTeam ? { kind: "danger", text: fmt(T.table.chipTeamDeficit, { n: row.deficitCount }), title: fmt(T.table.chipTeamDeficitTitle, { n: row.deficitCount }) } : { kind: "danger", text: T.table.chipDeficit, title: T.table.chipDeficitTitle });
   }
   if (row.isOverBudget) chips.push({ kind: "danger", text: T.table.chipOverBudget, title: T.table.chipOverBudgetTitle });
+  // まとめた行の合計がマイナスでなければ、超過見込みの案件があっても赤にしない（件数は灰色で出す。§66）
+  if (isTeam && !teamDeficit(row) && row.deficitCount > 0) chips.push({ kind: "neutral", text: fmt(T.table.chipTeamDeficitWithin, { n: row.deficitCount }), title: fmt(T.table.chipTeamDeficitWithinTitle, { n: row.deficitCount }) });
   if (chips.length) return chips;
   if (row.includesPreliminary) return [{ kind: "prelim", text: T.table.chipPrelim, title: T.table.chipPrelimTitle }];
   return [{ kind: "ok", text: T.table.chipOk }];
@@ -451,7 +460,7 @@ export function rowStatus(row) {
 
 /** 状態列の並び順: 赤（赤字・予算超過）を先頭、その中は消化率の高い順 */
 export function statusSortValue(row) {
-  const danger = row.isDeficit || row.isOverBudget || (row.deficitCount ?? 0) > 0;
+  const danger = rowDeficit(row) || row.isOverBudget;
   const rate = typeof row.burnRate === "number" && Number.isFinite(row.burnRate) ? row.burnRate : -1;
   return (danger ? 0 : 1000) - rate;
 }

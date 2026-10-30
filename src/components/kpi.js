@@ -52,6 +52,17 @@ export function statusChip(kind, text, title = null) {
   return html`<span class=${`yn-chip yn-chip-${kind}`} title=${title}><span class=${`yn-chip-icon${kind === "prelim" ? " yn-icon-prelim" : ""}`} aria-hidden="true">${chipIcon(kind)}</span>${text}</span>`;
 }
 
+/**
+ * 着地見込みの差（まとめた単位）の状態。合計がマイナスのときだけ赤（§66）。
+ * 合計がプラスでも、個々に超過見込みの案件があれば件数を灰色で出す。
+ */
+export function forecastStatus(forecast) {
+  const n = forecast.deficitContractIds.length;
+  if ((forecast.forecastGrossProfit ?? 0) < 0) return { kind: "danger", text: fmt(T.kpi.deficitCount, { n }) };
+  if (n > 0) return { kind: "neutral", text: fmt(T.kpi.deficitWithin, { n }) };
+  return { kind: "ok", text: T.kpi.noDeficit };
+}
+
 /** KPI の行 */
 export function kpiRow(tiles, { columns = 5 } = {}) {
   return html`<section class="yn-kpi-grid" style=${`--yn-kpi-cols:${columns}`} aria-label=${T.layout.kpiRowLabel}>${tiles}</section>`;

@@ -228,6 +228,8 @@ export default {
     // 状態チップ
     chipTeamDeficit: "超過見込み {n}件",
     chipTeamDeficitTitle: "配下の案件のうち、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
+    chipTeamDeficitWithin: "超過見込みの案件 {n}件",
+    chipTeamDeficitWithinTitle: "合計の着地はマイナスではありませんが、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
     chipDeficit: "超過見込み",
     chipDeficitTitle: "期間の終わりに超過で着地する見込み",
     chipOverBudget: "消化率超過",
@@ -452,6 +454,8 @@ export default {
     forecastEndSub: "{end}まで ・ 着地実績 {cost}",
     deficitCount: "超過見込み {n}件",
     noDeficit: "超過見込みなし",
+    // 合計はプラスで、個々に超過見込みの案件がある（赤にしない。§66）
+    deficitWithin: "超過見込みの案件 {n}件",
   },
 
   // ── 計算根拠パネル（数値をクリックすると開くダイアログ） ──────────────
