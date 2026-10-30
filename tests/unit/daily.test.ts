@@ -3,7 +3,7 @@
  * 年を固定しない（§49）: 月は今年から作り、営業日の数は calendar の関数で数えて比べる。
  */
 import { describe, expect, it } from "vitest";
-import { businessDaysInMonth, dailyMembers, dailyProgress, isBusinessDay, progressFromDays, type DailyFile } from "../../src/core/index.js";
+import { businessDaysInMonth, dailyMembers, dailyProgress, isBusinessDay, progressFromDays, targetForMonth, type DailyFile } from "../../src/core/index.js";
 
 const YEAR = new Date().getFullYear();
 const MONTH = `${YEAR}-06`;
@@ -139,5 +139,32 @@ describe("祝日の補完（§49）", () => {
     const month = `${YEAR}-01`;
     const p = progressFromDays(month, null, 100, 100, new Map(), [{ date: `${YEAR - 1}-05-03`, name: "前年" }] as never);
     expect(p.points[0]!.businessDay).toBe(false);
+  });
+});
+
+describe("targetForMonth（今月の上限に使う目標）", () => {
+  const t = (targetId: string, startMonth: string, endMonth: string, remainingRate: number) => ({ kind: "team", targetId, startMonth, endMonth, remainingRate, note: "" });
+  const model = {
+    config: { fiscalYearStartMonth: 4 },
+    targets: [
+      t("T1", "", `${YEAR + 1}-03`, 0.12),
+      t("T1", "", `${YEAR}-09`, 0.25),
+      t("T1", `${YEAR}-10`, `${YEAR}-10`, 0.2),
+      t("T2", "", `${YEAR + 1}-03`, 0.1),
+    ],
+  } as never;
+
+  it("月を含む目標のうち期間の最も短いもの（月ごとの目標を優先）", () => {
+    expect(targetForMonth(model, "team", "T1", `${YEAR}-10`)?.remainingRate).toBe(0.2);
+    expect(targetForMonth(model, "team", "T1", `${YEAR}-11`)?.remainingRate).toBe(0.12);
+    // 上期（開始月が空 = 年度の最初の月から）
+    expect(targetForMonth(model, "team", "T1", `${YEAR}-06`)?.remainingRate).toBe(0.25);
+    expect(targetForMonth(model, "team", "T2", `${YEAR}-06`)?.remainingRate).toBe(0.1);
+  });
+
+  it("月を含む目標が無ければ null（期間外・対象違い）", () => {
+    expect(targetForMonth(model, "team", "T1", `${YEAR + 1}-04`)).toBeNull();
+    expect(targetForMonth(model, "team", "T9", `${YEAR}-10`)).toBeNull();
+    expect(targetForMonth(model, "customer", "T1", `${YEAR}-10`)).toBeNull();
   });
 });

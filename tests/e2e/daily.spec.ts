@@ -3,7 +3,7 @@
  * チーム詳細にはメンバー×日の表が出る。各画面幅・ダークで画面からはみ出さない
  */
 import type { Page } from "@playwright/test";
-import { contractsForTeam, dailyMembers, dailyProgress, encodeDaily, formatYen, teamTreeForMonth } from "../../src/core/index.js";
+import { contractsForTeam, dailyMembers, dailyProgress, encodeDaily, formatYen, targetForMonth, teamTreeForMonth, type Model } from "../../src/core/index.js";
 import { test, expect, gotoPage, useDarkTheme, parseNumber } from "./helpers/app.js";
 import { getModel } from "./helpers/core.js";
 
@@ -13,6 +13,11 @@ const asOfMonth = model.meta.asOfMonth;
 const TEAM = "T111";
 const teamIds = contractsForTeam(model, TEAM, teamTreeForMonth(model, asOfMonth)).map((c) => c.contractId);
 const section = (page: Page) => page.locator("#yn-daily");
+/** 画面と同じ上限（今月を含む目標があれば 予算 ×（1 − 目標の残予算率）） */
+const capOpts = (kind: "team" | "customer" | "project", id: string) => {
+  const t = targetForMonth(model as Model, kind, id, asOfMonth);
+  return t ? { capRatio: 1 - t.remainingRate } : {};
+};
 
 /** 円表示の KPI の値（円） */
 async function kpiYen(page: Page, id: string): Promise<number | null> {
@@ -33,7 +38,7 @@ test("今月の進捗: 全体・チーム・顧客・案件の詳細に出る（
 });
 
 test("今月の進捗: KPI の値が core の計算と一致し、表の最後の累計が今日までの実績", async ({ page }) => {
-  const p = dailyProgress(model, daily, teamIds)!;
+  const p = dailyProgress(model, daily, teamIds, capOpts("team", TEAM))!;
   await gotoPage(page, `/team?id=${TEAM}&unit=yen`);
   expect(await kpiYen(page, "yn-daily-cap")).toBe(Math.round(p.cap));
   expect(await kpiYen(page, "yn-daily-actual")).toBe(Math.round(p.actual));
@@ -47,6 +52,28 @@ test("今月の進捗: KPI の値が core の計算と一致し、表の最後�
   // 数字を押すと根拠（式）
   await section(page).locator("#yn-daily-projection .yn-kpi-value").click();
   await expect(page.locator("dialog[open]")).toContainText("このペースの月末 =");
+});
+
+test("今月の進捗: 今月を含む目標があれば、上限 = 予算 ×（1 − 目標の残予算率）。無ければ予算", async ({ page }) => {
+  const teams = Object.keys(teamTreeForMonth(model, asOfMonth));
+  const ids = (id: string) => contractsForTeam(model, id, teamTreeForMonth(model, asOfMonth)).map((c) => c.contractId);
+  const withTarget = teams.find((id) => targetForMonth(model as Model, "team", id, asOfMonth) && dailyProgress(model, daily, ids(id)));
+  const without = teams.find((id) => !targetForMonth(model as Model, "team", id, asOfMonth) && dailyProgress(model, daily, ids(id)));
+  expect(withTarget, "ダミーデータに今月を含む目標のあるチームがある").toBeTruthy();
+  const t = targetForMonth(model as Model, "team", withTarget!, asOfMonth)!;
+  const p = dailyProgress(model, daily, ids(withTarget!), { capRatio: 1 - t.remainingRate })!;
+  await gotoPage(page, `/team?id=${withTarget}&unit=yen`);
+  expect(await kpiYen(page, "yn-daily-cap")).toBe(Math.round(p.budget * (1 - t.remainingRate)));
+  await expect(section(page).locator("#yn-daily-cap .yn-kpi-sub")).toContainText(`目標の残予算率 ${Math.round(t.remainingRate * 100)}%`);
+  await section(page).locator("#yn-daily-cap .yn-kpi-value").click();
+  await expect(page.locator("dialog[open]")).toContainText("今月の上限 = 今月の予算 ×（1 − 目標の残予算率）");
+  await page.keyboard.press("Escape");
+  if (without) {
+    const q = dailyProgress(model, daily, ids(without))!;
+    await gotoPage(page, `/team?id=${without}&unit=yen`);
+    expect(await kpiYen(page, "yn-daily-cap")).toBe(Math.round(q.budget));
+    await expect(section(page).locator("#yn-daily-cap .yn-kpi-sub")).not.toContainText("目標");
+  }
 });
 
 test("今月の進捗: 今月を含まない期間（前年度・先月）では出さない", async ({ page }) => {

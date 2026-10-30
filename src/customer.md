@@ -12,7 +12,7 @@ title: 顧客詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, targetForMonth } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
@@ -214,7 +214,7 @@ const daily = await loadDaily(FileAttachment("./data/daily.json"));
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, vm.scope.contractIds, vm.scope.period), { unit: vm.unit, dark, subtitle: group.label, exportName: `customer_daily_${model.meta.asOfMonth}` }));
+  display(dailySection(dailyFor(model, daily, vm.scope.contractIds, vm.scope.period, targetForMonth(model, "customer", group.label, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: group.label, exportName: `customer_daily_${model.meta.asOfMonth}` }));
 }
 ```
 

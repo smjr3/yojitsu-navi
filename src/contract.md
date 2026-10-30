@@ -13,7 +13,7 @@ title: 案件詳細
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } from "./core/index.js";
-import { customerKey } from "./core/index.js";
+import { customerKey, targetForMonth } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
@@ -203,7 +203,7 @@ const daily = await loadDaily(FileAttachment("./data/daily.json"));
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
 }
 ```
 

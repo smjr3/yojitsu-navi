@@ -12,7 +12,7 @@ title: チーム詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, setForecastPeriod, teamMemberCosts, teamOrgChanges, teamPath } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, setForecastPeriod, teamMemberCosts, teamOrgChanges, targetForMonth, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -172,7 +172,7 @@ const daily = await loadDaily(FileAttachment("./data/daily.json"));
 
 ```js
 if (vm?.exists) {
-  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
+  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period, vm.isUnassigned ? null : targetForMonth(model, "team", vm.teamId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
 }
 ```
 
