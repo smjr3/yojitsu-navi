@@ -9,6 +9,7 @@
  *   - 人事データの取り込み（取り込み元に再び現れたら在籍に戻す。現れない人を退職にはしない）
  */
 import { describe, expect, it } from "vitest";
+import { T } from "../../src/i18n/index.js";
 import { memberStatus, parseDataset } from "../../src/core/csv.js";
 import { createMasterIndex, isActiveAt, isLeftRecord, isWorkingAt, leaveReasonOf, leftMonthOf, memberAt, workedMonthKeys } from "../../src/core/masters.js";
 import { parseMasterDoc, planSourcesFromDocs } from "../../src/core/masterEdit.js";
@@ -36,6 +37,12 @@ describe("status 列の読み方", () => {
     ["休業", "休業"],
   ])("%j → %j", (raw, want) => {
     expect(memberStatus(raw).status).toBe(want);
+  });
+
+  it("文言は「退職」に限らない（休職・育休なども同じ扱い）", () => {
+    expect(T.plan.afterLeftChip).toContain("離脱");
+    expect(T.plan.afterLeftTitle).not.toContain("退職の前月");
+    expect(T.checks.assignmentAfterLeft).toContain("{reason}");
   });
 
   it("離脱の理由: left・retired は退職、それ以外は書いた値", () => {
