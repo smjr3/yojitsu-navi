@@ -208,18 +208,18 @@ test.describe("配色（§53）", () => {
     });
   test.describe("PC がダーク", () => {
     test.use({ colorScheme: "dark" });
-    test("既定は PC に合わせてダーク、設定画面で選んだライトはページを移っても保たれ、自動に戻すとダーク", async ({ page }) => {
+    test("既定は PC に合わせてダーク、設定画面で選んだライトはページを移っても保たれ、「PC に合わせる」に戻すとダーク", async ({ page }) => {
       await gotoPage(page, "/");
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       expect(await bgLum(page)).toBeLessThan(0.25);
       await gotoPage(page, "/settings");
-      await expect(page.getByRole("radio", { name: "自動（ダーク・PC）" })).toBeChecked();
+      await expect(page.getByRole("radio", { name: "PC に合わせる" })).toBeChecked();
       await page.getByRole("radio", { name: "ライト", exact: true }).check();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
       await gotoPage(page, "/teams");
       expect(await bgLum(page)).toBeGreaterThan(0.75);
       await gotoPage(page, "/settings");
-      await page.getByRole("radio", { name: /^自動/ }).first().check();
+      await page.getByRole("radio", { name: "PC に合わせる" }).check();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     });
   });
@@ -233,7 +233,16 @@ test.describe("配色（§53）", () => {
       await page.emulateMedia({ colorScheme: "dark" });
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     });
-    test("差し色を選ぶとリンク・選択中のタブの色が変わる", async ({ page }) => {
+    test("設定画面は「表示」が一番上、選択肢は何に合わせるかを書く", async ({ page }) => {
+      await gotoPage(page, "/settings");
+      const sections = page.locator(".yn-settings-section");
+      await expect(sections.first()).toHaveAttribute("aria-label", "表示");
+      await expect(page.getByRole("radio", { name: "PC に合わせる" })).toBeChecked();
+      await expect(page.getByRole("radio", { name: "GitLab に合わせる" })).toBeChecked();
+      await expect(page.locator(".yn-settings")).not.toContainText("自動");
+      await expect(page.locator(".yn-settings")).not.toContainText("差し色");
+    });
+    test("テーマカラーを選ぶとリンク・選択中のタブの色が変わる", async ({ page }) => {
       await gotoPage(page, "/settings");
       const link = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--yn-link").trim());
       const before = await link();

@@ -43,7 +43,8 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(main).toContainText("1.0 超 3か月");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   const toggle = page.locator('[data-fk="plan:toggle:M010"]');
-  await expect(toggle).toHaveText(/案件 1＋運用保守以外/);
+  // ボタンには案件の数だけを出す（「＋運用保守以外」は書かない。2026-10-30 試用版のコメント）
+  await expect(toggle).toHaveText(/^案件 1 ▾$/);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const proj = await subRow(page, "M010", "倉庫管理");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");

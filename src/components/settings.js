@@ -147,9 +147,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
   }
 
   function renderDisplay() {
-    const fallback = { theme: "light", accent: "blue", themeFrom: "os", accentFrom: "default" };
-    const look = window.ynAppearance?.get() ?? { ...fallback, themePref: "auto", accentPref: "auto", auto: fallback };
-    const from = (f) => (f === "gitlab" ? T.settings.fromGitlab : f === "os" ? T.settings.fromOs : T.settings.fromDefault);
+    const look = window.ynAppearance?.get() ?? { themePref: "auto", accentPref: "auto" };
     const group = (name, value, items, onPick) =>
       items.map(([v, label, swatch]) => {
         const input = html`<input type="radio" name=${name} value=${v} checked=${value === v}>`;
@@ -159,12 +157,12 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
         return html`<label class="yn-seg-radio">${input}${swatch ? html`<span class="yn-swatch" data-accent=${swatch} aria-hidden="true"></span>` : null}<span>${label}</span></label>`;
       });
     const themes = [
-      ["auto", fmt(T.settings.auto, { value: T.settings.themes[look.auto.theme], from: from(look.auto.themeFrom) })],
+      ["auto", T.settings.themeAuto],
       ["light", T.settings.themes.light],
       ["dark", T.settings.themes.dark],
     ];
     const accents = [
-      ["auto", fmt(T.settings.auto, { value: T.settings.accents[look.auto.accent], from: from(look.auto.accentFrom) })],
+      ["auto", T.settings.accentAuto],
       ...ACCENTS.map((a) => [a, T.settings.accents[a], a]),
     ];
     displaySlot.replaceChildren(html`<section class="yn-settings-section" aria-label=${T.settings.displayTitle}>
@@ -174,7 +172,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     </section>`);
   }
 
-  // 他のタブ・PC の設定・GitLab の読み直しで配色が変わったら、ラジオと「自動（…）」の表示を合わせる
+  // 配色が変わったら（PC の設定・GitLab の読み直しなど）ラジオを描き直す
   window.addEventListener("yn-theme", () => {
     const had = displaySlot.contains(document.activeElement) ? document.activeElement?.getAttribute("name") + ":" + document.activeElement?.getAttribute("value") : null;
     renderDisplay();
@@ -186,7 +184,8 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
 
   renderGitlab();
   renderDisplay();
-  root.append(gitlabSlot, displaySlot);
+  // 表示（全員が使う）を上、GitLab 接続（保存する人だけ）を下（2026-10-30 試用版のコメント）
+  root.append(displaySlot, gitlabSlot);
   if (usable && getToken() === "") publishMrCount(null);
   return root;
 }

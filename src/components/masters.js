@@ -1140,7 +1140,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const oCounts = rowCounts("outside", oRows);
       const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
-      const hasOutside = oRows.some(inFy);
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
@@ -1149,7 +1148,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: projectList.length })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(projectList.length) })}${hasOutside ? T.planEdit.toggleOutside : ""} ${open ? "▴" : "▾"}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: projectList.length })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(projectList.length) })} ${open ? "▴" : "▾"}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addProject}</button>
         </div></td>
       </tr>`;
