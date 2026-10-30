@@ -1055,6 +1055,21 @@ export default {
     emptyText: "期間を広げるか、チームの絞り込みを外してください。アサインは assignments.csv、作業実績は作業ログから読み込んでいます。",
     wholePeriodSuffix: " ・ 期間全体 {value}",
     elapsedSuffix: "（経過月）",
+    // 計画とのずれ（§64）
+    gapTitle: "計画とのずれ",
+    gapHint: "確定した月だけで、メンバー × 案件ごとに計画時間と実績時間を比べます（速報の月は実績が途中のため入れません）。計画なし = アサインが無いのに作業がある、実績なし = アサインがあるのに作業が無い、多い・少ない = 実績が計画から {ratio} 以上ずれている。差が {hours} 未満は出しません。",
+    gapStatus: "{period}（確定月） ・ {n}件",
+    gapNone: "{period}（確定月） ・ ずれはありません",
+    gapNoConfirmed: "選んだ期間に確定した月がありません",
+    gapUnplanned: "計画なし",
+    gapNoActual: "実績なし",
+    gapOver: "多い",
+    gapUnder: "少ない",
+    gapCaption: "計画とのずれ",
+    gapColKind: "ずれ",
+    gapColDiff: "差（時間）",
+    gapColDiffSub: "（実績−計画）",
+    gapToPlan: "リソース計画へ",
   },
 
   // ── メンバー詳細 ──────────────────────────────────
