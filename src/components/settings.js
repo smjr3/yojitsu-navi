@@ -185,7 +185,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
 
   renderGitlab();
   renderDisplay();
-  root.append(gitlabSlot, displaySlot);
+  root.append(displaySlot, gitlabSlot);
   if (usable && getToken() === "") publishMrCount(null);
   return root;
 }
