@@ -9,6 +9,8 @@ const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
 
 const model = getModel();
+/** 着地見込みの方式の既定（config.json。§51 で計画値） */
+const DEFAULT_METHOD = model.config.forecastMethodDefault;
 const FY = fiscalPeriod(model);
 
 test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ 案件詳細、パンくず、同じチームの案件一覧", { tag: "@smoke" }, async ({ page }) => {
@@ -173,7 +175,7 @@ test("絞り込み: 超過見込み / 消化率超過 / 速報含む / 期間外
   await gotoPage(page, "/contracts");
   const table = () => tableByCaption(page, "案件一覧");
   const all = contractsInPeriod(FY, undefined, model);
-  const ex = new Map(all.map((r) => [r.contract.contractId, contractRowExpected(r, FY, "recent3", model)]));
+  const ex = new Map(all.map((r) => [r.contract.contractId, contractRowExpected(r, FY, DEFAULT_METHOD, model)]));
   const expectRows = async (ids: string[], label: string) => {
     if (ids.length === 0) {
       await expect(page.getByText("該当する案件がありません"), label).toBeVisible();
@@ -292,7 +294,7 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     expect(r[ci("実績（円）")]).toBe(s.cost);
     expect(r[ci("残予算（円）")]).toBe(s.gp);
     expect(r[ci("着地差（円）")]).toBe(s.forecast);
-    const e = contractRowExpected(contractResult(s.id, model), FY, "recent3", model);
+    const e = contractRowExpected(contractResult(s.id, model), FY, DEFAULT_METHOD, model);
     expect(r[ci("予算（円）")]).toBe(e.totals.budget);
     const margin = r[ci("残予算率（%）")];
     if (e.totals.grossMargin !== null) expect(margin).toBeCloseTo(Math.round(e.totals.grossMargin * 1000) / 10, 6);
@@ -319,12 +321,12 @@ test("Excel 出力: .xlsx がダウンロードされ、見出しと数値が表
     expect(rows2.length).toBe(bodyYen.length);
     for (let i = 0; i < rows2.length; i++) {
       const id = String(rows2[i]![header2.indexOf("契約ID")]);
-      const e = contractRowExpected(contractResult(id, model), FY, "recent3", model);
+      const e = contractRowExpected(contractResult(id, model), FY, DEFAULT_METHOD, model);
       expect(rows2[i]![header2.indexOf("予算（円）")], `${unit}: ${id} 予算（円）`).toBe(e.totals.budget);
       expect(rows2[i]![header2.indexOf("実績（円）")], `${unit}: ${id} 実績（円）`).toBe(e.totals.cost);
     }
     // 表示は選択単位（core の値を同じ書式で丸めたもの）
-    const e0 = contractRowExpected(contractResult((await first.getAttribute("data-key"))!, model), FY, "recent3", model);
+    const e0 = contractRowExpected(contractResult((await first.getAttribute("data-key"))!, model), FY, DEFAULT_METHOD, model);
     expect(await cellText(first, col(h, "予算"))).toBe(yen(e0.totals.budget, unit));
   }
 });

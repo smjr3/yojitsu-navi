@@ -160,7 +160,7 @@ test("消化率の内訳: 累計実績 ÷ 累計予算 が KPI と一致する",
 });
 
 test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残り月 の算術が通る（C008・直近実績）", async ({ page }) => {
-  await gotoPage(page, "/contract?id=C008");
+  await gotoPage(page, "/contract?id=C008&method=recent3");
   const r = contractResult("C008", model);
   const f = r.forecasts.recent3;
   const b = f.breakdown;
