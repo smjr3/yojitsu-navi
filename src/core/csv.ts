@@ -122,9 +122,10 @@ export function parseNumberCell(cell: string): number {
   return Number(s);
 }
 
-/** 割合のセル（§63）: "20" / "20%" / "２０％" → 0.2。空・数値でない → NaN */
+/** 割合のセル（§63）: "20" / "20%" / "２０％" → 0.2、"-50" / "▲50" → -0.5。空・数値でない → NaN */
 export function parsePercentCell(cell: string): number {
-  const t = cell.normalize("NFKC").trim().replace(/\s*%$/, "");
+  // 負の数は「-50」のほか、数学のマイナス「−50」・会計の「▲50」「△50」も受け付ける（超過を減らす目標）
+  const t = cell.normalize("NFKC").trim().replace(/\s*%$/, "").replace(/^[\u2212▲△]\s*/, "-");
   if (t === "" || t.includes(",")) return Number.NaN;
   const n = parseNumberCell(t);
   return Number.isFinite(n) ? n / 100 : Number.NaN;
