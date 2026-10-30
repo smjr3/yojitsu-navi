@@ -221,11 +221,18 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   return table;
 }
 
-/** members.csv の status 列（§35）: 空・「在籍」・active = 在籍、「退職」・left・retired = 退職。それ以外はそのまま（検証でエラー） */
-export function memberStatus(raw: string): { status?: string } {
+/** 離脱の理由（§35。members.csv の status 列に書ける値。並びは画面の選択肢の順） */
+export const LEAVE_REASONS = ["退職", "休職", "産休", "育休", "契約終了"] as const;
+
+/**
+ * members.csv の status 列（§35）: 空・「在籍」・active = 在籍。
+ * LEAVE_REASONS のどれか（left・retired = 退職）= 離脱（status "left"、leaveReason にその値）。それ以外はそのまま（検証でエラー）
+ */
+export function memberStatus(raw: string): { status?: string; leaveReason?: string } {
   const v = raw.normalize("NFKC").trim();
   if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
-  if (v === "退職" || v.toLowerCase() === "left" || v.toLowerCase() === "retired") return { status: "left" };
+  if (v.toLowerCase() === "left" || v.toLowerCase() === "retired") return { status: "left", leaveReason: "退職" };
+  if ((LEAVE_REASONS as readonly string[]).includes(v)) return { status: "left", leaveReason: v };
   return { status: v };
 }
 

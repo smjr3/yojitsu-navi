@@ -274,9 +274,9 @@ export default {
     teamUnknownLeader: "{file} {row} 行目: リーダー {leaderMemberId} は members.csv に存在しません",
     memberIdEmpty: "{file} {row} 行目: member_id が空です",
     memberKindInvalid: "{file} {row} 行目: メンバー {memberId} の区分は employee か partner で指定してください: {value}",
-    memberStatusInvalid: "{file} {row} 行目: メンバー {memberId} の在籍状態（status）は空（在籍）か「退職」で指定してください: {value}",
-    assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} に退職していますが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を退職の前月にしてください",
-    worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は退職済みですが、退職月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
+    memberStatusInvalid: "{file} {row} 行目: メンバー {memberId} の在籍状態（status）は空（在籍）か「退職」「休職」「産休」「育休」「契約終了」で指定してください: {value}",
+    assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から{reason}ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
+    worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から{reason}ですが、翌月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
@@ -1046,10 +1046,9 @@ export default {
     colKind: "区分",
     kindPartner: "パートナー",
     kindEmployee: "社員",
-    // 退職（§35）
-    chipLeft: "退職",
-    chipLeftTitle: "{month} に退職（この月から在籍していません）",
-    leftLastTeam: "退職（最後の所属: {team}）",
+    // 離脱（退職・休職・産休・育休・契約終了。§35）
+    chipLeftTitle: "{month} から{reason}",
+    leftLastTeam: "{reason}（最後の所属: {team}）",
     varianceSub: "（計画−実績）",
     varianceExport: "差額（計画−実績）（円）",
     caption: "メンバー別の計画と実績",
@@ -1464,8 +1463,7 @@ export default {
     hintRemainingRate: "%（例: 20。超過を減らす目標は -50）。100 以下",
     hintTargetStart: "空なら終了月を含む年度の最初の月。月ごとの目標は終了月と同じ月",
     statusActive: "在籍",
-    statusLeft: "退職",
-    statusHint: "「退職」の行の適用開始月から在籍しません（退職した月を入れます）",
+    statusHint: "退職・休職などの行の適用開始月から在籍しません（その月に計画か実績があれば、その月までは稼働）",
     noneOption: "（なし）",
     choose: "選んでください",
     impact1: "過去の計算結果が変わります（影響:",
@@ -1540,6 +1538,9 @@ export default {
 
   // ── リソース計画（画面と、マスタ編集の「リソース計画」タブ） ─────────────────
   plan: {
+    // 離脱（退職・休職など。§35）
+    afterLeftChip: "離脱後の計画 {n}か月",
+    afterLeftTitle: "退職・休職などの翌月以降にもアサインが残っています。終了月を見直してください",
     // 変更の影響（§65）
     impact: {
       title: "変更の影響",
@@ -1561,9 +1562,6 @@ export default {
       colStatus: "状況",
       targetName: "{kind} {name}（{due}）",
     },
-    // 退職（§35）
-    afterLeftChip: "退職後の計画 {n}か月",
-    afterLeftTitle: "退職した月以降にもアサインが残っています。終了月を退職の前月にしてください",
     lead: "リーダーが、メンバー一人ひとりのリソース計画（どの案件に月何人月か、運用保守以外の見込み）を入れる画面です。人ごとに 1 行、開くと案件ごとの行と変更の履歴が出ます。人月でも時間でも入力でき、保存は人月に揃えます。保存できるのはリーダー層（GitLab の Developer 以上）だけです。所属・単価・組織の台帳はマスタ編集で直します。",
     tabLabel: "リソース計画",
     tabFile: "人 × 月の一覧",

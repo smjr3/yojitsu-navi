@@ -8,7 +8,7 @@
  * 実運用でよくあることを、ふつうに混ぜてある（docs/DUMMY_DATA.md「実運用規模の部分」）:
  *   - 予算超過（予実マイナス）が 3 割前後。大幅超過（150〜250%）や大幅な余り（30〜60%）も少しある
  *   - 終了した案件（更新しなかった・途中解約）、変更契約（途中で金額が変わり別契約行）、3 年契約、将来開始
- *   - 退職者（status=退職 の履歴行。退職月から工数なし。1 人だけ退職後に工数が付いている）・入社・異動・昇格
+ *   - 離脱者（status=退職・休職・育休・契約終了 の履歴行。離脱した月から工数なし。1 人は退職月の前半まで工数あり、1 人は退職の翌月に工数が付いている）・入社・異動・昇格
  *   - 長い顧客名・案件名・作業名・氏名、同姓同名、名称の表記ゆれ
  *   - 組織変更（課の廃止で配下チームの付け替え、チーム名の変更、新設チーム、5 段目の「班」、リーダー交代）
  *   - アサインの頻繁な変更（契約ごとに 1〜3 区間、期中に配分が変わる）。人×月の配分合計は 1.0 以下（0.05 刻み）
@@ -273,7 +273,7 @@ interface Person {
   id: string;
   name: string;
   kind: "employee" | "partner";
-  /** 履歴（effective_from 昇順）。status=退職 の行から先は在籍しない */
+  /** 履歴（effective_from 昇順）。status=退職・休職など の行から先は在籍しない */
   rows: MemberRow[];
 }
 
@@ -367,7 +367,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const t = rng.pick(leafTeams.filter((x) => !x.from || x.from <= m));
     hire(t.id, "一般", rng.chance(0.25) ? "partner" : "employee", m);
   }
-  // 昇格（一般 → 主任）6 人、異動 8 人、退職 12 人（重ならないように別々の人を選ぶ）
+  // 昇格（一般 → 主任）6 人、異動 8 人、離脱 12 人（退職 10・休職 1・育休 1。重ならないように別々の人を選ぶ）
   const pool = workers().filter((p) => p.rows[0]!.effective_from === FIRST && p.rows[0]!.title === "一般" && p.kind === "employee");
   const take = (n: number) => {
     const out: Person[] = [];
@@ -381,11 +381,14 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   }
   const retireMonths: YearMonth[] = [c.m(-1, 7), c.m(-1, 9), c.m(-1, 12), c.m(-1, 1), c.m(-1, 3), c.m(0, 4), c.m(0, 4), c.m(0, 6), c.m(0, 7), c.m(0, 9), c.m(0, 10), c.m(0, 10)];
   const retirees = take(retireMonths.length);
-  retirees.forEach((p, i) => addRow(p, retireMonths[i] as YearMonth, { status: "退職" }));
-  // パートナーの契約終了（退職と同じ扱い）2 人
-  for (const p of workers().filter((x) => x.kind === "partner" && x.rows.length === 1).slice(0, 2)) addRow(p, c.m(0, 4), { status: "退職" });
-  // 退職した人を戻すことはしない。退職の翌月に精算の工数が 1 件だけ付いている人（データの誤り）を 1 人作る
+  const leaveReasons: Record<number, string> = { 5: "休職", 8: "育休" };
+  retirees.forEach((p, i) => addRow(p, retireMonths[i] as YearMonth, { status: leaveReasons[i] ?? "退職" }));
+  // パートナーの契約終了 2 人
+  for (const p of workers().filter((x) => x.kind === "partner" && x.rows.length === 1).slice(0, 2)) addRow(p, c.m(0, 4), { status: "契約終了" });
+  // 離脱した人を戻すことはしない。退職の翌月に精算の工数が 1 件だけ付いている人（データの誤り）を 1 人作る
   const lateLogger = retirees.find((p) => lastRow(p).effective_from <= c.m(0, 7));
+  // 月の途中で退職し、退職した月の前半まで工数がある人（§35。その月は稼働として数える）
+  const midMonthLeaver = retirees[7];
 
   // 組織の履歴: 課の廃止（S33 → 配下を S32 へ 今年度 4 月）、チーム名の変更（T421 前年度 10 月）、リーダー交代（T312 今年度 4 月）
   for (const d of DIVISIONS) addTeam(d);
@@ -518,7 +521,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const m = ymOf(date);
     for (const p of people) {
       const row = rowAt(p, m);
-      if (!row || row.status === "退職" || row.title === "部長") continue;
+      if (!row || row.status !== "" || row.title === "部長") continue;
       if (rng.chance(0.045)) continue; // 休暇
       const isSectionLead = !!SECTION_OF[row.team_id];
       let own = isSectionLead ? contractsOfSection(row.team_id, m) : contractsOfTeam(row.team_id, m);
@@ -548,10 +551,17 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   }
   // 退職の翌月に 1 件だけ付いた工数（データの誤り。WORKLOG_AFTER_LEFT の例）
   if (lateLogger) {
-    const leftAt = lastRow(lateLogger).effective_from;
+    const leftAt = addMonths(lastRow(lateLogger).effective_from, 1);
     const date = input.days.find((x) => ymOf(x) === leftAt);
     const d = drafts.find((x) => x.team_id === lateLogger.rows[0]!.team_id && x.start_month <= leftAt && leftAt <= x.end_month) ?? drafts.find((x) => x.start_month <= leftAt && leftAt <= x.end_month);
     if (date && d) pushLog(lateLogger, date, d, "引き継ぎ", 1.5);
+  }
+  // 退職した月の最初の 5 営業日の引き継ぎ（乱数を使わない。ほかのデータを変えないため）
+  if (midMonthLeaver) {
+    const leftAt = lastRow(midMonthLeaver).effective_from;
+    const team = midMonthLeaver.rows[0]!.team_id;
+    const d = drafts.find((x) => x.team_id === team && x.start_month <= leftAt && leftAt <= x.end_month);
+    if (d) for (const date of input.days.filter((x) => ymOf(x) === leftAt).slice(0, 5)) pushLog(midMonthLeaver, date, d, "引き継ぎ", 7, { customer: d.account.customerVariants[0]!, project: d.account.projectVariants[0]! });
   }
 
   // ---- 金額: 着地見込み（実績の月平均 × 契約月数）÷ 目標の消化率。1 万円単位 ----
@@ -577,7 +587,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   const fyTo: YearMonth = c.m(0, 3);
   for (const p of people) {
     const start = p.rows[0]!.effective_from > fyFrom ? p.rows[0]!.effective_from : fyFrom;
-    const leftRow = p.rows.find((r) => r.status === "退職");
+    const leftRow = p.rows.find((r) => r.status !== "");
     // 1 人だけ、退職後もアサインが残っている（終了月の直し忘れ。ASSIGNMENT_AFTER_LEFT の例）
     const end = leftRow && p !== forgotten ? addMonths(leftRow.effective_from, -1) : fyTo;
     if (end < start) continue;

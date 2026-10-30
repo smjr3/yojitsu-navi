@@ -216,10 +216,12 @@ export interface MemberRecord {
   teamId: string | null;
   effectiveFrom: YearMonth;
   /**
-   * 在籍状態（任意の列 status。SPEC §35）。"left" = この行の effective_from から退職（在籍しない）。
-   * 省略・空 = 在籍。CSV の「退職」「left」は "left" に、それ以外の値はそのまま入る（validateDataset でエラー）
+   * 在籍状態（任意の列 status。SPEC §35）。"left" = この行の effective_from から離脱（退職・休職・産休・育休・契約終了）。
+   * 省略・空 = 在籍。CSV の離脱の値は "left" に、それ以外の値はそのまま入る（validateDataset でエラー）
    */
   status?: string;
+  /** 離脱の理由（status が "left" のとき。CSV の値。left・retired は「退職」） */
+  leaveReason?: string;
 }
 
 export interface RateRecord {
@@ -506,6 +508,8 @@ export interface Model {
   /** 木構造の最上位チームID一覧（表示順） */
   rootTeamIds: string[];
   members: MemberRecord[];
+  /** 作業実績のある「メンバー|月」（"memberId|YYYY-MM"。§35。リソース計画で離脱した月を稼働とみなすかの判定に使う） */
+  worklogMonths: string[];
   /** 画面側で過去月の組織（teamTreeAt）を引くための履歴 */
   teams: TeamRecord[];
   /** 画面側で月の状態・営業日を再計算するための祝日 */
@@ -640,8 +644,10 @@ export interface MemberTotals {
   teamId: string | null;
   title: string | null;
   kind: MemberKind | null;
-  /** 基準月の時点で退職していれば退職した月（§35）、在籍なら null */
+  /** 基準月の時点で離脱していれば離脱した月（§35）、在籍なら null */
   leftFrom: YearMonth | null;
+  /** 離脱の理由（退職・休職など。leftFrom が null なら null） */
+  leaveReason: string | null;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;
