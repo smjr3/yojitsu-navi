@@ -4,7 +4,7 @@
   "hoursPerBusinessDay": 8,
   "burnRateDangerThreshold": 1.0,
   "closingBusinessDay": 3,
-  "forecastMethodDefault": "recent3",
+  "forecastMethodDefault": "assignment",
   "forecastRecentMonths": 3,
   "currency": { "code": "JPY", "defaultUnit": "millionYen" },
   "labels": {

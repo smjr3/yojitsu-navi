@@ -55,7 +55,7 @@ Markdown で自由に書き換えられます（見出しは `##`、表は `|` �
 | `{closingDay}` | 工数確定の営業日（翌月 N 営業日） |
 | `{standardHours}` `{dayHours}` | 月の標準時間・1 日の時間 |
 | `{recentMonths}` | 着地見込みで平均する直近の月数 |
-| `{methodDefault}` `{methodRecent3}` `{methodAll}` `{methodAssignment}` | 着地見込みの方式名（既定・直近平均・全実績・アサイン） |
+| `{methodDefault}` `{methodRecent3}` `{methodAll}` `{methodAssignment}` | 着地見込みの方式名（既定・直近実績・全期間平均・計画値） |
 
 ページの見出しと冒頭の説明は `ja.js` の `app.pages.rules` と `rules.lead` です。
 

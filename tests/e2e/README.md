@@ -17,7 +17,7 @@ GitHub Actions の分数を節約するため、CI は Pull Request では縮小
 - `smoke.spec.ts` のすべて（全ページがエラー 0 で開く、404）
 - `screen-text.spec.ts` の各画面の説明文の量
 - `fonts.spec.ts` の同梱フォントの読み込み
-- 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、リソース計画の表示とセルの修正（plan / plan-cells）、検証の一覧から該当の行へ（issue-list）、テーマ切替（ui-controls）
+- 主要な操作の代表 1〜2 件ずつ: KPI の突合と単位の切替（numbers）、遷移と上部タブ（navigation）、計算根拠（breakdown）、顧客・メンバー・工数の画面、マスタ編集の追加とダウンロード（masters）、デモの保存 → マージ（gitlab-merge）、リソース計画の表示とセルの修正（plan / plan-cells）、検証の一覧から該当の行へ（issue-list）、テーマ（設定画面）（ui-controls）
 
 画面幅・ダーク・モンキー・回帰などは全件だけで走る。全件はマージ前にローカルで通す。主要な画面・操作を足したら、その代表のテストに `@smoke` を付ける。
 
@@ -53,7 +53,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `numbers.spec.ts` | KPI・チーム行・契約行・案件詳細の月行が core と一致。単位の切替、期間プリセット、着地方式、チーム絞り込み、URL ⇄ 状態 |
 | `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
 | `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |
-| `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・工数の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
+| `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・稼働実績の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |

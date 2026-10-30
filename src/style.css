@@ -2764,6 +2764,63 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-who .yn-chip {
   flex: none;
 }
+/* 名前列の幅を変える境目（列見出しの右端）。幅を決めたら名前列をその幅に固定する */
+.yn-me-plan-name-th {
+  padding-right: 14px !important;
+}
+.yn-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.yn-col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 4px;
+  width: 1px;
+  background: var(--yn-hairline-strong);
+}
+.yn-col-resizer:hover::after,
+.yn-col-resizer.is-dragging::after,
+.yn-col-resizer:focus-visible::after {
+  left: 3px;
+  width: 3px;
+  background: var(--yn-focus);
+}
+.yn-col-resizer:focus-visible {
+  outline: none;
+}
+.yn-me-plan-table.is-name-sized thead th:first-child,
+.yn-me-plan-table.is-name-sized tbody th[scope="row"],
+.yn-me-plan-table.is-name-sized tfoot th:first-child {
+  /* 決めた幅 = 見えている列の幅（余白を含む）。ドラッグを始めた瞬間に幅が跳ねないように */
+  box-sizing: border-box;
+  /* 狭い画面では表示幅の 6 割まで（名前列は左に貼り付くので、広げすぎると数値が見えなくなる） */
+  --yn-plan-name-w-eff: min(var(--yn-plan-name-w), 60vw);
+  width: var(--yn-plan-name-w-eff);
+  min-width: var(--yn-plan-name-w-eff);
+  max-width: var(--yn-plan-name-w-eff);
+}
+/* 幅を決めたら、名前を優先して見せ、入りきらない所属・チップは次の行へ回す（チップで名前が隠れないように） */
+.yn-me-plan-table.is-name-sized .yn-me-plan-who {
+  max-width: none;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.yn-me-plan-table.is-name-sized .yn-me-plan-who .yn-me-plan-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+.yn-me-plan-table.is-name-sized .yn-me-plan-who .yn-me-plan-team {
+  min-width: min(4em, 100%);
+}
 /* 狭い画面: 名前を先に見せ、チップは名前の下に回す（チップで名前が隠れないように） */
 @media (max-width: 639px) {
   .yn-me-plan-who {
@@ -3184,15 +3241,6 @@ html:has(dialog.yn-dialog[open]) {
 .yn-more-item[aria-current="page"] {
   background: var(--yn-accent-bg);
   font-weight: 600;
-}
-.yn-theme-toggle .yn-icon-sun {
-  display: none;
-}
-:root[data-theme="dark"] .yn-theme-toggle .yn-icon-moon {
-  display: none;
-}
-:root[data-theme="dark"] .yn-theme-toggle .yn-icon-sun {
-  display: block;
 }
 @media (max-width: 1023px) {
   .yn-icon-btn {

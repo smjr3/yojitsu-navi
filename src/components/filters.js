@@ -112,7 +112,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("method")) {
-    const methods = ["recent3", "all", "assignment"];
+    const methods = ["assignment", "recent3", "all"];
     const radios = methods.map((m) => {
       const input = html`<input type="radio" name="yn-method" value=${m} id=${`yn-method-${m}`}>`;
       input.addEventListener("change", () => input.checked && store.set({ method: m }));

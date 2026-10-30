@@ -245,11 +245,11 @@ test.describe("本物の GitLab API の形（モック）", () => {
 test.describe("設定画面とヘッダー", () => {
   const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "content-type": "application/json" };
   const cfg = { mode: "gitlab", gitlab: { apiBaseUrl: GITLAB, projectId: "grp/yn", targetBranch: "main", commitMode: "mr" } };
-  test("ヘッダー: テーマ切替と設定はアイコンのボタン（他のリンクと形が違う）", async ({ page }) => {
+  test("ヘッダー: 設定はアイコンのボタン（他のリンクと形が違う）。テーマ切替はヘッダーに置かない", async ({ page }) => {
     await gotoPage(page, "/");
-    const toggle = page.locator(".yn-theme-toggle");
+    const toggle = page.locator(".yn-settings-link");
     const tool = page.locator(".yn-tool").first();
-    await expect(toggle).toHaveAccessibleName("ダーク表示");
+    await expect(page.locator(".yn-theme-toggle")).toHaveCount(0);
     const [tb, lb] = await Promise.all([toggle.evaluate((e) => getComputedStyle(e).borderTopWidth + "/" + getComputedStyle(e).borderRadius), tool.evaluate((e) => getComputedStyle(e).borderTopWidth)]);
     expect(tb).toBe("0px/50%");
     expect(lb).toBe("1px");
@@ -321,13 +321,14 @@ test.describe("設定画面とヘッダー", () => {
     expect(await page.evaluate(() => localStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
   });
 
-  test("テーマ: 設定画面のラジオとヘッダーのボタンは同じ値を切り替える", async ({ page }) => {
+  test("テーマ: 設定画面のラジオで切り替え、再読み込みしても保たれる", async ({ page }) => {
     await gotoPage(page, "/settings");
     await page.getByRole("radio", { name: "ダーク" }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator(".yn-theme-toggle")).toHaveAttribute("aria-pressed", "true");
-    await page.locator(".yn-theme-toggle").click();
-    await expect(page.getByRole("radio", { name: "ライト" })).toBeChecked();
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByRole("radio", { name: "ダーク" })).toBeChecked();
+    await page.getByRole("radio", { name: "ライト" }).check();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });

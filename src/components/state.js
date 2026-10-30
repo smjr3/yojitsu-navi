@@ -4,11 +4,11 @@
  * 優先順位: URL クエリ（共有された表示を再現） > localStorage（前回の表示） > 既定値。
  * 変更すると URL（history.replaceState）と localStorage の両方に書き戻す。
  *
- * クエリ:  ?from=2026-04&to=2027-03&team=T111&unit=m&method=recent3
+ * クエリ:  ?from=2026-04&to=2027-03&team=T111&unit=m&method=assignment
  *   from/to  YYYY-MM（meta.minMonth〜maxMonth に収める）
  *   team     チームID / "" = 全体 / "__unassigned__" = 未設定
  *   unit     m（百万円）| k（千円）| yen
- *   method   recent3 | all | assignment
+ *   method   assignment | recent3 | all
  *   outside  1 = 契約外を含む（メンバー別の計画・実績。§50.4）。0（既定）は URL に書かない
  */
 import { UNITS, fromCoreUnit } from "./format.js";
@@ -18,7 +18,7 @@ import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fisc
 export const STATE_KEYS = ["from", "to", "team", "unit", "method", "outside"];
 // v2: 既定の単位を百万円に変えたとき、以前の既定（円）が保存値として残らないように切り替えた
 export const STORAGE_KEY = "yojitsu-navi:state:v2";
-const METHODS = ["recent3", "all", "assignment"];
+const METHODS = ["assignment", "recent3", "all"];
 const UNIT_IDS = UNITS.map((u) => u.id);
 
 function clampMonth(m, min, max) {
@@ -43,7 +43,7 @@ export function defaultState(model) {
     to: p.to,
     team: "",
     unit: fromCoreUnit(model.config.currency?.defaultUnit),
-    method: METHODS.includes(model.config.forecastMethodDefault) ? model.config.forecastMethodDefault : "recent3",
+    method: METHODS.includes(model.config.forecastMethodDefault) ? model.config.forecastMethodDefault : "assignment",
     outside: "0",
   };
 }

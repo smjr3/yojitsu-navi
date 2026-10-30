@@ -30,7 +30,7 @@ src/
 
 左サイドバーは使わない（`sidebar: false`）。`observablehq.config.js` の `header()` が全ページ共通のヘッダを出す。
 
-- 1 段目: ロゴ ＋ **画面タブ**（`NAV`: 全体・チーム・顧客・案件・メンバー・工数。現在のページは `aria-current="page"`）＋ 右上に **表示単位**（`#yn-unit-slot`）と **業務リンク**（`TOOLS`: リソース計画・マスタ編集）、テーマ切替・設定・**その他「⋯」**（`MORE`: 使い方・データ確認・計算ルール。たまに見る画面なので目立たせない。§45・§47）のアイコン
+- 1 段目: ロゴ ＋ **画面タブ**（`NAV`: 全体・チーム・顧客・案件・メンバー・稼働実績。現在のページは `aria-current="page"`）＋ 右上に **表示単位**（`#yn-unit-slot`）と **業務リンク**（`TOOLS`: リソース計画・マスタ編集）、設定・**その他「⋯」**（`MORE`: 使い方・データ確認・計算ルール。たまに見る画面なので目立たせない。§45・§47）のアイコン
 - 2 段目: **固定フィルタバー**（`#yn-filterbar-slot`）。ページが `mountFilterBar()` を呼んだときだけ表示。期間（開始月・終了月の選択＋カレンダーでの日付指定＋プリセット「今年度・今月・先月・直近3か月・直近12か月・前年度」。データは月単位なので、カレンダーで選んだ日付はその日が属する月として扱う）・チーム・着地見込みを 1 行に並べ、ヘッダごと `position: sticky` で上端に残る。フィルタの無いページ（使い方・計算ルール・データ確認）では出ない
 - href は `/teams` のように `/` 始まりで書けば Framework がページごとの相対パスに書き換える（GitLab Pages のサブパス配信でも動く）
 - 1024px 未満はタブを 2 段目に回して横スクロール、フィルタも 1 行で横スクロール。1024px 以上はヘッダーが 1 段（単位のボタンも折り返さない）。スマホ幅はロゴと右上のリンク・アイコンを 1 段、タブを 2 段目
@@ -62,7 +62,7 @@ src/
 | `from`, `to` | `YYYY-MM`（`meta.minMonth`〜`maxMonth` に収める。逆転は入れ替え） | asOf の年度をデータ範囲に収めたもの |
 | `team` | チームID / `""`（全体）/ `__unassigned__`（未設定） | `""` |
 | `unit` | `m`（百万円）/ `k`（千円）/ `yen` | `config.currency.defaultUnit`（既定 `millionYen`） |
-| `method` | `recent3` / `all` / `assignment` | `config.forecastMethodDefault` |
+| `method` | `assignment`（計画値）/ `recent3` / `all`（この順で表示） | `config.forecastMethodDefault`（既定 `assignment`） |
 
 優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
 フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。
@@ -119,7 +119,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 
 ## スタイル（style.css）
 
-- `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。既定はライトで、OS の設定には追従しない。ヘッダー右端の「ダーク表示」ボタンで `<html data-theme="dark">` に切り替え、選択は localStorage `yn-theme` に保存（復元は observablehq.config.js の head スクリプト）。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
+- `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。既定はライトで、OS の設定には追従しない。設定画面の「表示」で `<html data-theme="dark">` に切り替え（ヘッダーに切替ボタンは置かない。§51）、選択は localStorage `yn-theme` に保存（復元は observablehq.config.js の head スクリプト）。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
 - フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §46）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。
