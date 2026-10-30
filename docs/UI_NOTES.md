@@ -23,7 +23,7 @@ src/
     chart-zoom.js  グラフの枠（凡例＋「拡大」ボタン＋幅に合わせた再描画）と拡大表示のダイアログ（全グラフ共通。SPEC §33）
     filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
-  style.css        デザイントークン（ライト／ダーク）とスタイル
+  style.css        デザイントークン（ライト／ダーク・差し色）とスタイル
 ```
 
 ## ナビゲーション（上部ヘッダ）
@@ -119,7 +119,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 
 ## スタイル（style.css）
 
-- `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。既定はライトで、OS の設定には追従しない。設定画面の「表示」で `<html data-theme="dark">` に切り替え（ヘッダーに切替ボタンは置かない。§51）、選択は localStorage `yn-theme` に保存（復元は observablehq.config.js の head スクリプト）。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
+- `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。表示モードと差し色は §52: head のスクリプト（`src/components/appearance.js`）が描画前に `<html data-theme data-accent>` を決める（設定画面 → GitLab → PC の設定 → ライト／ブルー）。ダークの面はネイビー寄りのグレー（ページ `#161c27`・カード `#1e2533`）。差し色はリンク・フォーカス・選択中・主ボタン・ロゴだけに使い、グラフの系列色は変えない。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
 - フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §46）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。

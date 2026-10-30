@@ -200,28 +200,49 @@ test.describe("ダークモード", () => {
   }
 });
 
-test.describe("テーマ切替", () => {
-  // OS がダークでも既定はライト。設定画面でダークにし、ページを移っても保たれる
-  test.use({ colorScheme: "dark" });
-  test("既定はライト、設定画面でダーク・ライトを切り替えて保持する", async ({ page }) => {
-    const bgLum = () =>
-      page.evaluate(() => {
-        const m = getComputedStyle(document.documentElement).backgroundColor.match(/\d+/g)!.map(Number);
-        return (0.2126 * m[0]! + 0.7152 * m[1]! + 0.0722 * m[2]!) / 255;
-      });
-    await gotoPage(page, "/");
-    expect(await bgLum()).toBeGreaterThan(0.75);
-    await gotoPage(page, "/settings");
-    await page.getByRole("radio", { name: "ダーク" }).check();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    expect(await bgLum()).toBeLessThan(0.25);
-    await gotoPage(page, "/teams");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    expect(await bgLum()).toBeLessThan(0.25);
-    await gotoPage(page, "/settings");
-    await page.getByRole("radio", { name: "ライト" }).check();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    expect(await bgLum()).toBeGreaterThan(0.75);
+test.describe("配色（§52）", () => {
+  const bgLum = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => {
+      const m = getComputedStyle(document.documentElement).backgroundColor.match(/\d+/g)!.map(Number);
+      return (0.2126 * m[0]! + 0.7152 * m[1]! + 0.0722 * m[2]!) / 255;
+    });
+  test.describe("PC がダーク", () => {
+    test.use({ colorScheme: "dark" });
+    test("既定は PC に合わせてダーク、設定画面で選んだライトはページを移っても保たれ、自動に戻すとダーク", async ({ page }) => {
+      await gotoPage(page, "/");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      expect(await bgLum(page)).toBeLessThan(0.25);
+      await gotoPage(page, "/settings");
+      await expect(page.getByRole("radio", { name: "自動（ダーク・PC）" })).toBeChecked();
+      await page.getByRole("radio", { name: "ライト", exact: true }).check();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await gotoPage(page, "/teams");
+      expect(await bgLum(page)).toBeGreaterThan(0.75);
+      await gotoPage(page, "/settings");
+      await page.getByRole("radio", { name: /^自動/ }).first().check();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    });
+  });
+  test.describe("PC がライト", () => {
+    test.use({ colorScheme: "light" });
+    test("既定はライト・ブルー、PC の設定が変わると追従する", async ({ page }) => {
+      await gotoPage(page, "/");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await expect(page.locator("html")).toHaveAttribute("data-accent", "blue");
+      expect(await bgLum(page)).toBeGreaterThan(0.75);
+      await page.emulateMedia({ colorScheme: "dark" });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    });
+    test("差し色を選ぶとリンク・選択中のタブの色が変わる", async ({ page }) => {
+      await gotoPage(page, "/settings");
+      const link = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--yn-link").trim());
+      const before = await link();
+      await page.getByRole("radio", { name: "グリーン" }).check();
+      await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
+      expect(await link()).not.toBe(before);
+      await gotoPage(page, "/");
+      await expect(page.locator("html")).toHaveAttribute("data-accent", "green");
+    });
   });
 });
 

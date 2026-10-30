@@ -42,7 +42,7 @@ test.describe("テーマ切替", () => {
 
   test("設定画面のラジオはキーボード（矢印キー）で切り替えられる", async ({ page }) => {
     await gotoPage(page, "/settings");
-    await page.getByRole("radio", { name: "ライト" }).focus();
+    await page.getByRole("radio", { name: "ライト", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await bgLum(page)).toBeLessThan(0.25);
@@ -56,7 +56,7 @@ test.describe("テーマ切替", () => {
     });
     await gotoPage(page, "/settings");
     expect(await bgLum(page)).toBeGreaterThan(0.75);
-    await page.getByRole("radio", { name: "ダーク" }).check();
+    await page.getByRole("radio", { name: "ダーク", exact: true }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 

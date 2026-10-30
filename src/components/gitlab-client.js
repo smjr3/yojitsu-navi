@@ -68,6 +68,12 @@ export function clearToken() {
   remove("session", TOKEN_STORAGE_KEY);
   remove("local", TOKEN_STORAGE_KEY);
   publishMrCount(null);
+  // GitLab から読んだ配色の設定も使わない（§52）
+  try {
+    window.ynAppearance?.setGitlabUser(null);
+  } catch {
+    /* 無視 */
+  }
 }
 
 /** デモ（§29）で「リーダーとして操作」しているか（既定 true） */

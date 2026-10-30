@@ -44,6 +44,7 @@ function parseCsv(text) {
 }
 import ja from "./src/i18n/ja.js";
 import { badgeConfig, mrBadgeScript } from "./src/components/header-badge.js";
+import { appearanceConfig, appearanceScript } from "./src/components/appearance.js";
 import { withGitLabEnv } from "./src/components/gitlab-env.js";
 
 /** config.json の masterEdit（ヘッダーのマージ待ち件数バッジの接続先。§27・§39.1）。読めなければ空 */
@@ -123,26 +124,10 @@ function header({ path }) {
 }
 
 /**
- * テーマ（既定ライト）。描画前に localStorage の選択を <html data-theme> に戻す。切り替えは設定画面（§28）だけ。
+ * 配色（§52）: 描画前に表示モード（設定画面 → GitLab → PC の設定）と差し色（設定画面 → GitLab → 既定）を <html data-theme data-accent> に当てる。
  * Framework の dark（グラフの配色）は body の color-scheme を見て自動で追従する（style.css の :root[data-theme="dark"]）。
  */
-const THEME_SCRIPT = `(() => {
-  const KEY = "yn-theme";
-  const root = document.documentElement;
-  const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
-  const apply = (t) => {
-    root.dataset.theme = t === "dark" ? "dark" : "light";
-  };
-  const choose = (t) => {
-    try { localStorage.setItem(KEY, t); } catch {}
-    apply(t);
-    window.dispatchEvent(new CustomEvent("yn-theme", { detail: root.dataset.theme }));
-  };
-  apply(read());
-  // 設定画面（§28）が切り替えに使う
-  window.ynSetTheme = choose;
-  document.addEventListener("DOMContentLoaded", () => apply(read()));
-})();`;
+const THEME_SCRIPT = appearanceScript(appearanceConfig(masterEditConfig()));
 /**
  * 戻る・再読み込みでスクロール位置を戻す。画面はデータを読んでから描くため、ブラウザ任せだと一番上に戻ってしまう。
  * 離れるときの位置を URL ごとに sessionStorage に置き、描き終わって高さが足りたら戻す（その前に利用者が動かしたら戻さない）

@@ -141,7 +141,11 @@ describe("ファイルと接続の確認", () => {
   });
   it("checkConnection: ユーザーと権限（プロジェクトとグループの大きいほう）", async () => {
     const { fetch } = route({ "GET /user": { body: { username: "sato", name: "佐藤" } }, "GET /projects/grp%2Fyn": { body: { permissions: { project_access: { access_level: 30 }, group_access: { access_level: 40 } } } } });
-    expect(await checkConnection(fetch, cfg, "t")).toEqual({ user: { username: "sato", name: "佐藤" }, accessLevel: 40, warnings: [] });
+    expect(await checkConnection(fetch, cfg, "t")).toEqual({ user: { username: "sato", name: "佐藤" }, appearance: { theme_id: null, color_mode_id: null }, accessLevel: 40, warnings: [] });
+  });
+  it("checkConnection: 配色に使う GitLab のテーマ・カラーモード（§52）", async () => {
+    const { fetch } = route({ "GET /user": { body: { username: "sato", theme_id: 10, color_mode_id: 2 } }, "GET /projects/grp%2Fyn": { body: { permissions: {} } } });
+    expect((await checkConnection(fetch, cfg, "t")).appearance).toEqual({ theme_id: 10, color_mode_id: 2 });
   });
   it("checkConnection: 権限が無ければ null。トークン無効は permission", async () => {
     const ok = route({ "GET /user": { body: { username: "a" } }, "GET /projects/grp%2Fyn": { body: { permissions: {} } } });

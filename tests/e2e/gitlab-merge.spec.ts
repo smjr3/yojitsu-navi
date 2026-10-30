@@ -321,14 +321,36 @@ test.describe("設定画面とヘッダー", () => {
     expect(await page.evaluate(() => localStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
   });
 
+  test("配色: GitLab に接続するとそのテーマの差し色（デモは Indigo）、削除すると既定のブルーに戻る", async ({ page }) => {
+    await useDemo(page, { token: null });
+    await gotoPage(page, "/settings");
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "blue");
+    await expect(page.getByRole("radio", { name: "自動（ブルー・既定）" })).toBeChecked();
+    await page.locator("#yn-set-token").fill("demo-token");
+    await page.locator("#yn-set-token").press("Enter");
+    await expect(page.locator('[data-role="check-result"]')).toContainText("接続できました");
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "indigo");
+    await expect(page.getByRole("radio", { name: "自動（インディゴ・GitLab）" })).toBeChecked();
+    // 設定画面で選んだ色は GitLab より優先
+    await page.getByRole("radio", { name: "グレー" }).check();
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "gray");
+    await gotoPage(page, "/teams");
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "gray");
+    await gotoPage(page, "/settings");
+    await page.getByRole("radio", { name: /^自動（インディゴ/ }).check();
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "indigo");
+    await page.getByRole("button", { name: "削除" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "blue");
+  });
+
   test("テーマ: 設定画面のラジオで切り替え、再読み込みしても保たれる", async ({ page }) => {
     await gotoPage(page, "/settings");
-    await page.getByRole("radio", { name: "ダーク" }).check();
+    await page.getByRole("radio", { name: "ダーク", exact: true }).check();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.getByRole("radio", { name: "ダーク" })).toBeChecked();
-    await page.getByRole("radio", { name: "ライト" }).check();
+    await expect(page.getByRole("radio", { name: "ダーク", exact: true })).toBeChecked();
+    await page.getByRole("radio", { name: "ライト", exact: true }).check();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });
