@@ -1,8 +1,9 @@
 /**
  * 履歴マスタの有効レコード検索（SPEC §5）、時間単価（§6）、チーム階層（§11）
  */
-import type { Dataset, MemberRecord, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
+import type { Assignment, Dataset, MemberRecord, OutsidePlan, Worklog, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
+import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 
 // ---------------------------------------------------------------------------
 // §5 有効レコード（汎用）
@@ -103,26 +104,89 @@ export function createMasterIndex(
   };
 }
 
-/** 退職の行か（SPEC §35。members.csv の status 列が「退職」） */
+/** 離脱の行か（SPEC §35。members.csv の status 列が退職・休職・産休・育休・契約終了） */
 export function isLeftRecord(m: Pick<MemberRecord, "status"> | null | undefined): boolean {
   return m?.status === "left";
 }
 
-/** 月 m に在籍しているか（その月の有効レコードがあり、退職の行でない） */
+/** 月 m に在籍しているか（その月の有効レコードがあり、離脱の行でない） */
 export function isActiveAt(index: MasterIndex, memberId: string, month: YearMonth): boolean {
   const rec = memberAt(index, memberId, month);
   return rec !== null && !isLeftRecord(rec);
 }
 
-/** 退職した月（退職の行の effective_from）。退職していなければ null。復職（退職の後に在籍の行）があれば最後の退職以降に在籍の行が無いときだけ */
+/**
+ * 月 m に稼働しているとみなすか（§35）。在籍していれば稼働。
+ * 離脱した月（前月は在籍）は、その月に計画か実績があれば（worked）稼働とみなす。翌月からは稼働しない
+ */
+export function isWorkingAt(
+  at: (memberId: string, month: YearMonth) => MemberRecord | null | undefined,
+  memberId: string,
+  month: YearMonth,
+  worked: (memberId: string, month: YearMonth) => boolean,
+): boolean {
+  const rec = at(memberId, month);
+  if (!rec) return false;
+  if (!isLeftRecord(rec)) return true;
+  if (rec.effectiveFrom !== month) return false;
+  const prev = at(memberId, addMonths(month, -1));
+  return !!prev && !isLeftRecord(prev) && worked(memberId, month);
+}
+
+/** 「メンバー|月」のキー（§35 の離脱した月の稼働判定で使う） */
+export function memberMonthKey(memberId: string, month: YearMonth): string {
+  return `${memberId}|${month}`;
+}
+
+/** 計画（アサイン・運用保守以外の予定）か作業実績がある「メンバー|月」（§35） */
+export function workedMonthKeys(dataset: {
+  assignments?: readonly Pick<Assignment, "memberId" | "startMonth" | "endMonth" | "allocation">[];
+  outsidePlans?: readonly Pick<OutsidePlan, "memberId" | "startMonth" | "endMonth" | "personMonths">[];
+  worklogs?: readonly Pick<Worklog, "memberId" | "date" | "hours">[];
+}): Set<string> {
+  const keys = new Set<string>();
+  const plans = [
+    ...(dataset.assignments ?? []).map((a) => ({ memberId: a.memberId, startMonth: a.startMonth, endMonth: a.endMonth, value: a.allocation })),
+    ...(dataset.outsidePlans ?? []).map((o) => ({ memberId: o.memberId, startMonth: o.startMonth, endMonth: o.endMonth, value: o.personMonths })),
+  ];
+  for (const p of plans) {
+    if (!(p.value > 0) || !isValidYearMonth(p.startMonth) || !isValidYearMonth(p.endMonth) || p.startMonth > p.endMonth) continue;
+    for (const m of monthRange(p.startMonth, p.endMonth)) keys.add(memberMonthKey(p.memberId, m));
+  }
+  for (const w of dataset.worklogs ?? []) {
+    if (isValidISODate(w.date) && Number.isFinite(w.hours) && w.hours > 0) keys.add(memberMonthKey(w.memberId, monthOfDate(w.date)));
+  }
+  return keys;
+}
+
+/** 離脱した月（前月は在籍）のうち keys に入っている「メンバー|月」（§35。画面へ実績のある離脱月だけ渡す） */
+export function leaveMonthsIn(members: readonly MemberRecord[], keys: ReadonlySet<string>): string[] {
+  const idx = createEffectiveIndex(members, (m) => m.memberId, (m) => m.effectiveFrom);
+  const out: string[] = [];
+  for (const m of members) {
+    if (!isLeftRecord(m) || !isValidYearMonth(m.effectiveFrom)) continue;
+    const key = memberMonthKey(m.memberId, m.effectiveFrom);
+    if (keys.has(key) && isWorkingAt((id, mo) => idx.at(id, mo), m.memberId, m.effectiveFrom, () => true) && !out.includes(key)) out.push(key);
+  }
+  return out.sort();
+}
+
+/** 離脱した月（離脱の行の effective_from）。離脱していなければ null。復職（離脱の後に在籍の行）があれば最後の離脱以降に在籍の行が無いときだけ */
 export function leftMonthOf(records: readonly Pick<MemberRecord, "status" | "effectiveFrom">[]): YearMonth | null {
   const sorted = [...records].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : a.effectiveFrom > b.effectiveFrom ? 1 : 0));
   const last = sorted[sorted.length - 1];
   if (!last || !isLeftRecord(last)) return null;
-  // 退職の行が続いていればいちばん早いもの
+  // 離脱の行が続いていればいちばん早いもの
   let from = last.effectiveFrom;
   for (let i = sorted.length - 2; i >= 0 && isLeftRecord(sorted[i]); i--) from = (sorted[i] as MemberRecord).effectiveFrom;
   return from;
+}
+
+/** 離脱の理由（最後の行が離脱の行ならその理由。left・retired・理由なしは「退職」）。離脱していなければ null */
+export function leaveReasonOf(records: readonly Pick<MemberRecord, "status" | "effectiveFrom" | "leaveReason">[]): string | null {
+  let last: Pick<MemberRecord, "status" | "effectiveFrom" | "leaveReason"> | undefined;
+  for (const r of records) if (!last || r.effectiveFrom >= last.effectiveFrom) last = r;
+  return last && isLeftRecord(last) ? (last.leaveReason ?? "退職") : null;
 }
 
 /** 月 m に有効なメンバーレコード */

@@ -189,7 +189,7 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   const chips = (r) => {
     const list = [];
-    if (r.leftFrom) list.push({ kind: "neutral", text: T.members.chipLeft, title: fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) }) });
+    if (r.leftFrom) list.push({ kind: "neutral", text: r.leaveReason, title: fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom), reason: r.leaveReason }) });
     if (r.memberUnknown) list.push({ kind: "neutral", text: T.members.chipUnknown, title: T.members.chipUnknownTitle });
     if (r.rateMissing) list.push({ kind: "neutral", text: T.breakdown.rateMissing, title: T.members.chipRateMissingTitle });
     if (r.unplannedHours > 0) list.push({ kind: "neutral", text: fmt(T.members.chipUnplanned, { hours: formatHours(r.unplannedHours) }), title: T.members.chipUnplannedTitle });

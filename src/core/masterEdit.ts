@@ -1207,8 +1207,15 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
 // リソース計画タブ（§23）の入力: 編集中の文書 → PlanSources
 // ---------------------------------------------------------------------------
 
-/** 編集中（保存前）の組織・メンバー・アサインと、契約の担当組織からリソース計画の計算の入力を作る */
-export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments">, contractsText: string): PlanSources {
+/**
+ * 編集中（保存前）の組織・メンバー・アサイン（・運用保守以外の予定）と、契約の担当組織からリソース計画の計算の入力を作る。
+ * workedLeaveMonths は作業実績のある離脱した月（§35。model.json の leaveMonthsWorked）
+ */
+export function planSourcesFromDocs(
+  docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "outside">>,
+  contractsText: string,
+  workedLeaveMonths: readonly string[] = [],
+): PlanSources {
   const teams: TeamRecord[] = docs.teams.rows.map((r) => {
     const v = rowRecord(docs.teams, r);
     return {
@@ -1252,5 +1259,10 @@ export function planSourcesFromDocs(docs: Pick<Record<MasterFileId, MasterDoc>, 
     const id = row.get("contract_id");
     if (id !== "" && !contractTeams.has(id)) contractTeams.set(id, row.get("team_id") || null);
   }
-  return { teams, members, assignments, contractTeams };
+  const outsidePlans = (docs.outside?.rows ?? []).map((r) => {
+    const v = rowRecord(docs.outside as MasterDoc, r);
+    const raw = (v.person_months ?? "").trim();
+    return { memberId: (v.member_id ?? "").trim(), startMonth: (v.start_month ?? "").trim(), endMonth: (v.end_month ?? "").trim(), personMonths: raw === "" ? Number.NaN : parseNumberCell(raw) };
+  });
+  return { teams, members, assignments, contractTeams, outsidePlans, workedLeaveMonths };
 }

@@ -43,6 +43,7 @@ if (model && mastersData?.error) {
       config: model.config,
       asOfMonth: model.meta.asOfMonth,
       minMonth: model.meta.minMonth,
+      leaveMonthsWorked: model.leaveMonthsWorked,
       views: PLAN_VIEWS,
       initialTeam: params.get("team") || null,
       initialMember: params.get("member") || null,

@@ -200,7 +200,7 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
     marginBottom: 32,
     style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
-    // すべて 0h（退職後の期間など）だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
+    // すべて 0h（退職・休職後の期間など）だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: T.charts.hoursAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.plannedHours > 0) && !(d.actualHours > 0)) ? { domain: [0, 10] } : {}) },
     marks: [
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),

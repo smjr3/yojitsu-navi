@@ -49,6 +49,6 @@ if (model && mastersData?.error) {
   display(errorState({ title: T.mastersPage.loadFailed, error: mastersData.error }));
 } else if (model && mastersData) {
   const params = new URLSearchParams(location.search);
-  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, views: LEDGER_VIEWS, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null, initialJump: params.get("jump") }));
+  display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, leaveMonthsWorked: model.leaveMonthsWorked, views: LEDGER_VIEWS, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null, initialJump: params.get("jump") }));
 }
 ```

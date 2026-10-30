@@ -89,10 +89,14 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     expect(byMember.size).toBe(3);
     expect(byMember.has("M025")).toBe(true);
     for (const months of byMember.values()) expect(months.sort()).toEqual(monthRange("2025-04", "2026-10"));
-    // 退職（§35）: 退職後の工数 1 人・退職後のアサイン 1 人。どちらも status=退職 の行を持つ人
+    // 離脱（§35）: 退職の翌月の工数 1 人・退職後のアサイン 1 人。どちらも status=退職 の行を持つ人
     const left = new Set(ds.members.filter((m) => m.status === "left").map((m) => m.memberId));
     expect(left.size).toBeGreaterThanOrEqual(12);
     for (const code of ["WORKLOG_AFTER_LEFT", "ASSIGNMENT_AFTER_LEFT"]) expect(left.has(String(issues.find((i) => i.code === code)?.ref?.memberId))).toBe(true);
+    // 退職した月の前半まで実績がある人（その月は稼働。警告なし）
+    expect(model.leaveMonthsWorked.length).toBeGreaterThanOrEqual(1);
+    for (const key of model.leaveMonthsWorked) expect(left.has(key.split("|")[0]!)).toBe(true);
+    expect(new Set(ds.members.map((m) => m.leaveReason).filter(Boolean))).toEqual(new Set(["退職", "休職", "育休", "契約終了"]));
   });
 
   it("Model の警告も同じ内訳。除外時間は顧客名が空の契約内の行の合計と一致（顧客名が空の契約外 = 会社業務は除外しない §50.2）", () => {

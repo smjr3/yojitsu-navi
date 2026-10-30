@@ -8,7 +8,7 @@
  */
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, memberStatus, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory } from "../core/index.js";
+import { LEAVE_REASONS, addMonths, memberStatus, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -197,7 +197,7 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, leaveMonthsWorked = [], views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
   const VIEW_IDS = [...views];
   /** この画面で編集するファイル */
   const pageFiles = VIEW_IDS.flatMap((v) => VIEW_FILES[v] ?? []);
@@ -242,7 +242,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   const std = config.standardHoursPerMonth;
   // リソース計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
   const plan = {
-    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts).members, initialMember, asOfMonth) : null),
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked).members, initialMember, asOfMonth) : null),
     months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
     focusMember: initialMember,
     open: new Set(initialMember ? [initialMember] : []),
@@ -333,11 +333,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     return [...latest.entries()].map(([id, v]) => {
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
-      const left = memberStatus(get("status")).status === "left";
-      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      const st = memberStatus(get("status"));
+      const left = st.status === "left";
+      const sub = [left ? st.leaveReason : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
       return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left };
     })
-      // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
+      // 離脱した人（退職・休職など）は候補の後ろへ（過去の行の修正では選べるように残す。§35）
       .sort((a, b) => Number(a.left) - Number(b.left));
   }
   function projectOptions() {
@@ -1057,7 +1058,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       renderPlanCsv();
       return;
     }
-    const src = planSourcesFromDocs(docs, data.context.contracts);
+    const src = planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked);
     const months = plan.months;
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
@@ -1124,7 +1125,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     };
     const totals = months.map(() => 0);
     const outsideTotals = months.map(() => 0);
-    // 月別の合計グラフ（§58）: 人数 × 1.0 人月（その月に在籍している人。退職中・入社前は数えない）と、1.0 人月を超える人の数
+    // 月別の合計グラフ（§58）: 人数 × 1.0 人月（その月に稼働している人。離脱した月は計画か実績があれば数える。入社前は数えない）と、1.0 人月を超える人の数
     const capacity = months.map(() => 0);
     const overCounts = months.map(() => 0);
 
@@ -1146,8 +1147,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         tooltip.hide();
         openCellEditor(r, m, btn, focusTarget, fk);
       });
-      // 退職した月より後（§35）
-      const left = r.leftFrom != null && m >= r.leftFrom;
+      // 離脱した月から（離脱した月も計画・実績があれば稼働。§35）
+      const left = r.leftFrom != null && m >= r.leftFrom && !r.activeMonths[months.indexOf(m)];
       return html`<td class=${`num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
     };
 
@@ -1222,7 +1223,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom), reason: r.leaveReason })}>${r.leaveReason} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
@@ -1863,12 +1864,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       </select>`;
     }
     if (col.input === "status") {
-      // 在籍状態（§35）。CSV では空 = 在籍、「退職」= 退職
-      const left = value !== "" && value !== T.masters.statusActive;
-      const known = value === "" || value === T.masters.statusActive || value === T.masters.statusLeft || /^(left|retired)$/i.test(value);
+      // 在籍状態（§35）。CSV では空 = 在籍、退職・休職・産休・育休・契約終了 = 離脱
+      const st = memberStatus(value);
+      const known = st.status === undefined || st.status === "left";
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
-        <option value="" selected=${!left}>${T.masters.statusActive}</option>
-        <option value=${T.masters.statusLeft} selected=${left && known}>${T.masters.statusLeft}</option>
+        <option value="" selected=${st.status === undefined}>${T.masters.statusActive}</option>
+        ${LEAVE_REASONS.map((r) => html`<option value=${r} selected=${st.leaveReason === r}>${r}</option>`)}
         ${!known ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
       </select>`;
     }
@@ -2314,7 +2315,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
       if (/^\d{4}-\d{2}$/.test(start) && !plan.months.includes(start)) plan.months = fiscalMonths(start, config.fiscalYearStartMonth);
       plan.q = "";
-      const src = planSourcesFromDocs(docs, data.context.contracts);
+      const src = planSourcesFromDocs(docs, data.context.contracts, leaveMonthsWorked);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
         const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];
