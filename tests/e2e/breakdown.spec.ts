@@ -254,3 +254,13 @@ test("Esc で閉じ、フォーカスは開いたボタンに戻り、開いて�
   await page.locator("dialog.yn-dialog[open]").click({ position: { x: 2, y: 2 } });
   await expect(dialog(page)).toHaveCount(0);
 });
+
+test("着地見込み（計画値）の内訳: 残り月のアサイン明細は社員番号でなく氏名（試用版のコメント）", async ({ page }) => {
+  await gotoPage(page, "/contract?id=C002&method=assignment");
+  await kpiValue(page, 4).click();
+  const d = dialog(page);
+  await expect(d.getByRole("heading", { name: "残り月のアサイン明細" })).toBeVisible();
+  const table = d.locator("table").filter({ hasText: "配分" }).last();
+  await expect(table).toContainText("中村 拓也");
+  await expect(table).not.toContainText("M010");
+});

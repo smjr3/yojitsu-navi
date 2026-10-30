@@ -197,7 +197,7 @@ if (vm) {
           grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
           margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.customerName} / ${r.projectName}` }),
-          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
+          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
         },
       }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
