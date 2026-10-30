@@ -114,11 +114,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("初期表示: 右上の補助リンクの最後に「マスタ編集」（選択状態）、台帳の 3 タブ（リソース計画は別画面）、説明文（折りたたみ）、行数は対象の数、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 「⋯」のメニューの先頭に「マスタ編集」（選択状態）、台帳の 3 タブ（リソース計画は別画面）、説明文（折りたたみ）、行数は対象の数、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
-  const links = page.locator(".yn-tools a.yn-tool");
-  await expect(links.last()).toHaveText("マスタ編集");
-  await expect(links.last()).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".yn-more-btn")).toHaveClass(/is-current/);
+  const first = page.locator("#yn-more-menu a.yn-more-item").first();
+  await expect(first).toHaveText("マスタ編集");
+  await expect(first).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/]);
   // 説明は本文に出さない（見出し横の「?」だけ。§37）
   await expect(page.locator("details.yn-me-intro")).toHaveCount(0);

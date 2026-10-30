@@ -47,7 +47,8 @@ async function useDemo(page: Page, { leader = true, token = "demo" }: { leader?:
   );
 }
 
-const badge = (page: Page) => page.locator(".yn-tools .yn-mr-badge");
+// 件数は「⋯」の右上に出る（メニューの中のマスタ編集にも同じ数。§52）
+const badge = (page: Page) => page.locator(".yn-tools .yn-more-badge");
 
 /** 単価の CSV に 1 行足して反映し、保存する（MR ができる） */
 async function saveRateViaCsv(page: Page, line = "部長,14000,2026-11"): Promise<void> {
@@ -75,7 +76,9 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(mr).toContainText("検証: 成功");
     await expect(badge(page)).toBeVisible();
     await expect(badge(page)).toContainText("1");
+    await page.getByRole("button", { name: "その他" }).click();
     await expect(page.getByRole("link", { name: /マスタ編集.*マージ待ち 1 件/ })).toBeVisible();
+    await page.keyboard.press("Escape");
     // 別のページでも件数が出る
     await gotoPage(page, "/teams");
     await expect(badge(page)).toContainText("1");
@@ -347,7 +350,7 @@ test.describe("画面幅・ダーク", () => {
         if (path !== "/masters") await gotoPage(page, path);
         const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         expect(over, `${path} の横はみ出し`).toBeLessThanOrEqual(0);
-        const badgeBox = await page.locator(".yn-tools .yn-mr-badge").boundingBox();
+        const badgeBox = await badge(page).boundingBox();
         expect(badgeBox && badgeBox.x + badgeBox.width).toBeLessThanOrEqual(w);
         const icons = await page.locator(".yn-icon-tools").boundingBox();
         expect(icons && icons.x + icons.width).toBeLessThanOrEqual(w);
