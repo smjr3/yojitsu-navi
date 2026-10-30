@@ -11,7 +11,7 @@
 import { addMonths, isValidYearMonth } from "./calendar.js";
 import { memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
-import type { Config, MemberRecord, TeamRecord, YearMonth } from "./types.js";
+import type { Config, Dataset, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -776,6 +776,8 @@ export interface EditValidation {
   general: RowIssue[];
   /** 書き出したテキスト（保存・ダウンロードに使う） */
   texts: Record<MasterFileId, string>;
+  /** 読み込んだデータ（変更の影響の計算に使う。§65） */
+  dataset: Dataset;
 }
 
 /**
@@ -799,7 +801,7 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     ...(context.taskTypes !== undefined ? { taskTypes: context.taskTypes } : {}),
     worklogs: [],
   };
-  const { issues } = parseDataset(files);
+  const { issues, dataset } = parseDataset(files);
   const byFile = new Map<string, MasterFileId>(MASTER_FILE_IDS.map((id) => [MASTER_FILES[id].issueFile, id]));
   const byRow = { members: {}, rates: {}, teams: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
   const general: RowIssue[] = [];
@@ -827,6 +829,7 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     byRow,
     general,
     texts,
+    dataset,
   };
 }
 
