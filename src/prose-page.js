@@ -87,8 +87,7 @@ if (model) {
       model,
       title: ${JSON.stringify(title)},
       lead: ${leadKey},
-      // 全体の配下ではない（「⋯」から開く画面）のでパンくずは出さない
-      breadcrumbs: [],
+      breadcrumbs: [{ label: ${JSON.stringify(title)} }], // 全体サマリーの配下ではない（§69）
     }),
   );
 }

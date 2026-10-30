@@ -30,8 +30,7 @@ if (model) {
       model,
       title: T.app.pages.dataCheck,
       lead: T.dataCheck.lead,
-      // 全体の配下ではない（「⋯」から開く道具の画面）のでパンくずは出さない
-      breadcrumbs: [],
+      breadcrumbs: [{ label: T.app.pages.dataCheck }], // 全体サマリーの配下ではない（§69）
     }),
   );
 }

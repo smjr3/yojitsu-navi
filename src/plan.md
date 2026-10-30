@@ -26,8 +26,7 @@ if (model) {
       model: null,
       title: T.app.pages.plan,
       lead: T.plan.lead,
-      // 全体の配下ではない（上部の「リソース計画」ボタンから開く道具の画面）のでパンくずは出さない
-      breadcrumbs: [],
+      breadcrumbs: [{ label: T.app.pages.plan }], // 全体サマリーの配下ではないので親を付けない（§69）
     }),
   );
 }

@@ -38,8 +38,7 @@ if (model) {
       model: null,
       title: T.app.pages.masters,
       lead: T.mastersPage.lead,
-      // 全体の配下ではない（「⋯」から開く道具の画面）のでパンくずは出さない
-      breadcrumbs: [],
+      breadcrumbs: [{ label: T.app.pages.masters }], // 全体サマリーの配下ではない（§69）
     }),
   );
 }

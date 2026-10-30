@@ -136,6 +136,7 @@ if (vm) {
 }
 ```
 
+
 ```js
 // 検索フォームは model だけに依存し 1 回だけ描く（期間・単位を変えても作り直さない）
 const searchForm = (() => {
@@ -241,7 +242,7 @@ if (vm) {
 ```
 
 ```js
-// 計画とのずれ（§64）: メンバーごとの計画と実績の表の下（2026-10-30 試用版のコメント）。 確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
+// 計画とのずれ（§64）: メンバーごとの計画と実績の表の下に置く（§68）。確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
 if (vm) {
   const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
   const jp = gaps.judgedPeriod;

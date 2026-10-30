@@ -143,8 +143,8 @@ test.describe("メンバー一覧 /members", () => {
   test("Excel 出力: 金額は円、見出しと値が core と一致", async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     const dl = page.waitForEvent("download");
-    // 先頭は「計画とのずれ」（§64）の Excel。メンバー一覧は最後の表
-    await page.locator(".yn-export").last().click();
+    // メンバー一覧は先頭の表（「計画とのずれ」（§64）はその下。§68）
+    await page.locator(".yn-export").first().click();
     const download = await dl;
     // 出力するのは表示中の比較期間（経過月）
     expect(download.suggestedFilename()).toBe(`members_${CMP.from}_${CMP.to}.xlsx`);
