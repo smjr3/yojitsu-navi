@@ -1205,20 +1205,20 @@ h3 {
   border: 1px dashed var(--c);
   box-sizing: border-box;
 }
-.yn-legend-line {
-  height: 0;
-  border-top: 2px solid var(--c);
+/* 線の凡例: グラフの線種（実線・破線・点線）と同じに見えるよう、幅を取り、破線・点線は背景の繰り返しで描く
+   （2px の border の dashed / dotted は 14px 幅では実線と見分けられなかった） */
+.yn-legend-line,
+.yn-legend-line-dashed,
+.yn-legend-line-dotted {
+  width: 22px;
+  height: 2px;
   border-radius: 0;
 }
 .yn-legend-line-dashed {
-  height: 0;
-  border-top: 2px dashed var(--c);
-  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px);
 }
 .yn-legend-line-dotted {
-  height: 0;
-  border-top: 2px dotted var(--c);
-  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--c) 0 2px, transparent 2px 5px);
 }
 .yn-details {
   margin-top: 8px;
@@ -4079,4 +4079,21 @@ html:has(dialog.yn-dialog[open]) {
 .yn-dg-num.is-over {
   color: var(--yn-danger-text);
   font-weight: bold;
+}
+/* リソース計画の変更の影響（§65）: 前 → 後。マイナスの残予算・増えた着地は赤 */
+.yn-me-impact .is-neg {
+  color: var(--yn-danger-text);
+}
+.yn-me-impact-table td.num {
+  white-space: nowrap;
+}
+.yn-me-impact-before {
+  color: var(--yn-text-muted);
+}
+/* 読み上げ用の「から」（position: absolute）が横スクロールの枠の外へ出ないように */
+.yn-me-impact .yn-table-wrap {
+  position: relative;
+}
+.yn-me-impact .yn-table-wrap + .yn-table-wrap {
+  margin-top: 12px;
 }
