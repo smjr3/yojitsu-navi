@@ -127,13 +127,28 @@ test.describe("リソース計画: 名前列の幅", () => {
   });
 });
 
-test("使い方: リーダー層向けの表記、画面の表に計算ルールを並べない、着地見込みは年度末と明記", async ({ page }) => {
+test("使い方: リーダー層向けの表記、画面の表に計算ルールを並べない、着地見込みは選んだ期間の終わりと明記", async ({ page }) => {
   await gotoPage(page, "/guide");
   const main = page.locator("#observablehq-main");
   await expect(main).not.toContainText("リーダー向け");
   await expect(main.getByRole("heading", { name: /マスタ編集（リーダー層向け）/ })).toBeVisible();
-  await expect(main).toContainText("選んだ期間に関係なく");
+  await expect(main).not.toContainText("選んだ期間に関係なく");
+  await expect(main).toContainText("選んだ期間の終わり");
   await expect(main).not.toContainText("☾");
   await expect(main.locator("td", { hasText: "数値の計算方法の詳細" })).toHaveCount(0);
   await expect(main.locator("td strong", { hasText: "アサイン計画" })).toHaveCount(0);
+});
+
+test("用語: メンバーの ID は「社員番号」と表示する（§54）", async ({ page }) => {
+  for (const path of ["/data-check", "/members", "/masters"]) {
+    await gotoPage(page, path);
+    await expect(page.locator("#observablehq-main"), path).not.toContainText("メンバーID");
+  }
+  await gotoPage(page, "/data-check");
+  await expect(page.locator("#observablehq-main th", { hasText: "社員番号" }).first()).toBeVisible();
+});
+
+test("リソース計画の検証: 手でビルドが要るように読める説明を出さない（§54）", async ({ page }) => {
+  await gotoPage(page, "/plan");
+  await expect(page.locator("#observablehq-main")).not.toContainText("ビルド");
 });

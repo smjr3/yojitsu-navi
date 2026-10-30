@@ -1965,7 +1965,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       <div class="yn-me-form-msg" role="alert"></div>
       <div class="yn-me-confirm" hidden></div>
     </form>`;
-    // 取り込みモードのメンバー追加: メンバーIDを選ぶと取り込み列を最新の行から写す
+    // 取り込みモードのメンバー追加: 社員番号を選ぶと取り込み列を最新の行から写す
     if (fileId === "members" && importMode && mode === "add") {
       const idInput = form.querySelector('[name="member_id"]');
       idInput?.addEventListener("change", () => {

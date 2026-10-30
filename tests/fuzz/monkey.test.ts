@@ -288,19 +288,19 @@ function checkInvariants(seed: number, dataset: Dataset, asOf: string, model: Mo
       expect(f.method, tag).toBe(method);
       expect(f.fiscalYear, tag).toBe(model.meta.fiscalYear);
       expect(f.forecastCost >= f.breakdown.actualCost, `${tag} forecastCost >= actualCost ${c.contractId} ${method}`).toBe(true);
-      expect(f.forecastGrossProfit, tag).toBe(f.fyBudget - f.forecastCost);
+      expect(f.forecastGrossProfit, tag).toBe(f.targetBudget - f.forecastCost);
       expect(f.isDeficit, tag).toBe(f.forecastGrossProfit < 0);
-      expect(f.breakdown.contractMonthsInFY, tag).toEqual(model.meta.fiscalYearMonths.filter((m) => m >= c.startMonth && m <= c.endMonth));
-      expect([...f.breakdown.actualMonths, ...f.breakdown.remainingMonths], tag).toEqual(f.breakdown.contractMonthsInFY);
+      expect(f.breakdown.contractMonthsInTarget, tag).toEqual(model.meta.fiscalYearMonths.filter((m) => m >= c.startMonth && m <= c.endMonth));
+      expect([...f.breakdown.actualMonths, ...f.breakdown.remainingMonths], tag).toEqual(f.breakdown.contractMonthsInTarget);
       expect(f.breakdown.actualMonths.every((m) => m < model.meta.asOfMonth), tag).toBe(true);
       expect(f.breakdown.remainingMonths.every((m) => m >= model.meta.asOfMonth), tag).toBe(true);
-      expect(f.fyBudget, tag).toBe(r.months.filter((m) => f.breakdown.contractMonthsInFY.includes(m.month)).reduce((a, m) => a + m.budget, 0));
-      if (f.breakdown.contractMonthsInFY.length === 0) {
-        expect(f.fyBudget, tag).toBe(0);
+      expect(f.targetBudget, tag).toBe(r.months.filter((m) => f.breakdown.contractMonthsInTarget.includes(m.month)).reduce((a, m) => a + m.budget, 0));
+      if (f.breakdown.contractMonthsInTarget.length === 0) {
+        expect(f.targetBudget, tag).toBe(0);
         expect(f.forecastCost, tag).toBe(0);
         expect(f.isDeficit, tag).toBe(false);
       }
-      if (method !== "assignment") expect(f.breakdown.noActuals, tag).toBe(f.breakdown.averageBasisMonths.length === 0 && f.breakdown.contractMonthsInFY.length > 0);
+      if (method !== "assignment") expect(f.breakdown.noActuals, tag).toBe(f.breakdown.averageBasisMonths.length === 0 && f.breakdown.contractMonthsInTarget.length > 0);
     }
   }
 
@@ -371,8 +371,8 @@ function checkInvariants(seed: number, dataset: Dataset, asOf: string, model: Mo
     for (const method of METHODS) {
       const ft = forecastTotals(model, undefined, method);
       expect(nonFinitePaths(ft), tag).toEqual([]);
-      expect(ft.forecastGrossProfit, tag).toBe(ft.fyBudget - ft.forecastCost);
-      expect(ft.fyBudget, tag).toBe(model.contracts.reduce((a, r) => a + r.forecasts[method].fyBudget, 0));
+      expect(ft.forecastGrossProfit, tag).toBe(ft.targetBudget - ft.forecastCost);
+      expect(ft.targetBudget, tag).toBe(model.contracts.reduce((a, r) => a + r.forecasts[method].targetBudget, 0));
       expect(ft.deficitContractIds, tag).toEqual(model.contracts.filter((r) => r.forecasts[method].isDeficit).map((r) => r.contract.contractId));
     }
   }

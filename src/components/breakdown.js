@@ -387,11 +387,11 @@ export function forecastSpec({ forecast, contract, unit, config, subtitle = null
   const method = forecast.method;
   const rows = [
     { label: T.breakdown.method, value: METHOD_LABELS[method] },
-    { label: T.breakdown.fiscalYear, value: `FY${forecast.fiscalYear}`, note: `${b.fiscalYearMonths[0]}〜${b.fiscalYearMonths[b.fiscalYearMonths.length - 1]}` },
-    { label: T.breakdown.contractMonthsInFy, value: fmt(T.breakdown.months, { n: b.contractMonthsInFY.length }), note: b.contractMonthsInFY.length ? `${b.contractMonthsInFY[0]}〜${b.contractMonthsInFY[b.contractMonthsInFY.length - 1]}` : T.breakdown.notInFy },
+    { label: T.breakdown.targetPeriod, value: b.targetMonths.length ? periodJa({ from: b.targetMonths[0], to: b.targetMonths[b.targetMonths.length - 1] }) : EMPTY_VALUE },
+    { label: T.breakdown.contractMonthsInTarget, value: fmt(T.breakdown.months, { n: b.contractMonthsInTarget.length }), note: b.contractMonthsInTarget.length ? `${b.contractMonthsInTarget[0]}〜${b.contractMonthsInTarget[b.contractMonthsInTarget.length - 1]}` : T.breakdown.notInTarget },
     { label: T.breakdown.actualMonths, value: fmt(T.breakdown.months, { n: b.actualMonths.length }), note: b.actualMonths.join(", ") || T.common.none },
     { label: T.breakdown.remainingMonths, value: fmt(T.breakdown.months, { n: b.remainingMonths.length }), note: b.remainingMonths.join(", ") || T.common.none },
-    { label: T.breakdown.fyBudget, value: money(forecast.fyBudget, unit) },
+    { label: T.breakdown.targetBudget, value: money(forecast.targetBudget, unit) },
     { label: T.breakdown.actualCostSum, value: money(b.actualCost, unit) },
   ];
   const formula = [T.breakdown.fcFormulaBudget, T.breakdown.fcFormulaCost, T.breakdown.fcFormulaGp];
@@ -434,11 +434,11 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
   for (const r of model.contracts) {
     if (set && !set.has(r.contract.contractId)) continue;
     const f = r.forecasts[totals.method];
-    if (f.breakdown.contractMonthsInFY.length === 0) continue;
+    if (f.breakdown.contractMonthsInTarget.length === 0) continue;
     rows.push([
       detailHref ? html`<a href=${detailHref(r.contract.contractId)}>${r.contract.customerName} / ${r.contract.projectName}</a>` : `${r.contract.customerName} / ${r.contract.projectName}`,
       `${r.contract.startMonth}〜${r.contract.endMonth}`,
-      money(f.fyBudget, unit),
+      money(f.targetBudget, unit),
       money(f.breakdown.actualCost, unit),
       money(f.breakdown.remainingCost, unit),
       money(f.forecastGrossProfit, unit),
@@ -446,11 +446,11 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
     ]);
   }
   return {
-    title: fmt(T.breakdown.forecastTotalsTitle, { fy: totals.fiscalYear, method: METHOD_LABELS[totals.method] }),
+    title: fmt(T.breakdown.forecastTotalsTitle, { period: totals.period ? periodJa(totals.period) : `FY${totals.fiscalYear}`, method: METHOD_LABELS[totals.method] }),
     formula: [T.breakdown.fcTotalsFormula, T.breakdown.fcTotalsFormulaSum],
     rows: [
-      { label: T.breakdown.targetContractsFy, value: fmt(T.breakdown.count, { n: rows.length }) },
-      { label: T.breakdown.fyBudget, value: money(totals.fyBudget, unit) },
+      { label: T.breakdown.targetContractsPeriod, value: fmt(T.breakdown.count, { n: rows.length }) },
+      { label: T.breakdown.targetBudget, value: money(totals.targetBudget, unit) },
       { label: T.breakdown.forecastCost, value: money(totals.forecastCost, unit) },
       { label: T.breakdown.forecastGpLong, value: money(totals.forecastGrossProfit, unit), emphasis: true },
       { label: T.breakdown.deficitContracts, value: fmt(T.breakdown.count, { n: totals.deficitContractIds.length }), note: totals.deficitContractIds.join(", ") || null },
@@ -459,7 +459,7 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
       {
         title: T.breakdown.byContract,
         table: {
-          columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colContractPeriod }, { label: T.breakdown.fyBudget, align: "num" }, { label: T.breakdown.actualCost, align: "num" }, { label: T.breakdown.remainingCost, align: "num" }, { label: T.breakdown.forecastGp, align: "num" }, { label: T.breakdown.judgement }],
+          columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colContractPeriod }, { label: T.breakdown.targetBudget, align: "num" }, { label: T.breakdown.actualCost, align: "num" }, { label: T.breakdown.remainingCost, align: "num" }, { label: T.breakdown.forecastGp, align: "num" }, { label: T.breakdown.judgement }],
           rows,
         },
       },

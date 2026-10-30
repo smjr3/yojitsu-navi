@@ -39,7 +39,7 @@ function uniq<T>(xs: T[]): T[] {
 async function expectKpis(page: import("@playwright/test").Page, period: Period, teamId = "", method: ForecastMethod = DEFAULT_METHOD, unit: Unit = DEFAULT_UNIT) {
   const ids = teamContractIds(teamId, period, model);
   const totals = totalsFor(period, ids, model);
-  const fc = forecastFor(method, ids, model);
+  const fc = forecastFor(method, ids, model, period);
   await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget, unit));
   await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, unit));
   await expect(kpiValue(page, 2)).toHaveText(yen(totals.grossProfit, unit));

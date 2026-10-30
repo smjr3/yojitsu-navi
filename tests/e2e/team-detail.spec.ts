@@ -56,7 +56,7 @@ test("千円・期間・方式の変更が URL とKPIに反映され、再読込
   const ids = teamContractIds("S11", { from: "2026-06", to: "2026-09" }, model)!;
   const totals = totalsFor(period, ids, model);
   await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget, "k"));
-  await expect(kpiValue(page, 4)).toHaveText(yen(forecastFor("all", ids, model).forecastGrossProfit, "k"));
+  await expect(kpiValue(page, 4)).toHaveText(yen(forecastFor("all", ids, model, period).forecastGrossProfit, "k"));
   await page.reload();
   await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, "k"));
   expect(query(page).get("id")).toBe("S11");

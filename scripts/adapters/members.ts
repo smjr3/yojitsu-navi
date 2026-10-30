@@ -121,8 +121,8 @@ export function importMembers(raw: RawRow[], ms: MemberSourceConfig, report?: (r
     byId.set(m.memberId, m);
   }
   if (noName > 0) log?.(`[members] 氏名が空の ${noName} 人は、既存の氏名をそのまま残します（新しい人は氏名が空になります）`);
-  if (noId > 0) log?.(`[members] メンバーIDが空の ${noId} 行を除きました`);
-  if (dup > 0) log?.(`[members] メンバーIDが重複する ${dup} 行は先頭を採用しました`);
+  if (noId > 0) log?.(`[members] 社員番号が空の ${noId} 行を除きました`);
+  if (dup > 0) log?.(`[members] 社員番号が重複する ${dup} 行は先頭を採用しました`);
   return [...byId.values()];
 }
 

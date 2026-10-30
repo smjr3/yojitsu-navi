@@ -7,7 +7,7 @@
  *   L2  顧客詳細の担当チーム行 → 案件一覧は顧客キー（厳密）＋チームで絞り、件数が行と一致する
  *   L3  顧客詳細はチーム絞り込みを引き継ぎ、数字が変わることを注記する
  *   L4  メンバー別をチームで絞っても、期間全体の計画の対象が経過月だけで決まらない
- *   L6  合計行の着地差は年度内の案件が 0 件なら「—」
+ *   L6  着地差は選んだ期間の終わりまで（§54）。過去の期間だけなら着地差 = 残予算
  *   L9  メンバー列は名前順、検索欄の案内にチームが入る
  * 既定単位（百万円）で開いて「単位に従わない」ことを確かめる。
  */
@@ -279,17 +279,18 @@ test.describe("L2 / L3 顧客詳細", () => {
   });
 });
 
-test.describe("L6 合計行の着地差は年度内 0 件なら —", () => {
+test.describe("L6 着地差は選んだ期間の終わりまで", () => {
   const g = groups.find((x) => x.contractIds.includes("C016"))!;
   const early = "2025-04";
 
-  test("案件一覧: 年度に掛からない案件だけ表示しているとき", async ({ page }) => {
+  test("案件一覧: 前年度の月だけを選ぶと、着地差は残予算と同じ（残り月が無い）", async ({ page }) => {
     await gotoPage(page, `/contracts?customer=${encodeURIComponent(g.key)}&from=${early}&to=${early}&unit=yen`);
     const table = tableByCaption(page, "案件一覧");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(1);
-    expect(await cellText(dataRows(table).first(), col(h, "着地差"))).toBe("—");
-    expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe("—");
+    const gp = await cellText(dataRows(table).first(), col(h, "残予算"));
+    expect(await cellText(dataRows(table).first(), col(h, "着地差"))).toBe(gp);
+    expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe(await cellText(table.locator("tfoot tr"), col(h, "残予算")));
   });
 
   test("顧客一覧: 行と合計行の着地差が食い違わない（行が値を持つなら合計行も同じ値）", async ({ page }) => {
@@ -297,11 +298,11 @@ test.describe("L6 合計行の着地差は年度内 0 件なら —", () => {
     const table = tableByCaption(page, "顧客一覧");
     const h = await headerIndex(table);
     await expect(dataRows(table)).toHaveCount(1);
-    const row = (await cellText(dataRows(table).first(), col(h, "着地差"))).replace(/\d+件$/, "");
+    const row = await cellText(dataRows(table).first(), col(h, "着地差"));
     expect(await cellText(table.locator("tfoot tr"), col(h, "着地差"))).toBe(row);
   });
 
-  test("年度内の案件があれば合計行に金額が出る（案件一覧・既定期間）", async ({ page }) => {
+  test("期間に案件があれば合計行に金額が出る（案件一覧・既定期間）", async ({ page }) => {
     await gotoPage(page, "/contracts?unit=yen");
     const table = tableByCaption(page, "案件一覧");
     const h = await headerIndex(table);

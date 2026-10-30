@@ -49,13 +49,9 @@ async function expectRow(page: Page, key: string, ids: readonly string[], method
   expect(await cellText(row, col(h, "残予算"))).toBe(yen(t.grossProfit));
   expect(await cellText(row, col(h, "残予算率"))).toBe(formatPercent(t.grossMargin));
   expect(await cellText(row, col(h, "消化率"))).toContain(formatPercent(t.burnRate));
-  // 着地差セルは金額の下に年度内の件数（「N件」）を併記する（チーム一覧と同じ）
-  const fyCount = ids.filter((id) => (model.contracts.find((r) => r.contract.contractId === id)!.forecasts[method].breakdown.contractMonthsInFY.length ?? 0) > 0).length;
-  const fcCell = cell(row, col(h, "着地差"));
-  if (fyCount === 0) expect(await cellText(row, col(h, "着地差"))).toBe("—");
-  else {
-    expect((await fcCell.locator("button").first().innerText()).replace(/[▲\s]/g, "")).toBe(`${yen(f.forecastGrossProfit)}${fyCount}件`);
-  }
+  // 着地差は選んだ期間の終わりまで（§54）。期間に案件が無ければ「—」
+  if (t.contractCount === 0) expect(await cellText(row, col(h, "着地差"))).toBe("—");
+  else expect((await cellText(row, col(h, "着地差"))).replace(/[▲\s]/g, "")).toBe(yen(f.forecastGrossProfit));
 }
 
 test.describe("顧客一覧 /customers", () => {
@@ -186,7 +182,7 @@ test.describe("顧客一覧 /customers", () => {
     const hr = aoa.findIndex((r) => r.some((c) => c === "顧客"));
     expect(hr).toBeGreaterThanOrEqual(0);
     const header = aoa[hr]!.map((x) => String(x ?? ""));
-    for (const label of ["顧客", "案件数（期間内）", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（年度内）（円）"]) expect(header, label).toContain(label);
+    for (const label of ["顧客", "案件数（期間内）", "予算（円）", "実績（円）", "残予算（円）", "残予算率（%）", "消化率（%）", "着地差（円）"]) expect(header, label).toContain(label);
     const rowsAll = aoa.slice(hr + 1).filter((r) => r.some((c) => c !== null && c !== ""));
     expect(String(rowsAll.at(-1)![0]), "最終行は合計行").toMatch(/^合計/);
     const body = rowsAll.slice(0, -1);

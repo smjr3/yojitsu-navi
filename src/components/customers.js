@@ -22,17 +22,15 @@ export function customerHref(store, key, patch = {}) {
   return base.includes("?") ? base.replace("?", `?${k}&`) : `${base}?${k}`;
 }
 
-/** 契約ID集合を 1 行にする（チーム行 teamRow と同じ項目。着地は年度に掛かる契約が無ければ null） */
+/** 契約ID集合を 1 行にする（チーム行 teamRow と同じ項目。期間内の契約が無ければ着地は null） */
 export function idsRow(model, ids, period, method, extra = {}) {
   const set = new Set(ids);
   const results = model.contracts.filter((r) => set.has(r.contract.contractId));
   const totals = aggregate(model, { period, contractIds: ids });
   const f = forecastTotals(model, ids, method);
-  const fyContractCount = results.filter((r) => (r.forecasts[method]?.breakdown.contractMonthsInFY.length ?? 0) > 0).length;
   return {
     contractIds: ids,
     contractCount: totals.contractCount,
-    fyContractCount,
     totals,
     forecast: f,
     budget: totals.budget,
@@ -42,7 +40,7 @@ export function idsRow(model, ids, period, method, extra = {}) {
     burnRate: totals.burnRate,
     isOverBudget: totals.isOverBudget,
     includesPreliminary: totals.includesPreliminary,
-    forecastGrossProfit: fyContractCount === 0 ? null : f.forecastGrossProfit,
+    forecastGrossProfit: totals.contractCount === 0 ? null : f.forecastGrossProfit,
     deficitCount: f.deficitContractIds.length,
     isDeficit: f.deficitContractIds.length > 0,
     hours: totals.hours,

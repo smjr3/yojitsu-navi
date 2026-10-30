@@ -303,3 +303,17 @@ test("修正欄を開いたまま画面を狭く・広くしても、画面の�
   await p.locator(".yn-combo-toggle").click();
   await expect(p.locator("[role=listbox]")).toBeVisible();
 });
+
+test("下書きの復元待ちのあいだも、行の ＋ 案件・案件の開閉は消えない（＋ 案件は押せない）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2027-02").click();
+  await pop(page).locator("#yn-plan-pop-0").fill("0.4");
+  await pop(page).locator("#yn-plan-pop-0").press("Enter");
+  await page.evaluate(() => sessionStorage.setItem("yn-e2e-keep-draft", "1"));
+  await page.reload();
+  await expect(page.locator("#yn-me-draft-title")).toBeVisible();
+  const row = page.locator('.yn-me-plan-row[data-member="M010"]');
+  await expect(row.locator('[data-fk="plan:add:M010"]')).toBeVisible();
+  await expect(row.locator('[data-fk="plan:add:M010"]')).toBeDisabled();
+  await expect(row.locator('[data-fk="plan:toggle:M010"]')).toBeEnabled();
+});

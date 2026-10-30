@@ -17,7 +17,7 @@ import { scopeFor } from "./components/analysis.js";
 import { customerGroups, customerHref, idsRow, groupBreakdowns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns, withForecastCount } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
@@ -157,7 +157,7 @@ if (vm) {
   const columns = [
     { key: "name", label: T.customers.colCustomer, type: "text", sortValue: (r) => r.name },
     ...teamCountColumns(),
-    ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }).map(withForecastCount),
+    ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
   // 合計行は表示中の顧客の契約すべてを母集団にした aggregate() / forecastTotals()（顧客は契約を重複せず分けるので、全体の合計と一致する）
@@ -175,8 +175,8 @@ if (vm) {
     grossMargin: sumTotals.grossMargin,
     burnRate: sumTotals.burnRate,
     isOverBudget: sumTotals.isOverBudget,
-    // 着地粗利は年度に掛かる契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
-    forecastGrossProfit: rows.reduce((n, r) => n + r.fyContractCount, 0) === 0 ? null : sumForecast.forecastGrossProfit,
+    // 着地粗利は期間内の契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
+    forecastGrossProfit: sumTotals.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
     isDeficit: false,
     status: null,
   };

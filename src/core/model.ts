@@ -8,7 +8,7 @@ import { partitionContracts, monthlyBudget } from "./budget.js";
 import { addMonths, businessDaysInMonth, isValidISODate, isValidYearMonth, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf } from "./calendar.js";
 import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
-import { forecastAllMethods, type ForecastContext } from "./forecast.js";
+import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
 import { createMasterIndex, memberAt, teamTreeAt, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
@@ -81,6 +81,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   };
 
   const forecastCtx: ForecastContext = { asOfMonth, config, masters, assignments: dataset.assignments };
+  const forecastFiscalYear = fiscalYearOf(asOfMonth, config.fiscalYearStartMonth);
+  const forecastBasis = { asOfMonth, fiscalYear: forecastFiscalYear, forecastRecentMonths: config.forecastRecentMonths };
+  const fyMonthsForForecast = fiscalYearMonths(forecastFiscalYear, config.fiscalYearStartMonth);
 
   const results: ContractResult[] = contracts.map((contract) => {
     const months: ContractMonth[] = monthRange(contract.startMonth, contract.endMonth).map((month) => {
@@ -101,7 +104,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
         businessDays: businessDaysOf(month),
       };
     });
-    return { contract, months, forecasts: forecastAllMethods(forecastCtx, contract, months) };
+    const assignmentPlan = assignmentPlanOf(forecastCtx, contract);
+    const forecasts = forecastAllMethodsForMonths(forecastBasis, contract, months, assignmentPlan, fyMonthsForForecast);
+    return { contract, months, forecasts, assignmentPlan };
   });
 
   warnings.push(...collectRateWarnings(results, masters));
@@ -168,8 +173,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
 }
 
 /**
- * 単価なし（RATE_MISSING: メンバーID・月ごとに 1 件、時間合算）と
- * 未知メンバー（UNKNOWN_MEMBER: メンバーIDごとに 1 件）の警告を原価行から集める。
+ * 単価なし（RATE_MISSING: 社員番号・月ごとに 1 件、時間合算）と
+ * 未知メンバー（UNKNOWN_MEMBER: 社員番号ごとに 1 件）の警告を原価行から集める。
  * 未知メンバーには RATE_MISSING を重ねて出さない。
  */
 function collectRateWarnings(results: readonly ContractResult[], masters: MasterIndex): Warning[] {

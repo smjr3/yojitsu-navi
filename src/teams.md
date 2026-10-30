@@ -16,7 +16,7 @@ import { createStore } from "./components/state.js";
 import { scopeFor, flattenTree, teamRow, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
-import { dataTable, standardColumns, rowStatus, teamCountColumns, withForecastCount } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
@@ -101,7 +101,7 @@ if (vm) {
         burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: r.name }),
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
       },
-    }).map(withForecastCount),
+    }),
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), hideNarrow: true },
   ];
   display(

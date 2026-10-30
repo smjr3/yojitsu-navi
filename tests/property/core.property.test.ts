@@ -143,18 +143,18 @@ describe("Model の不変条件", () => {
     );
   });
 
-  it("forecastCost >= actualCost（原価がすべて 0 以上のとき）、fyBudget は年度内予算の合計", () => {
+  it("forecastCost >= actualCost（原価がすべて 0 以上のとき）、targetBudget は年度内予算の合計", () => {
     fc.assert(
       fc.property(datasetArb, asOfArb, (ds, asOf) => {
         const model = buildModel(ds, { asOf, generatedAt: "x" });
         for (const r of model.contracts) {
           for (const f of Object.values(r.forecasts)) {
             expect(f.forecastCost).toBeGreaterThanOrEqual(f.breakdown.actualCost);
-            expect(f.forecastGrossProfit).toBe(f.fyBudget - f.forecastCost);
+            expect(f.forecastGrossProfit).toBe(f.targetBudget - f.forecastCost);
             expect(f.isDeficit).toBe(f.forecastGrossProfit < 0);
             const inFY = r.months.filter((m) => model.meta.fiscalYearMonths.includes(m.month));
-            expect(f.fyBudget).toBe(inFY.reduce((a, m) => a + m.budget, 0));
-            expect(f.breakdown.contractMonthsInFY).toEqual(inFY.map((m) => m.month));
+            expect(f.targetBudget).toBe(inFY.reduce((a, m) => a + m.budget, 0));
+            expect(f.breakdown.contractMonthsInTarget).toEqual(inFY.map((m) => m.month));
             expect(f.breakdown.actualMonths.every((m) => m < model.meta.asOfMonth)).toBe(true);
             expect(f.breakdown.remainingMonths.every((m) => m >= model.meta.asOfMonth)).toBe(true);
           }

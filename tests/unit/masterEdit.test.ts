@@ -321,7 +321,7 @@ describe("validateEdited", () => {
     expect(rateIssues).toEqual(["INVALID_MONTH", "RATE_INVALID"]);
     const asg = v.byRow.assignments.o0!.map((i) => i.code).sort();
     expect(asg).toEqual(["ALLOCATION_OUT_OF_RANGE", "ASSIGNMENT_UNKNOWN_MEMBER"]);
-    expect(issueText(v.byRow.assignments.o0!.find((i) => i.code === "ASSIGNMENT_UNKNOWN_MEMBER")!)).toBe("メンバーID M404 は members.csv に存在しません");
+    expect(issueText(v.byRow.assignments.o0!.find((i) => i.code === "ASSIGNMENT_UNKNOWN_MEMBER")!)).toBe("社員番号 M404 は members.csv に存在しません");
   });
 
   it("行に結び付かない問題（循環）は general", () => {

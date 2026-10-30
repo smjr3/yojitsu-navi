@@ -338,7 +338,7 @@ test("見出し横の「?」: カーソルで説明が開き、Esc で閉じる�
   await expect(pop).toBeHidden();
   await tip.locator(".yn-tip-btn").hover();
   await expect(pop).toBeVisible();
-  await expect(pop).toContainText("母集団");
+  await expect(pop).toContainText("超過見込み");
   await tip.locator(".yn-tip-btn").press("Escape");
   await expect(pop).toBeHidden();
   await page.mouse.move(0, 0);

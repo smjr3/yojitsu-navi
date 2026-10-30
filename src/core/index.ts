@@ -63,7 +63,7 @@ export {
   type WorklogIndex,
 } from "./cost.js";
 export { lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } from "./status.js";
-export { FORECAST_METHODS, forecastAllMethods, forecastContract, type ForecastContext } from "./forecast.js";
+export { FORECAST_METHODS, assignmentPlanOf, forecastAllMethods, forecastAllMethodsForMonths, forecastContract, forecastForMonths, type ForecastBasis, type ForecastContext } from "./forecast.js";
 export { buildModel, type BuildModelOptions } from "./model.js";
 export {
   aggregateMembers,
@@ -80,9 +80,12 @@ export {
   UNASSIGNED_TEAM_ID,
   UNASSIGNED_TEAM_LABEL,
   aggregate,
+  contractEndForecasts,
   contractsForTeam,
+  forecastPeriodOf,
   forecastTotals,
   monthlySeries,
+  setForecastPeriod,
   teamTreeForMonth,
   type AggregateScope,
 } from "./aggregate.js";

@@ -2542,9 +2542,6 @@ li.is-jumped,
   margin: 0;
   overflow-wrap: anywhere;
 }
-.yn-me.is-locked .yn-me-row-actions .yn-btn {
-  display: none;
-}
 @media (max-width: 640px) {
   .yn-me-toolbar .yn-table-count {
     margin-left: 0;

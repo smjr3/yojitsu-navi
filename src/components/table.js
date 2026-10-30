@@ -430,24 +430,7 @@ export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.for
 export function teamCountColumns() {
   return [
     { key: "contractCount", label: T.columns.contractCount, sublabel: T.columns.inPeriodSub, type: "int", hideOnPhone: true, hideNarrow: true, exportLabel: T.columns.contractCountInPeriod },
-    { key: "fyContractCount", label: T.columns.contractCountFy, type: "int", exportOnly: true },
   ];
-}
-
-/** チーム行の着地粗利列: 見出しに「（年度内）」、セルの 2 行目に年度内の契約件数（契約数列とは母集団が違うため） */
-export function withForecastCount(col) {
-  if (col.key !== "forecastGrossProfit") return col;
-  const base = col.render;
-  return {
-    ...col,
-    sublabel: T.columns.inFySub,
-    exportLabel: T.columns.forecastGrossProfitFyExport,
-    render: (row, unit) => {
-      const t = base(row, unit);
-      if (t === EMPTY_VALUE || typeof row.fyContractCount !== "number") return t;
-      return html`<span class="yn-cell-stack">${t}<span class="yn-muted yn-cell-count" title=${T.table.fyContractCountTitle}>${fmt(T.table.fyContractCount, { n: integer(row.fyContractCount) })}</span></span>`;
-    },
-  };
 }
 
 /**

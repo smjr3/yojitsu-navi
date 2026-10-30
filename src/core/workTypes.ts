@@ -411,7 +411,7 @@ export function workMonthlySeries(rows: readonly WorkRow[], period: Period, meta
 }
 
 export interface WorkGroupRow {
-  /** チームID・顧客キー・メンバーID（未設定は UNASSIGNED_WORK_KEY） */
+  /** チームID・顧客キー・社員番号（未設定は UNASSIGNED_WORK_KEY） */
   key: string;
   label: string;
   totals: WorkTotals;
@@ -559,7 +559,7 @@ export function outsideInputs(mappings: ReadonlyArray<{ kind: string; worklog: W
 
 /**
  * 辞書＋配列に詰めた WorkRow[]。r の各行 =
- * [月, メンバーID, メンバー名, チーム, 契約, 顧客キー, 顧客名, 作業種別, 区分(0=契約内/1=契約外), 未分類(0/1), 時間, 金額|null]
+ * [月, 社員番号, メンバー名, チーム, 契約, 顧客キー, 顧客名, 作業種別, 区分(0=契約内/1=契約外), 未分類(0/1), 時間, 金額|null]
  * 文字列は dict の添字（null は -1）。
  */
 export interface EncodedWorkRows {
