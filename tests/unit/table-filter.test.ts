@@ -1,5 +1,5 @@
 /**
- * 表の列ごとの絞り込み（SPEC §67）の判定: 値の一覧・検索語・数値の範囲
+ * 表の列ごとの絞り込み（SPEC §70）の判定: 値の一覧・検索語・数値の範囲
  */
 import { describe, expect, it } from "vitest";
 import { matchesFilter } from "../../src/components/table.js";

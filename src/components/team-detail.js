@@ -5,7 +5,7 @@
  */
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
-import { statTile, kpiRow } from "./kpi.js";
+import { statTile, kpiRow, forecastStatus } from "./kpi.js";
 import { burnMeter } from "./charts.js";
 import * as bd from "./breakdown.js";
 import { money, moneySigned, pointsSigned, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./format.js";
@@ -30,7 +30,6 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
   };
   const elapsedLabel = (months) => (months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" }));
   const detailHref = (id) => store.href("./contract", {}, { id });
-  const deficitCount = forecast.deficitContractIds.length;
   return kpiRow([
     statTile({
       label: fy ? fmt(T.kpi.budgetFy, { fy: fiscalYearLabel(fy) }) : T.kpi.budgetPeriod,
@@ -65,7 +64,7 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
       label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
       value: money(forecast.forecastGrossProfit, unit),
       sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
-      status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
+      status: forecastStatus(forecast),
       breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref }),
       emphasis: true,
     }),

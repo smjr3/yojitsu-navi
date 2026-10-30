@@ -76,7 +76,14 @@ test.describe("全体サマリー", () => {
     await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
     await expect(page.locator(".yn-kpi").nth(2)).toContainText(formatPercent(totals.grossMargin));
     const deficit = fc.deficitContractIds.length;
-    await expect(page.locator(".yn-kpi").nth(4).locator(".yn-chip")).toHaveText(deficit > 0 ? new RegExp(`超過見込み ${deficit}件`) : /超過見込みなし/);
+    // 合計の着地がマイナスのときだけ赤（§67）。プラスなら超過見込みの案件の件数を灰色で
+    const chip = page.locator(".yn-kpi").nth(4).locator(".yn-chip");
+    if (fc.forecastGrossProfit < 0) await expect(chip).toHaveText(new RegExp(`超過見込み ${deficit}件`));
+    else if (deficit > 0) {
+      await expect(chip).toHaveText(new RegExp(`超過見込みの案件 ${deficit}件`));
+      await expect(chip).toHaveClass(/yn-chip-neutral/);
+      await expect(page.locator(".yn-kpi").nth(4)).not.toHaveClass(/is-danger/);
+    } else await expect(chip).toHaveText(/超過見込みなし/);
     // URL は初回表示で正規化される
     const q = query(page);
     expect(q.get("from")).toBe(FY.from);

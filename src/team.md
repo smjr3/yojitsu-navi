@@ -239,7 +239,7 @@ if (vm?.exists) {
           grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: sub(r) }),
           margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: sub(r) }),
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: sub(r) }),
-          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
+          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
         },
       }),
       hasTargets(model, "project") ? targetColumn(model, "project", (r) => r.contractId, vm.method) : null,

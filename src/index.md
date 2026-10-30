@@ -17,7 +17,7 @@ import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, teamName } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
-import { statTile, kpiRow, statusChip } from "./components/kpi.js";
+import { statTile, kpiRow, statusChip, forecastStatus } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
@@ -98,7 +98,6 @@ if (vm) {
   const elapsedLabel = (months) =>
     months.length === 0 ? T.kpi.noElapsed : fmt(T.kpi.elapsed, { span: monthSpanJa(months), n: months.length, prelim: months[months.length - 1] > model.meta.lastFinalMonth ? T.kpi.elapsedPrelim : "" });
   const budgetLabel = vm.fy ? fmt(T.kpi.budgetFy, { fy: fiscalYearLabel(vm.fy) }) : T.kpi.budgetPeriod;
-  const deficitCount = forecast.deficitContractIds.length;
   display(
     kpiRow([
       statTile({
@@ -134,7 +133,7 @@ if (vm) {
         label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
         value: money(forecast.forecastGrossProfit, unit),
         sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
-        status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
+        status: forecastStatus(forecast),
         breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
         emphasis: true,
       }),
@@ -197,7 +196,7 @@ if (vm) {
           grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
           margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.customerName} / ${r.projectName}` }),
-          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
+          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
         },
       }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },

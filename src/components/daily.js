@@ -75,7 +75,7 @@ export function dailyKpis(p, { unit, subtitle }) {
   const overCap = p.projection > p.cap;
   // 予実の KPI（.yn-kpi-grid）とは別の行。幅が足りれば 4 列、足りなければ 2×2
   return html`<section class="yn-daily-kpis" aria-label=${T.daily.kpiLabel}>${[
-      statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: p.target ? fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate) }) : fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
+      statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: p.target ? fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate), cap: ratePct(1 - p.target.remainingRate) }) : fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
       statTile({
         label: T.daily.actualLabel,
         value: money(p.actual, unit),

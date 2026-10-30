@@ -222,7 +222,7 @@ export default {
     rowCountTreeCollapsed: "表示 {shown} 行 / 全 {n} 行",
     rowCount: "{n} 件",
     rowCountFiltered: "{shown} 件 / 全 {n} 件",
-    // 列ごとの絞り込み（見出しの漏斗ボタン。SPEC §67）
+    // 列ごとの絞り込み（見出しの漏斗ボタン。SPEC §70）
     filterBy: "{label}で絞り込み",
     filterActive: "{label}で絞り込み中",
     filterSearch: "検索",
@@ -242,6 +242,8 @@ export default {
     // 状態チップ
     chipTeamDeficit: "超過見込み {n}件",
     chipTeamDeficitTitle: "配下の案件のうち、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
+    chipTeamDeficitWithin: "超過案件 {n}件",
+    chipTeamDeficitWithinTitle: "合計の着地はマイナスではありませんが、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
     chipDeficit: "超過見込み",
     chipDeficitTitle: "期間の終わりに超過で着地する見込み",
     chipOverBudget: "消化率超過",
@@ -466,6 +468,8 @@ export default {
     forecastEndSub: "{end}まで ・ 着地実績 {cost}",
     deficitCount: "超過見込み {n}件",
     noDeficit: "超過見込みなし",
+    // 合計はプラスで、個々に超過見込みの案件がある（赤にしない。§67）
+    deficitWithin: "超過見込みの案件 {n}件",
   },
 
   // ── 計算根拠パネル（数値をクリックすると開くダイアログ） ──────────────
@@ -583,7 +587,7 @@ export default {
     noAssignments: "アサインが 1 件もありません（残り見込み 0）",
     assignmentDetails: "残り月のアサイン明細",
     colMonth: "月",
-    colAllocation: "配分",
+    colAllocation: "配分（人月）",
     recentN: "直近 {n} か月",
     allMonths: "契約開始からの全月",
     fcFormulaAvg: "残り見込み = round(月平均の実績 × 残り月数)",
@@ -764,7 +768,7 @@ export default {
     hint: "今月の実績の累計（作業実績の速報、{date} まで）を、月の上限を営業日で按分した目安と比べます。月の上限は今月の予算です。今月を含む目標（残予算率）があれば、予算 ×（1 − 目標の残予算率）にします（月ごとの目標を年度の目標より優先）。土日・祝日は目安が増えません。グラフの「月末見込み」と「このペースの月末」は、これまでの営業日 1 日あたりの平均が残りの営業日も続いた場合の値です。",
     capLabel: "今月の上限",
     capSub: "{month} の予算",
-    capSubTarget: "予算から目標の残予算率 {rate} を除く",
+    capSubTarget: "目標の残予算率 {rate}（予算の {cap}）",
     budgetLabel: "今月の予算",
     targetLabel: "目標の残予算率",
     capFormulaTarget: "今月の上限 = 今月の予算 ×（1 − 目標の残予算率）",
@@ -772,7 +776,7 @@ export default {
     actualSub: "目安 {pace}（{elapsed}/{total} 営業日）",
     overPace: "目安超え",
     withinPace: "目安内",
-    leftLabel: "残り {n} 営業日で使える",
+    leftLabel: "残り {n} 営業日の予算",
     leftSub: "1 日あたり {perDay}（これまでの平均 {average}）",
     noDaysLeft: "残りの営業日はありません",
     projectionLabel: "このペースの月末",
@@ -1467,7 +1471,7 @@ export default {
     targetPlaceholder: "チーム・顧客・案件の名前で検索",
     hintTarget: "チーム・顧客・案件から選びます",
     hintEndMonth: "この月までの累計で判定します（YYYY-MM）",
-    hintRemainingRate: "%（例: 20）。100 以下",
+    hintRemainingRate: "%（例: 20。超過を減らす目標は -50）。100 以下",
     hintTargetStart: "空なら終了月を含む年度の最初の月。月ごとの目標は終了月と同じ月",
     statusActive: "在籍",
     statusLeft: "退職",

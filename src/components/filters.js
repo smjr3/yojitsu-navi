@@ -4,7 +4,7 @@
  */
 import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, monthRange } from "../core/index.js";
-import { METHOD_LABELS, UNITS, methodDescription, monthJa } from "./format.js";
+import { METHOD_LABELS, UNITS, dateTimeJst, methodDescription, monthJa } from "./format.js";
 import { periodPresets } from "./state.js";
 import { T } from "../i18n/index.js";
 
@@ -151,6 +151,12 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
     });
   }
 
+  // 作業実績の取得日時（mountFilterBar で上段の単位の左に移す）
+  const fetchedAt = model.meta?.worklogFetchedAt;
+  if (fetchedAt) {
+    form.append(html`<div class="yn-filter-fetched"><span>${T.layout.fetchedAt}</span><time datetime=${fetchedAt}>${dateTimeJst(fetchedAt)}</time></div>`);
+  }
+
   const sync = (s) => syncers.forEach((f) => f(s));
   sync(state());
   store.subscribe(sync);
@@ -168,8 +174,10 @@ export function mountFilterBar(store, model, options = {}) {
   slot.replaceChildren(form);
   slot.classList.add("is-filled");
   // 表示単位は「見せ方」の設定なので、絞り込みとは分けて上段（右上）に置く
+  // 作業実績の取得日時も、スクロールしても見えるよう同じ上段に置く（§66）
   const unit = form.querySelector(".yn-filter-unit");
+  const fetched = form.querySelector(".yn-filter-fetched");
   const unitSlot = document.getElementById("yn-unit-slot");
-  if (unit && unitSlot) unitSlot.replaceChildren(unit);
+  if ((unit || fetched) && unitSlot) unitSlot.replaceChildren(...[fetched, unit].filter(Boolean));
   return null;
 }
