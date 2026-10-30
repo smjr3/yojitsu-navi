@@ -5,7 +5,7 @@
  * （meta.generatedAt のみ options.generatedAt で固定できる）。
  */
 import { partitionContracts, monthlyBudget } from "./budget.js";
-import { addMonths, businessDaysInMonth, isValidISODate, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf } from "./calendar.js";
+import { addMonths, businessDaysInMonth, isValidISODate, isValidYearMonth, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf } from "./calendar.js";
 import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { forecastAllMethods, type ForecastContext } from "./forecast.js";
@@ -113,8 +113,15 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
 
   // メタ情報
   const fiscalYear = fiscalYearOf(asOfMonth, config.fiscalYearStartMonth);
-  const minMonth = contracts.reduce<YearMonth>((min, c) => (c.startMonth < min ? c.startMonth : min), contracts[0]?.startMonth ?? asOfMonth);
-  const maxMonth = contracts.reduce<YearMonth>((max, c) => (c.endMonth > max ? c.endMonth : max), contracts[0]?.endMonth ?? asOfMonth);
+  // 選べる期間 = 契約の期間 ＋ 運用保守以外の予定・実績の月（契約の外の月の予定もメンバー別で見られるように。§50）
+  const outsideMonths: YearMonth[] = outsideIn.map((o) => o.month);
+  for (const o of dataset.outsidePlans ?? []) {
+    if (isValidYearMonth(o.startMonth) && isValidYearMonth(o.endMonth) && o.startMonth <= o.endMonth) outsideMonths.push(o.startMonth, o.endMonth);
+  }
+  const spanStarts = [...contracts.map((c) => c.startMonth), ...outsideMonths];
+  const spanEnds = [...contracts.map((c) => c.endMonth), ...outsideMonths];
+  const minMonth = spanStarts.reduce<YearMonth>((min, m) => (m < min ? m : min), spanStarts[0] ?? asOfMonth);
+  const maxMonth = spanEnds.reduce<YearMonth>((max, m) => (m > max ? m : max), spanEnds[0] ?? asOfMonth);
   const priorYearCutoff = addMonths(asOfMonth, -12);
   const hasPriorYearData = results.some((r) =>
     r.months.some((m) => m.status === "final" && m.month <= priorYearCutoff && (m.cost > 0 || m.budget > 0)),

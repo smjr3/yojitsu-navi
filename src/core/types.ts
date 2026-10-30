@@ -492,7 +492,7 @@ export interface WorkRow {
 
 /** メンバー x・月 m・契約 c の計画と実績（MemberMonth.byContract の 1 行） */
 export interface MemberContractMonth {
-  /** 契約ID。契約外の行は outsideRowId(種別)（§50.3） */
+  /** 契約ID。契約外の行は outsideRowId(正規化した種別)（§50.3。表記ゆれは 1 行にまとめる） */
   contractId: string;
   /** 契約外の行だけ: 種別（空 = 種別なし） */
   outsideType?: string;

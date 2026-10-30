@@ -187,3 +187,46 @@ describe("契約外予定の検証（§50.1）", () => {
     expect(validateDataset(d).filter((i) => i.code === "OUTSIDE_UNKNOWN_TYPE")).toEqual([]);
   });
 });
+
+describe("Codex 指摘（#33）: 種別の表記ゆれ・契約の外の月", () => {
+  const base = () =>
+    dataset({
+      contracts: [contract({ contractId: "C1", customerName: "ABC", projectName: "保守", teamId: "T1", startMonth: m(0), endMonth: m(8), totalAmount: 900_000 })],
+      mappings: [rule("ABC", "保守", "C1")],
+      teams: [team("T1", null)],
+      members: [member({ memberId: "M1", teamId: "T1" })],
+      rates: [rate("SE", 5000)],
+      taskTypes: [
+        { task: "保守", category: "contract" },
+        { task: "提案", category: "outside", group: "Presales" },
+      ],
+      // 予定は全角の表記、分類表の種別は半角。契約が終わった後の月（m(9)〜m(11)）の予定もある
+      outsidePlans: [{ memberId: "M1", type: "Ｐｒｅｓａｌｅｓ", startMonth: m(0), endMonth: m(11), personMonths: 0.2, note: "" }],
+      worklogs: [worklog({ date: day(0, 2), memberId: "M1", customerName: "ABC", projectName: "保守", task: "提案", hours: 8 })],
+    });
+
+  it("全角・半角だけが違う種別は計画と実績が同じ 1 行になり、実績は計画外に数えない", () => {
+    const model = buildModel(base(), { asOf: `${m(1)}-05` });
+    const row = model.memberMonths.find((x) => x.memberId === "M1" && x.month === m(0))!;
+    const out = row.byContract.filter(isOutsideRow);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ plannedHours: 32, actualHours: 8 });
+    expect(out[0]!.contractId).toBe(outsideRowId("presales"));
+    const on = aggregateMembers(model, { period: { from: m(0), to: m(0) }, includeOutside: true });
+    expect(on.members[0]!.byContract.filter(isOutsideRow)).toMatchObject([{ plannedHours: 32, actualHours: 8, unplannedHours: 0 }]);
+  });
+
+  it("運用保守以外の予定が契約の期間の外にあっても、選べる期間（minMonth〜maxMonth）に入る", () => {
+    const model = buildModel(base(), { asOf: `${m(1)}-05` });
+    expect(model.meta.minMonth).toBe(m(0));
+    expect(model.meta.maxMonth).toBe(m(11));
+    expect(model.memberMonths.some((x) => x.month === m(11))).toBe(true);
+  });
+
+  it("運用保守以外の予定が無ければ、選べる期間は従来どおり契約の期間", () => {
+    const d = base();
+    d.outsidePlans = [];
+    const model = buildModel(d, { asOf: `${m(1)}-05` });
+    expect([model.meta.minMonth, model.meta.maxMonth]).toEqual([m(0), m(8)]);
+  });
+});
