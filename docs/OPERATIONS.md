@@ -108,7 +108,7 @@ npm run fetch:members                           # members.csv を更新
 
 ## マスタ編集の設定（GitLab へのマージ方式）
 
-`/masters`（`data/masters/members.csv`・`rates.csv`・`teams.csv`）と `/plan`（`data/assignments.csv`・`data/outside-plans.csv`）は、CSV を画面で編集する画面です（SPEC §19・§24〜§26・§36）。保存は 2 つの画面で共通で、両方の変更が 1 つの MR に入ります。
+`/masters`（`data/masters/members.csv`・`rates.csv`・`teams.csv`、目標 `data/targets.csv`）と `/plan`（`data/assignments.csv`・`data/outside-plans.csv`）は、CSV を画面で編集する画面です（SPEC §19・§24〜§26・§36）。保存は 2 つの画面で共通で、両方の変更が 1 つの MR に入ります。
 表で 1 行ずつ直すほか、「CSV で編集」に切り替えてファイルの中身をまとめて書き換える・Excel から貼り付けることもできます。
 編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。
 

@@ -171,6 +171,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     // 工数の明細（§30.2）
     workRows: buildWorkRows(results, outsideIn, classifier, masters),
     outsideTypes: outsideTypes(dataset.taskTypes),
+    targets: dataset.targets ?? [],
   };
 }
 

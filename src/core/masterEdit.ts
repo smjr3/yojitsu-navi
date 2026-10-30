@@ -19,7 +19,7 @@ import { T, fmt } from "../i18n/index.js";
 // 対象ファイルの定義
 // ---------------------------------------------------------------------------
 
-export type MasterFileId = "members" | "rates" | "teams" | "assignments" | "outside";
+export type MasterFileId = "members" | "rates" | "teams" | "assignments" | "outside" | "targets";
 
 export interface MasterColumnDef {
   /** CSV の列名 */
@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation" | "outsideType";
+  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation" | "outsideType" | "targetType" | "target" | "percent";
   required: boolean;
 }
 
@@ -44,8 +44,9 @@ export interface MasterFileDef {
    * 履歴の種類
    *  - effective: effective_from 付きの履歴（§5）。キー列ごとに「月 m の有効レコード」を引く
    *  - period:    start_month〜end_month の期間（アサイン）
+   *  - list:      1 行が 1 件（目標。§63）。履歴を持たず、過去の月の数値にも影響しない
    */
-  history: "effective" | "period";
+  history: "effective" | "period" | "list";
   /** 影響範囲を判定するキー列 */
   keyColumns: string[];
   /** period の値の列（人月。影響月の判定に使う） */
@@ -141,9 +142,32 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
     ],
   },
+  targets: {
+    id: "targets",
+    path: "data/targets.csv",
+    issueFile: "targets.csv",
+    label: T.masterFiles.targets,
+    history: "list",
+    keyColumns: ["target_type", "target_id"],
+    optional: true,
+    columns: [
+      // 対象の種類と対象は、画面では 1 つの欄（チーム・顧客・案件から選ぶ）で入れる
+      { name: "target_type", label: T.masterFiles.colTargetType, input: "targetType", required: true },
+      { name: "target_id", label: T.masterFiles.colTarget, input: "target", required: true },
+      { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
+      { name: "remaining_rate", label: T.masterFiles.colRemainingRate, input: "percent", required: true },
+      { name: "start_month", label: T.masterFiles.colTargetStart, input: "month", required: false },
+      { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
+    ],
+  },
 };
 
-export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments", "outside"];
+export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments", "outside", "targets"];
+
+/** 行の「いつ」の列（履歴 = 適用開始月、期間 = 開始月、一覧 = 終了月） */
+export function timeColumnOf(def: Pick<MasterFileDef, "history">): string {
+  return def.history === "effective" ? "effective_from" : def.history === "list" ? "end_month" : "start_month";
+}
 
 /** 省略可のファイルが無いときの中身（見出しだけ） */
 export function emptyMasterText(fileId: MasterFileId): string {
@@ -577,6 +601,8 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
  */
 export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
   const def = MASTER_FILES[fileId];
+  // 目標（§63）は計算の値を変えない
+  if (def.history === "list") return { months: [], keys: [], columns: [] };
   if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [], columns: [] };
   // 触れたキー: 片方にしか無い行（値まで含めて比べる）のキー
   const count = (rows: readonly CellRow[]) => {
@@ -697,6 +723,7 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
   outside: {
     person_months: [0, T.masterFiles.effectOutside, false],
   },
+  targets: {},
 };
 
 /** Impact.columns から、確認ダイアログに出す「何が変わるか」を作る（§19.1。一律に「原価・粗利など」と書かない） */
@@ -768,12 +795,13 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     members: ser.members.text,
     rates: ser.rates.text,
     outsidePlans: ser.outside.text,
+    targets: ser.targets.text,
     ...(context.taskTypes !== undefined ? { taskTypes: context.taskTypes } : {}),
     worklogs: [],
   };
   const { issues } = parseDataset(files);
   const byFile = new Map<string, MasterFileId>(MASTER_FILE_IDS.map((id) => [MASTER_FILES[id].issueFile, id]));
-  const byRow = { members: {}, rates: {}, teams: {}, assignments: {}, outside: {} } as EditValidation["byRow"];
+  const byRow = { members: {}, rates: {}, teams: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
   const general: RowIssue[] = [];
   const seen = new Set<string>();
   const out: RowIssue[] = [];
@@ -1084,7 +1112,7 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
   // 対応しなかった行を、同じ区間・同じキーの行と対にする
   const pair = new Array<number>(old.rows.length).fill(-1);
   const matchedB = new Set<number>(map.filter((j) => j >= 0));
-  const timeIndex = header.indexOf(def.history === "effective" ? "effective_from" : "start_month");
+  const timeIndex = header.indexOf(timeColumnOf(def));
   const keyAt = (cells: readonly string[]) => keyOf(def, header, cells);
   const timeAt = (cells: readonly string[]) => (cells[timeIndex] ?? "").trim();
   const bounds: Array<[number, number]> = [];

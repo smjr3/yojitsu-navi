@@ -182,7 +182,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 | `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
 | `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
 | `src/core/ledger.ts` | 台帳のまとめ（`ledgerGroups`・`nextChangeOf`）、期間の行の履歴（`periodHistory`）・期間の置き換え（`replaceRange`）・月の値（`valueAt`） |
-| `src/data/masters.json.ts`（`_masters.ts`） | 5 ファイル（任意の outside-plans.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
+| `src/data/masters.json.ts`（`_masters.ts`） | 6 ファイル（任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
 | `src/components/masters.js` | 画面（状態を持ち、変わった部分を描き直して `data-fk` でフォーカスを戻す） |
 | `src/masters.md` | ページ（model.json は計算基準月・データ最小月・config のためだけに読む） |
 

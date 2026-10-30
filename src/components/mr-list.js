@@ -9,7 +9,7 @@
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import { closeMergeRequest, fetchCurrentUser, getMergeRequest, gitlabConfigured, listMasterMergeRequests, mergeMergeRequest, mergeRequestFileChanges } from "../core/gitlab.js";
-import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, parseMasterDoc } from "../core/masterEdit.js";
+import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, parseMasterDoc, timeColumnOf } from "../core/masterEdit.js";
 import { docFromCsvText } from "../core/csvEdit.js";
 import { getToken, publishMrCount } from "./gitlab-client.js";
 import { dateTimeJst, integer } from "./format.js";
@@ -25,13 +25,13 @@ function fileDiff(fileId, before, after) {
 }
 
 function rowKey(def, rec) {
-  const time = def.history === "effective" ? rec.effective_from : rec.start_month;
+  const time = rec[timeColumnOf(def)];
   return [...def.keyColumns.map((k) => (rec[k] ?? "").trim()), (time ?? "").trim()].filter((v) => v !== "").join(" / ");
 }
 
 /** 追加した行の値（キー列・適用開始月はキーとして別に出すので除く） */
 function valuesText(def, rec) {
-  const skip = new Set([...def.keyColumns, "effective_from", "start_month"]);
+  const skip = new Set([...def.keyColumns, timeColumnOf(def)]);
   return def.columns
     .filter((col) => !skip.has(col.name) && (rec[col.name] ?? "").trim() !== "")
     .map((col) => `${col.label}: ${(rec[col.name] ?? "").trim()}`)

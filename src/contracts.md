@@ -20,6 +20,7 @@ import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./componen
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { hasTargets, targetColumn } from "./components/targets.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
 
@@ -206,8 +207,9 @@ if (vm) {
         forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
       },
     }),
+    hasTargets(model, "project") ? targetColumn(model, "project", (r) => r.contractId, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
-  ];
+  ].filter(Boolean);
   // 合計行はコアの aggregate() / forecastTotals() の結果（表示中の契約だけを母集団に 1 回の走査）
   const shownIds = rows.map((r) => r.contractId);
   const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });

@@ -23,6 +23,7 @@ import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS } from "./components/team-detail.js";
 import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
@@ -144,6 +145,14 @@ if (vm?.exists) {
 ```
 
 ```js
+// 目標（§63）。目標が無ければ何も出さない
+if (vm?.exists && !vm.isUnassigned) {
+  const sec = targetSection({ model, kind: "team", id: vm.teamId, name: vm.name, method: vm.method, unit: vm.unit, detailHref: (id) => store.href("./contract", {}, { id }) });
+  if (sec) display(sec);
+}
+```
+
+```js
 // 今月の進み（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
 ```
@@ -188,8 +197,9 @@ if (vm?.exists && vm.node && vm.node.children.length > 0) {
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref }),
       },
     }),
+    hasTargets(model, "team") ? targetColumn(model, "team", (r) => r.key, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
-  ];
+  ].filter(Boolean);
   display(dataTable({ columns, rows, unit, caption: T.team.childrenTitle, exportName: `team_${vm.teamId}_children_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
 }
 ```
@@ -231,8 +241,9 @@ if (vm?.exists) {
           forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config }),
         },
       }),
+      hasTargets(model, "project") ? targetColumn(model, "project", (r) => r.contractId, vm.method) : null,
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
-    ];
+    ].filter(Boolean);
     display(dataTable({ columns, rows, unit, caption: T.team.contractsCaption, exportName: `team_${vm.teamId}_contracts_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => detailHref(r.contractId) }));
   }
 }

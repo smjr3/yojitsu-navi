@@ -11,6 +11,8 @@ import { createMasterIndex, isLeftRecord, memberAt, rateFor, teamTreeAt } from "
 import type { Dataset, YearMonth } from "./types.js";
 import { createTaskClassifier, isOutsideWorklog, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import { normalizeName } from "./normalize.js";
+import { customerKey } from "./customers.js";
+import { isTargetKind } from "./targets.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface ValidationIssue {
@@ -173,6 +175,44 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     if (reported.has(sig)) continue;
     reported.add(sig);
     push({ severity: "error", code: "OUTSIDE_OVERLAP", message: fmt(T.checks.outsideOverlap, { file, memberId, month, rows: rows.join(", ") }), file, row: rows[rows.length - 1] as number, ref: { memberId, month } });
+  }
+}
+
+/**
+ * 目標（§63）: 種別・対象・月・残予算率の形式と、同じ対象・同じ終了月の重複。
+ * 対象が見つからないのは警告（チームの廃止・案件の終了後も、過去の目標の行は残せるように）
+ */
+function validateTargets(dataset: Dataset, teamIds: ReadonlySet<string>, contractIds: ReadonlySet<string>, push: IssueSink): void {
+  const file = "targets.csv";
+  const customers = new Set(dataset.contracts.map((c) => customerKey(c.customerName)));
+  const seen = new Map<string, number[]>();
+  (dataset.targets ?? []).forEach((t, i) => {
+    const row = rowOf(i);
+    const id = t.targetId.trim();
+    if (!isTargetKind(t.kind)) push({ severity: "error", code: "TARGET_INVALID_KIND", message: fmt(T.checks.targetInvalidKind, { file, row, value: t.kind }), file, row });
+    else if (id === "") push({ severity: "error", code: "TARGET_MISSING_ID", message: fmt(T.checks.targetMissingId, { file, row }), file, row });
+    else {
+      const known = t.kind === "team" ? teamIds.has(id) : t.kind === "customer" ? customers.has(customerKey(id)) : contractIds.has(id);
+      if (!known) push({ severity: "warning", code: "TARGET_UNKNOWN", message: fmt(T.checks.targetUnknown, { file, row, kind: T.targets.kinds[t.kind], id }), file, row, ref: { kind: t.kind, id } });
+    }
+    const due = t.endMonth.trim();
+    const start = t.startMonth.trim();
+    if (!isValidYearMonth(due)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.targetMonthInvalid, { file, row, column: "end_month", value: t.endMonth }), file, row });
+    if (start !== "" && !isValidYearMonth(start)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.targetMonthInvalid, { file, row, column: "start_month", value: t.startMonth }), file, row });
+    if (isValidYearMonth(due) && isValidYearMonth(start) && start > due) push({ severity: "error", code: "TARGET_PERIOD_INVERTED", message: fmt(T.checks.targetPeriodInverted, { file, row, from: start, to: due }), file, row });
+    if (!Number.isFinite(t.remainingRate) || t.remainingRate > 1) {
+      push({ severity: "error", code: "TARGET_RATE_INVALID", message: fmt(T.checks.targetRateInvalid, { file, row, value: Number.isFinite(t.remainingRate) ? String(Math.round(t.remainingRate * 10000) / 100) : T.checks.notANumber }), file, row });
+    }
+    if (!isTargetKind(t.kind) || id === "" || !isValidYearMonth(due)) return;
+    const key = `${t.kind}\u0000${t.kind === "customer" ? customerKey(id) : id}\u0000${due}`;
+    const list = seen.get(key);
+    if (list) list.push(row);
+    else seen.set(key, [row]);
+  });
+  for (const [key, rows] of seen) {
+    if (rows.length < 2) continue;
+    const [kind, id, month] = key.split("\u0000") as [string, string, string];
+    push({ severity: "error", code: "TARGET_DUPLICATE", message: fmt(T.checks.targetDuplicate, { file, kind: T.targets.kinds[kind as "team"], id, month, rows: rows.join(", ") }), file, row: rows[rows.length - 1] as number });
   }
 }
 
@@ -395,6 +435,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateMappings(dataset, contractIds, push);
   validateAssignments(dataset, contractIds, memberIds, push);
   validateOutsidePlans(dataset, memberIds, push);
+  validateTargets(dataset, teamIds, contractIds, push);
   validateTeams(dataset, teamIds, memberIds, push);
   validateMembers(dataset, teamIds, push);
   validateRates(dataset, push);

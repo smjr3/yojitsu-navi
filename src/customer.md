@@ -24,6 +24,7 @@ import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
+import { targetSection } from "./components/targets.js";
 import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
@@ -182,6 +183,14 @@ if (vm) {
       }),
     ]),
   );
+}
+```
+
+```js
+// 目標（§63）。目標が無ければ何も出さない
+if (vm) {
+  const sec = targetSection({ model, kind: "customer", id: group.label, name: group.label, method: vm.method, unit: vm.unit, detailHref: (id) => store.href("./contract", {}, { id }) });
+  if (sec) display(sec);
 }
 ```
 
