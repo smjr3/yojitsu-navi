@@ -152,7 +152,8 @@ function filterValues(col, row, unit) {
   if (col.filterValue) v = col.filterValue(row);
   else if (col.type === "status") {
     const s = col.get ? col.get(row) : row[col.key];
-    v = s ? (Array.isArray(s) ? s : [s]).map((x) => x.text) : "";
+    const list = s ? (Array.isArray(s) ? s : [s]).map((x) => x.text) : [];
+    v = list.length ? list : ""; // 印が無い行は（空白）として選べるように
   } else if (col.exportValue) v = col.exportValue(row, unit);
   else if (col.render) v = plainText(col.render(row, col.type === "moneyYen" ? "yen" : unit));
   else v = defaultExport(col, row, unit);
@@ -517,10 +518,13 @@ export function dataTable({
 
   // ── 絞り込みの吹き出し（body 直下に fixed で出す。表は横スクロールの枠で切られるため） ──
   let openPop = null;
-  function closeFilterPop({ focus = false } = {}) {
+  // discard: 入力の反映待ち（デバウンス中）を捨てる（「絞り込みを解除」用）。既定は閉じる前に反映する
+  function closeFilterPop({ focus = false, discard = false } = {}) {
     if (!openPop) return;
-    const { pop, btn, cleanup } = openPop;
+    const { pop, btn, cleanup, body } = openPop;
     openPop = null;
+    if (discard) body.cancel();
+    else body.flush();
     cleanup();
     pop.remove();
     btn.setAttribute("aria-expanded", "false");
@@ -541,6 +545,7 @@ export function dataTable({
     const clear = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClear}</button>`;
     const close = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClose}</button>`;
     clear.addEventListener("click", () => {
+      body.cancel();
       setFilter(col, null);
       body.reset();
     });
@@ -588,6 +593,7 @@ export function dataTable({
       col,
       pop,
       btn,
+      body,
       cleanup: () => {
         document.removeEventListener("pointerdown", onDown, true);
         removeEventListener("scroll", onScroll, { capture: true });
@@ -653,16 +659,30 @@ export function dataTable({
       sync();
     });
     let timer = null;
+    const applySearch = () => {
+      timer = null;
+      setFilter(col, { ...cur(), q: search.value.trim() });
+    };
     search.addEventListener("input", () => {
       sync();
       clearTimeout(timer);
-      timer = setTimeout(() => setFilter(col, { ...cur(), q: search.value.trim() }), 150);
+      timer = setTimeout(applySearch, 150);
     });
     sync();
     const node = html`<div class="yn-filter-values">${search}<label class="yn-filter-item yn-filter-all">${allBox}<span>${T.table.filterAll}</span></label>${list}${none}</div>`;
     return {
       node,
       focus: () => search.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          applySearch();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
       reset: () => {
         search.value = "";
         sync();
@@ -687,17 +707,19 @@ export function dataTable({
       return Number.isFinite(n) ? n * factor : undefined;
     };
     let timer = null;
+    const commit = () => {
+      timer = null;
+      const a = parse(min);
+      const b = parse(max);
+      if (a === undefined || b === undefined) return;
+      const f = {};
+      if (a !== null) f.min = a;
+      if (b !== null) f.max = b;
+      setFilter(col, f);
+    };
     const apply = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        const a = parse(min);
-        const b = parse(max);
-        if (a === undefined || b === undefined) return;
-        const f = {};
-        if (a !== null) f.min = a;
-        if (b !== null) f.max = b;
-        setFilter(col, f);
-      }, 250);
+      timer = setTimeout(commit, 250);
     };
     min.addEventListener("input", apply);
     max.addEventListener("input", apply);
@@ -705,6 +727,16 @@ export function dataTable({
     return {
       node,
       focus: () => min.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          commit();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
       reset: () => {
         min.value = "";
         max.value = "";
@@ -719,7 +751,7 @@ export function dataTable({
   const clearBtn = filterable ? html`<button type="button" class="yn-btn yn-btn-sm yn-filter-clear-all" hidden>${T.table.filterClearAll}</button>` : null;
   if (clearBtn)
     clearBtn.addEventListener("click", () => {
-      closeFilterPop();
+      closeFilterPop({ discard: true });
       filters.clear();
       saveFilters();
       renderBody();

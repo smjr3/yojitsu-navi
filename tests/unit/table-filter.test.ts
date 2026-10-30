@@ -31,6 +31,9 @@ describe("matchesFilter", () => {
     const row = { chips: [{ kind: "danger", text: "超過見込み" }, { kind: "danger", text: "消化率超過" }] };
     expect(matchesFilter(status, { values: ["消化率超過"] }, row, "m")).toBe(true);
     expect(matchesFilter(status, { values: ["問題なし"] }, row, "m")).toBe(false);
+    // 印が無い行（空の配列）は（空白）で選べる
+    expect(matchesFilter(status, { values: [""] }, { chips: [] }, "m")).toBe(true);
+    expect(matchesFilter(status, { values: [""] }, row, "m")).toBe(false);
   });
 
   it("数値の範囲は元の値（円）で比べ、端を含む。値が無い行は外す", () => {
