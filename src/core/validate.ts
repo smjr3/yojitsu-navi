@@ -179,7 +179,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
 }
 
 /**
- * 目標（§60）: 種別・対象・月・残予算率の形式と、同じ対象・同じ期限月の重複。
+ * 目標（§60）: 種別・対象・月・残予算率の形式と、同じ対象・同じ終了月の重複。
  * 対象が見つからないのは警告（チームの廃止・案件の終了後も、過去の目標の行は残せるように）
  */
 function validateTargets(dataset: Dataset, teamIds: ReadonlySet<string>, contractIds: ReadonlySet<string>, push: IssueSink): void {
@@ -195,9 +195,9 @@ function validateTargets(dataset: Dataset, teamIds: ReadonlySet<string>, contrac
       const known = t.kind === "team" ? teamIds.has(id) : t.kind === "customer" ? customers.has(customerKey(id)) : contractIds.has(id);
       if (!known) push({ severity: "warning", code: "TARGET_UNKNOWN", message: fmt(T.checks.targetUnknown, { file, row, kind: T.targets.kinds[t.kind], id }), file, row, ref: { kind: t.kind, id } });
     }
-    const due = t.dueMonth.trim();
+    const due = t.endMonth.trim();
     const start = t.startMonth.trim();
-    if (!isValidYearMonth(due)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.targetMonthInvalid, { file, row, column: "due_month", value: t.dueMonth }), file, row });
+    if (!isValidYearMonth(due)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.targetMonthInvalid, { file, row, column: "end_month", value: t.endMonth }), file, row });
     if (start !== "" && !isValidYearMonth(start)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.targetMonthInvalid, { file, row, column: "start_month", value: t.startMonth }), file, row });
     if (isValidYearMonth(due) && isValidYearMonth(start) && start > due) push({ severity: "error", code: "TARGET_PERIOD_INVERTED", message: fmt(T.checks.targetPeriodInverted, { file, row, from: start, to: due }), file, row });
     if (!Number.isFinite(t.remainingRate) || t.remainingRate > 1) {

@@ -781,9 +781,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
           ${cells}
           <td class="yn-me-state">${stateChips(st === "changed" ? 1 : 0, st === "added" ? 1 : 0, invalid ? 1 : 0)}</td>
           <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.due_month ?? "" })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
             ${st === "changed" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`revert:${r.id}`} disabled=${!editable} onclick=${() => commit(fileId, revertRow(docs[fileId], r.id), `edit:${r.id}`)}>${T.masters.revert}</button>` : null}
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.due_month ?? "" })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>
           </div></td>
         </tr>`;
         if (list.length === 0) return [tr];
@@ -1972,7 +1972,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     title: T.masters.hintTitle,
     status: T.masters.statusHint,
     target_id: T.masters.hintTarget,
-    due_month: T.masters.hintDueMonth,
+    end_month: T.masters.hintEndMonth,
     remaining_rate: T.masters.hintRemainingRate,
   };
 

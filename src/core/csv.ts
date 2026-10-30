@@ -172,7 +172,7 @@ export interface ParsedDataset {
 const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
   taskTypes: ["task", "category"],
   outsidePlans: ["member_id", "start_month", "end_month", "person_months"],
-  targets: ["target_type", "target_id", "due_month", "remaining_rate"],
+  targets: ["target_type", "target_id", "end_month", "remaining_rate"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -345,7 +345,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           kind: r.get("target_type"),
           targetId: r.get("target_id"),
           startMonth: r.get("start_month"),
-          dueMonth: r.get("due_month"),
+          endMonth: r.get("end_month"),
           remainingRate: parsePercentCell(r.get("remaining_rate")),
           note: r.get("note"),
         }));

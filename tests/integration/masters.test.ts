@@ -113,7 +113,7 @@ describe("ダミーデータのマスタで往復", () => {
       // 契約外予定（§36）: 1 行追加（ファイルが無ければ新しく作る）
       docs.outside = addRow(docs.outside, { member_id: memberId, start_month: "2026-11", end_month: "2027-01", person_months: "0.2", note: "提案, 準備" }).doc;
       // 目標（§60）: 1 行追加
-      docs.targets = addRow(docs.targets, { target_type: "team", target_id: anyTeam, due_month: "2027-06", remaining_rate: "18", start_month: "", note: "通期, 目標" }).doc;
+      docs.targets = addRow(docs.targets, { target_type: "team", target_id: anyTeam, end_month: "2027-06", remaining_rate: "18", start_month: "", note: "通期, 目標" }).doc;
 
       const v = validateEdited(docs, p.context, loadDataset(dir).dataset.config);
       expect(v.issues.filter((i) => i.severity === "error")).toEqual([]);
@@ -127,7 +127,7 @@ describe("ダミーデータのマスタで往復", () => {
       expect(dataset.teams[0]!.name).toBe("改称した本部");
       expect(dataset.assignments).toHaveLength(docs.assignments.rows.length);
       expect(dataset.outsidePlans?.some((o) => o.memberId === memberId && o.personMonths === 0.2 && o.note === "提案, 準備")).toBe(true);
-      expect(dataset.targets?.some((t) => t.kind === "team" && t.targetId === anyTeam && t.dueMonth === "2027-06" && Math.abs(t.remainingRate - 0.18) < 1e-9 && t.note === "通期, 目標")).toBe(true);
+      expect(dataset.targets?.some((t) => t.kind === "team" && t.targetId === anyTeam && t.endMonth === "2027-06" && Math.abs(t.remainingRate - 0.18) < 1e-9 && t.note === "通期, 目標")).toBe(true);
       expect(runValidation(dir).errors).toEqual([]);
 
       // 書き戻したファイルをもう一度ローダで読むと、書き出しと同じテキスト（往復で安定）

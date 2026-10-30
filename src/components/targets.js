@@ -49,13 +49,13 @@ export function targetSpec({ model, ev, name, unit, detailHref = null }) {
   };
 }
 
-/** 対象の目標をすべて評価する（期限月の順） */
+/** 対象の目標をすべて評価する（終了月の順） */
 export function evaluateTargetsOf(model, kind, id, method) {
   return targetsOf(model, kind, id).map((t) => ({ ...evaluateTarget(model, t, method), method }));
 }
 
 /**
- * 詳細画面の「目標」: 期限・目標・残予算率（実績 or 見込み）・差・状況。目標が無ければ null（何も出さない）
+ * 詳細画面の「目標」: 終了月・目標・残予算率（実績 or 見込み）・差・状況。目標が無ければ null（何も出さない）
  */
 export function targetSection({ model, kind, id, name, method, unit, detailHref = null }) {
   const list = evaluateTargetsOf(model, kind, id, method);
@@ -75,7 +75,7 @@ export function targetSection({ model, kind, id, name, method, unit, detailHref 
     ${sectionTitle(T.targets.title, fmt(T.targets.tip, { method: METHOD_LABELS[method] }))}
     <div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-targets-table">
       <thead><tr>
-        <th scope="col">${T.targets.colDue}</th>
+        <th scope="col">${T.targets.colEnd}</th>
         <th scope="col" class="hide-narrow">${T.targets.colPeriod}</th>
         <th scope="col" class="num">${T.targets.colTarget}</th>
         <th scope="col" class="num">${T.targets.colRate}</th>
@@ -88,7 +88,7 @@ export function targetSection({ model, kind, id, name, method, unit, detailHref 
 }
 
 /**
- * 一覧の「目標」列（基準月以降で最も近い期限の目標。無ければ最後の目標）。
+ * 一覧の「目標」列（基準月以降で最も近い終了月の目標。無ければ最後の目標）。
  * get = 目標との差（並べ替え用。目標なしは null）。目標が 1 件も無い一覧では列ごと出さない（hasTargets で判定）
  */
 export function hasTargets(model, kind) {

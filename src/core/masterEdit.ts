@@ -152,7 +152,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       // 対象の種類と対象は、画面では 1 つの欄（チーム・顧客・案件から選ぶ）で入れる
       { name: "target_type", label: T.masterFiles.colTargetType, input: "targetType", required: true },
       { name: "target_id", label: T.masterFiles.colTarget, input: "target", required: true },
-      { name: "due_month", label: T.masterFiles.colDueMonth, input: "month", required: true },
+      { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "remaining_rate", label: T.masterFiles.colRemainingRate, input: "percent", required: true },
       { name: "start_month", label: T.masterFiles.colTargetStart, input: "month", required: false },
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
@@ -162,9 +162,9 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
 
 export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments", "outside", "targets"];
 
-/** 行の「いつ」の列（履歴 = 適用開始月、期間 = 開始月、一覧 = 期限月） */
+/** 行の「いつ」の列（履歴 = 適用開始月、期間 = 開始月、一覧 = 終了月） */
 export function timeColumnOf(def: Pick<MasterFileDef, "history">): string {
-  return def.history === "effective" ? "effective_from" : def.history === "list" ? "due_month" : "start_month";
+  return def.history === "effective" ? "effective_from" : def.history === "list" ? "end_month" : "start_month";
 }
 
 /** 省略可のファイルが無いときの中身（見出しだけ） */

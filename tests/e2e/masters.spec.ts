@@ -610,7 +610,7 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
   await expect(page.getByRole("tab", { name: /単価/ })).toBeFocused();
   await expect(page.getByRole("tab", { name: /単価/ })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: /組織/ })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /目標/ })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(first).toBeFocused();
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "yn-me-tab-members");

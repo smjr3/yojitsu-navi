@@ -256,18 +256,18 @@ export interface TaskTypeRule {
 export type TargetKind = "team" | "customer" | "project";
 
 /**
- * 目標（§60）: 対象 × 期限月 × 残予算率。targets.csv の 1 行。
- * 残予算率は「開始月〜期限月」の累計（予算 − 実績（期限が先なら着地見込み））÷ 予算
+ * 目標（§60）: 対象 × 期間（開始月〜終了月）× 残予算率。targets.csv の 1 行。
+ * 残予算率は期間の累計（予算 − 実績（終了月が先なら着地見込み））÷ 予算。月ごとの目標は開始月 = 終了月
  */
 export interface Target {
   /** team / customer / project（不正な値は検証でエラー。そのまま持つ） */
   kind: string;
   /** team = チームID、customer = 顧客名、project = 契約ID */
   targetId: string;
-  /** 累計の開始月。空 = 期限月を含む年度の最初の月 */
+  /** 開始月。空 = 終了月を含む年度の最初の月 */
   startMonth: string;
-  /** 期限月 */
-  dueMonth: string;
+  /** 終了月 */
+  endMonth: string;
   /** 目標の残予算率（割合。CSV の 20 = 20% → 0.2）。数値でなければ NaN */
   remainingRate: number;
   note: string;

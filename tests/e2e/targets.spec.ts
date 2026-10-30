@@ -1,7 +1,7 @@
 /**
  * 目標（SPEC §60）
  * - チーム・顧客・案件の詳細に「目標」の表（core の evaluateTarget と一致）。目標の無い対象には出さない
- * - 一覧の「目標」列（基準月以降で最も近い期限の目標）と、ノート PC 幅で横スクロールにならないこと
+ * - 一覧の「目標」列（基準月以降で最も近い終了月の目標）と、ノート PC 幅で横スクロールにならないこと
  * - マスタ編集の「目標」タブ: 追加（対象をチーム・顧客・案件から選ぶ）・修正・削除・検証エラー・ダウンロード
  * - 390px・ダークで横スクロール無し
  */
@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/** 詳細の「目標」の表の行（期限月の順）が core と一致する */
+/** 詳細の「目標」の表の行（終了月の順）が core と一致する */
 async function expectTargetTable(page: Page, kind: "team" | "customer" | "project", id: string): Promise<void> {
   const list = targetsOf(model, kind, id).map((t) => evaluateTarget(model, t, "assignment"));
   expect(list.length).toBeGreaterThan(0);
@@ -37,7 +37,7 @@ async function expectTargetTable(page: Page, kind: "team" | "customer" | "projec
   }
 }
 
-test("チーム詳細: 期限の違う目標を期限月の順に、確定（実績）と見込みを分けて出す。残予算率を押すと計算根拠", { tag: "@smoke" }, async ({ page }) => {
+test("チーム詳細: 終了月の違う目標を終了月の順に、確定（実績）と見込みを分けて出す。残予算率を押すと計算根拠", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/team?id=T111");
   await expect(page.getByRole("heading", { name: "目標" })).toBeVisible();
   await expectTargetTable(page, "team", "T111");
@@ -57,7 +57,7 @@ test("顧客詳細・案件詳細にも目標。目標の無い対象には表�
   await expect(page.locator(".yn-targets-table .yn-chip-danger")).toHaveCount(1);
   await gotoPage(page, "/contract?id=C007");
   await expectTargetTable(page, "project", "C007");
-  // 累計の開始月が契約開始（年度をまたぐ）
+  // 開始月が契約開始（年度をまたぐ）
   await expect(page.locator(".yn-targets-table")).toContainText("2025年4月〜2027年3月");
   await gotoPage(page, "/team?id=T112");
   await expect(page.locator(".yn-targets")).toHaveCount(0);
@@ -89,7 +89,7 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   // 対象の種類は対象の欄でまとめて選ぶ（別の欄は無い）
   await expect(d.locator("#yn-me-f-target_type")).toHaveCount(0);
   await pickCombo(d.locator("#yn-me-f-target_id"), "ネットワーク", /ネットワーク保守チーム/);
-  await d.locator("#yn-me-f-due_month").fill("2027-03");
+  await d.locator("#yn-me-f-end_month").fill("2027-03");
   await d.locator("#yn-me-f-remaining_rate").fill("18");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
@@ -100,7 +100,7 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(added).toContainText("追加");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /targets\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
-  expect(text).toBe(serializeMasterDoc(addRow(parseMasterDoc("targets", TARGETS_TEXT), { target_type: "team", target_id: "T112", due_month: "2027-03", remaining_rate: "18", start_month: "", note: "" }).doc).text);
+  expect(text).toBe(serializeMasterDoc(addRow(parseMasterDoc("targets", TARGETS_TEXT), { target_type: "team", target_id: "T112", end_month: "2027-03", remaining_rate: "18", start_month: "", note: "" }).doc).text);
 
   // 顧客に付け替えて修正 → 確認 → 反映
   await added.getByRole("button", { name: "修正" }).click();
@@ -111,7 +111,7 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(rows.last()).toContainText("こもれび出版");
   await expect(rows.last()).toContainText("顧客");
 
-  // 同じ対象・同じ期限月の重複は検証エラー（行に出る）
+  // 同じ対象・同じ終了月の重複は検証エラー（行に出る）
   await expect(page.locator(".yn-me-check")).toContainText("エラー");
   await expect(page.locator("tr.yn-me-issue-row").first()).toContainText("複数の行");
 
@@ -122,15 +122,15 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");
 });
 
-test("マスタ編集「目標」: 対象・期限月・率の未入力は止め、100% 超はエラー", async ({ page }) => {
+test("マスタ編集「目標」: 対象・終了月・率の未入力は止め、100% 超はエラー", async ({ page }) => {
   await gotoPage(page, "/masters?view=targets");
   await page.getByRole("button", { name: "＋ 新しい目標" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   await d.locator('[data-role="submit"]').click();
   await expect(d.locator(".yn-me-form-msg")).toContainText("対象");
-  await expect(d.locator(".yn-me-form-msg")).toContainText("期限月");
+  await expect(d.locator(".yn-me-form-msg")).toContainText("終了月");
   await pickCombo(d.locator("#yn-me-f-target_id"), "C002");
-  await d.locator("#yn-me-f-due_month").fill("2027-02");
+  await d.locator("#yn-me-f-end_month").fill("2027-02");
   await d.locator("#yn-me-f-remaining_rate").fill("150");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);

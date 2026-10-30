@@ -8,7 +8,7 @@ import { evaluateTarget, headlineTarget, isUsableTarget, targetContractIds, targ
 import type { Target } from "../../src/core/types.js";
 import { baseConfig } from "./fixtures.js";
 
-const HEADER = "target_type,target_id,due_month,remaining_rate,start_month,note\n";
+const HEADER = "target_type,target_id,end_month,remaining_rate,start_month,note\n";
 
 /** 月 100 万円の予算（12 か月）、2026-04〜2026-09 に毎月 100 時間 × 5,000 円 = 50 万円の実績。基準日 2026-10-15 */
 function files(targets?: string): DatasetFiles {
@@ -32,7 +32,7 @@ function files(targets?: string): DatasetFiles {
 }
 const codes = (text: string) => parseDataset(files(text)).issues.filter((i) => i.file === "targets.csv").map((i) => `${i.code}@${i.row}`);
 const modelOf = (text: string) => buildModel(parseDataset(files(text)).dataset, { asOf: "2026-10-15", generatedAt: "t" });
-const target = (o: Partial<Target>): Target => ({ kind: "team", targetId: "T1", startMonth: "", dueMonth: "2027-03", remainingRate: 0.2, note: "", ...o });
+const target = (o: Partial<Target>): Target => ({ kind: "team", targetId: "T1", startMonth: "", endMonth: "2027-03", remainingRate: 0.2, note: "", ...o });
 
 describe("目標の読み込み", () => {
   it("省略・空・見出しだけなら無し", () => {
@@ -44,10 +44,10 @@ describe("目標の読み込み", () => {
   });
 
   it("残予算率は % の数値（20・20%・全角）を割合にする。開始月・メモは省略できる", () => {
-    const r = parseDataset(files("target_type,target_id,due_month,remaining_rate\nteam,T1,2027-03,20\ncustomer,A社,2027-03,１５％\n"));
+    const r = parseDataset(files("target_type,target_id,end_month,remaining_rate\nteam,T1,2027-03,20\ncustomer,A社,2027-03,１５％\n"));
     expect(r.dataset.targets).toEqual([
-      { kind: "team", targetId: "T1", startMonth: "", dueMonth: "2027-03", remainingRate: 0.2, note: "" },
-      { kind: "customer", targetId: "A社", startMonth: "", dueMonth: "2027-03", remainingRate: 0.15, note: "" },
+      { kind: "team", targetId: "T1", startMonth: "", endMonth: "2027-03", remainingRate: 0.2, note: "" },
+      { kind: "customer", targetId: "A社", startMonth: "", endMonth: "2027-03", remainingRate: 0.15, note: "" },
     ]);
     expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
     expect(parsePercentCell("-5")).toBe(-0.05);
@@ -55,7 +55,7 @@ describe("目標の読み込み", () => {
   });
 
   it("必須列が無ければ MISSING_COLUMN", () => {
-    expect(codes("target_type,target_id,due_month\nteam,T1,2027-03\n")).toContain("MISSING_COLUMN@1");
+    expect(codes("target_type,target_id,end_month\nteam,T1,2027-03\n")).toContain("MISSING_COLUMN@1");
   });
 });
 
@@ -67,8 +67,8 @@ describe("目標の検証", () => {
           "group,T1,2027-03,20,,\n" + // 2: 種類
           "team,,2027-03,20,,\n" + // 3: 対象なし
           "team,T9,2027-03,20,,\n" + // 4: 無いチーム（警告）
-          "team,T1,2027-3,20,,\n" + // 5: 期限月
-          "team,T1,2027-03,20,2027-04,\n" + // 6: 開始月が期限月より後
+          "team,T1,2027-3,20,,\n" + // 5: 終了月
+          "team,T1,2027-03,20,2027-04,\n" + // 6: 開始月が終了月より後
           "team,T1,2026-12,abc,,\n" + // 7: 率が数値でない
           "team,T1,2026-11,120,,\n" + // 8: 100% 超
           "customer,Ｃ社,2027-03,20,,\n" + // 9: 無い顧客（警告）
@@ -77,7 +77,7 @@ describe("目標の検証", () => {
     ).toEqual(["TARGET_INVALID_KIND@2", "TARGET_MISSING_ID@3", "TARGET_UNKNOWN@4", "INVALID_MONTH@5", "TARGET_PERIOD_INVERTED@6", "TARGET_RATE_INVALID@7", "TARGET_RATE_INVALID@8", "TARGET_UNKNOWN@9", "TARGET_UNKNOWN@10"]);
   });
 
-  it("同じ対象・同じ期限月は重複エラー（顧客名は正規化して比べる）。期限が違えば別の目標", () => {
+  it("同じ対象・同じ終了月は重複エラー（顧客名は正規化して比べる）。終了月が違えば別の目標", () => {
     expect(codes(`${HEADER}customer,Ｂ商事,2027-03,20,,\ncustomer,B商事,2027-03,10,,\ncustomer,B商事,2026-09,10,,\n`)).toEqual(["TARGET_DUPLICATE@3"]);
     expect(codes(`${HEADER}team,T1,2026-09,20,,\nteam,T1,2027-03,20,,\nproject,C1,2027-03,20,,\n`)).toEqual([]);
   });
@@ -86,10 +86,10 @@ describe("目標の検証", () => {
 describe("目標の評価", () => {
   const model = modelOf("");
 
-  it("期間の開始は空なら期限月を含む年度の最初の月", () => {
-    expect(targetStartMonth({ startMonth: "", dueMonth: "2027-03" }, 4)).toBe("2026-04");
-    expect(targetStartMonth({ startMonth: "", dueMonth: "2026-04" }, 4)).toBe("2026-04");
-    expect(targetStartMonth({ startMonth: "2025-10", dueMonth: "2027-03" }, 4)).toBe("2025-10");
+  it("期間の開始は空なら終了月を含む年度の最初の月", () => {
+    expect(targetStartMonth({ startMonth: "", endMonth: "2027-03" }, 4)).toBe("2026-04");
+    expect(targetStartMonth({ startMonth: "", endMonth: "2026-04" }, 4)).toBe("2026-04");
+    expect(targetStartMonth({ startMonth: "2025-10", endMonth: "2027-03" }, 4)).toBe("2025-10");
     expect(isUsableTarget(target({ startMonth: "2027-04" }), 4)).toBe(false);
     expect(isUsableTarget(target({ kind: "x" }), 4)).toBe(false);
     expect(isUsableTarget(target({ remainingRate: Number.NaN }), 4)).toBe(false);
@@ -103,15 +103,15 @@ describe("目標の評価", () => {
     expect(targetContractIds(model, "project", "C9")).toEqual([]);
   });
 
-  it("期限が過ぎた目標は実績で確定（ちょうど目標なら達成）", () => {
+  it("終了月が過ぎた目標は実績で確定（ちょうど目標なら達成）", () => {
     // 2026-04〜09: 予算 600 万、実績 300 万 → 残予算率 50%
-    const ok = evaluateTarget(model, target({ dueMonth: "2026-09", remainingRate: 0.5 }), "recent3");
+    const ok = evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: 0.5 }), "recent3");
     expect(ok).toMatchObject({ period: { from: "2026-04", to: "2026-09" }, contractIds: ["C1"], budget: 6_000_000, actualCost: 3_000_000, forecastCost: 3_000_000, settled: true, status: "achieved" });
     expect(ok.rate).toBeCloseTo(0.5);
-    expect(evaluateTarget(model, target({ dueMonth: "2026-09", remainingRate: 0.6 }), "recent3").status).toBe("missed");
+    expect(evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: 0.6 }), "recent3").status).toBe("missed");
   });
 
-  it("期限が先の目標は着地見込みで判定（方式で変わる）", () => {
+  it("終了月が先の目標は着地見込みで判定（方式で変わる）", () => {
     // 直近 3 か月平均 50 万 × 残り 6 か月 = 300 万 → 着地 600 万 / 予算 1,200 万 → 50%
     const ev = evaluateTarget(model, target({ remainingRate: 0.4 }), "recent3");
     expect(ev).toMatchObject({ settled: false, status: "onTrack", budget: 12_000_000, actualCost: 3_000_000, forecastCost: 6_000_000 });
@@ -123,18 +123,18 @@ describe("目標の評価", () => {
 
   it("予算 0（対象の案件が無い・期間外）は「予算なし」", () => {
     expect(evaluateTarget(model, target({ kind: "project", targetId: "C9" }), "recent3")).toMatchObject({ rate: null, gap: null, status: "noBudget" });
-    expect(evaluateTarget(model, target({ dueMonth: "2025-12", startMonth: "2025-06" }), "recent3")).toMatchObject({ status: "noBudget", contractIds: [] });
+    expect(evaluateTarget(model, target({ endMonth: "2025-12", startMonth: "2025-06" }), "recent3")).toMatchObject({ status: "noBudget", contractIds: [] });
   });
 
-  it("targetsOf は計算できる目標だけを期限月の順に。一覧の 1 件は基準月以降で最も近い期限、無ければ最後", () => {
+  it("targetsOf は計算できる目標だけを終了月の順に。一覧の 1 件は基準月以降で最も近い終了月、無ければ最後", () => {
     const m = modelOf(`${HEADER}team,T1,2027-03,20,,\nteam,T1,2026-09,20,,\nteam,T1,abc,20,,\ncustomer,b商事,2027-03,20,,\n`);
-    expect(targetsOf(m, "team", "T1").map((t) => t.dueMonth)).toEqual(["2026-09", "2027-03"]);
+    expect(targetsOf(m, "team", "T1").map((t) => t.endMonth)).toEqual(["2026-09", "2027-03"]);
     expect(targetsOf(m, "customer", "Ｂ商事")).toHaveLength(1);
     expect(targetsOf(m, "team", "T2")).toEqual([]);
     const list = targetsOf(m, "team", "T1");
-    expect(headlineTarget(list, "2026-10")?.dueMonth).toBe("2027-03");
-    expect(headlineTarget(list, "2027-04")?.dueMonth).toBe("2027-03");
-    expect(headlineTarget(list, "2026-05")?.dueMonth).toBe("2026-09");
+    expect(headlineTarget(list, "2026-10")?.endMonth).toBe("2027-03");
+    expect(headlineTarget(list, "2027-04")?.endMonth).toBe("2027-03");
+    expect(headlineTarget(list, "2026-05")?.endMonth).toBe("2026-09");
     expect(headlineTarget([], "2026-10")).toBeNull();
   });
 });

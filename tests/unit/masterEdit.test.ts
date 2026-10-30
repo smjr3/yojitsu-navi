@@ -43,7 +43,7 @@ const range = { fromMonth: "2025-04", toMonth: "2026-10" };
 
 /** 契約外予定（§36）の空のファイル */
 const OUTSIDE_EMPTY = "member_id,start_month,end_month,person_months,note\n";
-const TARGETS_EMPTY = "target_type,target_id,due_month,remaining_rate,start_month,note\n";
+const TARGETS_EMPTY = "target_type,target_id,end_month,remaining_rate,start_month,note\n";
 
 describe("splitCsvRecords", () => {
   it("引用符内のカンマ・改行・二重引用符を 1 セルとして読み、元テキストも返す", () => {
