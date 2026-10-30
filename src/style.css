@@ -3893,3 +3893,11 @@ html:has(dialog.yn-dialog[open]) {
   white-space: normal;
   vertical-align: middle;
 }
+
+/* リソース計画の月別の合計グラフ（§58）。表を描き直すたびに高さが 0 にならないよう枠の高さを取っておく */
+.yn-me-plan-chart {
+  margin: 0 0 12px;
+}
+.yn-me-plan-chart .yn-chart-plot {
+  min-height: 200px;
+}

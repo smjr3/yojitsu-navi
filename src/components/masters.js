@@ -51,6 +51,8 @@ import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-c
 import { mergeRequestsPanel } from "./mr-list.js";
 import { combobox } from "./combobox.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
+import { chartFigure } from "./chart-zoom.js";
+import { planLoadChart, planLoadLegend } from "./work.js";
 import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt } from "../core/ledger.js";
 
 /** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
@@ -282,6 +284,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   let draftMsg = "";
 
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
+  /** 月別の合計グラフ（§58）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
+  let planChartBuild = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
     tabs: html`<div class="yn-me-tabs-slot"></div>`,
@@ -1071,6 +1075,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
     };
     const totals = months.map(() => 0);
     const outsideTotals = months.map(() => 0);
+    // 月別の合計グラフ（§58）: 人数 × 1.0 人月（その月に在籍している人。退職中・入社前は数えない）と、1.0 人月を超える人の数
+    const capacity = months.map(() => 0);
+    const overCounts = months.map(() => 0);
 
     /** 人の行の月合計の色: 1.0 超は黄、0 より多く 1.0 未満は青系（§41）。0（計画なし）は色を付けない */
     const allocLevel = (v) => (v > 1 + 1e-9 ? "over" : v > 1e-9 && v < 1 - 1e-9 ? "under" : null);
@@ -1120,6 +1127,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       }, 150);
     });
 
+    /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
+    const planChart = () => {
+      const isDark = () => document.documentElement.dataset.theme === "dark";
+      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
+      planChartBuild = planChart;
+      return chartFigure({
+        title: T.plan.chartTitle,
+        subtitle: `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`,
+        legend: planLoadLegend(isDark()),
+        draw: (width, height) => planLoadChart({ data, dark: isDark(), width, height }),
+        className: "yn-me-plan-chart",
+      });
+    };
+
     const body = rowsShown.flatMap((r) => {
       const open = plan.open.has(r.memberId);
       const detailId = `yn-me-plan-d-${r.memberId}`;
@@ -1129,6 +1150,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
       monthly.forEach((v, i) => (totals[i] += v));
       outsideMonthly.forEach((v, i) => (outsideTotals[i] += v));
+      months.forEach((m, i) => {
+        if (r.activeMonths[i]) capacity[i] += 1;
+        if (monthly[i] > 1 + 1e-9) overCounts[i] += 1;
+      });
       const overMonths = months.filter((_, i) => monthly[i] > 1 + 1e-9);
       // 案件ごと（この年度に掛かる計画のある案件。月の不正な行も見せる）
       const byProject = new Map();
@@ -1301,6 +1326,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(rowsShown.length), total: integer(view.rows.length), unit: T.ledger.unit.members })}</span>
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
+      ${rowsShown.length ? planChart() : null}
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria} onkeydown=${gridKeys}>
         <table class=${`yn-table yn-table-compact yn-me-table yn-me-plan-table${plan.nameW ? " is-name-sized" : ""}`} style=${plan.nameW ? `--yn-plan-name-w: ${plan.nameW}px` : ""}>
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
@@ -2582,6 +2608,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
   }
 
   // 設定画面でトークンを登録して「戻る」で戻ったとき（ページがキャッシュから復元されたとき）は、保存の欄とマージ待ちを読み直す
+  // 月別の合計グラフ（§58）は描いたときの配色なので、テーマが変わったら（自動で PC の設定が変わったときなど）描き直す
+  addEventListener("yn-theme", () => {
+    const old = root.querySelector(".yn-me-plan-chart");
+    if (old && planChartBuild) old.replaceWith(planChartBuild());
+  });
   addEventListener("pageshow", (e) => {
     if (!e.persisted) return;
     renderSave();

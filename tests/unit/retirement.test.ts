@@ -149,6 +149,21 @@ describe("リソース計画（planView）", () => {
     expect(v.rows.find((r) => r.memberId === "M4")!.afterLeftMonths).toEqual(["2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03"]);
   });
 
+  it("月ごとの在籍 activeMonths（§58 の人数 × 1.0）: 退職した月からは在籍しない。復職すれば戻る", () => {
+    const v = view();
+    const active = (id: string) => FY.filter((_, i) => v.rows.find((r) => r.memberId === id)!.activeMonths[i]);
+    expect(active("M1")).toEqual(FY);
+    expect(active("M2")).toEqual(["2026-04", "2026-05", "2026-06"]);
+    // 6 月に退職し 10 月に復職: 6〜9 月は数えない（期間の最後の leftFrom は null になるので、それでは判定できない）
+    const rejoin = planView(
+      planSourcesFromDocs({ teams: parseMasterDoc("teams", TEAMS), members: parseMasterDoc("members", `${MEMBERS}\nM5,復職,employee,一般,,,T1,2026-04,\nM5,復職,employee,一般,,,T1,2026-06,退職\nM5,復職,employee,一般,,,T1,2026-10,`), assignments: parseMasterDoc("assignments", `${ASSIGN}\nM5,C1,2026-04,2027-03,0.5`) }, CONTRACTS),
+      "T1",
+      FY,
+    ).rows.find((r) => r.memberId === "M5")!;
+    expect(rejoin.leftFrom).toBeNull();
+    expect(FY.filter((_, i) => !rejoin.activeMonths[i])).toEqual(["2026-06", "2026-07", "2026-08", "2026-09"]);
+  });
+
   it("退職後の月だけを見ると、配分の残っている人だけが出る", () => {
     const v = view(["2026-11", "2026-12"]);
     expect(v.rows.map((r) => r.memberId)).toEqual(["M1", "M4"]);

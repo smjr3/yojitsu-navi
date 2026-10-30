@@ -1427,6 +1427,13 @@ export default {
     toggle: "計画 {n}件",
     support: "応援",
     overChip: "1.0 超 {n}か月",
+    // 表の上の月別の合計グラフ（§58）
+    chartTitle: "月別の合計",
+    chartCapacity: "人数 × 1.0",
+    chartOver: "!{n}人",
+    chartOverShort: "!{n}",
+    chartOverTip: "1.0 超",
+    chartAria: "月別の合計。運用保守と運用保守以外の人月の積み上げ棒と、人数 × 1.0 人月の破線。1.0 人月を超える人がいる月はその人数。値は下の表の合計行で確認できます。",
     cellTitle: "{month}: {pm} 人月",
     allocPerMonth: "{pm} 人月/月",
     allocNotNumber: "（配分が数値ではありません）",
