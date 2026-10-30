@@ -101,6 +101,19 @@ test("グラフの目標: 月次推移に「目標の上限」（予算 ×（1 �
   await expect(section(page).locator(".yn-legend")).toContainText("上限（目標）");
   // 月末見込みはグラフも凡例も点線（目安・上限の破線と見分ける）
   await expect(section(page).locator(".yn-legend li", { hasText: "月末見込み" }).locator(".yn-legend-line-dotted")).toHaveCount(1);
+  // 凡例の線種が見た目でも分かれる（実線・破線・点線の背景がそれぞれ違い、高さがある）
+  const looks = await section(page).locator(".yn-legend li .yn-legend-swatch").evaluateAll((els) =>
+    els.map((e) => {
+      const cs = getComputedStyle(e);
+      return { cls: [...e.classList], image: cs.backgroundImage, height: e.getBoundingClientRect().height };
+    }),
+  );
+  const pick = (c: string) => looks.find((x) => x.cls.includes(c))!;
+  expect(pick("yn-legend-line").image === "none" || pick("yn-legend-line").image === "").toBe(true);
+  expect(pick("yn-legend-line-dashed").image).toContain("repeating-linear-gradient");
+  expect(pick("yn-legend-line-dotted").image).toContain("repeating-linear-gradient");
+  expect(pick("yn-legend-line-dotted").image).not.toBe(pick("yn-legend-line-dashed").image);
+  for (const l of looks) expect(l.height).toBeGreaterThan(0);
   // 目標の無いチームは凡例・列を増やさない
   const without = teams.find((id) => !Object.values(model.targets ?? []).some((x) => x.kind === "team" && x.targetId === id));
   if (without) {
