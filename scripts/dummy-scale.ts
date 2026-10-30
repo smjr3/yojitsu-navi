@@ -36,7 +36,7 @@ export interface ScaleOutput {
   mappings: MappingRow[];
   assignments: AssignmentRow[];
   outsidePlans: OutsidePlanRow[];
-  taskTypes: Array<{ task: string; category: string; group?: string; note: string }>;
+  taskTypes: Array<{ task: string; category: string; group?: string; match?: string; note: string }>;
   worklogs: Worklog[];
 }
 
@@ -238,6 +238,9 @@ const TASKS_IN: ReadonlyArray<readonly [string, number]> = [
   ["テスト", 2],
 ];
 
+/** 作業名の運用保守の識別子（§62。mapping.csv の task_include） */
+const MAINTENANCE_MARK = "【保守】";
+
 const TASKS_OUT: ReadonlyArray<readonly [string, number]> = [
   ["次期システム更改に向けた現行調査および提案資料作成", 2],
   ["要件定義支援（新規案件）", 1],
@@ -246,9 +249,9 @@ const TASKS_OUT: ReadonlyArray<readonly [string, number]> = [
 ];
 
 const TASK_TYPES = [
-  { task: "定期メンテナンス作業（月次パッチ適用およびセキュリティ脆弱性対応の事前検証を含む）", category: "契約内", note: "" },
-  { task: "障害一次切り分け・ベンダーエスカレーション対応（夜間・休日待機を含む）", category: "契約内", note: "" },
-  { task: "運用手順書・設計書の改訂（変更管理委員会への提出資料作成を含む）", category: "契約内", note: "" },
+  { task: "定期メンテナンス作業（月次パッチ適用およびセキュリティ脆弱性対応の事前検証を含む）", category: "契約内", match: "含む", note: "" },
+  { task: "障害一次切り分け・ベンダーエスカレーション対応（夜間・休日待機を含む）", category: "契約内", match: "含む", note: "" },
+  { task: "運用手順書・設計書の改訂（変更管理委員会への提出資料作成を含む）", category: "契約内", match: "含む", note: "" },
   { task: "次期システム更改に向けた現行調査および提案資料作成", category: "契約外", group: "提案", note: "更改提案（保守契約の範囲外）" },
   { task: "要件定義支援（新規案件）", category: "契約外", group: "設計", note: "新規案件の上流支援" },
   { task: "引き継ぎ", category: "契約内", note: "退職・異動に伴う引き継ぎ" },
@@ -491,7 +494,9 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   const huge = drafts.find((d) => d.project_name.startsWith("国際送金") && d.start_month >= c.m(0, 4)) ?? drafts.find((d) => d.project_name.startsWith("国際送金"));
 
   // 契約の工数側の名前: 同じ顧客・案件名の契約は期間で振り分く（mapping は契約ごとに 1 行）
-  const mappings: MappingRow[] = drafts.map((d) => ({ worklog_customer_name: d.customer_name, worklog_project_name: d.project_name, contract_id: d.contract_id }));
+  // 超大型の案件は、作業名の識別子「【保守】」の付いた作業だけを運用保守として数える（§62。提案などは識別子なしで同じ案件名に付く）
+  const keywordAccount = huge?.account;
+  const mappings: MappingRow[] = drafts.map((d) => ({ worklog_customer_name: d.customer_name, worklog_project_name: d.project_name, contract_id: d.contract_id, ...(d.account === keywordAccount ? { task_include: MAINTENANCE_MARK } : {}) }));
 
   // ---- 作業実績 ----
   const worklogs: Worklog[] = [];
@@ -503,8 +508,10 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   const pushLog = (p: Person, date: string, d: Draft | null, task: string, hours: number, names?: { customer: string; project: string }) => {
     const m = ymOf(date);
     const nm = names ?? { customer: rng.pick(d!.account.customerVariants), project: rng.pick(d!.account.projectVariants) };
-    worklogs.push({ date, memberId: p.id, memberName: rowAt(p, m)?.name ?? p.name, customerName: nm.customer, projectName: nm.project, task, hours });
-    if (d && TASKS_IN.some(([t]) => t === task)) costBy.set(d.contract_id, (costBy.get(d.contract_id) ?? 0) + hours * costRate(p, m));
+    const inContract = d !== null && TASKS_IN.some(([t]) => t === task);
+    const name = inContract && d.account === keywordAccount ? `${MAINTENANCE_MARK}${task}` : task;
+    worklogs.push({ date, memberId: p.id, memberName: rowAt(p, m)?.name ?? p.name, customerName: nm.customer, projectName: nm.project, task: name, hours });
+    if (d && inContract) costBy.set(d.contract_id, (costBy.get(d.contract_id) ?? 0) + hours * costRate(p, m));
   };
 
   for (const date of input.days) {

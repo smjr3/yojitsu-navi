@@ -221,6 +221,22 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
   });
 });
 
+describe("C124: 作業名の識別子「【保守】」で運用保守を抜き出す（§62）", () => {
+  it("案件の実績は【保守】の付いた作業だけ。付かない作業は運用保守以外として一覧に出る", () => {
+    const ids = new Set(byId("C124").months.flatMap((m) => m.worklogs.map((w) => w.task)));
+    expect(ids.size).toBeGreaterThan(0);
+    expect([...ids].every((t) => t.startsWith("【保守】"))).toBe(true);
+    const unmatched = model.keywordUnmatched;
+    expect(unmatched.length).toBeGreaterThan(0);
+    expect(unmatched.every((g) => g.projectName.includes("国際送金") || g.projectName.includes("外為"))).toBe(true);
+    expect(unmatched.some((g) => g.task.startsWith("【保守】"))).toBe(false);
+  });
+  it("作業種別の内訳は「含む」の行の表記にまとまる（【保守】付きの種別が別に出ない）", () => {
+    const tasks = new Set(model.workRows.filter((r) => r.contractId === "C124" && r.category === "contract").map((r) => r.task));
+    expect([...tasks].some((t) => t.startsWith("【保守】"))).toBe(false);
+  });
+});
+
 describe("C003 → C004 更新契約（同じ顧客・案件名、期間で振り分け）", () => {
   it("2026-09 のみなと銀行の作業ログは全部 C003、2026-10 は全部 C004", () => {
     const c003 = byId("C003");

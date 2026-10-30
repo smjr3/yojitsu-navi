@@ -5,7 +5,7 @@
  * 各 CSV を Dataset に変換する parseDataset。文字コード変換（Shift_JIS）は scripts 側の責務。
  */
 import { isValidISODate } from "./calendar.js";
-import { normalizeName } from "./normalize.js";
+import { normalizeName, splitKeywords } from "./normalize.js";
 import type { Assignment, OutsidePlan, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
@@ -236,11 +236,18 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     return c;
   });
 
-  const mappings: MappingRule[] = parseTable("mapping.csv", files.mapping, REQUIRED_COLUMNS.mapping, issues).rows.map((r) => ({
-    worklogCustomerName: r.get("worklog_customer_name"),
-    worklogProjectName: r.get("worklog_project_name"),
-    contractId: r.get("contract_id"),
-  }));
+  const mappings: MappingRule[] = parseTable("mapping.csv", files.mapping, REQUIRED_COLUMNS.mapping, issues).rows.map((r) => {
+    // 作業名のキーワード（§62.1）は省略可の列。無ければ条件なし
+    const include = splitKeywords(r.get("task_include"));
+    const exclude = splitKeywords(r.get("task_exclude"));
+    return {
+      worklogCustomerName: r.get("worklog_customer_name"),
+      worklogProjectName: r.get("worklog_project_name"),
+      contractId: r.get("contract_id"),
+      ...(include.length > 0 ? { taskInclude: include } : {}),
+      ...(exclude.length > 0 ? { taskExclude: exclude } : {}),
+    };
+  });
 
   const assignments: Assignment[] = parseTable("assignments.csv", files.assignments, REQUIRED_COLUMNS.assignments, issues).rows.map((r) => ({
     memberId: r.get("member_id"),
@@ -375,13 +382,26 @@ function parseTaskTypes(text: string | undefined, issues: ValidationIssue[]): Ta
       issues.push({ severity: "error", code: "DUPLICATE_TASK_TYPE", message: fmt(T.checks.duplicateTaskType, { file, row, task, first }), file, row, ref: { task } });
       return;
     }
+    const match = parseTaskMatch(r.get("match"));
+    if (match === null) {
+      issues.push({ severity: "error", code: "TASK_MATCH_INVALID", message: fmt(T.checks.taskMatchInvalid, { file, row, task, value: r.get("match") }), file, row, ref: { task } });
+      return;
+    }
     seen.set(key, row);
     const note = r.get("note");
     // 計画の種別（§50.1）は契約外の行だけ使う
     const group = category === "outside" ? r.get("group") : "";
-    out.push({ task, category, ...(group !== "" ? { group } : {}), ...(note !== "" ? { note } : {}) });
+    out.push({ task, category, ...(group !== "" ? { group } : {}), ...(match === "contains" ? { match } : {}), ...(note !== "" ? { note } : {}) });
   });
   return out;
+}
+
+/** match 列（§62.2）: 空・完全一致・exact → 完全一致（"exact"）、含む・contains → "contains"、それ以外 → null */
+export function parseTaskMatch(value: string | null | undefined): "exact" | "contains" | null {
+  const v = (value ?? "").normalize("NFKC").trim().toLowerCase();
+  if (v === "" || v === "完全一致" || v === "exact") return "exact";
+  if (v === "含む" || v === "contains") return "contains";
+  return null;
 }
 
 /** 作業実績の日付: YYYY/MM/DD・YYYY/M/D・YYYY-M-D も受け付けて YYYY-MM-DD に揃える（それ以外はそのまま返し、検証で不正になる） */

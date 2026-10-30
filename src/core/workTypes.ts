@@ -9,9 +9,10 @@
 import { isValidISODate, monthOfDate, monthRange } from "./calendar.js";
 import { customerKey } from "./customers.js";
 import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
-import { normalizeName } from "./normalize.js";
+import { createKeywordRouter } from "./mapping.js";
+import { normalizeKeyword, normalizeName } from "./normalize.js";
 import { monthStatusFromMeta } from "./status.js";
-import type { ContractResult, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
+import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
@@ -31,34 +32,68 @@ export interface TaskClassification {
   category: TaskCategory;
   /** 契約外の種別（§50.1。group、無ければ分類表の task の表記）。契約内は "" */
   group: string;
+  /** 内訳に出す作業種別の表記（完全一致・分類表に無い = 作業名そのまま、含む（§62.2）= 当たった行の task） */
+  label: string;
   /** 分類表に無い（契約内として数える）。分類表が空のときは常に false */
   unclassified: boolean;
+  /** 作業名のキーワードに合致せず運用保守以外にした（§62.1） */
+  keywordMiss?: boolean;
 }
 
 export interface TaskClassifier {
-  /** 分類表に 1 行以上ある */
+  /** 分類表に 1 行以上ある、または紐付けルールに作業名のキーワードがある */
   readonly enabled: boolean;
+  /** 作業種別（作業名）だけで分類する（分類表のみ） */
   classify(task: string): TaskClassification;
+  /** 作業ログを分類する。紐付けルールのキーワード（§62.1）があればそれを優先する */
+  classifyWorklog(w: Pick<Worklog, "customerName" | "projectName" | "task">): TaskClassification;
 }
 
-/** 分類表から分類器を作る。正規化後に同じ作業種別が複数あれば先の行を使う */
-export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined): TaskClassifier {
+/**
+ * 分類表（と紐付けルールの作業名キーワード）から分類器を作る。
+ * 照合は 完全一致（正規化後）→ 含む（§62.2。ファイルの順で最初の行）。正規化後に同じ作業種別が複数あれば先の行を使う
+ */
+export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined, mappings: readonly MappingRule[] = []): TaskClassifier {
   const index = new Map<string, { category: TaskCategory; group: string }>();
+  const contains: Array<{ key: string; task: string; category: TaskCategory; group: string }> = [];
   for (const r of rules ?? []) {
     const key = normalizeName(r.task);
     if (key === "" || index.has(key)) continue;
-    index.set(key, { category: r.category, group: r.category === "outside" ? outsideTypeOf(r) : "" });
+    const entry = { category: r.category, group: r.category === "outside" ? outsideTypeOf(r) : "" };
+    index.set(key, entry);
+    if (r.match === "contains") contains.push({ key: normalizeKeyword(r.task), task: r.task.trim(), ...entry });
   }
-  const enabled = index.size > 0;
+  const hasTypes = index.size > 0;
+  const router = createKeywordRouter(mappings);
   const cache = new Map<string, TaskClassification>();
+  const classify = (task: string): TaskClassification => {
+    let c = cache.get(task);
+    if (c) return c;
+    const hit = index.get(normalizeName(task));
+    if (hit) c = { category: hit.category, group: hit.group, label: task, unclassified: false };
+    else {
+      const t = normalizeKeyword(task);
+      const part = t === "" ? undefined : contains.find((r) => t.includes(r.key));
+      c = part ? { category: part.category, group: part.group, label: part.task, unclassified: false } : { category: "contract", group: "", label: task, unclassified: hasTypes };
+    }
+    cache.set(task, c);
+    return c;
+  };
+  const byWorklog = new Map<string, TaskClassification>();
   return {
-    enabled,
-    classify(task) {
-      let c = cache.get(task);
+    enabled: hasTypes || router.enabled,
+    classify,
+    classifyWorklog(w) {
+      if (!router.enabled) return classify(w.task);
+      const key = `${w.customerName}${SEP}${w.projectName}${SEP}${w.task}`;
+      let c = byWorklog.get(key);
       if (c) return c;
-      const hit = index.get(normalizeName(task));
-      c = hit ? { category: hit.category, group: hit.group, unclassified: false } : { category: "contract", group: "", unclassified: enabled };
-      cache.set(task, c);
+      const base = classify(w.task);
+      const m = router.match(w);
+      if (m === "hit") c = { category: "contract", group: "", label: base.label, unclassified: false };
+      else if (m === "miss") c = { category: "outside", group: base.category === "outside" ? base.group : T.work.otherType, label: base.label, unclassified: false, keywordMiss: true };
+      else c = base;
+      byWorklog.set(key, c);
       return c;
     },
   };
@@ -72,7 +107,27 @@ export function isOutsideWorklog(w: Worklog, classifier: TaskClassifier): boolea
   if (!classifier.enabled) return false;
   if (typeof w.hours !== "number" || !Number.isFinite(w.hours) || w.hours <= 0) return false;
   if (!isValidISODate(w.date)) return false;
-  return classifier.classify(w.task).category === "outside";
+  return classifier.classifyWorklog(w).category === "outside";
+}
+
+/** キーワードに合致せず運用保守以外にした作業を (顧客名, 案件名, 作業名)（正規化後）でまとめる（§62.3。時間の多い順） */
+export function keywordUnmatchedGroups(worklogs: readonly Worklog[], classifier: TaskClassifier): KeywordUnmatchedGroup[] {
+  const acc = new Map<string, KeywordUnmatchedGroup>();
+  for (const w of worklogs) {
+    if (!isOutsideWorklog(w, classifier)) continue;
+    const c = classifier.classifyWorklog(w);
+    if (!c.keywordMiss) continue;
+    // 表記ゆれ（法人格・全角半角）は 1 行にまとめ、表記は最初の行のもの
+    const key = [normalizeName(w.customerName), normalizeName(w.projectName), normalizeKeyword(w.task)].join(SEP);
+    const g = acc.get(key);
+    if (g) {
+      g.hours += w.hours;
+      g.count += 1;
+      if (w.date < g.firstDate) g.firstDate = w.date;
+      if (w.date > g.lastDate) g.lastDate = w.date;
+    } else acc.set(key, { customerName: w.customerName, projectName: w.projectName, task: w.task, type: c.group, hours: w.hours, count: 1, firstDate: w.date, lastDate: w.date });
+  }
+  return [...acc.values()].sort((a, b) => b.hours - a.hours || cmp(a.customerName, b.customerName) || cmp(a.projectName, b.projectName) || cmp(a.task, b.task));
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +170,7 @@ export function unclassifiedTaskWarnings(worklogs: readonly Worklog[], classifie
   if (!classifier.enabled) return [];
   const acc = new Map<string, { task: string; hours: number; count: number }>();
   for (const w of worklogs) {
-    if (!classifier.classify(w.task).unclassified) continue;
+    if (!classifier.classifyWorklog(w).unclassified) continue;
     const key = normalizeName(w.task);
     const a = acc.get(key);
     if (a) {
@@ -180,11 +235,15 @@ export function buildWorkRows(results: readonly ContractResult[], outside: reado
     const cKey = customerKey(r.contract.customerName);
     for (const cm of r.months) {
       if (cm.worklogs.length === 0) continue;
+      // 作業種別の表記（§62.2 の含むなら分類表の task）ごとの時間。未分類はその表記の作業ログのどれかが未分類なら立てる
       const byMember = new Map<string, Map<string, number>>();
+      const unclassified = new Set<string>();
       for (const w of cm.worklogs) {
         let tasks = byMember.get(w.memberId);
         if (!tasks) byMember.set(w.memberId, (tasks = new Map()));
-        tasks.set(w.task, (tasks.get(w.task) ?? 0) + w.hours);
+        const c = classifier.classifyWorklog(w);
+        tasks.set(c.label, (tasks.get(c.label) ?? 0) + w.hours);
+        if (c.unclassified) unclassified.add(c.label);
       }
       for (const line of cm.costLines) {
         const tasks = byMember.get(line.memberId);
@@ -193,7 +252,6 @@ export function buildWorkRows(results: readonly ContractResult[], outside: reado
         const hours = names.map((t) => tasks.get(t) as number);
         const amounts = apportion(line.amount, hours);
         names.forEach((task, i) => {
-          const c = classifier.classify(task);
           rows.push({
             month: cm.month,
             memberId: line.memberId,
@@ -204,7 +262,7 @@ export function buildWorkRows(results: readonly ContractResult[], outside: reado
             customerName: r.contract.customerName,
             task,
             category: "contract",
-            unclassified: c.unclassified,
+            unclassified: unclassified.has(task),
             hours: hours[i] as number,
             amount: amounts[i] as number,
           });
@@ -221,7 +279,8 @@ export function buildWorkRows(results: readonly ContractResult[], outside: reado
     const contract = o.contractId ? contractById.get(o.contractId) : undefined;
     const customerName = contract ? contract.customerName : w.customerName;
     const cKey = customerKey(customerName);
-    const key = [o.month, w.memberId, o.contractId ?? "", cKey, w.task].join(SEP);
+    const task = classifier.classifyWorklog(w).label;
+    const key = [o.month, w.memberId, o.contractId ?? "", cKey, task].join(SEP);
     const hit = acc.get(key);
     if (hit) {
       hit.hours += w.hours;
@@ -236,7 +295,7 @@ export function buildWorkRows(results: readonly ContractResult[], outside: reado
       contractId: o.contractId,
       customerKey: cKey,
       customerName,
-      task: w.task,
+      task,
       category: "outside",
       unclassified: false,
       hours: w.hours,
