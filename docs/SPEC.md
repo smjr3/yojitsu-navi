@@ -262,7 +262,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - 履歴マスタ（§5）は **行を追加する** のが基本操作（「4月から単価変更」= 新しい `effective_from` の行を足す）。既存行の修正・削除もできるが、過去月の数値が変わる操作には確認ダイアログで「過去の計算結果が変わります（影響: N か月）」と出す。
 - 確認ダイアログの「何が変わるか」は、過去の月で **実際に値が変わる列** に応じて出し分ける（一律に「実績・残予算など」と書かない）:
   - メンバーの `title`（役職）・単価の行 → 時間単価と、実績・残予算・消化率・着地見込み
-  - メンバーの `team_id` → 所属チームによる組織別の集計（メンバー別の所属・チームでの絞り込み、チーム詳細の応援の区別）。`department` / `section` → 部署・課の表示。`name` → 氏名の表示。`kind` → 区分の表示。これらだけの変更では「実績・残予算・消化率・着地見込みは変わりません」と明記する
+  - メンバーの `team_id` → 所属チームによる組織別の集計（メンバー別の所属・チームでの絞り込み、チーム詳細の応援の区別）。`division` / `department` / `section` → 事業本部・部・課の表示（§60）。`name` → 氏名の表示。`kind` → 区分の表示。これらだけの変更では「実績・残予算・消化率・着地見込みは変わりません」と明記する
   - チームの `parent_team_id` → 組織の木と上位組織の合計。`name` → チーム名の表示
   - アサイン → 着地見込み（アサイン方式）とメンバー別の計画
   - その月の有効な行が増える・無くなる（キー・適用開始月の変更、追加・削除）ときは、無い側を全列空として比べ、キー列（登録の有無）も変わったものとして扱う。`effective_from` だけが変わり値が同じ月は「変わる月」に数えない
@@ -315,8 +315,8 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - 時間は分・秒から換算しても小数 4 桁まで保持して CSV に書く（行ごとに 0.01h へ丸めない）。
 
 ### 20.2 所属・役職の取り込み（`memberSource`）
-所属部署・課・役職は人事系の元データから取り込む（2026-10-27 決定）。`memberSource` は `worklogSource` と同じ仕組み（`adapter: csv | http | none`、`columns`、`pagination` 等）で `memberId, name, kind, title, department, section` を取得し、`npm run fetch:members` で `data/masters/members.csv` を更新する。
-- `team_id` は取り込まない（画面で手入力）。取り込み結果と現在の有効レコードを比べ、`name/kind/title/department/section` のどれかが変わった人だけ `effective_from = 取り込み実行月` の新しい行を追加する（`team_id` は直前の有効レコードを引き継ぐ）。変化が無ければ何もしない（冪等）。
+所属部署・課・役職は人事系の元データから取り込む（2026-10-27 決定）。`memberSource` は `worklogSource` と同じ仕組み（`adapter: csv | http | none`、`columns`、`pagination` 等）で `memberId, name, kind, title, division, department, section` を取得し、`npm run fetch:members` で `data/masters/members.csv` を更新する。
+- `team_id` は取り込まない（画面で手入力）。取り込み結果と現在の有効レコードを比べ、`name/kind/title/division/department/section` のどれかが変わった人だけ `effective_from = 取り込み実行月` の新しい行を追加する（`team_id` は直前の有効レコードを引き継ぐ）。変化が無ければ何もしない（冪等）。
 - 取り込み元の氏名が空の人は、既存の氏名を空で上書きしない（件数を警告）。実行月より前の行が無い人（未来日付の行だけ）は、最も早い行を土台に実行月の行を足す。実行月より後の行は残すが、旧値をそのまま引き継いでいる項目は新しい値に揃える。
 - 取り込みに無い既存メンバーは削除しない（退職者の過去月を壊さない）。件数を表示する。
 - `memberSource.adapter = "none"`（既定）の間は従来どおり手入力。マスタ編集画面は `memberSource.adapter != "none"` のとき取り込み対象列を読み取り専用にする。
@@ -828,6 +828,14 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - バージョン = ルートの `package.json` の `version`。コミット = ビルドしたコミットの短いハッシュ（GitLab CI は `CI_COMMIT_SHORT_SHA`、それ以外は `git rev-parse --short=8 HEAD`）。ビルド日時 = ビルドした時刻（JST、`YYYY-MM-DD HH:mm`）。
 - `observablehq.config.js` の `buildInfo()` がビルド時に求め、全ページの head に `<meta name="yn-build" data-version data-commit data-built-at>` として入れる。設定画面（`versionSection`）はそれを読む。取れない項目（git の無い環境のコミットなど）の行は出さない。
 - 再発防止: `tests/e2e/version.spec.ts`。
+
+## 60. 所属を「事業本部・部・課」の 3 段に（2026-10-30 試用版のコメント）
+「部署と課って必要？」→ 計算には使わないが残す。「実際は事業本部、部、課」への対応。
+- `members.csv` に省略可の列 `division`（事業本部）を追加。`department` は「部」、`section` は「課」と呼ぶ（列名は変えない）。旧ファイル（列なし）はそのまま読め、画面で保存すると見出しの末尾に足す。
+- 取り込み（§20）: `memberSource.columns.division` で取得元の列を指定できる（省略可。省略すると取り込まず今の値を引き継ぐ）。取り込み時の比較項目にも入る。
+- 画面: マスタ編集のメンバーのフォーム・表に「事業本部」、メンバー詳細の「所属組織」に「事業本部 部 課」を並べて出す。人を選ぶ欄の検索にも使う。計算・集計には使わない（組織別の集計は所属チーム `team_id`）。
+- ダミーデータは全員「ソリューション事業本部」。
+- 再発防止: `tests/unit/csv.test.ts`、`masterEdit.test.ts`、`tests/e2e/masters.spec.ts`。
 
 ## 61. 今月の進み（日別の速報。2026-10-30 要望）
 「月が終わらないと実績が確定せず、月の途中でチームの稼働を抑えられない」への対応（3 案のうち「累積と目安の線」＋チーム詳細に「メンバー×日の表」を採用）。速報でよく、週別は持たない。

@@ -92,7 +92,7 @@ test("台帳のエラー: 名前で示し、押すと絞り込みを外して履
   await page.getByRole("tab", { name: /メンバー/ }).click();
   await page.getByRole("button", { name: "CSV で編集" }).click();
   const area = page.getByRole("textbox", { name: /メンバー の CSV/ });
-  await area.fill((await area.inputValue()).replace("M011,小林 玲奈,employee,主任,第1事業部,第1課,T111,2026-07,", "M011,小林 玲奈,employee,主任,第1事業部,第1課,NOPE,2026-07,"));
+  await area.fill((await area.inputValue()).replace("M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,T111,2026-07,", "M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,NOPE,2026-07,"));
   await page.locator('[data-fk="csv:apply:members"]').click();
   await page.getByRole("button", { name: "表で編集" }).click();
   await page.locator("#yn-me-q-members").fill("該当なし");

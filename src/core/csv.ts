@@ -273,6 +273,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     // 区分の妥当性は validateDataset で検証する（ここでは文字列のまま通す）
     kind: r.get("kind").toLowerCase() as MemberKind,
     title: r.get("title"),
+    // 事業本部（省略可の列。§60）。空なら項目を持たない
+    ...(r.get("division") ? { division: r.get("division") } : {}),
     department: r.get("department"),
     section: r.get("section"),
     teamId: nullable(r.get("team_id")),

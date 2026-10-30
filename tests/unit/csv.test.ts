@@ -105,6 +105,10 @@ describe("parseDataset", () => {
     expect(dataset.teams).toEqual([{ teamId: "ROOT", name: "全社", parentTeamId: null, effectiveFrom: "2000-01", level: "", leaderMemberId: null }, { teamId: "T1", name: "開発", parentTeamId: "ROOT", effectiveFrom: "2000-01", level: "", leaderMemberId: null }]);
     expect(dataset.members[0]).toEqual({ memberId: "M1", name: "山田 太郎", kind: "employee", title: "SE", department: "開発部", section: "1課", teamId: "T1", effectiveFrom: "2000-01" });
     expect(dataset.members[1]?.teamId).toBeNull();
+    // 事業本部の列（§60）は省略可。あれば division に入る
+    const withDivision = parseDataset(files({ members: "member_id,name,kind,title,division,department,section,team_id,effective_from\nM1,山田,employee,SE,ソリューション事業本部,開発部,1課,T1,2000-01\n" }));
+    expect(withDivision.issues.filter((i) => (i.file ?? "").includes("members"))).toEqual([]);
+    expect(withDivision.dataset.members[0]).toMatchObject({ division: "ソリューション事業本部", department: "開発部", section: "1課" });
     expect(dataset.rates).toEqual([{ key: "SE", hourlyRate: 5000, effectiveFrom: "2000-01" }, { key: "M2", hourlyRate: 4000, effectiveFrom: "2000-01" }]);
     expect(dataset.holidays).toEqual([{ date: "2026-01-01", name: "元日" }]);
     expect(dataset.worklogs).toEqual([

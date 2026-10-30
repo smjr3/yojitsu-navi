@@ -327,8 +327,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
       const left = memberStatus(get("status")).status === "left";
-      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
-      return { value: id, label: get("name") || id, sub, search: `${id} ${get("department")} ${get("section")}`, left };
+      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left };
     })
       // 退職した人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
       .sort((a, b) => Number(a.left) - Number(b.left));
