@@ -241,6 +241,7 @@ export default {
   checks: {
     taskTypeEmpty: "{file} {row} 行目: 作業種別（task）が空です",
     taskCategoryInvalid: "{file} {row} 行目: 作業種別「{task}」の区分（category）は「運用保守」か「運用保守以外」（または 契約内・契約外）で指定してください: {value}",
+    taskMatchInvalid: "{file} {row} 行目: 作業種別「{task}」の照合（match）は空・「完全一致」・「含む」のどれかで指定してください: {value}",
     duplicateTaskType: "{file} {row} 行目: 作業種別「{task}」は {first} 行目と重複しています。{first} 行目を使います",
     missingColumn: "{file}: 列 {column} がありません",
     contractIdEmpty: "{file} {row} 行目: 契約IDが空です",
@@ -347,6 +348,7 @@ export default {
   // ── 作業種別と工数（SPEC §30） ─────────────────────────────
   work: {
     emptyTask: "（空欄）",
+    otherType: "その他",
     contract: "運用保守",
     outside: "運用保守以外",
     total: "合計",
@@ -1036,6 +1038,11 @@ export default {
     colCount: "件数",
     colFirstDate: "最初の日",
     colLastDate: "最後の日",
+    keywordTitle: "キーワードに合致しない作業",
+    keywordHint: "mapping.csv で作業名のキーワード（task_include / task_exclude）を指定した案件のうち、合致しなかった作業。運用保守以外として数え、案件の実績には入れていません。運用保守のものがあればキーワードを足してください。",
+    keywordEmpty: "キーワードに合致しない作業はありません",
+    colTask: "作業名",
+    colType: "扱い",
     rateMissingTitle: "単価のないメンバー",
     rateMissingHint: "役職にも個人にも単価が無く、0 円で計算した作業（メンバー × 月）。rates.csv に役職または社員番号の行を追加してください。",
     rateMissingEmpty: "単価のないメンバーはいません",

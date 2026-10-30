@@ -92,6 +92,30 @@ if (model) {
 ```
 
 ```js
+// 作業名のキーワード（§62.3）。キーワードを使っていない・すべて合致したときは出さない
+if (model && (model.keywordUnmatched ?? []).length > 0) {
+  display(sectionTitle(T.dataCheck.keywordTitle, T.dataCheck.keywordHint));
+  display(
+    dataTable({
+      columns: [
+        { key: "customerName", label: T.dataCheck.colWorklogCustomer, type: "text" },
+        { key: "projectName", label: T.dataCheck.colWorklogProject, type: "text", empty: T.dataCheck.empty },
+        { key: "task", label: T.dataCheck.colTask, type: "text", empty: T.dataCheck.empty },
+        { key: "type", label: T.dataCheck.colType, type: "text" },
+        { key: "hours", label: T.columns.hours, type: "hours" },
+        { key: "count", label: T.dataCheck.colCount, type: "int" },
+        { key: "lastDate", label: T.dataCheck.colLastDate, type: "text", hideOnPhone: true },
+      ],
+      rows: model.keywordUnmatched.map((g, i) => ({ key: i, ...g })),
+      caption: T.dataCheck.keywordTitle,
+      exportName: "keyword_unmatched",
+      sort: { key: "hours", dir: "desc" },
+    }),
+  );
+}
+```
+
+```js
 if (model) {
   display(sectionTitle(T.dataCheck.rateMissingTitle, T.dataCheck.rateMissingHint));
   const rows = model.warnings

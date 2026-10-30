@@ -60,6 +60,7 @@ budget(m)   = baseMonthly            (最終月以外)
 5. ルールの `contractId` が存在しない → `MAPPING_UNKNOWN_CONTRACT` 警告、未紐付け（理由 `UNKNOWN_CONTRACT`）。
    ルールの `contractId` が不備で除外中の契約 → `MAPPING_EXCLUDED_CONTRACT` 警告（除外理由つき）、未紐付け（理由 `EXCLUDED_CONTRACT`）。
 6. 未紐付けは `(顧客名, 案件名)`（元の表記）でまとめ、時間・件数・最初と最後の日付を持つ。
+7. ルールに作業名のキーワード（`task_include` / `task_exclude`）があるときの振り分けは §62。
 
 `hours <= 0` または数値でない工数行は無視し、件数を `UNMAPPED` ではなく警告 `CONTRACT_INVALID` とは別に数えない（単に無視）。`hours` は小数可（0.25 など）。
 
@@ -430,7 +431,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 ### 30.1 作業種別の分類表 `data/task-types.csv`
 | 列 | 内容 |
 |---|---|
-| `task` | 作業実績の作業種別（照合は §4.1 の `normalizeName` で正規化して完全一致） |
+| `task` | 作業実績の作業種別（照合は §4.1 の `normalizeName` で正規化して完全一致。`match=含む` の行は部分一致 §62.2） |
 | `category` | `運用保守` または `運用保守以外`（旧表記の `契約内` / `契約外`、英字の `contract` / `outside` も可。§50.5） |
 | `note` | 任意のメモ |
 
@@ -827,3 +828,25 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - バージョン = ルートの `package.json` の `version`。コミット = ビルドしたコミットの短いハッシュ（GitLab CI は `CI_COMMIT_SHORT_SHA`、それ以外は `git rev-parse --short=8 HEAD`）。ビルド日時 = ビルドした時刻（JST、`YYYY-MM-DD HH:mm`）。
 - `observablehq.config.js` の `buildInfo()` がビルド時に求め、全ページの head に `<meta name="yn-build" data-version data-commit data-built-at>` として入れる。設定画面（`versionSection`）はそれを読む。取れない項目（git の無い環境のコミットなど）の行は出さない。
 - 再発防止: `tests/e2e/version.spec.ts`。
+
+## 62. 作業名のキーワードで運用保守を抜き出す（2026-10-30 要望）
+「1 つの案件に運用保守と導入・設計などの作業が混ざる。運用保守の作業は作業名に特定のキーワード（識別子）が入っている。作業 ID は取り込むまで分からない。作業名で対象案件の運用保守として抜き出したい」への対応。作業名には作業種別も識別子も入っている（作業実績の `task` 列）。
+
+### 62.1 mapping.csv の作業名キーワード
+- 任意列 `task_include`（含むキーワード）・`task_exclude`（除くキーワード）。`|`（全角 `｜` も可）区切りで複数。照合は `normalizeKeyword`（NFKC・小文字化・空白をすべて除く）した作業名の部分一致。列が無い・空なら条件なし（従来どおり）。
+- 作業ログの (顧客, 案件) のルールを §4.2 と同じ順（完全一致 → (顧客, "")）で探し、そのキーのルールのどれかにキーワードがあれば:
+  - どれかの行の条件に合う（除くを含まず、含むが空かどれかを含む）→ **運用保守**（hit）。紐付ける契約は条件に合った行の契約から §4.2 の 3. で選ぶ（同じ案件名の契約をキーワードで分けられる）。
+  - どの行にも合わない → **運用保守以外**（miss）。案件の実績に入れない。関連契約（稼働実績の絞り込み用）はそのキーの全契約から選ぶ。種別（§50.1）は分類表の分類が運用保守以外ならその group、それ以外は「その他」。
+- キーワードで決まった作業は分類表（§30.1）の区分より優先し、未分類の警告 `TASK_UNCLASSIFIED` を出さない。
+- 実装: `createKeywordRouter`（mapping.ts）、`createTaskClassifier(taskTypes, mappings).classifyWorklog`（workTypes.ts）。
+
+### 62.2 task-types.csv の照合「含む」
+- 任意列 `match`: 空・`完全一致`・`exact` = 完全一致（従来）、`含む`・`contains` = 作業名（`normalizeKeyword`）に task を含めば該当。それ以外は error `TASK_MATCH_INVALID`（その行は使わない）。
+- 照合は完全一致が先、無ければ「含む」の行をファイルの順に見て最初に当たった行。
+- 作業種別の内訳（§30.4）・稼働実績の明細の作業種別は、「含む」で当たった行の task の表記にまとめる（「【保守】月次定例」→「定例」）。
+
+### 62.3 データ確認「キーワードに合致しない作業」
+- `Model.keywordUnmatched`: miss の作業を (顧客名, 案件名, 作業名) で正規化（§4.1・`normalizeKeyword`）してまとめ（表記は最初の行）、扱い（種別）・時間・件数・最初と最後の日。時間の多い順。
+- データ確認の「未紐付けの作業実績」の次に表（顧客名・案件名・作業名・扱い・時間・件数・最後の日。最後の日はスマホでは隠す。Excel 出力つき）。1 件も無いとき（キーワードを使っていないときを含む）は見出しごと出さない。説明は見出し横の「?」だけ。
+- ダミーデータ: C124（国際送金）の運用保守の作業名に「【保守】」、`task_include=【保守】`。金額・警告件数は変わらない（docs/DUMMY_DATA.md）。
+- 再発防止: `tests/unit/task-keywords.test.ts`、`tests/integration/dummy-data.test.ts`（C124）、`tests/e2e/keyword-unmatched.spec.ts`。

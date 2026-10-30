@@ -75,3 +75,27 @@ export function normalizeName(raw: string | null | undefined): string {
   // 5. 空になったら空文字
   return value.trim();
 }
+
+/**
+ * 作業名とキーワードの部分一致用の正規化（§62）。NFKC・小文字化・空白はすべて取り除く。
+ * 法人格は除かない（作業名の一部なので）。
+ */
+export function normalizeKeyword(raw: string | null | undefined): string {
+  if (raw === null || raw === undefined) return "";
+  return String(raw).normalize("NFKC").toLowerCase().replace(/[\s　]+/g, "");
+}
+
+/** キーワードのセル（"保守|定例"。全角の ｜ も可）を分ける。空のキーワードは捨てる */
+export function splitKeywords(cell: string | null | undefined): string[] {
+  if (cell === null || cell === undefined) return [];
+  return String(cell)
+    .normalize("NFKC")
+    .split("|")
+    .map((k) => k.trim())
+    .filter((k) => normalizeKeyword(k) !== "");
+}
+
+/** 作業名（正規化済み）がキーワードのどれかを含むか */
+export function includesAnyKeyword(normalizedTask: string, keywords: readonly string[]): boolean {
+  return keywords.some((k) => normalizedTask.includes(normalizeKeyword(k)));
+}
