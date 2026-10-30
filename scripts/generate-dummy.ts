@@ -79,6 +79,8 @@ export interface MappingRow {
   worklog_customer_name: string;
   worklog_project_name: string;
   contract_id: string;
+  /** 作業名に含むキーワード（§62.1。| 区切り。省略可） */
+  task_include?: string;
 }
 
 export interface AssignmentRow {
@@ -408,18 +410,19 @@ const TASKS: ReadonlyArray<readonly [string, number]> = [
  * 作業種別の分類表（SPEC §30.1）。「勉強会」はわざと載せない（未分類の警告 TASK_UNCLASSIFIED の例）。
  * 契約外の行の group は計画の種別（§50.1）。「社内会議」（顧客名が空）は契約外の会社業務として数える（§50.2）。
  * 「構築」は作業実績の無い種別の例（計画だけ入れられる）。
+ * match「含む」の行は作業名に含めば該当（§62.2。作業名に識別子の付いた「【保守】定例」なども「定例」にまとまる）。
  */
-const TASK_TYPES: Array<{ task: string; category: string; group?: string; note: string }> = [
-  { task: "定例", category: "契約内", note: "" },
-  { task: "問い合わせ対応", category: "契約内", note: "" },
-  { task: "障害対応", category: "契約内", note: "" },
-  { task: "調査", category: "契約内", note: "" },
-  { task: "リリース作業", category: "契約内", note: "" },
-  { task: "監視・運用", category: "契約内", note: "" },
+const TASK_TYPES: Array<{ task: string; category: string; group?: string; match?: string; note: string }> = [
+  { task: "定例", category: "契約内", match: "含む", note: "" },
+  { task: "問い合わせ対応", category: "契約内", match: "含む", note: "" },
+  { task: "障害対応", category: "契約内", match: "含む", note: "" },
+  { task: "調査", category: "契約内", match: "含む", note: "" },
+  { task: "リリース作業", category: "契約内", match: "含む", note: "" },
+  { task: "監視・運用", category: "契約内", match: "含む", note: "" },
   { task: "パッチ適用", category: "契約内", note: "" },
   { task: "ドキュメント更新", category: "契約内", note: "" },
-  { task: "改修", category: "契約内", note: "保守契約の範囲内の軽微な改修" },
-  { task: "テスト", category: "契約内", note: "" },
+  { task: "改修", category: "契約内", match: "含む", note: "保守契約の範囲内の軽微な改修" },
+  { task: "テスト", category: "契約内", match: "含む", note: "" },
   { task: "データ移行", category: "契約内", note: "" },
   { task: "導入準備", category: "契約内", note: "" },
   { task: "提案", category: "契約外", group: "提案", note: "追加案件・更改の提案" },
@@ -489,7 +492,7 @@ interface Generated {
   assignments: AssignmentRow[];
   outsidePlans: OutsidePlanRow[];
   holidays: Array<{ date: string; name: string }>;
-  taskTypes: Array<{ task: string; category: string; group?: string; note: string }>;
+  taskTypes: Array<{ task: string; category: string; group?: string; match?: string; note: string }>;
   /** 月ごとの作業実績 */
   worklogsByMonth: Map<YearMonth, Worklog[]>;
 }
@@ -715,7 +718,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   mkdirSync(join(out, "worklogs"), { recursive: true });
 
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
-  writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id"]));
+  writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
   // holidays.csv は Excel で保存した体で BOM 付き
@@ -723,7 +726,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
   writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "department", "section", "team_id", "effective_from", "status"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
-  writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "note"]));
+  writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "match", "note"]));
 
   // 既存の月次ファイルを消してから書く（asOf を戻したときに古い月が残らないように）
   const wlDir = join(out, "worklogs");
