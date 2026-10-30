@@ -213,7 +213,7 @@ test.describe("配色（§53）", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       expect(await bgLum(page)).toBeLessThan(0.25);
       await gotoPage(page, "/settings");
-      await expect(page.getByRole("radio", { name: "自動（ダーク・PC）" })).toBeChecked();
+      await expect(page.locator('input[name="yn-set-theme"][value="auto"]')).toBeChecked();
       await page.getByRole("radio", { name: "ライト", exact: true }).check();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
       await gotoPage(page, "/teams");
@@ -233,7 +233,7 @@ test.describe("配色（§53）", () => {
       await page.emulateMedia({ colorScheme: "dark" });
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     });
-    test("差し色を選ぶとリンク・選択中のタブの色が変わる", async ({ page }) => {
+    test("テーマカラーを選ぶとリンク・選択中のタブの色が変わる", async ({ page }) => {
       await gotoPage(page, "/settings");
       const link = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--yn-link").trim());
       const before = await link();

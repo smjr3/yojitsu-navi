@@ -324,23 +324,23 @@ test.describe("設定画面とヘッダー", () => {
     expect(await page.evaluate(() => localStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
   });
 
-  test("配色: GitLab に接続するとそのテーマの差し色（デモは Indigo）、削除すると既定のブルーに戻る", async ({ page }) => {
+  test("配色: GitLab に接続するとそのテーマのテーマカラー（デモは Indigo）、削除すると既定のブルーに戻る", async ({ page }) => {
     await useDemo(page, { token: null });
     await gotoPage(page, "/settings");
     await expect(page.locator("html")).toHaveAttribute("data-accent", "blue");
-    await expect(page.getByRole("radio", { name: "自動（ブルー・既定）" })).toBeChecked();
+    await expect(page.locator('input[name="yn-set-accent"][value="auto"]')).toBeChecked();
     await page.locator("#yn-set-token").fill("demo-token");
     await page.locator("#yn-set-token").press("Enter");
     await expect(page.locator('[data-role="check-result"]')).toContainText("接続できました");
     await expect(page.locator("html")).toHaveAttribute("data-accent", "indigo");
-    await expect(page.getByRole("radio", { name: "自動（インディゴ・GitLab）" })).toBeChecked();
+    await expect(page.locator('input[name="yn-set-accent"][value="auto"]')).toBeChecked();
     // 設定画面で選んだ色は GitLab より優先
     await page.getByRole("radio", { name: "グレー" }).check();
     await expect(page.locator("html")).toHaveAttribute("data-accent", "gray");
     await gotoPage(page, "/teams");
     await expect(page.locator("html")).toHaveAttribute("data-accent", "gray");
     await gotoPage(page, "/settings");
-    await page.getByRole("radio", { name: /^自動（インディゴ/ }).check();
+    await page.locator('input[name="yn-set-accent"][value="auto"]').check();
     await expect(page.locator("html")).toHaveAttribute("data-accent", "indigo");
     await page.getByRole("button", { name: "削除" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-accent", "blue");

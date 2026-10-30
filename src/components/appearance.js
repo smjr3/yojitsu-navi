@@ -1,10 +1,10 @@
 /**
- * 配色（SPEC §53）: 表示モード（ライト／ダーク）と差し色
+ * 配色（SPEC §53）: 表示モード（ライト／ダーク）とテーマカラー
  *
  * 決め方（上から順に、決まったものを使う）
  *   表示モード: 設定画面で選んだライト／ダーク → GitLab（旧ダークテーマ・API が返す場合のカラーモード）→ PC（OS）の設定 → ライト
  *   （GitLab の GET /user は現行版でカラーモードを返さないので、多くの場合は PC の設定に合わせることになる）
- *   差し色:     設定画面で選んだ色 → GitLab のユーザー設定（テーマ）→ 既定（ブルー）
+ *   テーマカラー:     設定画面で選んだ色 → GitLab のユーザー設定（テーマ）→ 既定（ブルー）
  * GitLab の設定は「接続を確認」と、トークンがあるときのページ表示（1 時間に 1 回）で GET /user から読み、localStorage に置く。
  *
  * observablehq.config.js が appearanceScript() の文字列を全ページの <head> に埋め込み、描画前に <html data-theme data-accent> を決める。
@@ -15,7 +15,7 @@ export const THEME_KEY = "yn-theme";
 export const ACCENT_KEY = "yn-accent";
 export const GITLAB_LOOK_KEY = "yojitsu-navi:gitlab-look:v1";
 export const THEME_PREFS = ["auto", "light", "dark"];
-/** 差し色（色の値は style.css の :root[data-accent]） */
+/** テーマカラー（色の値は style.css の :root[data-accent]） */
 export const ACCENTS = ["blue", "indigo", "green", "red", "gray"];
 export const DEFAULT_ACCENT = "blue";
 
