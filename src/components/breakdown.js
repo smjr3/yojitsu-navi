@@ -14,7 +14,7 @@
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
-import { grossMarginOf } from "./analysis.js";
+import { grossMarginOf, memberNameAt } from "./analysis.js";
 import { worklogKey } from "./worklog-key.js";
 
 /**
@@ -382,7 +382,7 @@ export function burnRateSpec({ totals, unit, threshold, asOfMonth, subtitle = nu
 }
 
 /** 契約1件の着地見込み（ForecastBreakdown） */
-export function forecastSpec({ forecast, contract, unit, config, subtitle = null }) {
+export function forecastSpec({ forecast, contract, unit, config, model = null, subtitle = null }) {
   const b = forecast.breakdown;
   const method = forecast.method;
   const rows = [
@@ -405,7 +405,7 @@ export function forecastSpec({ forecast, contract, unit, config, subtitle = null
         title: T.breakdown.assignmentDetails,
         table: {
           columns: [{ label: T.breakdown.colMonth }, { label: T.breakdown.colMember }, { label: T.breakdown.colAllocation, align: "num" }, { label: T.breakdown.colHours, align: "num" }, { label: T.breakdown.colRate, align: "num" }, { label: T.breakdown.colAmount, align: "num" }],
-          rows: b.assignmentLines.map((l) => [l.month, l.memberId, decimal(l.allocation, 2), formatHours(l.hours), money(l.hourlyRate, "yen"), money(l.amount, unit)]),
+          rows: b.assignmentLines.map((l) => [l.month, model ? memberNameAt(model, l.memberId, l.month) : l.memberId, decimal(l.allocation, 2), formatHours(l.hours), money(l.hourlyRate, "yen"), money(l.amount, unit)]),
         },
       });
     }

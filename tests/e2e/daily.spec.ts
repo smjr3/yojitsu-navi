@@ -44,7 +44,7 @@ test("今月の進捗: KPI の値が core の計算と一致し、表の最後�
   expect(await kpiYen(page, "yn-daily-actual")).toBe(Math.round(p.actual));
   expect(await kpiYen(page, "yn-daily-left")).toBe(Math.round(p.remaining));
   expect(await kpiYen(page, "yn-daily-projection")).toBe(Math.round(p.projection));
-  await expect(section(page).locator("#yn-daily-left .yn-kpi-label")).toContainText(`残り ${p.remainingBusinessDays} 営業日`);
+  await expect(section(page).locator("#yn-daily-left .yn-kpi-label")).toHaveText(`残り ${p.remainingBusinessDays} 営業日の予算`);
   await section(page).locator("summary", { hasText: "表で見る" }).click();
   const rows = section(page).locator("table").first().locator("tbody tr");
   await expect(rows).toHaveCount(p.points.filter((x) => x.cumulative !== null).length);
