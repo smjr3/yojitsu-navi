@@ -12,7 +12,7 @@ title: 顧客詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, targetForMonth } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
@@ -21,7 +21,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
+import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
@@ -195,26 +195,27 @@ if (vm) {
 ```
 
 ```js
-// 今月の進み（日別の速報。§61）。読めなければ出さない
+if (vm) {
+  const series = withTargets(vm.series, (m) => targetForMonth(model, "customer", group.label, m));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
+  display(chartFigure({
+    title: T.charts.monthlyTitle,
+    subtitle: periodJa(vm.scope.period),
+    legend: monthlyLegend(dark, series),
+    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
+    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
+  }));
+}
+```
+
+```js
+// 今月の進捗（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
 ```
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, vm.scope.contractIds, vm.scope.period), { unit: vm.unit, dark, subtitle: group.label, exportName: `customer_daily_${model.meta.asOfMonth}` }));
-}
-```
-
-```js
-if (vm) {
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(chartFigure({
-    title: T.charts.monthlyTitle,
-    subtitle: periodJa(vm.scope.period),
-    legend: monthlyLegend(dark),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
-  }));
+  display(dailySection(dailyFor(model, daily, vm.scope.contractIds, vm.scope.period, targetForMonth(model, "customer", group.label, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: group.label, exportName: `customer_daily_${model.meta.asOfMonth}` }));
 }
 ```
 

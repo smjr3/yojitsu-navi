@@ -120,3 +120,19 @@ export function headlineTarget(targets: readonly Target[], asOfMonth: YearMonth)
   return sorted.find((t) => t.endMonth >= asOfMonth) ?? (sorted[sorted.length - 1] as Target);
 }
 
+
+/**
+ * 今月の進捗（§61）の上限に使う目標: 期間（開始月〜終了月）が month を含む目標のうち、期間の最も短いもの
+ * （月ごとの目標があれば年度の目標より優先）。同じ長さなら終了月の早いもの。無ければ null
+ */
+export function targetForMonth(model: Model, kind: TargetKind, targetId: string, month: YearMonth): Target | null {
+  const fy = model.config.fiscalYearStartMonth;
+  let best: { t: Target; span: number } | null = null;
+  for (const t of targetsOf(model, kind, targetId)) {
+    const from = targetStartMonth(t, fy);
+    if (month < from || month > t.endMonth) continue;
+    const span = monthRange(from, t.endMonth).length;
+    if (!best || span < best.span) best = { t, span };
+  }
+  return best?.t ?? null;
+}

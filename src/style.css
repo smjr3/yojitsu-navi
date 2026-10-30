@@ -1164,6 +1164,11 @@ h3 {
   border-top: 2px dashed var(--c);
   border-radius: 0;
 }
+.yn-legend-line-dotted {
+  height: 0;
+  border-top: 2px dotted var(--c);
+  border-radius: 0;
+}
 .yn-details {
   margin-top: 8px;
   border-top: 1px solid var(--yn-hairline);
@@ -3943,7 +3948,7 @@ html:has(dialog.yn-dialog[open]) {
   }
 }
 
-/* ── 今月の進み（SPEC §61）: KPI 4 枚は幅が足りれば 4 列、足りなければ 2×2、スマホは 1 列 ── */
+/* ── 今月の進捗（SPEC §61）: KPI 4 枚は幅が足りれば 4 列、足りなければ 2×2、スマホは 1 列 ── */
 .yn-daily-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3961,7 +3966,7 @@ html:has(dialog.yn-dialog[open]) {
   }
 }
 
-/* ── 今月の進み: メンバー×日の表（SPEC §61） ───────────── */
+/* ── 今月の進捗: メンバー×日の表（SPEC §61） ───────────── */
 .yn-dg-wrap {
   overflow-x: auto;
   padding: 0;
