@@ -192,7 +192,7 @@ export interface TeamRecord {
   effectiveFrom: YearMonth;
   /** 種別（「課」「チーム」「班」など自由入力。空 = なし）。SPEC §21 */
   level?: string;
-  /** リーダーのメンバーID。null/省略 = 未設定。SPEC §22 */
+  /** リーダーの社員番号。null/省略 = 未設定。SPEC §22 */
   leaderMemberId?: string | null;
 }
 
@@ -217,7 +217,7 @@ export interface MemberRecord {
 }
 
 export interface RateRecord {
-  /** 役職名 または メンバーID */
+  /** 役職名 または 社員番号 */
   key: string;
   /** 時間単価（円） */
   hourlyRate: number;
@@ -326,10 +326,12 @@ export interface ContractMonth {
 
 export interface ForecastBreakdown {
   method: ForecastMethod;
+  /** asOf の年度 */
   fiscalYear: number;
-  fiscalYearMonths: YearMonth[];
-  /** 契約期間と年度の両方に含まれる月 */
-  contractMonthsInFY: YearMonth[];
+  /** 着地を見る対象の月（既定は asOf の年度。画面では選択中の期間、案件詳細では契約の全期間。§53） */
+  targetMonths: YearMonth[];
+  /** 契約期間と対象の両方に含まれる月 */
+  contractMonthsInTarget: YearMonth[];
   actualMonths: YearMonth[];
   remainingMonths: YearMonth[];
   actualCost: number;
@@ -337,7 +339,7 @@ export interface ForecastBreakdown {
   averageBasisMonths: YearMonth[];
   averageMonthlyCost: number;
   /** assignment 方式での残り月の見積り明細 */
-  assignmentLines: Array<{ month: YearMonth; memberId: string; allocation: number; hours: number; hourlyRate: number; amount: number }>;
+  assignmentLines: AssignmentForecastLine[];
   remainingCost: number;
   /** 見積りに実績がない（平均の基礎が0か月） */
   noActuals: boolean;
@@ -345,11 +347,29 @@ export interface ForecastBreakdown {
   noAssignments: boolean;
 }
 
+/** リソース計画（assignment 方式）の 1 か月・1 人ぶんの見積り */
+export interface AssignmentForecastLine {
+  month: YearMonth;
+  memberId: string;
+  allocation: number;
+  hours: number;
+  hourlyRate: number;
+  amount: number;
+}
+
+/** 契約のリソース計画の明細（asOf 月から契約の終了月まで。対象の月を変えても計算し直せるように Model に持たせる） */
+export interface AssignmentPlan {
+  /** この契約のアサインが 1 行でもあるか（無ければ assignment 方式は noAssignments） */
+  hasAssignments: boolean;
+  lines: AssignmentForecastLine[];
+}
+
 export interface Forecast {
   contractId: string;
   fiscalYear: number;
   method: ForecastMethod;
-  fyBudget: number;
+  /** 対象の月（契約期間内）の予算の合計 */
+  targetBudget: number;
   forecastCost: number;
   forecastGrossProfit: number;
   isDeficit: boolean;
@@ -359,8 +379,10 @@ export interface Forecast {
 export interface ContractResult {
   contract: Contract;
   months: ContractMonth[];
-  /** 方式ごとの着地見込み（年度は asOf の年度） */
+  /** 方式ごとの着地見込み。Model を作った時点は asOf の年度。画面では setForecastPeriod で選択中の期間に置き換える（§53） */
   forecasts: Record<ForecastMethod, Forecast>;
+  /** リソース計画の明細（期間を変えて着地を計算し直すための材料） */
+  assignmentPlan: AssignmentPlan;
 }
 
 export interface TeamNode {
@@ -369,7 +391,7 @@ export interface TeamNode {
   parentTeamId: string | null;
   /** 種別（空文字 = なし）。SPEC §21 */
   level: string;
-  /** リーダーのメンバーID（null = 未設定）。SPEC §22 */
+  /** リーダーの社員番号（null = 未設定）。SPEC §22 */
   leaderMemberId: string | null;
   depth: number;
   children: string[];
@@ -396,7 +418,7 @@ export type WarningCode =
 export interface Warning {
   code: WarningCode;
   message: string;
-  /** 関係する識別子（契約ID・メンバーID・顧客名など） */
+  /** 関係する識別子（契約ID・社員番号・顧客名など） */
   ref?: Record<string, string | number>;
   /** 件数や時間など、まとめる単位 */
   hours?: number;
@@ -667,7 +689,9 @@ export interface MonthlyPoint {
 export interface ForecastTotals {
   method: ForecastMethod;
   fiscalYear: number;
-  fyBudget: number;
+  /** 着地を見ている対象の期間（setForecastPeriod で選んだもの。null = asOf の年度） */
+  period: Period | null;
+  targetBudget: number;
   forecastCost: number;
   forecastGrossProfit: number;
   deficitContractIds: string[];

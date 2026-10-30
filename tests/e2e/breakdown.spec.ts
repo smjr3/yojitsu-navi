@@ -170,14 +170,17 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   const d = dialog(page);
   await expect(d).toBeVisible();
   await expect(d.locator("#yn-dialog-title")).toContainText("着地見込みの計算根拠");
-  await expect(d.locator(".yn-bd-formula")).toContainText("着地差 = 年度予算 − 着地実績");
+  await expect(d.locator(".yn-bd-formula")).toContainText("着地差 = 期間の予算 − 着地実績");
   expect(await dialogRow(page, "方式")).toBe("直近実績");
-  expect(await dialogRow(page, "対象年度")).toBe(`FY${f.fiscalYear}`);
+  // 対象は選んだ期間（既定は今年度）を案件の期間に収めたもの（§53）
+  const ja = (m: string) => `${Number(m.slice(0, 4))}年${Number(m.slice(5))}月`;
+  const inTarget = b.contractMonthsInTarget;
+  expect(await dialogRow(page, "対象期間")).toBe(`${ja(inTarget[0]!)}〜${ja(inTarget.at(-1)!)}`);
   expect(await dialogRow(page, "実績月（完了した月）")).toBe(`${b.actualMonths.length}か月`);
   expect(await dialogRow(page, "残り月（基準月を含む）")).toBe(`${b.remainingMonths.length}か月`);
   expect(await dialogRow(page, "平均の基礎にした月")).toBe(`${b.averageBasisMonths.length}か月`);
   expect(b.averageBasisMonths.length).toBe(model.config.forecastRecentMonths);
-  const fyBudget = parseNumber(await dialogRow(page, "年度予算"))!;
+  const targetBudget = parseNumber(await dialogRow(page, "期間の予算"))!;
   const actual = parseNumber(await dialogRow(page, "実績（実績月の合計）"))!;
   const avg = parseNumber(await dialogRow(page, "月平均の実績"))!;
   const remaining = parseNumber(await dialogRow(page, "残り見込み"))!;
@@ -186,7 +189,7 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   expect(shown, "KPI は画面の既定単位").toBe(yen(f.forecastGrossProfit, DEFAULT_UNIT));
   expect(gp, "dialog は常に円").toBe(yen(f.forecastGrossProfit, "yen"));
   // core の値と一致
-  expect(fyBudget).toBe(f.fyBudget);
+  expect(targetBudget).toBe(f.targetBudget);
   expect(actual).toBe(b.actualCost);
   expect(avg).toBe(Math.round(b.averageMonthlyCost));
   expect(remaining).toBe(b.remainingCost);
@@ -195,9 +198,9 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   const n = b.remainingMonths.length;
   expect(Math.abs(remaining - avg * n), "残り見込み ≒ 平均 × 残り月数（丸め差は月数以内）").toBeLessThanOrEqual(n);
   expect(actual + remaining).toBe(forecastCost);
-  expect(fyBudget - forecastCost).toBe(parseNumber(gp));
-  // 実績月 + 残り月 = 年度内の契約月
-  expect(b.actualMonths.length + b.remainingMonths.length).toBe(b.contractMonthsInFY.length);
+  expect(targetBudget - forecastCost).toBe(parseNumber(gp));
+  // 実績月 + 残り月 = 期間内の契約月
+  expect(b.actualMonths.length + b.remainingMonths.length).toBe(b.contractMonthsInTarget.length);
   await expect(d.locator(".yn-bd-rows")).toContainText(b.remainingMonths[0]!);
   await expect(d.locator(".yn-bd-rows")).toContainText("超過見込み");
 });

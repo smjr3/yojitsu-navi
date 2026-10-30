@@ -149,14 +149,14 @@ test.describe("メンバー一覧 /members", () => {
     expect(download.suggestedFilename()).toBe(`members_${CMP.from}_${CMP.to}.xlsx`);
     const wb = XLSX.readFile((await download.path())!);
     const aoa = XLSX.utils.sheet_to_json<Array<string | number | null>>(wb.Sheets[wb.SheetNames[0]!]!, { header: 1, defval: null });
-    const hr = aoa.findIndex((r) => r.includes("メンバーID"));
+    const hr = aoa.findIndex((r) => r.includes("社員番号"));
     const header = aoa[hr]!.map((x) => String(x ?? ""));
-    for (const label of ["メンバー", "メンバーID", "所属チーム", "役職", "区分", "計画時間（h）", "実績時間（h）", "稼働率（%）", "計画額（円）", "実績（円）", "差額（計画−実績）（円）", "状態"]) expect(header).toContain(label);
+    for (const label of ["メンバー", "社員番号", "所属チーム", "役職", "区分", "計画時間（h）", "実績時間（h）", "稼働率（%）", "計画額（円）", "実績（円）", "差額（計画−実績）（円）", "状態"]) expect(header).toContain(label);
     const agg = aggregateMembers(model, { period: CMP });
-    const body = aoa.slice(hr + 1).filter((r) => r[header.indexOf("メンバーID")]);
+    const body = aoa.slice(hr + 1).filter((r) => r[header.indexOf("社員番号")]);
     expect(body).toHaveLength(agg.members.length);
     for (const r of body) {
-      const m = agg.members.find((x) => x.memberId === r[header.indexOf("メンバーID")])!;
+      const m = agg.members.find((x) => x.memberId === r[header.indexOf("社員番号")])!;
       expect(r[header.indexOf("計画額（円）")]).toBe(m.plannedCost);
       expect(r[header.indexOf("実績（円）")]).toBe(m.actualCost);
       expect(r[header.indexOf("差額（計画−実績）（円）")]).toBe(m.variance);

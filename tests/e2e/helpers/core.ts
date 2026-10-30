@@ -12,6 +12,7 @@ import {
   forecastTotals,
   formatPercent,
   formatYen,
+  setForecastPeriod,
   teamTreeForMonth,
   type ContractResult,
   type ForecastMethod,
@@ -102,7 +103,9 @@ export function totalsFor(period: Period, contractIds?: readonly string[], model
   return contractIds ? aggregate(model, { period, contractIds }) : aggregate(model, { period });
 }
 
-export function forecastFor(method: ForecastMethod, contractIds?: readonly string[], model: Model = getModel()) {
+/** 着地見込みの合計（対象は period の終わりまで。§53。省略時は今年度 = 画面の既定の期間） */
+export function forecastFor(method: ForecastMethod, contractIds?: readonly string[], model: Model = getModel(), period: Period = fiscalPeriod(model)) {
+  setForecastPeriod(model, period);
   return forecastTotals(model, contractIds, method);
 }
 
@@ -120,8 +123,9 @@ export function contractsInPeriod(period: Period, contractIds?: readonly string[
 
 /** 案件一覧の 1 行の期待値（analysis.contractRow と同じ定義） */
 export function contractRowExpected(r: ContractResult, period: Period, method: ForecastMethod, model: Model = getModel()) {
+  setForecastPeriod(model, period);
   const totals = aggregate(model, { period, contractIds: [r.contract.contractId] });
   const f = r.forecasts[method];
-  const forecastGrossProfit = f.fyBudget === 0 && f.breakdown.contractMonthsInFY.length === 0 ? null : f.forecastGrossProfit;
+  const forecastGrossProfit = f.targetBudget === 0 && f.breakdown.contractMonthsInTarget.length === 0 ? null : f.forecastGrossProfit;
   return { totals, forecast: f, forecastGrossProfit, isDeficit: f.isDeficit, isOverBudget: totals.isOverBudget, includesPreliminary: totals.includesPreliminary };
 }

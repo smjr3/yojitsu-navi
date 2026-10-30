@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, forecastTotals, monthlySeries } from "../../src/core/aggregate.js";
+import { aggregate, contractEndForecasts, forecastPeriodOf, forecastTotals, monthlySeries, setForecastPeriod } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
 import type { Dataset } from "../../src/core/types.js";
 import { assignment, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
@@ -139,7 +139,7 @@ describe("buildModel — 手計算の例", () => {
 
   it("着地見込み 3 方式", () => {
     const { recent3, all, assignment: asg } = c1.forecasts;
-    expect(recent3.fyBudget).toBe(2_400_000);
+    expect(recent3.targetBudget).toBe(2_400_000);
     expect(recent3.breakdown.actualCost).toBe(643_250);
     expect(recent3.breakdown.averageBasisMonths).toEqual(["2026-07", "2026-08", "2026-09"]);
     expect(recent3.breakdown.averageMonthlyCost).toBeCloseTo(241_250 / 3, 6);
@@ -160,7 +160,7 @@ describe("buildModel — 手計算の例", () => {
     expect(asg.isDeficit).toBe(true);
 
     const totals = forecastTotals(model, undefined, "assignment");
-    expect(totals).toEqual({ method: "assignment", fiscalYear: 2026, fyBudget: 2_400_000, forecastCost: 3_523_250, forecastGrossProfit: -1_123_250, deficitContractIds: ["C1"], contractCount: 1 });
+    expect(totals).toEqual({ method: "assignment", fiscalYear: 2026, period: null, targetBudget: 2_400_000, forecastCost: 3_523_250, forecastGrossProfit: -1_123_250, deficitContractIds: ["C1"], contractCount: 1 });
   });
 
   it("月次推移", () => {
@@ -291,5 +291,29 @@ describe("buildModel — 境界・警告", () => {
     const model = buildModel(dataset({ teams: [team("A", "B"), team("B", "A")] }), { asOf: "2026-10-27" });
     expect(model.warnings.map((w) => w.code)).toEqual(["UNKNOWN_TEAM"]);
     expect(model.rootTeamIds).toEqual(["A"]);
+  });
+});
+
+describe("着地見込みの対象を期間に合わせる (SPEC §53)", () => {
+  it("setForecastPeriod は forecasts を期間で計算し直し、forecastTotals に期間が出る。同じ期間なら何もしない", () => {
+    const model = buildModel(workedExample(), { asOf: "2026-10-27", generatedAt: "2026-10-27T02:00:00Z" });
+    const fy = forecastTotals(model, undefined, "recent3");
+    setForecastPeriod(model, { from: "2026-04", to: "2026-12" });
+    const t = forecastTotals(model, undefined, "recent3");
+    expect(t.period).toEqual({ from: "2026-04", to: "2026-12" });
+    expect(forecastPeriodOf(model)).toEqual({ from: "2026-04", to: "2026-12" });
+    expect(t.targetBudget).toBeLessThan(fy.targetBudget);
+    const before = model.contracts[0]!.forecasts;
+    setForecastPeriod(model, { from: "2026-04", to: "2026-12" });
+    expect(model.contracts[0]!.forecasts).toBe(before);
+    expect(Object.keys(model), "期間は JSON に出さない").not.toContain("forecastPeriod");
+  });
+
+  it("contractEndForecasts は契約の全期間を対象にする", () => {
+    const model = buildModel(workedExample(), { asOf: "2026-10-27", generatedAt: "2026-10-27T02:00:00Z" });
+    const r = model.contracts[0]!;
+    const end = contractEndForecasts(model, r);
+    expect(end.recent3.breakdown.contractMonthsInTarget[0]).toBe(r.contract.startMonth);
+    expect(end.recent3.breakdown.contractMonthsInTarget.at(-1)).toBe(r.contract.endMonth);
   });
 });

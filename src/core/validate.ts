@@ -357,7 +357,7 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     push({ severity: "warning", code: "EXCLUDED_NO_CUSTOMER", message: fmt(T.checks.excludedNoCustomer, { file, hours: mapping.excludedHours }), file, ref: { hours: mapping.excludedHours } });
   }
 
-  // 単価なし・未知メンバー（紐付いた実績のみ対象。メンバーID・月で集約）
+  // 単価なし・未知メンバー（紐付いた実績のみ対象。社員番号・月で集約）
   const masters = createMasterIndex(dataset);
   const missing = new Map<string, { memberId: string; month: YearMonth; hours: number }>();
   const unknown = new Map<string, number>();

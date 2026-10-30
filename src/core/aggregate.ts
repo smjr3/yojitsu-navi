@@ -4,6 +4,7 @@
 import { monthRange } from "./calendar.js";
 import { monthStatusFromMeta } from "./status.js";
 import { teamTreeAt } from "./masters.js";
+import { forecastAllMethodsForMonths } from "./forecast.js";
 import { T } from "../i18n/index.js";
 import type {
   Contract,
@@ -11,6 +12,7 @@ import type {
   ContractResult,
   CostTypeId,
   Dataset,
+  Forecast,
   ForecastMethod,
   ForecastTotals,
   Model,
@@ -131,27 +133,57 @@ export function monthlySeries(model: Model, scope: AggregateScope): MonthlyPoint
   return [...points.values()];
 }
 
-/** 契約ごとの着地見込みを合算 */
+/** 契約ごとの着地見込みを合算（対象の期間は setForecastPeriod で選んだもの） */
 export function forecastTotals(model: Model, contractIds: readonly string[] | undefined, method: ForecastMethod): ForecastTotals {
   const results = selectContracts(model, contractIds);
-  let fyBudget = 0;
+  let targetBudget = 0;
   let forecastCost = 0;
   const deficitContractIds: string[] = [];
   for (const r of results) {
     const f = r.forecasts[method];
-    fyBudget += f.fyBudget;
+    targetBudget += f.targetBudget;
     forecastCost += f.forecastCost;
     if (f.isDeficit) deficitContractIds.push(r.contract.contractId);
   }
   return {
     method,
     fiscalYear: model.meta.fiscalYear,
-    fyBudget,
+    period: forecastPeriodOf(model),
+    targetBudget,
     forecastCost,
-    forecastGrossProfit: fyBudget - forecastCost,
+    forecastGrossProfit: targetBudget - forecastCost,
     deficitContractIds,
     contractCount: results.length,
   };
+}
+
+const FORECAST_PERIOD = Symbol("forecastPeriod");
+type WithForecastPeriod = Model & { [FORECAST_PERIOD]?: Period };
+
+/** いま着地見込みが対象にしている期間（null = Model を作ったときの asOf の年度） */
+export function forecastPeriodOf(model: Model): Period | null {
+  return (model as WithForecastPeriod)[FORECAST_PERIOD] ?? null;
+}
+
+/**
+ * 着地見込みの対象を期間に合わせる（§53）。契約ごとの forecasts を、期間内の契約月だけで計算し直して置き換える。
+ * 画面は期間を変えるたびに呼ぶ（scopeFor が呼ぶ）。同じ期間なら何もしない。Model を書き換えるのはここだけ。
+ */
+export function setForecastPeriod(model: Model, period: Period): void {
+  const cur = forecastPeriodOf(model);
+  if (cur && cur.from === period.from && cur.to === period.to) return;
+  const basis = { asOfMonth: model.meta.asOfMonth, fiscalYear: model.meta.fiscalYear, forecastRecentMonths: model.config.forecastRecentMonths };
+  const target = period.from <= period.to ? monthRange(period.from, period.to) : [];
+  for (const r of model.contracts) {
+    r.forecasts = forecastAllMethodsForMonths(basis, r.contract, r.months, r.assignmentPlan, target);
+  }
+  Object.defineProperty(model, FORECAST_PERIOD, { value: { from: period.from, to: period.to }, configurable: true, enumerable: false, writable: true });
+}
+
+/** 契約の全期間（案件終了時点）の着地見込み（案件詳細で使う。§53） */
+export function contractEndForecasts(model: Model, r: ContractResult): Record<ForecastMethod, Forecast> {
+  const basis = { asOfMonth: model.meta.asOfMonth, fiscalYear: model.meta.fiscalYear, forecastRecentMonths: model.config.forecastRecentMonths };
+  return forecastAllMethodsForMonths(basis, r.contract, r.months, r.assignmentPlan, monthRange(r.contract.startMonth, r.contract.endMonth));
 }
 
 /**

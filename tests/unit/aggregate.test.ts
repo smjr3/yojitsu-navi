@@ -140,7 +140,7 @@ describe("forecastTotals", () => {
     // B: 年度内 07〜09 すべて実績、残り 0 → 120,000
     // U: 2026-04 のみ、残り 0、予算 0 → 0
     // Z: 年度外 → 0
-    expect(t.fyBudget).toBe(1_500_000);
+    expect(t.targetBudget).toBe(1_500_000);
     expect(t.forecastCost).toBe(280_000);
     expect(t.forecastGrossProfit).toBe(1_220_000);
     expect(t.deficitContractIds).toEqual([]);
@@ -150,7 +150,7 @@ describe("forecastTotals", () => {
 
   it("契約を絞る・赤字", () => {
     const t = forecastTotals(model, ["B"], "all");
-    expect(t.fyBudget).toBe(300_000);
+    expect(t.targetBudget).toBe(300_000);
     expect(t.forecastCost).toBe(120_000);
     expect(t.contractCount).toBe(1);
     const u = forecastTotals(model, ["U"], "all");
@@ -158,7 +158,7 @@ describe("forecastTotals", () => {
   });
 
   it("契約 0 件", () => {
-    expect(forecastTotals(model, [], "assignment")).toEqual({ method: "assignment", fiscalYear: 2026, fyBudget: 0, forecastCost: 0, forecastGrossProfit: 0, deficitContractIds: [], contractCount: 0 });
+    expect(forecastTotals(model, [], "assignment")).toEqual({ method: "assignment", fiscalYear: 2026, period: null, targetBudget: 0, forecastCost: 0, forecastGrossProfit: 0, deficitContractIds: [], contractCount: 0 });
   });
 });
 

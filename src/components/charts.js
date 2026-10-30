@@ -75,8 +75,8 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       hasForecast && lastActual
         ? Plot.rectX([{ x1: lastActual.i + 0.5, x2: n - 0.5 }], { x1: "x1", x2: "x2", fill: c.muted, fillOpacity: 0.06 })
         : null,
-      // 予算（左の棒）。見込み月は薄く、年度外（見込み対象外）の月はさらに薄く
-      Plot.rectY(data, { x1: (d) => d.i - gap - bw, x2: (d) => d.i - gap, y: "budget", fill: c.budget, fillOpacity: (d) => (d.isActual ? 1 : d.outsideFY ? 0.3 : 0.55), ry2: 4, title: null }),
+      // 予算（左の棒）。見込み月は薄く
+      Plot.rectY(data, { x1: (d) => d.i - gap - bw, x2: (d) => d.i - gap, y: "budget", fill: c.budget, fillOpacity: (d) => (d.isActual ? 1 : 0.55), ry2: 4, title: null }),
       // 原価（実績）
       Plot.rectY(actual, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "cost", fill: c.cost, ry2: 4 }),
       // 原価（見込み）: 薄い塗り ＋ 破線の枠
@@ -100,11 +100,11 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
           stroke: c.axis,
           fontSize: 12,
           channels: {
-            [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : d.outsideFY ? T.charts.suffixOutsideFy : T.charts.suffixForecast }),
+            [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : T.charts.suffixForecast }),
             [T.charts.tipBudget]: (d) => money(d.budget, unit),
-            [T.charts.tipCost]: (d) => (d.isActual ? money(d.cost, unit) : d.outsideFY ? T.charts.outsideFyDash : fmt(T.charts.forecastValue, { value: money(d.forecastCost, unit) })),
+            [T.charts.tipCost]: (d) => (d.isActual ? money(d.cost, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastCost, unit) })),
             [T.charts.tipPrelim]: (d) => (!d.isActual && d.status === "preliminary" ? money(d.cost, unit) : null),
-            [T.charts.tipGrossProfit]: (d) => (d.isActual ? money(d.grossProfit, unit) : d.outsideFY ? "—" : fmt(T.charts.forecastValue, { value: money(d.forecastGrossProfit, unit) })),
+            [T.charts.tipGrossProfit]: (d) => (d.isActual ? money(d.grossProfit, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastGrossProfit, unit) })),
             [T.charts.tipHours]: (d) => (d.hours > 0 ? formatHours(d.hours) : null),
           },
           format: { x: false, y: false },
@@ -114,9 +114,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   });
   plot.setAttribute("role", "img");
   plot.setAttribute("aria-label", fmt(T.charts.monthlyAria, { title }));
-  const outside = data.filter((d) => d.outsideFY);
-  if (outside.length === 0) return plot;
-  return html`<div>${plot}<p class="yn-chart-note">${monthShort(outside[0].month, true)}${outside.length > 1 ? `〜${monthShort(outside[outside.length - 1].month, true)}` : ""}${T.charts.outsideFyNote}</p></div>`;
+  return plot;
 }
 
 export function monthlyLegend(dark) {
@@ -130,13 +128,12 @@ export function monthlyLegend(dark) {
   ]);
 }
 
-/** グラフの双子の表。実績月は実績、基準月以降は見込み、年度外の未来月は「年度外」（原価・粗利は無し） */
+/** グラフの双子の表。実績月は実績、基準月以降は見込み */
 export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {}) {
   const rows = series.map((d) => ({
     key: d.month,
     month: d.month,
     status: d.status,
-    outsideFY: d.outsideFY === true,
     budget: d.budget,
     cost: d.isActual ? d.cost : null,
     forecastCost: d.forecastCost,
@@ -145,13 +142,12 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {
     hours: d.hours,
     actualCostPrelim: !d.isActual && d.status === "preliminary" ? d.cost : null,
   }));
-  const statusText = (r) => (r.outsideFY ? fmt(T.charts.statusOutsideFy, { status: STATUS_LABELS[r.status] }) : STATUS_LABELS[r.status]);
   const columns = [
     { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
-    { key: "status", label: T.columns.status, type: "text", render: (r) => (r.outsideFY ? html`<span title=${T.charts.outsideFyTitle}>${statusText(r)}</span>` : statusText(r)), exportValue: (r) => statusText(r) },
+    { key: "status", label: T.columns.status, type: "text", render: (r) => STATUS_LABELS[r.status], exportValue: (r) => STATUS_LABELS[r.status] },
     { key: "budget", label: T.columns.budget, type: "money" },
     { key: "cost", label: T.charts.costActual, type: "money", render: (r, u) => (r.cost === null ? (r.actualCostPrelim !== null && r.actualCostPrelim > 0 ? fmt(T.charts.prelimValue, { value: money(r.actualCostPrelim, u) }) : "—") : money(r.cost, u)), exportValue: (r) => r.cost ?? r.actualCostPrelim },
-    { key: "forecastCost", label: T.charts.costForecast, type: "money", render: (r, u) => (r.outsideFY ? "—" : money(r.forecastCost, u)) },
+    { key: "forecastCost", label: T.charts.costForecast, type: "money", render: (r, u) => (r.forecastCost === null ? "—" : money(r.forecastCost, u)) },
     { key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => (r.grossProfit === null ? (r.forecastGrossProfit === null ? "—" : fmt(T.charts.forecastValue, { value: money(r.forecastGrossProfit, u) })) : money(r.grossProfit, u)), exportValue: (r) => r.grossProfit ?? r.forecastGrossProfit },
     { key: "hours", label: T.columns.hours, type: "hours", hideOnPhone: true, hideNarrow: true },
   ];

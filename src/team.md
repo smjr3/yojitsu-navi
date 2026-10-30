@@ -12,7 +12,7 @@ title: チーム詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, teamMemberCosts, teamOrgChanges, teamPath } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, setForecastPeriod, teamMemberCosts, teamOrgChanges, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -20,7 +20,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns, withForecastCount } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS } from "./components/team-detail.js";
 import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
@@ -48,6 +48,8 @@ const state = Generators.observe((notify) => {
 const vm = (() => {
   if (!model || !state) return null;
   const period = { from: state.from, to: state.to };
+  // 着地見込みは選択中の期間の終わりまで（§53）
+  setForecastPeriod(model, period);
   const treeMonth = treeMonthFor(model, period);
   const { tree } = treeAt(model, treeMonth);
   const isUnassigned = teamId === UNASSIGNED_TEAM_ID;
@@ -173,7 +175,7 @@ if (vm?.exists && vm.node && vm.node.children.length > 0) {
         burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: r.name }),
         forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref }),
       },
-    }).map(withForecastCount),
+    }),
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
   display(dataTable({ columns, rows, unit, caption: T.team.childrenTitle, exportName: `team_${vm.teamId}_children_${period.from}_${period.to}`, sort: { key: "status", dir: "asc" }, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));

@@ -21,7 +21,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns, withForecastCount } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
@@ -174,7 +174,7 @@ if (vm) {
       statTile({
         label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
         value: money(forecast.forecastGrossProfit, unit),
-        sub: fmt(T.kpi.forecastSub, { budget: money(forecast.fyBudget, unit), cost: money(forecast.forecastCost, unit) }),
+        sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
         status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
         breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref }),
         emphasis: true,
@@ -268,7 +268,7 @@ if (vm) {
   }
   const rows = [...byTeam.entries()]
     .map(([tid, ids]) => ({ ...idsRow(model, ids, scope.period, method, { name: tid === UNASSIGNED_TEAM_ID ? UNASSIGNED_TEAM_LABEL : teamName(model, tid, tree), teamId: tid }), key: tid }))
-    .filter((r) => r.contractCount > 0 || r.fyContractCount > 0);
+    .filter((r) => r.contractCount > 0);
   display(sectionTitle(T.customer.byTeamTitle, fmt(T.customer.byTeamHint, { customer: group.label, month: monthJa(treeMonthFor(model, scope.period)) })));
   if (rows.length === 0) {
     display(emptyState({ title: T.customer.noContractsTitle, text: T.customer.changePeriod, icon: "○" }));
@@ -276,7 +276,7 @@ if (vm) {
     const columns = [
       { key: "name", label: T.columns.team, type: "text" },
       ...teamCountColumns(),
-      ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }).map(withForecastCount),
+      ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
     ];
     display(

@@ -12,7 +12,7 @@
 | 実（実績） | 作業時間 × その月に有効な時間単価。種類（`costTypes`）を持つ。当面は `labor` のみ |
 | 残予算 | 予算 − 実績。残予算率 = 残予算 ÷ 予算 |
 | 消化率 | 経過月の累計実績 ÷ 経過月の累計予算。100%超（`burnRateDangerThreshold`）で赤 |
-| 着地見込み | 年度末時点の実績と残予算の予測。案件（契約）ごとに超過／範囲内 |
+| 着地見込み | 選んだ期間の終わり時点の実績と残予算の予測。案件（契約）ごとに超過／範囲内（§53） |
 | 年度 | 4月始まり（`fiscalYearStartMonth`）。FY2026 = 2026-04〜2027-03。年度番号は開始年 |
 | asOf | 計算基準日。既定は実行日。テストでは固定する |
 | リソース計画 | 人 × 案件 × 月の配分（アサイン）と契約外予定を入れる画面 `/plan`（§23・§36）。旧称: 稼働計画（改名は §48。URL・ファイル名・データ構造は変えない） |
@@ -75,8 +75,8 @@ teams / members / rates は `effectiveFrom`（適用開始月）付きの履歴�
 月 m のメンバー x の単価:
 1. `rates` に `key == memberId` の有効レコードがあればそれ（パートナー個人単価）。
 2. 無ければ、月 m に有効な `members` レコードの `title` で `key == title` を探す。
-3. 無ければ単価 0、`rateMissing = true`、警告 `RATE_MISSING`（メンバーID・月ごとに1件、時間を合算）。
-4. メンバーが `members` に無い → 単価は 1 のルールのみ試し、無ければ 0。警告 `UNKNOWN_MEMBER`（メンバーIDごとに1件）。
+3. 無ければ単価 0、`rateMissing = true`、警告 `RATE_MISSING`（社員番号・月ごとに1件、時間を合算）。
+4. メンバーが `members` に無い → 単価は 1 のルールのみ試し、無ければ 0。警告 `UNKNOWN_MEMBER`（社員番号ごとに1件）。
 
 単価改定は行を追加する運用。過去月は過去の単価で計算されるので再計算されない。
 
@@ -113,16 +113,15 @@ costs[labor] = cost
 - 人月（標準）= hours ÷ `standardHoursPerMonth`。
 - 人月（カレンダー）= hours ÷ (businessDays(m) × `hoursPerBusinessDay`)。複数月の合計は月ごとの人月を合算。
 
-## 10. 着地見込み（案件＝契約ごと・年度ごと）
+## 10. 着地見込み（案件＝契約ごと・対象の月ごと）
 
-対象年度 = asOf の年度（`meta.fiscalYear`）。契約 c について:
+対象の月 `targetMonths` = 画面で選んだ期間の月（§53。`model.json` に入る既定値は asOf の年度の 12 か月）。契約 c について:
 
 ```
-fyMonths        = 年度の12か月
-cMonthsInFY     = fyMonths ∩ 契約期間
-actualMonths    = cMonthsInFY のうち m < asOfMonth   // 完了した月（速報含む）
-remainingMonths = cMonthsInFY のうち m >= asOfMonth  // asOf 月を含む
-fyBudget        = Σ budget(c, m)  for m in cMonthsInFY
+cMonthsInTarget = targetMonths ∩ 契約期間                // contractMonthsInTarget
+actualMonths    = cMonthsInTarget のうち m < asOfMonth   // 完了した月（速報含む）
+remainingMonths = cMonthsInTarget のうち m >= asOfMonth  // asOf 月を含む
+targetBudget    = Σ budget(c, m)  for m in cMonthsInTarget
 actualCost      = Σ cost(c, m)    for m in actualMonths
 ```
 残り月の実績の出し方（方式）:
@@ -132,10 +131,10 @@ actualCost      = Σ cost(c, m)    for m in actualMonths
 
 ```
 forecastCost        = actualCost + remainingCost
-forecastGrossProfit = fyBudget - forecastCost
+forecastGrossProfit = targetBudget - forecastCost
 isDeficit           = forecastGrossProfit < 0
 ```
-契約が年度に1か月も掛からない場合: `fyBudget = 0, forecastCost = 0, isDeficit = false`、`contractMonthsInFY = []`。
+契約が対象の月に1か月も掛からない場合: `targetBudget = 0, forecastCost = 0, isDeficit = false`、`contractMonthsInTarget = []`。
 3方式すべてを `forecasts` に入れ、画面で切り替える。
 
 ## 11. 集計（画面側）
@@ -181,7 +180,7 @@ isDeficit           = forecastGrossProfit < 0
 `scripts/validate-data.ts` は以下で非0終了する:
 - 契約: ID重複、期間逆転、金額が数値でない／負／円の整数でない／9,007,199,254,740,991 円超、主担当チームが teams.csv に無い（`CONTRACT_UNKNOWN_TEAM`）
 - マッピング: 存在しない契約ID
-- アサイン: 未知のメンバーID／契約ID、allocation が 0〜1 の外
+- アサイン: 未知の社員番号／契約ID、allocation が 0〜1 の外
 - チーム: 未知の親ID、自分自身を親にした行（`TEAM_SELF_PARENT`。行番号つき）、循環、未知のリーダー（`TEAM_UNKNOWN_LEADER`。§22）、同じ team_id・effective_from の重複行（`DUPLICATE_TEAM_ROW`）
 - メンバー: 未知のチームID、区分が employee/partner 以外、同じ member_id・effective_from の重複行（`DUPLICATE_MEMBER_ROW`）
 - 単価: 数値でない／負、同じ key・effective_from の重複行（`DUPLICATE_RATE_ROW`）
@@ -340,7 +339,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ## 22. 組織ごとのリーダー
 
-- `teams.csv` に列 `leader_member_id`（リーダーのメンバーID）を追加する。省略可・空可。組織ごとに 1 人。履歴（`effective_from`）に乗るので、リーダー交代は新しい行で表す。
+- `teams.csv` に列 `leader_member_id`（リーダーの社員番号）を追加する。省略可・空可。組織ごとに 1 人。履歴（`effective_from`）に乗るので、リーダー交代は新しい行で表す。
 - 兼務可（1 人が複数の組織のリーダーでもよい）。リーダーは配下の組織の所属でなくてもよい。
 - 検証（§14 に追加）: `leader_member_id` が `members.csv` に無い → error `TEAM_UNKNOWN_LEADER`。
 - 表示: チーム一覧に「リーダー」列、チーム詳細の見出しの下にリーダー名（期間の終了月時点。§16 の基準月）、リソース計画の組織選択。`TeamNode` に `leaderMemberId`（null = 未設定）を持たせる。
@@ -759,9 +758,19 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ## 51. 試用版のコメント対応（2026-10-30 要望）
 - **着地見込みの方式**: 「アサイン計画」を **計画値** に改名（「アサイン」と「リソース計画」が混ざって分かりにくいため）。並びは **計画値 → 直近実績 → 全期間平均**、既定は計画値（`config.json` の `forecastMethodDefault: "assignment"`。値の名前・URL の `method=assignment` は変えない）。案件詳細の 3 方式の比較・計算ルール・使い方も同じ順。
-- **着地見込みの対象**は従来どおり、表示条件の期間に関係なく **asOf の年度末**（§10）。使い方の説明にその旨を明記。
+- **着地見込みの対象**は §53 で **選んだ期間の終わり** に変更した（当初は asOf の年度末）。
 - **ヘッダーのテーマ切替（☾／☀）を廃止**。設定画面の「表示」にあるため。右端のアイコンは設定と「⋯」の 2 つ。
 - **上部タブ「工数」→「稼働実績」**（画面名・見出し・グラフの名前）。URL `/workload` とデータは変えない。計算式の「工数 × 単価」などの一般的な言い方はそのまま。
 - **使い方**: 「リーダー向け」→「リーダー層向け」。「画面」の表から計算ルールの行を外す（⋯ メニューと 11. 困ったときで案内）。
 - **リソース計画の名前列の幅を変えられる**: 列見出し「メンバー」の右端の境目をドラッグ（矢印キーで 10px、Shift で 40px、Home・ダブルクリックで既定に戻す）。100〜480px（表示幅の 6 割まで。名前列は左に貼り付くため）。幅を決めたら名前を優先し、所属・チップは次の行へ回す。表は描き直さず CSS 変数だけを変え、幅はこのブラウザ（`localStorage` の `yojitsu-navi:plan-name-width`）に覚える。
 - 再発防止: `tests/e2e/review-comments.spec.ts`。
+
+## 53. 着地見込みを選んだ期間の終わりまでに・案件終了時点の着地（2026-10-30 要望）
+「年度の途中で始まる・終わる案件の収支が見にくい」「年度をまたぐ案件が多い」への対応。
+- **着地見込みの対象 = 表示条件の期間**（§10 の `targetMonths`）。全体・チーム・顧客・案件一覧・案件詳細の KPI・表・グラフ・計算根拠すべてで、選んだ期間の契約月だけを数える（実績月は基準月より前、残り月は基準月以降）。期間が過去だけなら残り月 0 で、着地差 = 期間の残予算。
+- コア: `Model.contracts[].assignmentPlan`（asOf 月〜契約終了月のリソース計画の明細）を持たせ、画面で `setForecastPeriod(model, period)` を呼ぶと `forecasts` を期間で計算し直す（`forecastForMonths`）。同じ期間なら何もしない。`forecastTotals()` は `period`（`null` = 既定の年度）と `targetBudget` を返す。`fyBudget`→`targetBudget`、`contractMonthsInFY`→`contractMonthsInTarget` に改名。
+- 期間で数えるので、着地差の下の「年度内 N件」と、案件一覧の「年度外」表示は廃止（期間に掛かる案件 = 着地見込みの対象）。
+- **案件詳細の「案件終了時点の着地」**: 契約の全期間を対象にした着地見込み（`contractEndForecasts`）を KPI の 6 枚目と 3 方式のカードの行に出す。押すと計算根拠。期間が契約の全期間と同じときは同じ値なので出さない（KPI は 5 枚）。
+- **リソース計画の「＋ 案件」**: 下書きの復元待ちのあいだ、行のボタン（＋ 案件・＋ 変更・案件の開閉）が消えていて「追加がない」と見えた。消さずに表示し、編集のボタンは押せない表示にする（復元か破棄を選ぶと押せる）。
+- **文言**: 検証・保存後の案内の「CI がビルドし直す」を「マージ後、数分で自動的に反映」に（手でビルドが要るように読めたため）。メンバーの ID の呼び名を **社員番号** に（列名 `member_id` は変えない）。
+- 再発防止: `tests/e2e/forecast-period.spec.ts`、`plan-cells.spec.ts`、`review-comments.spec.ts`、`tests/unit/forecast.test.ts`・`model.test.ts`。

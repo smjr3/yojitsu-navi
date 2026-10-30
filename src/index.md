@@ -20,7 +20,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns, withForecastCount } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
@@ -132,7 +132,7 @@ if (vm) {
       statTile({
         label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
         value: money(forecast.forecastGrossProfit, unit),
-        sub: fmt(T.kpi.forecastSub, { budget: money(forecast.fyBudget, unit), cost: money(forecast.forecastCost, unit) }),
+        sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
         status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
         breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
         emphasis: true,
@@ -169,7 +169,7 @@ if (vm) {
     .filter((r) => r.forecasts[method].isDeficit)
     .map((r) => ({ ...contractRow(model, r, scope.period, method, scope.tree), key: r.contract.contractId }))
     .sort((a, b) => a.forecastGrossProfit - b.forecastGrossProfit);
-  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { fy: fiscalYearLabel(model.meta.fiscalYear), method: METHOD_LABELS[method] })));
+  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { period: periodJa(scope.period), method: METHOD_LABELS[method] })));
   if (rows.length === 0) {
     display(emptyState({ title: T.index.noDeficitTitle, text: fmt(T.index.noDeficitText, { team: scope.teamLabel }), icon: "✓" }));
   } else {
@@ -230,7 +230,7 @@ if (vm) {
           burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: r.name }),
           forecast: (r) => bd.forecastTotalsSpec({ model, totals: r.forecast, unit, contractIds: r.contractIds, detailHref: (id) => store.href("./contract", {}, { id }) }),
         },
-      }).map(withForecastCount),
+      }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
     display(dataTable({ columns, rows, unit, caption: T.index.byTeamCaption, exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));

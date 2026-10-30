@@ -64,7 +64,7 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
     statTile({
       label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
       value: money(forecast.forecastGrossProfit, unit),
-      sub: fmt(T.kpi.forecastSub, { budget: money(forecast.fyBudget, unit), cost: money(forecast.forecastCost, unit) }),
+      sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
       status: deficitCount > 0 ? { kind: "danger", text: fmt(T.kpi.deficitCount, { n: deficitCount }) } : { kind: "ok", text: T.kpi.noDeficit },
       breakdown: () => bd.forecastTotalsSpec({ model, totals: forecast, unit, contractIds: scope.contractIds, detailHref }),
       emphasis: true,

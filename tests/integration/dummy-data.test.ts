@@ -152,7 +152,7 @@ describe("C005: 38,000,000 円 / 12 か月（§3 手計算）", () => {
     expect(last.budgetBreakdown.isLastMonth).toBe(true);
     expect(r.months.reduce((a, m) => a + m.budget, 0)).toBe(38_000_000);
     // FY2026 の着地予算も総額と一致（契約期間 = 年度）
-    expect(r.forecasts.recent3.fyBudget).toBe(38_000_000);
+    expect(r.forecasts.recent3.targetBudget).toBe(38_000_000);
   });
 });
 
@@ -183,7 +183,7 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(f.breakdown.actualCost).toBe(actual);
     expect(f.breakdown.averageMonthlyCost).toBe(avg);
     expect(f.breakdown.remainingCost).toBe(remaining);
-    expect(f.fyBudget).toBe(6_000_000);
+    expect(f.targetBudget).toBe(6_000_000);
     expect(f.forecastCost).toBe(actual + remaining);
     expect(f.forecastGrossProfit).toBe(6_000_000 - actual - remaining);
     expect(f.forecastGrossProfit).toBeLessThan(0);
@@ -207,7 +207,7 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(base(forecastTotals(model, undefined, "all").deficitContractIds)).toEqual(["C008"]);
     // assignment 方式では C013（月 10,000 円の予算）も赤字: M016 の配分 0.05 × 160h = 8h × 一般 6,000 円 = 48,000 円/月 × 残り 6 か月
     expect(base(forecastTotals(model, undefined, "assignment").deficitContractIds)).toEqual(["C008", "C013"]);
-    const fy = model.contracts.filter((r) => r.forecasts.recent3.fyBudget > 0);
+    const fy = model.contracts.filter((r) => r.forecasts.recent3.targetBudget > 0);
     const deficit = forecastTotals(model, undefined, "recent3").deficitContractIds.length;
     expect(deficit / fy.length).toBeGreaterThan(0.2);
     expect(deficit / fy.length).toBeLessThan(0.5);
@@ -215,9 +215,9 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(c013.breakdown.assignmentLines).toHaveLength(6);
     expect(c013.breakdown.assignmentLines.every((l) => l.memberId === "M016" && l.allocation === 0.05 && l.hours === 8 && l.hourlyRate === 6000 && l.amount === 48_000)).toBe(true);
     expect(c013.breakdown.remainingCost).toBe(48_000 * 6);
-    expect(c013.fyBudget).toBe(120_000);
-    // 前年度 C015（9,000,000）は黒字（FY2026 には掛からないので fyBudget 0）
-    expect(byId("C015").forecasts.recent3).toMatchObject({ fyBudget: 0, forecastCost: 0, isDeficit: false });
+    expect(c013.targetBudget).toBe(120_000);
+    // 前年度 C015（9,000,000）は黒字（FY2026 には掛からないので targetBudget 0）
+    expect(byId("C015").forecasts.recent3).toMatchObject({ targetBudget: 0, forecastCost: 0, isDeficit: false });
   });
 });
 
@@ -311,7 +311,7 @@ describe("月の状態・年度（asOf = 2026-10-27）", () => {
   it("C007（24 か月）の FY2026 予算は 4,000,000 × 12、C012（実績ゼロ）は基礎月があるので noActuals ではない", () => {
     const c007 = byId("C007");
     expect(c007.months.every((m) => m.budget === 4_000_000)).toBe(true);
-    expect(c007.forecasts.recent3.fyBudget).toBe(48_000_000);
+    expect(c007.forecasts.recent3.targetBudget).toBe(48_000_000);
     expect(c007.forecasts.recent3.breakdown.averageBasisMonths).toEqual(["2026-07", "2026-08", "2026-09"]);
     const c012 = byId("C012");
     // SPEC §10: noActuals は「基礎月が 0 か月」。C012 は 2026-07〜09 が基礎月（原価 0）なので false、平均 0
