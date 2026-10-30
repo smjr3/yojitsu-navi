@@ -87,12 +87,10 @@ const NAV = [
   { name: ja.app.nav.members, path: "/members", match: ["/members", "/member"] },
   { name: ja.app.nav.workload, path: "/workload", match: ["/workload"] },
 ];
-const TOOLS = [
-  { name: ja.app.nav.plan, path: "/plan" },
-  { name: ja.app.nav.masters, path: "/masters", badge: true },
-];
-// 使い方・データ確認・計算ルールはたまに見る画面なので、目立つ場所に置かない（§45・§47）
+const TOOLS = [{ name: ja.app.nav.plan, path: "/plan" }];
+// マスタ編集・使い方・データ確認・計算ルールは目立つ場所に置かない（§45・§47・§52）。マージ待ちの件数は「⋯」にも出す
 const MORE = [
+  { name: ja.app.nav.masters, path: "/masters", badge: true },
   { name: ja.app.nav.guide, path: "/guide" },
   { name: ja.app.nav.dataCheck, path: "/data-check" },
   { name: ja.app.nav.rules, path: "/rules" },
@@ -112,7 +110,7 @@ function header({ path }) {
   const dots = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></g></svg>`;
   const settingsOn = path === "/settings";
   const moreOn = MORE.some(isOn);
-  const more = `<span class="yn-more"><button type="button" class="yn-icon-btn yn-more-btn${moreOn ? " is-current" : ""}" aria-haspopup="true" aria-expanded="false" aria-controls="yn-more-menu" aria-label="${escapeHtml(ja.app.more)}" title="${escapeHtml(ja.app.more)}">${dots}</button><span class="yn-more-menu" id="yn-more-menu" hidden>${MORE.map((i) => link(i, "yn-more-item")).join("")}</span></span>`;
+  const more = `<span class="yn-more"><button type="button" class="yn-icon-btn yn-more-btn${moreOn ? " is-current" : ""}" aria-haspopup="true" aria-expanded="false" aria-controls="yn-more-menu" aria-label="${escapeHtml(ja.app.more)}" title="${escapeHtml(ja.app.more)}">${dots}</button>${badge.replace('class="yn-mr-badge"', 'class="yn-mr-badge yn-more-badge"')}<span class="yn-more-menu" id="yn-more-menu" hidden>${MORE.map((i) => link(i, "yn-more-item")).join("")}</span></span>`;
   return `<div class="yn-topbar">
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>

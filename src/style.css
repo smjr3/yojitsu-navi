@@ -271,12 +271,14 @@ body {
 .yn-unit-slot:empty + .yn-tools {
   margin-left: auto;
 }
+/* 右上の業務リンク（リソース計画）。よく使うので大きめに（§52） */
 .yn-tool {
-  padding: 4px 10px;
+  padding: 6px 20px;
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
-  color: var(--yn-text-2) !important;
-  font-size: 13px;
+  color: var(--yn-text-1) !important;
+  font-size: 14px;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -302,8 +304,8 @@ body {
     margin: 0 -8px;
   }
   .yn-tool {
-    padding: 2px 8px;
-    font-size: 12px;
+    padding: 4px 16px;
+    font-size: 13px;
   }
 }
 .yn-filterbar-slot:not(.is-filled) {
@@ -3234,6 +3236,22 @@ html:has(dialog.yn-dialog[open]) {
 .yn-more-item:hover,
 .yn-more-item:focus-visible {
   background: var(--yn-wash);
+}
+/* 「⋯」の右上のマージ待ち件数（メニューの中のマスタ編集にも同じ数） */
+.yn-more-badge:not([hidden]) {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 0;
+  padding: 0 4px;
+  font-size: 10px;
+  box-shadow: 0 0 0 2px var(--yn-card);
+  pointer-events: none;
+}
+.yn-more-item .yn-mr-badge:not([hidden]) {
+  margin-left: 8px;
 }
 .yn-more-item[aria-current="page"] {
   background: var(--yn-accent-bg);
