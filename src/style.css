@@ -4081,6 +4081,7 @@ html:has(dialog.yn-dialog[open]) {
   .yn-filterbar-slot .yn-filter-period {
     flex-basis: 100%;
   }
+}
 /* リソース計画の変更の影響（§65）: 前 → 後。マイナスの残予算・増えた着地は赤 */
 .yn-me-impact .is-neg {
   color: var(--yn-danger-text);
