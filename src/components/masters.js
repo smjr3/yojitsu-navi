@@ -1141,6 +1141,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
       const projectList = [...byProject.values()].filter((g) => g.rows.some((x) => inFy(x) || !/^\d{4}-\d{2}$/.test(x.startMonth) || !/^\d{4}-\d{2}$/.test(x.endMonth)));
       const counts = rowCounts("assignments", aRows);
       const oCounts = rowCounts("outside", oRows);
+      // 開くと出る作業の数 = 案件 ＋ その年度に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
+      const workCount = projectList.length + new Set(oRows.filter(inFy).map((x) => x.type ?? "")).size;
       const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
@@ -1151,7 +1153,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, views = LEDGE
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: projectList.length })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(projectList.length) })} ${open ? "▴" : "▾"}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(workCount) })} ${open ? "▴" : "▾"}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addProject}</button>
         </div></td>
       </tr>`;
