@@ -10,6 +10,9 @@ test("メンバー別に「計画とのずれ」が出て、行からメンバ�
   await expect(head).toContainText(/（確定月） ・ \d+件/);
   const table = page.getByRole("table", { name: "計画とのずれ" });
   await expect(table.locator("tbody tr").first()).toBeVisible();
+  // メンバーごとの計画と実績の表の下（試用版のコメント）
+  const membersTable = page.locator("table").filter({ has: page.locator("caption") }).first();
+  expect((await head.boundingBox())!.y).toBeGreaterThan((await membersTable.boundingBox())!.y);
   await expect(table.locator("tbody tr").first()).toContainText(/計画なし|実績なし|多い|少ない/);
   await table.locator("tbody tr").first().click();
   await expect(page).toHaveURL(/\/member\?/);
