@@ -30,7 +30,7 @@ if (model) {
       model,
       title: T.app.pages.dataCheck,
       lead: T.dataCheck.lead,
-      breadcrumbs: [{ label: T.app.pages.index, href: "./" }, { label: T.app.pages.dataCheck }],
+      breadcrumbs: [{ label: T.app.pages.dataCheck }], // 全体サマリーの配下ではない（§69）
     }),
   );
 }

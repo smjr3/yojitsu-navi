@@ -247,6 +247,7 @@ body {
   display: flex;
   align-items: center;
   padding: 0 12px;
+  border-top: 2px solid transparent; /* 下線（border-bottom）と釣り合わせ、文字を上下の中央に置く */
   color: var(--yn-text-2) !important;
   text-decoration: none;
   white-space: nowrap;
@@ -276,6 +277,21 @@ body {
   align-items: center;
   gap: 6px;
   margin: 0;
+}
+.yn-filter-fetched {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 20px;
+  color: var(--yn-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* 上段に入らない幅では出さない（ページ見出しの下の「作業実績の取得」で見られる） */
+@media (max-width: 879px), (min-width: 1024px) and (max-width: 1279px) {
+  .yn-filter-fetched {
+    display: none;
+  }
 }
 .yn-unit-slot .yn-seg {
   flex-wrap: nowrap;
@@ -334,6 +350,17 @@ body {
     font-size: 13px;
   }
 }
+/* 狭い幅（ブラウザの左右に余白がある・コメント欄を開いたなど）でもタブが切れないよう詰める（§66） */
+@media (max-width: 479px) {
+  .yn-tabs {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .yn-tab {
+    padding: 0 min(10px, 1.5vw);
+    font-size: 13px;
+  }
+}
 .yn-filterbar-slot:not(.is-filled) {
   display: none;
 }
@@ -348,7 +375,7 @@ body {
   border-radius: 0;
   background: transparent;
   align-items: center;
-  gap: 8px 20px;
+  gap: 8px 16px;
 }
 @media (min-width: 640px) {
   .yn-filterbar-slot .yn-filters {
@@ -376,6 +403,13 @@ body {
 }
 .yn-filterbar-slot .yn-filter-period .yn-filter-row {
   flex-wrap: wrap;
+  gap: 4px;
+}
+/* 着地見込みだけが次の行に落ちないよう、1 行に収まらない幅では期間を 1 行目に、チームと着地見込みを 2 行目にまとめる */
+@media (min-width: 720px) and (max-width: 1365px) {
+  .yn-filterbar-slot .yn-filters:has(.yn-filter-team):has(.yn-filter-method) .yn-filter-period {
+    flex-basis: 100%;
+  }
 }
 /* 期間のカレンダー（透明な input[type=date] をアイコンの上に重ねる） */
 .yn-date-pick {
@@ -390,6 +424,11 @@ body {
   border-radius: 6px;
   color: var(--yn-text-muted);
   overflow: hidden;
+}
+/* アイコンは行の高さに引きずられないよう箱ごと中央に置く（文字のベースラインで数 px 上にずれていた。§66） */
+.yn-date-pick-icon,
+.yn-date-pick-icon svg {
+  display: block;
 }
 .yn-date-pick:hover {
   color: var(--yn-link);
@@ -417,7 +456,18 @@ body {
   margin: 0;
   cursor: pointer;
 }
+.yn-filterbar-slot .yn-filter-team {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+.yn-filterbar-slot .yn-filter-team label {
+  flex: none;
+  white-space: nowrap;
+}
 .yn-filterbar-slot #yn-filter-team {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   max-width: 240px;
 }
 .yn-filterbar-slot .yn-select {
@@ -432,7 +482,7 @@ body {
 .yn-filterbar-slot .yn-radio {
   position: relative; /* 隠した input の基準（ヘッダの外にはみ出して横スクロールを生まない） */
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-right: 1px solid var(--yn-hairline-strong);
 }
 .yn-filterbar-slot .yn-radio:last-child {
@@ -469,6 +519,7 @@ body {
 #observablehq-footer {
   margin-top: 64px;
   color: var(--yn-text-muted);
+  text-align: center;
 }
 a[href] {
   color: var(--yn-link);
@@ -2630,7 +2681,7 @@ li.is-jumped,
 }
 .yn-filterbar-slot .yn-seg-btn {
   min-height: 30px;
-  padding: 3px 10px;
+  padding: 3px 8px;
   white-space: nowrap;
 }
 .yn-filterbar-slot .yn-seg-btn[aria-pressed="true"]::before {
@@ -3502,6 +3553,9 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-card);
   font-size: 14px;
   cursor: pointer;
+}
+.yn-seg-radio input {
+  margin: 0; /* 既定の上の余白でラジオが文字より下がるのを防ぐ（§66） */
 }
 .yn-seg-radio:has(input:checked) {
   background: var(--yn-accent-bg);

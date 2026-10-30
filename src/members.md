@@ -136,64 +136,6 @@ if (vm) {
 }
 ```
 
-```js
-// 計画とのずれ（§64）: 確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
-if (vm) {
-  const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
-  const jp = gaps.judgedPeriod;
-  const status = !jp ? T.members.gapNoConfirmed : gaps.rows.length ? fmt(T.members.gapStatus, { period: periodJa(jp), n: gaps.rows.length }) : fmt(T.members.gapNone, { period: periodJa(jp) });
-  const toPlan = html`<a class="yn-btn yn-btn-sm" id="yn-gap-plan-link" href=${state.team ? `./plan?team=${encodeURIComponent(state.team)}` : "./plan"}>${T.members.gapToPlan}</a>`;
-  display(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
-  if (gaps.rows.length) {
-    const byId = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
-    const kindText = { unplanned: T.members.gapUnplanned, noActual: T.members.gapNoActual, over: T.members.gapOver, under: T.members.gapUnder };
-    const rows = gaps.rows.map((g) => {
-      const k = byId.get(g.contractId);
-      const outside = typeof g.outsideType === "string";
-      return {
-        ...g,
-        key: `${g.memberId}\u0000${g.contractId}`,
-        outside,
-        outsideLabel: outside ? bd.outsideRowLabel(g.outsideType) : "",
-        memberTeamName: g.teamId ? teamName(model, g.teamId, vm.scope.tree) : T.members.noTeam,
-        customerName: k?.customerName ?? "",
-        projectName: k?.projectName ?? "",
-        teamName: k?.teamId ? teamName(model, k.teamId, vm.scope.tree) : T.numbers.unassignedTeam,
-        startMonth: k?.startMonth ?? "",
-        endMonth: k?.endMonth ?? "",
-        kindLabel: kindText[g.kind],
-      };
-    });
-    const signedHours = (h) => (h > 0 ? `+${formatHours(h)}` : h < 0 ? `−${formatHours(-h)}` : formatHours(0));
-    const columns = [
-      {
-        key: "memberName",
-        label: T.breakdown.colMember,
-        type: "text",
-        render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.memberTeamName}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${r.memberTeamName}</span></span>`,
-      },
-      { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
-      { key: "contractId", label: T.columns.contract, type: "text", render: (r) => (r.outside ? html`<span class="yn-cell-main">${r.outsideLabel}</span>` : contractNameCell(r)), sortValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`), exportValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`) },
-      { key: "kind", label: T.members.gapColKind, type: "status", get: (r) => [{ kind: "neutral", text: r.kindLabel }], sortValue: (r) => r.kindLabel, exportValue: (r) => r.kindLabel },
-      { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true },
-      { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true },
-      { key: "diffHours", label: T.members.gapColDiff, sublabel: T.members.gapColDiffSub, type: "hours", render: (r) => signedHours(r.diffHours), sortValue: (r) => Math.abs(r.diffHours) },
-    ];
-    display(
-      dataTable({
-        columns,
-        rows,
-        unit: vm.unit,
-        caption: T.members.gapCaption,
-        exportName: `plan_gaps_${jp.from}_${jp.to}`,
-        sort: { key: "diffHours", dir: "desc" },
-        rowHref: (r) => store.href("./member", {}, { id: r.memberId }),
-        maxHeight: 420,
-      }),
-    );
-  }
-}
-```
 
 ```js
 // 検索フォームは model だけに依存し 1 回だけ描く（期間・単位を変えても作り直さない）
@@ -296,5 +238,64 @@ if (vm) {
     }),
   );
   if (vm.rows.length === 0) display(note(T.members.emptyText));
+}
+```
+
+```js
+// 計画とのずれ（§64）: メンバーごとの計画と実績の表の下に置く（§68）。確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
+if (vm) {
+  const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
+  const jp = gaps.judgedPeriod;
+  const status = !jp ? T.members.gapNoConfirmed : gaps.rows.length ? fmt(T.members.gapStatus, { period: periodJa(jp), n: gaps.rows.length }) : fmt(T.members.gapNone, { period: periodJa(jp) });
+  const toPlan = html`<a class="yn-btn yn-btn-sm" id="yn-gap-plan-link" href=${state.team ? `./plan?team=${encodeURIComponent(state.team)}` : "./plan"}>${T.members.gapToPlan}</a>`;
+  display(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
+  if (gaps.rows.length) {
+    const byId = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
+    const kindText = { unplanned: T.members.gapUnplanned, noActual: T.members.gapNoActual, over: T.members.gapOver, under: T.members.gapUnder };
+    const rows = gaps.rows.map((g) => {
+      const k = byId.get(g.contractId);
+      const outside = typeof g.outsideType === "string";
+      return {
+        ...g,
+        key: `${g.memberId}\u0000${g.contractId}`,
+        outside,
+        outsideLabel: outside ? bd.outsideRowLabel(g.outsideType) : "",
+        memberTeamName: g.teamId ? teamName(model, g.teamId, vm.scope.tree) : T.members.noTeam,
+        customerName: k?.customerName ?? "",
+        projectName: k?.projectName ?? "",
+        teamName: k?.teamId ? teamName(model, k.teamId, vm.scope.tree) : T.numbers.unassignedTeam,
+        startMonth: k?.startMonth ?? "",
+        endMonth: k?.endMonth ?? "",
+        kindLabel: kindText[g.kind],
+      };
+    });
+    const signedHours = (h) => (h > 0 ? `+${formatHours(h)}` : h < 0 ? `−${formatHours(-h)}` : formatHours(0));
+    const columns = [
+      {
+        key: "memberName",
+        label: T.breakdown.colMember,
+        type: "text",
+        render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.memberTeamName}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${r.memberTeamName}</span></span>`,
+      },
+      { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
+      { key: "contractId", label: T.columns.contract, type: "text", render: (r) => (r.outside ? html`<span class="yn-cell-main">${r.outsideLabel}</span>` : contractNameCell(r)), sortValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`), exportValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`) },
+      { key: "kind", label: T.members.gapColKind, type: "status", get: (r) => [{ kind: "neutral", text: r.kindLabel }], sortValue: (r) => r.kindLabel, exportValue: (r) => r.kindLabel },
+      { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true },
+      { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true },
+      { key: "diffHours", label: T.members.gapColDiff, sublabel: T.members.gapColDiffSub, type: "hours", render: (r) => signedHours(r.diffHours), sortValue: (r) => Math.abs(r.diffHours) },
+    ];
+    display(
+      dataTable({
+        columns,
+        rows,
+        unit: vm.unit,
+        caption: T.members.gapCaption,
+        exportName: `plan_gaps_${jp.from}_${jp.to}`,
+        sort: { key: "diffHours", dir: "desc" },
+        rowHref: (r) => store.href("./member", {}, { id: r.memberId }),
+        maxHeight: 420,
+      }),
+    );
+  }
 }
 ```

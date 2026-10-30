@@ -131,6 +131,50 @@ test("フィルタはヘッダの固定バーにあり、スクロールして�
   await expect(page.locator("#yn-filter-from")).toBeInViewport();
 });
 
+test("作業実績の取得日時は上段（単位の左）に常に出し、スクロールしても見える。入らない幅では出さない（§66）", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await gotoPage(page, "/contracts");
+  const fetched = page.locator(".yn-topbar .yn-filter-fetched");
+  await expect(fetched).toContainText("作業実績の取得");
+  await expect(fetched.locator("time")).toHaveAttribute("datetime", model.meta.worklogFetchedAt!);
+  await page.mouse.wheel(0, 2000);
+  await expect(fetched).toBeInViewport();
+  for (const width of [390, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(fetched).toBeHidden();
+  }
+  await page.setViewportSize({ width: 880, height: 800 });
+  await expect(fetched).toBeVisible();
+});
+
+test("見た目の揃え: タブの文字・カレンダーのアイコンが上下の中央、狭い幅でもタブが切れない、フッターは中央（§66）", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await gotoPage(page, "/");
+  const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
+  const brand = (await page.locator(".yn-brand").boundingBox())!;
+  for (const tab of await page.locator(".yn-tab").all()) {
+    const text = await tab.evaluate((el) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const b = r.getBoundingClientRect();
+      return { y: b.top, height: b.height };
+    });
+    expect(Math.abs(mid(text) - mid(brand))).toBeLessThanOrEqual(1);
+  }
+  for (const pick of await page.locator("#yn-filterbar-slot .yn-date-pick").all()) {
+    const box = (await pick.boundingBox())!;
+    const icon = (await pick.locator("svg").boundingBox())!;
+    expect(Math.abs(mid(icon) - mid(box))).toBeLessThanOrEqual(1);
+  }
+  const footer = page.locator("#observablehq-footer");
+  await expect(footer).toHaveCSS("text-align", "center");
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    const tabs = page.locator(".yn-tabs");
+    expect(await tabs.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  }
+});
+
 test("見出しクリックで並べ替え: aria-sort が切り替わり、数値順（辞書順ではない）に並ぶ", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const table = tableByCaption(page, "案件一覧");
@@ -345,4 +389,12 @@ test("見出し横の「?」: カーソルで説明が開き、Esc で閉じる�
   await tip.locator(".yn-tip-btn").click();
   await expect(pop).toBeVisible();
   await expect(tip.locator(".yn-tip-btn")).toHaveAttribute("aria-expanded", "true");
+});
+
+test("タブにないページ（リソース計画・マスタ編集・データ確認・使い方・計算ルール）は全体サマリーを親にしない（§69）", async ({ page }) => {
+  for (const path of ["/plan", "/masters", "/data-check", "/guide", "/rules"]) {
+    await gotoPage(page, path);
+    await expect(page.locator("h1").first()).toBeVisible();
+    await expect(page.locator('nav[aria-label="パンくず"]'), path).toHaveCount(0);
+  }
 });
