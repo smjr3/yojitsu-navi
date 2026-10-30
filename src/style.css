@@ -1,7 +1,8 @@
 /* 予実ナビ スタイル
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
- * 既定はライト。ヘッダーの切替ボタンで <html data-theme="dark"> にするとダーク（OS の設定には追従しない）。
- * 選んだテーマは localStorage（yn-theme）に保存し、observablehq.config.js の head スクリプトが描画前に復元する。
+ * 表示モードと差し色（§53）は head のスクリプト（components/appearance.js）が描画前に <html data-theme data-accent> に当てる。
+ * 表示モードは 設定画面 → GitLab（旧ダークテーマ等）→ PC の設定、差し色は 設定画面 → GitLab のテーマ → ブルー の順に決める。
+ * ダークは真っ黒にせず、ネイビー寄りのグレーの面にする。
  * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§46）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
  */
 @import url("observablehq:default.css");
@@ -22,7 +23,6 @@
 
   /* ライト */
   --theme-foreground: #0b0b0b;
-  --theme-foreground-focus: #1c5cab;
   --theme-background-a: #f9f9f7; /* ページ */
   --yn-card: #fcfcfb; /* カード・グラフ面 */
   --yn-text-1: #0b0b0b;
@@ -33,8 +33,13 @@
   --yn-grid: #e1e0d9;
   --yn-wash: rgba(11, 11, 11, 0.04);
   --yn-wash-strong: rgba(11, 11, 11, 0.08);
-  --yn-focus: #1c5cab;
-  --yn-link: #1c5cab;
+  /* 差し色（リンク・フォーカス・選択中・主ボタン）。色は下の :root[data-accent] */
+  --yn-accent: #1c5cab;
+  --theme-foreground-focus: var(--yn-accent);
+  --yn-focus: var(--yn-accent);
+  --yn-link: var(--yn-accent);
+  --yn-on-accent: #fff;
+  accent-color: var(--yn-accent); /* チェックボックス・ラジオ */
 
   --yn-series-budget: #2a78d6;
   --yn-series-cost: #eb6834;
@@ -51,17 +56,16 @@
   --yn-prelim-bg: #efeeea;
   --yn-neutral-text: #52514e;
   --yn-neutral-bg: #efeeea;
-  --yn-accent-bg: #e4eefb;
+  --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 12%, var(--yn-card));
   --yn-under-text: #075e80; /* リソース計画の 1.0 未満（6.4:1） */
   --yn-under-bg: #e2f4fb;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --theme-foreground: #f0efec;
-  --theme-foreground-focus: #6da7ec;
-  --theme-background-a: #121211;
-  --theme-background-b: #1a1a19;
+  --theme-foreground: #eceff4;
+  --theme-background-a: #161c27; /* ページ（ネイビー寄りのグレー） */
+  --theme-background-b: #1e2533;
   /* air テーマの派生色（ライト基準）をダークの面で作り直す */
   --theme-background: var(--theme-background-a);
   --theme-background-alt: var(--theme-background-b);
@@ -70,34 +74,56 @@
   --theme-foreground-faint: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-b));
   --theme-foreground-fainter: color-mix(in srgb, var(--theme-foreground) 30%, var(--theme-background-b));
   --theme-foreground-faintest: color-mix(in srgb, var(--theme-foreground) 14%, var(--theme-background-b));
-  --yn-card: #1a1a19;
-  --yn-text-1: #f0efec;
-  --yn-text-2: #c3c2b7;
-  --yn-text-muted: #a3a29a;
-  --yn-hairline: rgba(255, 255, 255, 0.1);
-  --yn-hairline-strong: rgba(255, 255, 255, 0.18);
-  --yn-grid: #2c2c2a;
-  --yn-wash: rgba(255, 255, 255, 0.05);
-  --yn-wash-strong: rgba(255, 255, 255, 0.1);
-  --yn-focus: #6da7ec;
-  --yn-link: #6da7ec;
+  --yn-card: #1e2533;
+  --yn-text-1: #eceff4;
+  --yn-text-2: #bfc6d2;
+  --yn-text-muted: #9aa3b2;
+  --yn-hairline: rgba(214, 224, 240, 0.12);
+  --yn-hairline-strong: rgba(214, 224, 240, 0.2);
+  --yn-grid: #2d3545;
+  --yn-wash: rgba(214, 224, 240, 0.05);
+  --yn-wash-strong: rgba(214, 224, 240, 0.1);
+  --yn-accent: #6da7ec;
+  --yn-on-accent: #10151f;
   --yn-series-budget: #3987e5;
   --yn-series-cost: #d95926;
   --yn-series-gp: #199e70;
   --yn-danger-text: #ee7a7a;
-  --yn-danger-bg: #3a1515;
+  --yn-danger-bg: #3a1a20;
   --yn-good-text: #2fbf4a; /* 5.97:1 on --yn-good-bg */
   --yn-good-bg: #10300f;
   --yn-warn-text: #fab219;
   --yn-warn-bg: #3a2a08;
-  --yn-prelim-text: #c3c2b7;
-  --yn-prelim-bg: #2a2a28;
-  --yn-neutral-text: #c3c2b7;
-  --yn-neutral-bg: #2a2a28;
-  --yn-accent-bg: #1a2a40;
+  --yn-prelim-text: #bfc6d2;
+  --yn-prelim-bg: #283040;
+  --yn-neutral-text: #bfc6d2;
+  --yn-neutral-bg: #283040;
+  --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 22%, var(--yn-card));
   --yn-under-text: #6fc6ea; /* 7.4:1 */
   --yn-under-bg: #0c2e3b;
 }
+
+/* 差し色（GitLab のテーマの色合い）。文字に使うのでカード・ページの面に対して 6:1 以上（tests/unit/appearance.test.ts） */
+:root[data-accent="indigo"] { --yn-accent: #4b4ba8; }
+:root[data-accent="green"] { --yn-accent: #1b6b3f; }
+:root[data-accent="red"] { --yn-accent: #a82f1d; }
+:root[data-accent="gray"] { --yn-accent: #55545c; }
+:root[data-theme="dark"][data-accent="indigo"] { --yn-accent: #a3a3f0; }
+:root[data-theme="dark"][data-accent="green"] { --yn-accent: #5cc98f; }
+:root[data-theme="dark"][data-accent="red"] { --yn-accent: #f19280; }
+:root[data-theme="dark"][data-accent="gray"] { --yn-accent: #b8b8c2; }
+/* 設定画面の色見本（選んでいる差し色に関係なく、その色を出す） */
+.yn-swatch { width: 14px; height: 14px; border-radius: 4px; background: var(--sw); flex: none; }
+.yn-swatch[data-accent="blue"] { --sw: #1c5cab; }
+.yn-swatch[data-accent="indigo"] { --sw: #4b4ba8; }
+.yn-swatch[data-accent="green"] { --sw: #1b6b3f; }
+.yn-swatch[data-accent="red"] { --sw: #a82f1d; }
+.yn-swatch[data-accent="gray"] { --sw: #55545c; }
+:root[data-theme="dark"] .yn-swatch[data-accent="blue"] { --sw: #6da7ec; }
+:root[data-theme="dark"] .yn-swatch[data-accent="indigo"] { --sw: #a3a3f0; }
+:root[data-theme="dark"] .yn-swatch[data-accent="green"] { --sw: #5cc98f; }
+:root[data-theme="dark"] .yn-swatch[data-accent="red"] { --sw: #f19280; }
+:root[data-theme="dark"] .yn-swatch[data-accent="gray"] { --sw: #b8b8c2; }
 
 /* ---------------------------------------------------------------------------
  * ベース
@@ -1942,13 +1968,10 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-btn-primary {
   background: var(--yn-focus);
   border-color: var(--yn-focus);
-  color: #fff;
+  color: var(--yn-on-accent);
 }
 .yn-btn-primary:hover {
   background: color-mix(in srgb, var(--yn-focus), #000 12%);
-}
-:root[data-theme="dark"] .yn-btn-primary {
-  color: #0b0b0b;
 }
 :root[data-theme="dark"] .yn-btn-primary:hover {
   background: color-mix(in srgb, var(--yn-focus), #fff 12%);
@@ -3157,15 +3180,12 @@ html:has(dialog.yn-dialog[open]) {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--yn-link);
-  color: #fff;
+  color: var(--yn-on-accent);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   vertical-align: 1px;
-}
-:root[data-theme="dark"] .yn-mr-badge:not([hidden]) {
-  color: #0b0b0b;
 }
 .yn-icon-tools {
   display: inline-flex;
@@ -3321,13 +3341,10 @@ html:has(dialog.yn-dialog[open]) {
   padding: 1px 8px;
   border-radius: 10px;
   background: var(--yn-link);
-  color: #fff;
+  color: var(--yn-on-accent);
   font-size: 12px;
   font-weight: 700;
   vertical-align: 2px;
-}
-:root[data-theme="dark"] .yn-mr-count {
-  color: #0b0b0b;
 }
 .yn-mr-empty,
 .yn-mr-list {

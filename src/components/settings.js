@@ -1,5 +1,5 @@
 /**
- * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（テーマ）
+ * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・差し色、§53）
  *
  *   settingsPanel({ masterEdit, fetchImpl }) → HTMLElement
  */
@@ -8,6 +8,7 @@ import { T, fmt } from "../i18n/index.js";
 import { ACCESS_LEVELS, checkConnection, effectiveSaveMode } from "../core/gitlab.js";
 import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
 import { infoTip, sectionTitle } from "./layout.js";
+import { ACCENTS } from "./appearance.js";
 
 export function settingsPanel({ masterEdit, fetchImpl = null }) {
   const cfg = masterEdit;
@@ -64,6 +65,8 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     renderGitlab();
     try {
       check = { info: await checkConnection(doFetch, cfg, getToken()) };
+      // GitLab のテーマを配色に使う（§53）
+      window.ynAppearance?.setGitlabUser(check.info.appearance);
     } catch (e) {
       check = { error: { message: e?.message ?? String(e), detail: e?.detail ?? "" } };
       if (e?.status === 401) clearToken();
@@ -144,24 +147,41 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
   }
 
   function renderDisplay() {
-    const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-    const radio = (value, label) => {
-      const input = html`<input type="radio" name="yn-set-theme" value=${value} checked=${current === value}>`;
-      input.addEventListener("change", () => {
-        if (input.checked) window.ynSetTheme?.(value);
+    const fallback = { theme: "light", accent: "blue", themeFrom: "os", accentFrom: "default" };
+    const look = window.ynAppearance?.get() ?? { ...fallback, themePref: "auto", accentPref: "auto", auto: fallback };
+    const from = (f) => (f === "gitlab" ? T.settings.fromGitlab : f === "os" ? T.settings.fromOs : T.settings.fromDefault);
+    const group = (name, value, items, onPick) =>
+      items.map(([v, label, swatch]) => {
+        const input = html`<input type="radio" name=${name} value=${v} checked=${value === v}>`;
+        input.addEventListener("change", () => {
+          if (input.checked) onPick(v);
+        });
+        return html`<label class="yn-seg-radio">${input}${swatch ? html`<span class="yn-swatch" data-accent=${swatch} aria-hidden="true"></span>` : null}<span>${label}</span></label>`;
       });
-      return html`<label class="yn-seg-radio">${input}<span>${label}</span></label>`;
-    };
+    const themes = [
+      ["auto", fmt(T.settings.auto, { value: T.settings.themes[look.auto.theme], from: from(look.auto.themeFrom) })],
+      ["light", T.settings.themes.light],
+      ["dark", T.settings.themes.dark],
+    ];
+    const accents = [
+      ["auto", fmt(T.settings.auto, { value: T.settings.accents[look.auto.accent], from: from(look.auto.accentFrom) })],
+      ...ACCENTS.map((a) => [a, T.settings.accents[a], a]),
+    ];
     displaySlot.replaceChildren(html`<section class="yn-settings-section" aria-label=${T.settings.displayTitle}>
-      ${sectionTitle(T.settings.displayTitle, null)}
-      <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.theme}</legend>${radio("light", T.settings.themeLight)}${radio("dark", T.settings.themeDark)}</fieldset>
+      ${sectionTitle(T.settings.displayTitle, T.settings.displayHint)}
+      <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.theme}</legend>${group("yn-set-theme", look.themePref, themes, (v) => window.ynAppearance?.setTheme(v))}</fieldset>
+      <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.accent}</legend>${group("yn-set-accent", look.accentPref, accents, (v) => window.ynAppearance?.setAccent(v))}</fieldset>
     </section>`);
   }
 
-  // ヘッダーのボタンで切り替えたら、ラジオも合わせる
+  // 他のタブ・PC の設定・GitLab の読み直しで配色が変わったら、ラジオと「自動（…）」の表示を合わせる
   window.addEventListener("yn-theme", () => {
-    const value = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-    for (const r of displaySlot.querySelectorAll('input[name="yn-set-theme"]')) r.checked = r.value === value;
+    const had = displaySlot.contains(document.activeElement) ? document.activeElement?.getAttribute("name") + ":" + document.activeElement?.getAttribute("value") : null;
+    renderDisplay();
+    if (had) {
+      const [n, v] = had.split(":");
+      displaySlot.querySelector(`input[name="${n}"][value="${v}"]`)?.focus();
+    }
   });
 
   renderGitlab();
