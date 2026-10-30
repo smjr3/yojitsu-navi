@@ -758,7 +758,7 @@ export default {
     actualSub: "目安 {pace}（{elapsed}/{total} 営業日）",
     overPace: "目安超え",
     withinPace: "目安内",
-    leftLabel: "残り {n} 営業日で使える",
+    leftLabel: "残り {n} 営業日の予算",
     leftSub: "1 日あたり {perDay}（これまでの平均 {average}）",
     noDaysLeft: "残りの営業日はありません",
     projectionLabel: "このペースの月末",
