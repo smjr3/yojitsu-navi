@@ -423,6 +423,9 @@ const targetsOf = (c: FyCalendar): TargetRow[] => [
   { target_type: "customer", target_id: "こもれび出版", end_month: c.m(0, 3), remaining_rate: 10, start_month: "", note: "値下げ更新後の立て直し" },
   { target_type: "project", target_id: "C007", end_month: c.m(0, 3), remaining_rate: 15, start_month: c.m(-1, 4), note: "2 年契約の終了時点" },
   { target_type: "project", target_id: "C002", end_month: c.m(0, 12), remaining_rate: 25, start_month: "", note: "" },
+  // 超過している案件の改善目標（マイナスの残予算率）。C143 は達成見込み、C117 は未達見込み
+  { target_type: "project", target_id: "C143", end_month: c.m(0, 3), remaining_rate: -100, start_month: "", note: "超過を -100% までに" },
+  { target_type: "project", target_id: "C117", end_month: c.m(0, 3), remaining_rate: -50, start_month: "", note: "超過を半分に" },
 ];
 
 const TASKS: ReadonlyArray<readonly [string, number]> = [
