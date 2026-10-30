@@ -420,7 +420,7 @@ test.describe("画面の作法", () => {
     for (const t of chips) expect(t).toMatch(/超過見込み|予算超過|消化率超過/);
     const dangerText = await page.locator("tbody .yn-danger-text").evaluateAll((els) => els.map((e) => (e.textContent ?? "").replace(/[▲\s]/g, "")));
     for (const t of dangerText) expect(t.length).toBeGreaterThan(0);
-    // 超過見込みの案件を持つ顧客: 合計の着地がマイナスなら赤の「超過見込み N件」、マイナスでなければ灰色の「超過見込みの案件 N件」（§67）
+    // 超過見込みの案件を持つ顧客: 合計の着地がマイナスなら赤の「超過見込み N件」、マイナスでなければ灰色の「超過案件 N件」（§67）
     const deficitCustomers = listed().filter((g) => forecastFor(DEFAULT_METHOD, g.ids, model).deficitContractIds.length > 0);
     expect(deficitCustomers.length).toBeGreaterThan(0);
     for (const g of deficitCustomers) {
@@ -429,7 +429,7 @@ test.describe("画面の作法", () => {
       const row = rowByKey(page, "顧客一覧", g.key);
       if (f.forecastGrossProfit < 0) await expect(row.locator(".yn-chip-danger").first()).toHaveText(`▲超過見込み ${n}件`);
       else {
-        await expect(row.locator(".yn-chip-neutral")).toContainText(`超過見込みの案件 ${n}件`);
+        await expect(row.locator(".yn-chip-neutral")).toContainText(`超過案件 ${n}件`);
         await expect(row.locator(".yn-chip-danger", { hasText: "超過見込み" })).toHaveCount(0);
       }
     }

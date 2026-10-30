@@ -228,7 +228,7 @@ export default {
     // 状態チップ
     chipTeamDeficit: "超過見込み {n}件",
     chipTeamDeficitTitle: "配下の案件のうち、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
-    chipTeamDeficitWithin: "超過見込みの案件 {n}件",
+    chipTeamDeficitWithin: "超過案件 {n}件",
     chipTeamDeficitWithinTitle: "合計の着地はマイナスではありませんが、期間の終わりに超過で着地する見込みの案件が {n} 件あります",
     chipDeficit: "超過見込み",
     chipDeficitTitle: "期間の終わりに超過で着地する見込み",
