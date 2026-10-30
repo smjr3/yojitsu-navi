@@ -139,7 +139,32 @@ test("作業別の内訳と木構造の表: 作業別には付き、チーム一
   await gotoPage(page, "/contract?id=C008");
   const work = tableByCaption(page, "作業種別の内訳");
   await expect(filterBtn(work, "task")).toBeVisible();
+  // 右寄せでも値が文字の列（単価）は値の一覧で絞る（範囲にすると全行が消える）
+  const members = tableByCaption(page, "メンバー別の実績");
+  const n = await dataRows(members).count();
+  await filterBtn(members, "rateText").click();
+  await expect(pop(page).locator(".yn-filter-range")).toHaveCount(0);
+  await pop(page).locator(".yn-filter-list input").first().uncheck();
+  expect(await dataRows(members).count()).toBeLessThan(n);
+  await pop(page).getByRole("button", { name: "解除" }).click();
+  await expect(dataRows(members)).toHaveCount(n);
+  await page.keyboard.press("Escape");
   await gotoPage(page, "/teams");
   await expect(page.locator("table.yn-table").first()).toBeVisible();
   await expect(page.locator("table.yn-table").first().locator(".yn-filter-btn")).toHaveCount(0);
+});
+
+test("全部外した絞り込みは、表を作り直しても（単位の切り替え・再読み込み）残る", async ({ page }) => {
+  await gotoPage(page, "/customers");
+  const table = tableByCaption(page, "顧客一覧");
+  await filterBtn(table, "status").click();
+  await pop(page).getByLabel("（すべて）").uncheck();
+  await page.keyboard.press("Escape");
+  await expect(dataRows(table)).toHaveCount(0);
+  await page.getByRole("button", { name: "千円" }).first().click();
+  await expect(tableByCaption(page, "顧客一覧").locator(".yn-table-empty")).toHaveText("絞り込みに一致する行がありません");
+  await page.reload();
+  await expect(tableByCaption(page, "顧客一覧").locator(".yn-table-empty")).toHaveText("絞り込みに一致する行がありません");
+  await clearAll(tableByCaption(page, "顧客一覧")).click();
+  await expect(dataRows(tableByCaption(page, "顧客一覧")).first()).toBeVisible();
 });

@@ -137,10 +137,13 @@ function rangeUnitLabel(col, unit) {
   return "";
 }
 
-function filterKind(col) {
+/** 絞り込みの種類。右寄せでも値が文字の列（単価の「6,000円 / 7,000円」など）は値の一覧にする */
+function filterKind(col, rows = null) {
   if (col.filter === false) return null;
   if (col.filter === "values" || col.filter === "range") return col.filter;
-  return isNumeric(col) ? "range" : "values";
+  if (NUMERIC_TYPES.has(col.type)) return "range";
+  if (isNumeric(col) && (!rows || rows.some((r) => rangeValue(col, r) !== null))) return "range";
+  return "values";
 }
 
 /** 絞り込みの値（文字）。空は "" */
@@ -301,8 +304,9 @@ export function dataTable({
       for (const [key, f] of Object.entries(saved ?? {})) {
         const col = visibleCols.find((c) => c.key === key && filterKind(c));
         if (!col || !isActiveFilter(f)) continue;
-        if (Array.isArray(f.values)) {
-          // 別の案件などで覚えた値のうち、この表に無いものは捨てる（全部無ければ絞り込みごと捨てる）
+        if (Array.isArray(f.values) && f.values.length > 0) {
+          // 別の案件などで覚えた値のうち、この表に無いものは捨てる（全部無ければ絞り込みごと捨てる）。
+          // 全部外した（空の）選択は利用者の意図なのでそのまま残す
           const present = new Set(rows.flatMap((r) => filterValues(col, r, unit)));
           const values = f.values.filter((v) => present.has(v));
           if (values.length === 0) continue;
@@ -530,7 +534,7 @@ export function dataTable({
   }
   function openFilterPop(col, btn) {
     closeFilterPop();
-    const kind = filterKind(col);
+    const kind = filterKind(col, rows);
     const popId = `yn-filter-pop-${++filterPopSeq}`;
     const pop = html`<div class="yn-filter-pop" role="dialog" id=${popId} aria-label=${fmt(T.table.filterBy, { label: col.label })}></div>`;
     const body = kind === "range" ? rangeBody(col) : valuesBody(col);
