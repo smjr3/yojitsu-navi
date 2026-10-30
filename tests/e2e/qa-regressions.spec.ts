@@ -1,6 +1,7 @@
 /**
  * 実操作 QA で見つかった不具合の再発防止
  * - URL の team にプロトタイプのキー（constructor 等）を入れても例外にならず、全体に戻る
+ * - ヘッダー・フィルタバーの部品は高さ 32px で中央がそろい、1280px 以上はフィルタが 1 行。ヘッダーの帯は左右の端まで、取得日時をヘッダーに、フッターは中央（§66）
  * - 1024px 未満でも上部タブがすべて見える（2 段目に回る）。1024px 以上はヘッダーが 1 段（単位のボタンも折り返さない）
  * - 並べ替えは絞り込み・単位の変更や「戻る」で既定に戻らない。絞り込み・検索は「戻る」で復元される
  * - 案件詳細の ID は前後の空白・大文字小文字の違いを許す
@@ -50,6 +51,73 @@ test("1024px 幅ではヘッダーが 1 段（タブ・単位・右上のリン�
   expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(4);
   const unitTops = await page.locator(".yn-unit-slot .yn-seg-btn").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(unitTops).size).toBe(1);
+});
+
+test("ヘッダーとフィルタバーの操作部品は高さ 32px で上下中央がそろう（§66）", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoPage(page, "/");
+  const header = await page.evaluate(() =>
+    [".yn-unit-slot .yn-seg", ".yn-tool", ".yn-settings-link", ".yn-more-btn"].map((s) => {
+      const r = document.querySelector(s)!.getBoundingClientRect();
+      return { h: Math.round(r.height), c: (r.top + r.bottom) / 2 };
+    }),
+  );
+  expect(header.map((x) => x.h)).toEqual([32, 32, 32, 32]);
+  expect(Math.max(...header.map((x) => x.c)) - Math.min(...header.map((x) => x.c))).toBeLessThanOrEqual(1);
+  const bar = await page.evaluate(() =>
+    ["#yn-filterbar-slot .yn-select", "#yn-filterbar-slot .yn-date-pick", "#yn-filterbar-slot .yn-filter-period .yn-seg", "#yn-filterbar-slot .yn-filter-method .yn-seg"].map((s) => {
+      const r = document.querySelector(s)!.getBoundingClientRect();
+      return Math.round(r.height);
+    }),
+  );
+  expect(bar).toEqual([32, 32, 32, 32]);
+  // カレンダーのアイコンもボタンの上下中央
+  const icon = await page.evaluate(() => {
+    const b = document.querySelector("#yn-filterbar-slot .yn-date-pick")!.getBoundingClientRect();
+    const i = document.querySelector("#yn-filterbar-slot .yn-date-pick svg")!.getBoundingClientRect();
+    return Math.abs((b.top + b.bottom) / 2 - (i.top + i.bottom) / 2);
+  });
+  expect(icon).toBeLessThanOrEqual(1);
+});
+
+for (const width of [1280, 1440, 1920]) {
+  test(`${width}px 幅ではフィルタバーの期間・チーム・着地見込みが 1 行に並ぶ（§66）`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await gotoPage(page, "/");
+    const tops = await page.evaluate(() =>
+      [".yn-filter-period", ".yn-filter-team", ".yn-filter-method"].map((s) => Math.round(document.querySelector(`#yn-filterbar-slot ${s}`)!.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+    // チームの選択欄は「全体（すべてのチーム）」が切れない幅
+    const team = await page.locator("#yn-filter-team").evaluate((e) => e.scrollWidth <= e.clientWidth + 1);
+    expect(team).toBe(true);
+  });
+}
+
+test("1024px 幅のフィルタバーは、期間を 1 行目、チームと着地見込みを 2 行目にそろえる（§66）", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await gotoPage(page, "/");
+  const tops = await page.evaluate(() =>
+    [".yn-filter-period", ".yn-filter-team", ".yn-filter-method"].map((s) => Math.round(document.querySelector(`#yn-filterbar-slot ${s}`)!.getBoundingClientRect().top)),
+  );
+  expect(tops[1]!).toBeGreaterThan(tops[0]!);
+  expect(tops[2]).toBe(tops[1]);
+});
+
+test("本文より広い画面でもヘッダーの帯は左右の端まで。取得日時はヘッダー、フッターは中央（§66）", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await gotoPage(page, "/");
+  const header = await page.evaluate(() => {
+    const h = document.querySelector("#observablehq-header")!;
+    return { left: h.getBoundingClientRect().left, outset: getComputedStyle(h).borderImageOutset, scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  expect(header.left).toBeGreaterThan(0); // 本文は 1440px で中央
+  expect(parseFloat(header.outset.split(" ")[1]!)).toBeGreaterThanOrEqual(header.left); // 帯だけ端まで伸ばす
+  expect(header.scroll).toBe(0);
+  await expect(page.locator("#yn-fetched")).toHaveText(/^データ取得 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  await expect(page.locator("#observablehq-footer")).toHaveCSS("text-align", "center");
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(page.locator("#yn-fetched")).toBeHidden();
 });
 
 test("案件一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {

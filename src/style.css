@@ -1,6 +1,6 @@
 /* 予実ナビ スタイル
  * Framework の既定テーマ（air = ライト / near-midnight = ダーク）を読み込み、その上にデザイントークンを重ねる。
- * 表示モードとテーマカラー（§53）は head のスクリプト（components/appearance.js）が描画前に <html data-theme data-accent> に当てる。
+ * 表示モードとテーマカラー（§66）は head のスクリプト（components/appearance.js）が描画前に <html data-theme data-accent> に当てる。
  * 表示モードは 設定画面 → GitLab（旧ダークテーマ等）→ PC の設定、テーマカラーは 設定画面 → GitLab のテーマ → ブルー の順に決める。
  * ダークは真っ黒にせず、ネイビー寄りのグレーの面にする。
  * 8px グリッド、画面フォントは同梱の BIZ UDPゴシック（§46）、tabular-nums、赤は「消化率超過」と「赤字着地」のみ。
@@ -174,6 +174,8 @@ body {
   padding: 0;
   background: var(--yn-card);
   border-bottom: 1px solid var(--yn-hairline);
+  /* 本文より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（§66。border-image の外側は横スクロールを生まない） */
+  border-image: linear-gradient(to bottom, var(--yn-card) calc(100% - 1px), var(--yn-hairline) 0) fill 0 / 0 0 1px / 0 100vmax;
   font: 14px/1.5 var(--sans-serif);
 }
 #observablehq-header ~ #observablehq-main {
@@ -262,6 +264,22 @@ body {
   font-weight: 700;
   border-bottom-color: var(--yn-link);
 }
+/* 作業実績の取得日時（スクロールしても見えるようにヘッダーに出す。1280px 未満は本文上の「作業実績の取得」だけ。§66） */
+.yn-fetched {
+  align-self: center;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--yn-text-muted);
+  white-space: nowrap;
+}
+.yn-fetched:not([hidden]) + .yn-unit-slot {
+  margin-left: 0;
+}
+@media (max-width: 1279px) {
+  .yn-fetched {
+    display: none;
+  }
+}
 .yn-unit-slot {
   display: flex;
   align-items: center;
@@ -280,9 +298,11 @@ body {
 .yn-unit-slot .yn-seg {
   flex-wrap: nowrap;
 }
+/* ヘッダーとフィルタバーの操作部品は高さ 32px（枠込み）・文字は上下中央にそろえる（§66） */
 .yn-unit-slot .yn-seg-btn {
-  min-height: 28px;
-  padding: 2px 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  line-height: 20px;
   white-space: nowrap;
 }
 .yn-unit-slot .yn-seg-btn[aria-pressed="true"]::before {
@@ -299,7 +319,11 @@ body {
 }
 /* 右上の業務リンク（リソース計画）。よく使うので大きめに（§52） */
 .yn-tool {
-  padding: 6px 20px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 20px;
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   color: var(--yn-text-1) !important;
@@ -339,6 +363,7 @@ body {
 }
 .yn-filterbar-slot {
   border-top: 1px solid var(--yn-hairline);
+  border-image: linear-gradient(var(--yn-hairline) 0 0) 1 0 0 / 1px 0 0 / 0 100vmax;
 }
 .yn-filterbar-slot .yn-filters {
   position: relative; /* visually-hidden など絶対配置の子をバーの中に閉じ込める */
@@ -348,7 +373,7 @@ body {
   border-radius: 0;
   background: transparent;
   align-items: center;
-  gap: 8px 20px;
+  gap: 8px 16px;
 }
 @media (min-width: 640px) {
   .yn-filterbar-slot .yn-filters {
@@ -398,6 +423,9 @@ body {
   outline: 2px solid var(--yn-focus);
   outline-offset: 1px;
 }
+.yn-date-pick-icon {
+  display: flex; /* 行の高さ・ベースラインの余白でアイコンが上にずれないようにする */
+}
 .yn-date-pick-input {
   position: absolute;
   inset: 0;
@@ -417,13 +445,17 @@ body {
   margin: 0;
   cursor: pointer;
 }
+/* 1440px 幅で期間・チーム・着地見込みが 1 行に収まる幅（§66） */
 .yn-filterbar-slot #yn-filter-team {
-  max-width: 240px;
+  max-width: 200px;
 }
 .yn-filterbar-slot .yn-select {
-  min-height: 30px;
-  padding-top: 2px;
-  padding-bottom: 2px;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 13px;
 }
 .yn-filterbar-slot .yn-radio-group {
   gap: 0;
@@ -432,7 +464,8 @@ body {
 .yn-filterbar-slot .yn-radio {
   position: relative; /* 隠した input の基準（ヘッダの外にはみ出して横スクロールを生まない） */
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 8px;
+  line-height: 20px;
   border-right: 1px solid var(--yn-hairline-strong);
 }
 .yn-filterbar-slot .yn-radio:last-child {
@@ -469,6 +502,7 @@ body {
 #observablehq-footer {
   margin-top: 64px;
   color: var(--yn-text-muted);
+  text-align: center;
 }
 a[href] {
   color: var(--yn-link);
@@ -2630,7 +2664,8 @@ li.is-jumped,
 }
 .yn-filterbar-slot .yn-seg-btn {
   min-height: 30px;
-  padding: 3px 10px;
+  padding: 0 8px;
+  line-height: 20px;
   white-space: nowrap;
 }
 .yn-filterbar-slot .yn-seg-btn[aria-pressed="true"]::before {
@@ -4025,4 +4060,25 @@ html:has(dialog.yn-dialog[open]) {
 .yn-dg-num.is-over {
   color: var(--yn-danger-text);
   font-weight: bold;
+}
+/* 1280〜1439px: 余白とボタンを詰めて期間・チーム・着地見込みを 1 行に収める（§66） */
+@media (min-width: 720px) and (max-width: 1439px) {
+  .yn-filterbar-slot .yn-filters {
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 8px 12px;
+  }
+  .yn-filterbar-slot #yn-filter-team {
+    max-width: 184px;
+  }
+  .yn-filterbar-slot .yn-seg-btn,
+  .yn-filterbar-slot .yn-radio {
+    padding: 0 6px;
+  }
+}
+/* 1279px 以下は 1 行に入らないので、期間を 1 行目、チームと着地見込みを 2 行目にそろえる（1 つだけ折り返さない） */
+@media (min-width: 720px) and (max-width: 1279px) {
+  .yn-filterbar-slot .yn-filter-period {
+    flex-basis: 100%;
+  }
 }

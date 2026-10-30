@@ -116,6 +116,7 @@ function header({ path }) {
   return `<div class="yn-topbar">
   <a class="yn-brand" href="/"><span class="yn-brand-mark" aria-hidden="true"></span>${escapeHtml(ja.app.name)}</a>
   <nav class="yn-tabs" aria-label="${escapeHtml(ja.app.tabsLabel)}">${NAV.map((i) => link(i, "yn-tab")).join("")}</nav>
+  <span id="yn-fetched" class="yn-fetched" hidden></span>
   <div id="yn-unit-slot" class="yn-unit-slot"></div>
   <nav class="yn-tools" aria-label="${escapeHtml(ja.app.toolsLabel)}">${TOOLS.map((i) => link(i, "yn-tool")).join("")}<span class="yn-icon-tools"><a class="yn-icon-btn yn-settings-link" href="/settings" aria-label="${escapeHtml(ja.app.settings)}" title="${escapeHtml(ja.app.settings)}"${settingsOn ? ' aria-current="page"' : ""}>${gear}</a>${more}</span></nav>
 </div>

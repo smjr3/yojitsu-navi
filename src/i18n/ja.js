@@ -81,6 +81,7 @@ export default {
     lastFinal: "確定済み",
     lastFinalValue: "{month} まで",
     fetchedAt: "作業実績の取得",
+    fetchedShort: "データ取得 {at}",
     notFetched: "未取得",
     prelimHidden: "速報",
     prelimBadge: "速報を含む",

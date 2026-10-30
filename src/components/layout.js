@@ -18,6 +18,7 @@ export function preliminaryBadge(includes) {
  */
 export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreliminary = false, extra = null }) {
   const meta = model?.meta;
+  showFetched(meta);
   // 1 段だけのパンくずは上部タブと重複するので出さない
   const crumbs = breadcrumbs.length > 1
     ? html`<nav class="yn-crumbs" aria-label=${T.layout.breadcrumbsLabel}><ol>${breadcrumbs.map(
@@ -41,6 +42,15 @@ export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreli
         </dl>`
       : null}
   </header>`;
+}
+
+/** ヘッダーの取得日時（スクロールしても見える位置。データを読まないページでは隠す） */
+function showFetched(meta) {
+  const el = typeof document === "undefined" ? null : document.getElementById("yn-fetched");
+  if (!el) return;
+  el.hidden = !meta?.worklogFetchedAt;
+  el.textContent = meta?.worklogFetchedAt ? fmt(T.layout.fetchedShort, { at: dateTimeJst(meta.worklogFetchedAt) }) : "";
+  el.title = T.layout.fetchedAt;
 }
 
 let tipSeq = 0;
