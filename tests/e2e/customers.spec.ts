@@ -409,7 +409,7 @@ test.describe("画面の作法", () => {
     }
     expect([...reached].sort()).toEqual(Object.keys(targets).sort());
     const ths = page.locator("table.yn-table thead th button.yn-sort");
-    for (let i = 0; i < (await ths.count()); i++) await expect(ths.nth(i).locator("xpath=..")).toHaveAttribute("aria-sort", /^(none|ascending|descending)$/);
+    for (let i = 0; i < (await ths.count()); i++) await expect(ths.nth(i).locator("xpath=ancestor::th[1]")).toHaveAttribute("aria-sort", /^(none|ascending|descending)$/);
     await expect(page.locator("table.yn-table caption")).toHaveCount(1);
     await expect(page.locator("tbody tr[data-key]").first().locator("th[scope=row]")).toHaveCount(1);
   });

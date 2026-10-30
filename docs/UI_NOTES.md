@@ -96,10 +96,11 @@ spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMon
 
 ## 表（table.js）
 
-`dataTable({columns, rows, unit, sort, rowHref, caption, exportName, tree, summary, summaryBreakdown, maxHeight})`。
-列は `{key, label, sublabel, type: money|percent|hours|int|status|text, get, render, sortValue, exportValue, breakdown, hideOnPhone, hideNarrow}`。`sublabel` は見出しの 2 行目（「（期間内）」「（年度内）」など母集団の注記。幅を増やさない）。
+`dataTable({columns, rows, unit, sort, rowHref, caption, exportName, tree, summary, summaryBreakdown, maxHeight, filter})`。
+列は `{key, label, sublabel, type: money|percent|hours|int|status|text, get, render, sortValue, exportValue, breakdown, hideOnPhone, hideNarrow, filter, filterValue}`。`sublabel` は見出しの 2 行目（「（期間内）」「（年度内）」など母集団の注記。幅を増やさない）。
 `<th scope="col">` にソートボタンと `aria-sort`、先頭列は `<th scope="row">`。行クリックは `rowHref` のリンク（キーボードはリンクで到達）＋行全体のクリック。並べ替え・木の開閉で thead/tbody を描き直したあとは `data-key` で同じボタンにフォーカスを戻す（キーボード操作が途切れない）。
-合計行（`summary`）は行用の `breakdown(row)` を使わず、`summaryBreakdown(col)` が spec を返す列だけ根拠ボタンになる（案件一覧は表示中の契約 ID を母集団に `aggregate()` / `forecastTotals()` で合計し、同じ ID 集合で根拠を開く。案件詳細の月表の合計行は KPI と同じ `Totals` を表示し、根拠ボタンは付けない）。
+列ごとの絞り込み（SPEC §70）: 見出しの漏斗ボタンで吹き出し（`body` 直下に fixed。表の横スクロール枠で切られないため）。文字・状態は値の一覧＋検索、数値は下限〜上限（表示単位で入力し、`rangeFactor` で元の値に直して比較）。判定は `matchesFilter(col, f, row, unit)`（ユニットテストあり）。状態は sessionStorage `yojitsu-navi:filter:<path>:<caption>`。木構造の表・`filter: false` には付けない。`summary` に関数 `(shownRows) => row` を渡すと絞り込み後の行で合計行を作り直す（固定の row は絞り込み中は出さない）。
+合計行（`summary`）は行用の `breakdown(row)` を使わず、`summaryBreakdown(col, summaryRow)` が spec を返す列だけ根拠ボタンになる（案件一覧は表示中の契約 ID を母集団に `aggregate()` / `forecastTotals()` で合計し、同じ ID 集合で根拠を開く。案件詳細の月表の合計行は KPI と同じ `Totals` を表示し、根拠ボタンは付けない）。
 Excel 出力は **今見えている行（並べ替え・絞り込み後）** を `.xlsx` に。金額は **表示単位に関係なく常に円の整数**（列名「…（円）」、1 行目に「単位: 円」の注記、2 行目が見出し）。千円表示は画面だけの都合で、行ごとに丸めた値を出力して合計がずれることを避ける。割合は % の数値、月は `YYYY-MM`。画面に合計行（tfoot）がある表は、最終行に同じ合計を出す。
 幅の工夫（1280px で標準列がスクロール無しで収まるように）: 先頭列は `position: sticky`（横スクロール時も名前が残る）、横スクロールが必要なときは両端に影とツールバーに「横にスクロールできます」を出す（`.yn-table-scroll.is-scrollable`）。案件一覧・赤字一覧は「顧客 / 案件」と「ID・チーム・期間（YY/MM）」の 2 行セル（`contractNameCell()`、`title` に正式表記、Excel には別列で出力 = `exportOnly`）。コンテナ幅 820px 以下で `hideNarrow` 列（案件数・状態・時間など）を隠し、700px 以下で文字 11.5px/余白 3px に詰める。
 

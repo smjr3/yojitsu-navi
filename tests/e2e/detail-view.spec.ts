@@ -332,7 +332,7 @@ test.describe("L4 / L9 メンバー一覧", () => {
     await expect(search).toHaveAttribute("placeholder", /チーム/);
     await expect(search).toHaveAttribute("aria-label", /チーム/);
     const table = tableByCaption(page, "メンバー別の計画と実績");
-    await table.locator("thead th[data-key='memberName'] button").click();
+    await table.locator("thead th[data-key='memberName'] button.yn-sort").click();
     const names = await dataRows(table).evaluateAll((trs) => trs.map((tr) => tr.querySelector(".yn-cell-main")?.textContent ?? ""));
     const sorted = [...names].sort((a, b) => a.localeCompare(b, "ja"));
     expect(names).toEqual(sorted);

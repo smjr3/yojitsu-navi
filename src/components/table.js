@@ -6,10 +6,13 @@
  *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
  *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す）,
  *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
- *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する） }],
+ *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
+ *               filter?: "values"|"range"|false（見出しの絞り込み。既定は数値列 range・それ以外 values）, filterValue?(row) -> string|string[] }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効）,
- *   summary?: row（tfoot の合計行）, summaryBreakdown?(col) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
+ *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
+ *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
+ *   filter?: false（列ごとの絞り込みを付けない）,
  *   maxHeight?: px, toolbar?: Node
  * })
  * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
@@ -119,6 +122,95 @@ function compare(a, b, dir) {
   return dir === "desc" ? -r : r;
 }
 
+/** 金額列の入力値（表示単位）→ 円 の倍率。割合は % で入力する */
+function rangeFactor(col, unit) {
+  if (col.type === "money") return unit === "m" ? 1e6 : unit === "k" ? 1e3 : 1;
+  if (col.type === "percent") return 0.01;
+  return 1;
+}
+
+function rangeUnitLabel(col, unit) {
+  if (col.type === "money") return T.format.units[unit] ?? T.format.units.yen;
+  if (col.type === "moneyYen") return T.format.units.yen;
+  if (col.type === "percent") return "%";
+  if (col.type === "hours") return "h";
+  return "";
+}
+
+/** 絞り込みの種類。右寄せでも値が文字の列（単価の「6,000円 / 7,000円」など）は値の一覧にする */
+function filterKind(col, rows = null) {
+  if (col.filter === false) return null;
+  if (col.filter === "values" || col.filter === "range") return col.filter;
+  if (NUMERIC_TYPES.has(col.type)) return "range";
+  if (isNumeric(col) && (!rows || rows.some((r) => rangeValue(col, r) !== null))) return "range";
+  return "values";
+}
+
+/** 絞り込みの値（文字）。空は "" */
+function filterValues(col, row, unit) {
+  let v;
+  if (col.filterValue) v = col.filterValue(row);
+  else if (col.type === "status") {
+    const s = col.get ? col.get(row) : row[col.key];
+    const list = s ? (Array.isArray(s) ? s : [s]).map((x) => x.text) : [];
+    v = list.length ? list : ""; // 印が無い行は（空白）として選べるように
+  } else if (col.exportValue) v = col.exportValue(row, unit);
+  else if (col.render) v = plainText(col.render(row, col.type === "moneyYen" ? "yen" : unit));
+  else v = defaultExport(col, row, unit);
+  const list = Array.isArray(v) ? v : [v];
+  return list.map((x) => (x === null || x === undefined || x === EMPTY_VALUE ? "" : String(x).trim()));
+}
+
+function rangeValue(col, row) {
+  const v = col.get ? col.get(row) : row[col.key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** 検索語の比較（全角・半角、大文字・小文字を揃える） */
+function norm(s) {
+  return String(s).normalize("NFKC").toLowerCase();
+}
+
+/** 読み上げ用の値の文字（記号や色付きの要素で包まれていても、見えている文字を使う） */
+function plainText(text) {
+  if (typeof text === "string") return text;
+  if (typeof Node === "undefined" || !(text instanceof Node)) return text === null || text === undefined ? "" : String(text);
+  const clone = text.cloneNode(true);
+  if (clone instanceof Element) for (const h of clone.querySelectorAll('[aria-hidden="true"]')) h.remove();
+  return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** 1 行が列の絞り込みを満たすか。f = {q, values} | {min, max}（min/max は円・比率などの元の値） */
+export function matchesFilter(col, f, row, unit) {
+  if (!f) return true;
+  if ("min" in f || "max" in f) {
+    const v = rangeValue(col, row);
+    if (v === null) return false;
+    // 表示と同じ丸めで比べると端の値が漏れるので、元の値で比べる
+    if (typeof f.min === "number" && v < f.min) return false;
+    if (typeof f.max === "number" && v > f.max) return false;
+    return true;
+  }
+  const vals = filterValues(col, row, unit);
+  if (f.q) {
+    const q = norm(f.q);
+    if (!vals.some((v) => norm(v).includes(q))) return false;
+  }
+  if (Array.isArray(f.values)) {
+    const set = new Set(f.values);
+    if (!vals.some((v) => set.has(v))) return false;
+  }
+  return true;
+}
+
+function isActiveFilter(f) {
+  return !!f && ((typeof f.q === "string" && f.q !== "") || Array.isArray(f.values) || typeof f.min === "number" || typeof f.max === "number");
+}
+
+const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
+
+let filterPopSeq = 0;
+
 /** ファイル名に使えない文字を _ に（契約IDがそのまま入るため） */
 export function safeFileName(name) {
   return String(name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "export";
@@ -184,6 +276,7 @@ export function dataTable({
   maxHeight = null,
   toolbar = null,
   id = null,
+  filter = true,
 }) {
   const visibleCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   const exportCols = columns.filter((c) => !c.hidden && c.export !== false);
@@ -200,6 +293,45 @@ export function dataTable({
   let sortState = tree ? null : remembered ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
   let currentRows = rows;
+
+  // 列ごとの絞り込み（SPEC §70）。木構造の表には付けない。並べ替えと同じくタブ単位で覚える
+  const filterable = !tree && filter !== false && rows.length > 0;
+  const filterMemoKey = filterable && caption ? `yojitsu-navi:filter:${location.pathname}:${caption}` : null;
+  /** @type {Map<string, any>} 列 key → {q, values} | {min, max} */
+  const filters = new Map();
+  if (filterMemoKey) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(filterMemoKey) ?? "null");
+      for (const [key, f] of Object.entries(saved ?? {})) {
+        const col = visibleCols.find((c) => c.key === key && filterKind(c));
+        if (!col || !isActiveFilter(f)) continue;
+        if (Array.isArray(f.values) && f.values.length > 0) {
+          // 別の案件などで覚えた値のうち、この表に無いものは捨てる（全部無ければ絞り込みごと捨てる）。
+          // 全部外した（空の）選択は利用者の意図なのでそのまま残す
+          const present = new Set(rows.flatMap((r) => filterValues(col, r, unit)));
+          const values = f.values.filter((v) => present.has(v));
+          if (values.length === 0) continue;
+          filters.set(key, { ...f, values });
+        } else filters.set(key, f);
+      }
+    } catch {
+      /* プライベートモード等では無視 */
+    }
+  }
+  const saveFilters = () => {
+    try {
+      if (filterMemoKey) sessionStorage.setItem(filterMemoKey, JSON.stringify(Object.fromEntries(filters)));
+    } catch {
+      /* 無視 */
+    }
+  };
+  const activeFilters = () => [...filters].filter(([, f]) => isActiveFilter(f));
+  function filteredRows() {
+    const act = activeFilters();
+    if (act.length === 0) return rows;
+    const cols = act.map(([key, f]) => [visibleCols.find((c) => c.key === key), f]).filter(([c]) => c);
+    return rows.filter((r) => cols.every(([c, f]) => matchesFilter(c, f, r, unit)));
+  }
 
   const table = html`<table class="yn-table" id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
   const thead = html`<thead></thead>`;
@@ -219,16 +351,20 @@ export function dataTable({
         return true;
       });
     }
-    if (!sortState) return rows;
+    const base = filteredRows();
+    if (!sortState) return base;
     const col = columns.find((c) => c.key === sortState.key);
-    if (!col) return rows;
-    return rows
+    if (!col) return base;
+    return base
       .map((r, i) => ({ r, i, v: sortValue(col, r) }))
       .sort((a, b) => compare(a.v, b.v, sortState.dir) || a.i - b.i)
       .map((x) => x.r);
   }
 
+  const filterButtons = new Map();
   function renderHead() {
+    closeFilterPop();
+    filterButtons.clear();
     thead.replaceChildren(
       html`<tr>${visibleCols.map((col) => {
         const numeric = isNumeric(col);
@@ -252,18 +388,25 @@ export function dataTable({
           });
           th.append(btn);
         } else th.append(headLabel(col), col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : "");
+        if (filterable && filterKind(col)) {
+          const fb = html`<button type="button" class="yn-filter-btn" aria-haspopup="dialog" aria-expanded="false"></button>`;
+          fb.innerHTML = FILTER_ICON;
+          fb.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            if (openPop && openPop.col === col) closeFilterPop();
+            else openFilterPop(col, fb);
+          });
+          filterButtons.set(col.key, { btn: fb, col });
+          th.classList.add("has-filter");
+          // 並べ替えのボタン（または見出しの文字）と漏斗を横に並べる
+          const inner = html`<div class="yn-th-inner"><span class="yn-th-main"></span></div>`;
+          inner.firstChild.append(...th.childNodes);
+          inner.append(fb);
+          th.append(inner);
+        }
         return th;
       })}</tr>`,
     );
-  }
-
-  /** 読み上げ用の値の文字（記号や色付きの要素で包まれていても、見えている文字を使う） */
-  function plainText(text) {
-    if (typeof text === "string") return text;
-    if (!(text instanceof Node)) return "";
-    const clone = text.cloneNode(true);
-    if (clone instanceof Element) for (const h of clone.querySelectorAll('[aria-hidden="true"]')) h.remove();
-    return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
   }
 
   function cellNode(col, row, isSummary = false) {
@@ -325,29 +468,295 @@ export function dataTable({
     return tr;
   }
 
+  // 合計行。関数なら絞り込み後の行で作り直す。固定の行は絞り込み中は母集団が合わないので出さない
+  let currentSummary = null;
+  const tfoot = html`<tfoot></tfoot>`;
+  function renderSummary() {
+    const filtered = activeFilters().length > 0;
+    currentSummary = typeof summary === "function" ? (currentRows.length ? summary(currentRows) : null) : filtered ? null : summary;
+    if (!currentSummary) {
+      tfoot.remove();
+      return;
+    }
+    const sm = currentSummary;
+    tfoot.replaceChildren(html`<tr class="yn-summary-row">${visibleCols.map((col, ci) => {
+      const numeric = isNumeric(col);
+      const has = sm[col.key] !== undefined && sm[col.key] !== null;
+      const content = ci === 0 ? (sm.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, sm, true);
+      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}`}>${content}</td>`;
+    })}</tr>`);
+    if (!tfoot.isConnected) table.append(tfoot);
+  }
+
   function renderBody() {
     currentRows = orderedRows();
+    const filtered = activeFilters().length > 0;
     if (currentRows.length === 0) {
-      tbody.replaceChildren(html`<tr class="yn-table-empty"><td colspan=${visibleCols.length}>${emptyText}</td></tr>`);
+      tbody.replaceChildren(html`<tr class="yn-table-empty"><td colspan=${visibleCols.length}>${filtered && rows.length ? T.table.filterEmpty : emptyText}</td></tr>`);
     } else {
       tbody.replaceChildren(...currentRows.map(renderRow));
     }
-    if (count) count.textContent = tree && currentRows.length < rows.length ? fmt(T.table.rowCountTreeCollapsed, { shown: integer(currentRows.length), n: integer(rows.length) }) : fmt(tree ? T.table.rowCountTree : T.table.rowCount, { n: integer(rows.length) });
+    renderSummary();
+    if (count)
+      count.textContent = tree
+        ? currentRows.length < rows.length
+          ? fmt(T.table.rowCountTreeCollapsed, { shown: integer(currentRows.length), n: integer(rows.length) })
+          : fmt(T.table.rowCountTree, { n: integer(rows.length) })
+        : filtered
+          ? fmt(T.table.rowCountFiltered, { shown: integer(currentRows.length), n: integer(rows.length) })
+          : fmt(T.table.rowCount, { n: integer(rows.length) });
+    for (const { btn, col } of filterButtons.values()) {
+      const on = isActiveFilter(filters.get(col.key));
+      btn.classList.toggle("is-active", on);
+      btn.closest("th")?.classList.toggle("is-filtered", on);
+      const label = fmt(on ? T.table.filterActive : T.table.filterBy, { label: col.label });
+      btn.setAttribute("aria-label", label);
+      btn.title = label;
+    }
+    if (clearBtn) clearBtn.hidden = !filtered;
+  }
+
+  // ── 絞り込みの吹き出し（body 直下に fixed で出す。表は横スクロールの枠で切られるため） ──
+  let openPop = null;
+  // discard: 入力の反映待ち（デバウンス中）を捨てる（「絞り込みを解除」用）。既定は閉じる前に反映する
+  function closeFilterPop({ focus = false, discard = false } = {}) {
+    if (!openPop) return;
+    const { pop, btn, cleanup, body } = openPop;
+    openPop = null;
+    if (discard) body.cancel();
+    else body.flush();
+    cleanup();
+    pop.remove();
+    btn.setAttribute("aria-expanded", "false");
+    if (focus && btn.isConnected) btn.focus();
+  }
+  function setFilter(col, f) {
+    if (isActiveFilter(f)) filters.set(col.key, f);
+    else filters.delete(col.key);
+    saveFilters();
+    renderBody();
+  }
+  function openFilterPop(col, btn) {
+    closeFilterPop();
+    const kind = filterKind(col, rows);
+    const popId = `yn-filter-pop-${++filterPopSeq}`;
+    const pop = html`<div class="yn-filter-pop" role="dialog" id=${popId} aria-label=${fmt(T.table.filterBy, { label: col.label })}></div>`;
+    const body = kind === "range" ? rangeBody(col) : valuesBody(col);
+    const clear = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClear}</button>`;
+    const close = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClose}</button>`;
+    clear.addEventListener("click", () => {
+      body.cancel();
+      setFilter(col, null);
+      body.reset();
+    });
+    close.addEventListener("click", () => closeFilterPop({ focus: true }));
+    pop.append(body.node, html`<div class="yn-filter-pop-actions">${clear}${close}</div>`);
+    document.body.append(pop);
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-controls", popId);
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const w = Math.min(300, vw - 32);
+      pop.style.width = `${w}px`;
+      pop.style.left = `${Math.max(16, Math.min(r.right - w, vw - w - 16))}px`;
+      const h = pop.offsetHeight;
+      const below = r.bottom + 4;
+      const above = r.top - 4 - h;
+      pop.style.top = `${below + h <= vh - 8 ? below : above >= 8 ? above : Math.max(8, vh - 8 - h)}px`;
+    };
+    place();
+    const onDown = (e) => {
+      if (!pop.contains(e.target) && !btn.contains(e.target)) closeFilterPop();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeFilterPop({ focus: true });
+      }
+    };
+    // 吹き出しは fixed なので、外側がスクロールしたら見出しのボタンに付いて動かし、ボタンが画面から消えたら閉じる
+    // （絞り込みで行が減ると表の枠もスクロールするため、スクロールだけでは閉じない）
+    const onScroll = (e) => {
+      if (e.target instanceof Node && pop.contains(e.target)) return;
+      const r = btn.getBoundingClientRect();
+      if (!btn.isConnected || r.bottom < 0 || r.top > document.documentElement.clientHeight) closeFilterPop();
+      else place();
+    };
+    const onResize = () => closeFilterPop();
+    document.addEventListener("pointerdown", onDown, true);
+    pop.addEventListener("keydown", onKey);
+    addEventListener("scroll", onScroll, { passive: true, capture: true });
+    addEventListener("resize", onResize);
+    openPop = {
+      col,
+      pop,
+      btn,
+      body,
+      cleanup: () => {
+        document.removeEventListener("pointerdown", onDown, true);
+        removeEventListener("scroll", onScroll, { capture: true });
+        removeEventListener("resize", onResize);
+      },
+    };
+    body.focus();
+  }
+
+  /** 値の一覧（チェックボックス）＋検索。検索語は行の部分一致にもなる */
+  function valuesBody(col) {
+    const counts = new Map();
+    for (const r of rows) for (const v of new Set(filterValues(col, r, unit))) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const values = [...counts.keys()];
+    if (col.type !== "status") values.sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ja", { numeric: true })));
+    const cur = () => filters.get(col.key) ?? {};
+    const search = html`<input type="search" class="yn-input yn-filter-search" placeholder=${T.table.filterSearch} aria-label=${fmt(T.table.filterBy, { label: col.label })}>`;
+    search.value = cur().q ?? "";
+    const allBox = html`<input type="checkbox">`;
+    const list = html`<div class="yn-filter-list" role="group" aria-label=${col.label}></div>`;
+    const none = html`<p class="yn-filter-none" hidden>${T.table.filterNoMatch}</p>`;
+    const boxes = values.map((v) => {
+      const input = html`<input type="checkbox" value=${v}>`;
+      const label = html`<label class="yn-filter-item">${input}<span class="yn-filter-item-text">${v === "" ? T.table.filterBlank : v}</span><span class="yn-filter-item-count">${integer(counts.get(v))}</span></label>`;
+      input.addEventListener("change", () => {
+        const f = cur();
+        const selected = new Set(Array.isArray(f.values) ? f.values : values);
+        if (input.checked) selected.add(v);
+        else selected.delete(v);
+        // すべて選んだ状態は「絞り込みなし」と同じに戻す（後から増えた値も出るように）
+        setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
+        sync();
+      });
+      list.append(label);
+      return { v, input, label };
+    });
+    function sync() {
+      const f = cur();
+      const sel = Array.isArray(f.values) ? new Set(f.values) : null;
+      const q = norm(search.value);
+      let shown = 0;
+      let checked = 0;
+      for (const b of boxes) {
+        const vis = !q || norm(b.v).includes(q);
+        b.label.hidden = !vis;
+        b.input.checked = sel ? sel.has(b.v) : true;
+        if (vis) {
+          shown += 1;
+          if (b.input.checked) checked += 1;
+        }
+      }
+      none.hidden = shown > 0;
+      allBox.checked = shown > 0 && checked === shown;
+      allBox.indeterminate = checked > 0 && checked < shown;
+    }
+    allBox.addEventListener("change", () => {
+      const f = cur();
+      const q = norm(search.value);
+      const target = boxes.filter((b) => !q || norm(b.v).includes(q)).map((b) => b.v);
+      const selected = new Set(Array.isArray(f.values) ? f.values : values);
+      for (const v of target) allBox.checked ? selected.add(v) : selected.delete(v);
+      setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
+      sync();
+    });
+    let timer = null;
+    const applySearch = () => {
+      timer = null;
+      setFilter(col, { ...cur(), q: search.value.trim() });
+    };
+    search.addEventListener("input", () => {
+      sync();
+      clearTimeout(timer);
+      timer = setTimeout(applySearch, 150);
+    });
+    sync();
+    const node = html`<div class="yn-filter-values">${search}<label class="yn-filter-item yn-filter-all">${allBox}<span>${T.table.filterAll}</span></label>${list}${none}</div>`;
+    return {
+      node,
+      focus: () => search.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          applySearch();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
+      reset: () => {
+        search.value = "";
+        sync();
+      },
+    };
+  }
+
+  /** 数値の範囲（下限・上限）。入力は画面の単位（百万円・%・h）で、元の値に直して覚える */
+  function rangeBody(col) {
+    const factor = col.type === "moneyYen" ? 1 : rangeFactor(col, unit);
+    const unitLabel = rangeUnitLabel(col, unit);
+    const toInput = (v) => (typeof v === "number" ? String(Math.round((v / factor) * 1e6) / 1e6) : "");
+    const f0 = filters.get(col.key) ?? {};
+    const mk = (label, v) => html`<input type="text" inputmode="decimal" class="yn-input yn-filter-num" aria-label=${`${col.label} ${label}`} placeholder=${label} value=${toInput(v)}>`;
+    const min = mk(T.table.filterMin, f0.min);
+    const max = mk(T.table.filterMax, f0.max);
+    const parse = (el) => {
+      const t = el.value.normalize("NFKC").replace(/[,\s]/g, "").replace(/[−ー‐]/g, "-");
+      if (t === "") return null;
+      const n = Number(t);
+      el.classList.toggle("is-invalid", !Number.isFinite(n));
+      return Number.isFinite(n) ? n * factor : undefined;
+    };
+    let timer = null;
+    const commit = () => {
+      timer = null;
+      const a = parse(min);
+      const b = parse(max);
+      if (a === undefined || b === undefined) return;
+      const f = {};
+      if (a !== null) f.min = a;
+      if (b !== null) f.max = b;
+      setFilter(col, f);
+    };
+    const apply = () => {
+      clearTimeout(timer);
+      timer = setTimeout(commit, 250);
+    };
+    min.addEventListener("input", apply);
+    max.addEventListener("input", apply);
+    const node = html`<div class="yn-filter-range">${min}<span aria-hidden="true">〜</span>${max}${unitLabel ? html`<span class="yn-filter-unit">${unitLabel}</span>` : null}</div>`;
+    return {
+      node,
+      focus: () => min.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          commit();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
+      reset: () => {
+        min.value = "";
+        max.value = "";
+        min.classList.remove("is-invalid");
+        max.classList.remove("is-invalid");
+      },
+    };
   }
 
   renderHead();
   const count = html`<span class="yn-table-count" aria-live="polite"></span>`;
+  const clearBtn = filterable ? html`<button type="button" class="yn-btn yn-btn-sm yn-filter-clear-all" hidden>${T.table.filterClearAll}</button>` : null;
+  if (clearBtn)
+    clearBtn.addEventListener("click", () => {
+      closeFilterPop({ discard: true });
+      filters.clear();
+      saveFilters();
+      renderBody();
+    });
   renderBody();
-
-  if (summary) {
-    const tfoot = html`<tfoot><tr class="yn-summary-row">${visibleCols.map((col, ci) => {
-      const numeric = isNumeric(col);
-      const has = summary[col.key] !== undefined && summary[col.key] !== null;
-      const content = ci === 0 ? (summary.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, summary, true);
-      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}`}>${content}</td>`;
-    })}</tr></tfoot>`;
-    table.append(tfoot);
-  }
 
   const exportBtn = exportName
     ? exportButton(() => ({
@@ -356,7 +765,7 @@ export function dataTable({
         unit,
         name: exportName,
         sheet: caption ?? exportName,
-        summary,
+        summary: currentSummary,
       }))
     : null;
 
@@ -364,7 +773,7 @@ export function dataTable({
   const wrapEl = html`<div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? T.table.regionLabel}>${table}</div>`;
   const scroller = html`<div class="yn-table-scroll">${wrapEl}</div>`;
   const wrap = html`<div class="yn-table-block">
-    <div class="yn-table-toolbar">${count}${scrollHint}${toolbar}${exportBtn}</div>
+    <div class="yn-table-toolbar">${count}${clearBtn}${scrollHint}${toolbar}${exportBtn}</div>
     ${scroller}
   </div>`;
   // 横スクロールの有無と位置を示す（端に影、ツールバーに案内）

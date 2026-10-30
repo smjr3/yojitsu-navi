@@ -55,7 +55,7 @@ test("1024px 幅ではヘッダーが 1 段（タブ・単位・右上のリン�
 test("案件一覧: 並べ替え・絞り込み・検索が、絞り込み変更と詳細からの「戻る」で保たれる", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const sortTh = page.locator('th[data-key="grossMargin"]');
-  await sortTh.locator("button").click();
+  await sortTh.locator("button.yn-sort").click();
   const dir = await sortTh.getAttribute("aria-sort");
   await page.locator('label[for="yn-f-prelim"]').click();
   await expect(page.locator('th[data-key="grossMargin"]')).toHaveAttribute("aria-sort", dir!);

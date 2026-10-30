@@ -50,11 +50,11 @@ for (const path of ["/", "/teams", "/contracts", "/contract?id=C008"]) {
       for (let j = 0; j < m; j++) {
         const th = ths.nth(j);
         await expect(th).toHaveAttribute("scope", "col");
-        const hasBtn = (await th.locator("button").count()) > 0;
+        const hasBtn = (await th.locator("button.yn-sort").count()) > 0;
         const sort = await th.getAttribute("aria-sort");
         if (hasBtn) {
           expect(sort, `${path} 表${i} 列${j}`).toMatch(/^(none|ascending|descending)$/);
-          await expect(th.locator("button")).toHaveAttribute("type", "button");
+          await expect(th.locator("button.yn-sort")).toHaveAttribute("type", "button");
         } else expect(sort === null || sort === "none", `${path} 表${i} 列${j}: ボタン無しなら aria-sort は無い`).toBe(true);
       }
       await expect(t.locator("tbody tr[data-key]").first().locator("th[scope=row]")).toHaveCount(1);

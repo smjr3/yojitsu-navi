@@ -4097,3 +4097,142 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-impact .yn-table-wrap + .yn-table-wrap {
   margin-top: 12px;
 }
+
+/* 列ごとの絞り込み（table.js。見出しの漏斗ボタンと吹き出し。SPEC §70） */
+.yn-th-inner {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.yn-th-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.yn-filter-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px; /* 列が多い一覧（1024px）でも横スクロールを増やさない幅 */
+  height: 20px;
+  margin-right: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--yn-text-muted);
+  opacity: 0.55;
+  cursor: pointer;
+}
+.yn-filter-btn:hover,
+.yn-filter-btn[aria-expanded="true"] {
+  opacity: 1;
+  background: var(--yn-wash-strong);
+}
+.yn-filter-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 0;
+}
+.yn-filter-btn.is-active {
+  opacity: 1;
+  color: var(--yn-on-accent);
+  background: var(--yn-accent);
+}
+.yn-table thead th.is-filtered {
+  color: var(--yn-text-1);
+}
+.yn-filter-pop {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  max-height: calc(100vh - 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius-sm);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  white-space: normal;
+}
+.yn-filter-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.yn-filter-pop .yn-input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.yn-filter-list {
+  max-height: min(260px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--yn-hairline);
+  padding-top: 4px;
+}
+.yn-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.yn-filter-item[hidden] {
+  display: none;
+}
+.yn-filter-item input {
+  flex: none;
+  margin: 0;
+}
+.yn-filter-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.yn-filter-item-count {
+  flex: none;
+  color: var(--yn-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.yn-filter-none {
+  margin: 4px 2px;
+  color: var(--yn-text-muted);
+}
+.yn-filter-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.yn-filter-num.is-invalid {
+  border-color: var(--yn-danger);
+}
+.yn-filter-unit {
+  color: var(--yn-text-muted);
+  white-space: nowrap;
+}
+.yn-filter-pop-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.yn-filter-clear-all[hidden] {
+  display: none;
+}
+/* 漏斗の分だけ見出しが広がらないよう、右の余白を詰める */
+.yn-table thead th.has-filter {
+  padding-right: 2px;
+}

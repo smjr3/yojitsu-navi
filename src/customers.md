@@ -162,27 +162,33 @@ if (vm) {
     hasTargets(model, "customer") ? targetColumn(model, "customer", (r) => r.name, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ].filter(Boolean);
-  // 合計行は表示中の顧客の契約すべてを母集団にした aggregate() / forecastTotals()（顧客は契約を重複せず分けるので、全体の合計と一致する）
-  const shownIds = rows.flatMap((r) => r.contractIds);
-  const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });
-  const sumForecast = forecastTotals(model, shownIds, vm.method);
-  const sumSubtitle = fmt(T.customers.totalSubtitle, { n: rows.length, period: periodJa(scope.period) });
+  // 合計行は表示中の顧客の契約すべてを母集団にした aggregate() / forecastTotals()（顧客は契約を重複せず分けるので、全体の合計と一致する）。
+  // 列の絞り込みをすると、絞り込み後の顧客で作り直す
   const detailHref = (id) => store.href("./contract", {}, { id });
-  const summary = {
-    name: fmt(T.customers.totalRow, { n: rows.length }),
-    contractCount: sumTotals.contractCount,
-    budget: sumTotals.budget,
-    cost: sumTotals.cost,
-    grossProfit: sumTotals.grossProfit,
-    grossMargin: sumTotals.grossMargin,
-    burnRate: sumTotals.burnRate,
-    isOverBudget: sumTotals.isOverBudget,
-    // 着地粗利は期間内の契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
-    forecastGrossProfit: sumTotals.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
-    isDeficit: false,
-    status: null,
+  const summary = (shown) => {
+    const shownIds = shown.flatMap((r) => r.contractIds);
+    const sumTotals = aggregate(model, { period: scope.period, contractIds: shownIds });
+    const sumForecast = forecastTotals(model, shownIds, vm.method);
+    return {
+      name: fmt(T.customers.totalRow, { n: shown.length }),
+      contractCount: sumTotals.contractCount,
+      budget: sumTotals.budget,
+      cost: sumTotals.cost,
+      grossProfit: sumTotals.grossProfit,
+      grossMargin: sumTotals.grossMargin,
+      burnRate: sumTotals.burnRate,
+      isOverBudget: sumTotals.isOverBudget,
+      // 着地粗利は期間内の契約が 1 件も無ければ「—」（forecastTotals.contractCount は全契約数なので使わない）
+      forecastGrossProfit: sumTotals.contractCount === 0 ? null : sumForecast.forecastGrossProfit,
+      isDeficit: false,
+      status: null,
+      shownIds,
+      sumTotals,
+      sumForecast,
+      sumSubtitle: fmt(T.customers.totalSubtitle, { n: shown.length, period: periodJa(scope.period) }),
+    };
   };
-  const summaryBreakdown = (col) => {
+  const summaryBreakdown = (col, { shownIds, sumTotals, sumForecast, sumSubtitle }) => {
     switch (col.key) {
       case "budget":
         return () => bd.budgetAggregateSpec({ model, contractIds: shownIds, period: scope.period, unit });

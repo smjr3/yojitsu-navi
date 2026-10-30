@@ -87,17 +87,19 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
     ...shownMonths.map((m) => ({ key: `m:${m}`, label: monthShort(m, m === shownMonths[0]), type: "hours", hideOnPhone: true, get: (r) => r.byMonth[m] ?? 0, render: (r) => (r.byMonth[m] ? formatHours(r.byMonth[m]) : EMPTY_VALUE), exportLabel: fmt(T.work.monthHours, { month: m }) })),
   ];
   const all = [...contract, ...outside].map((l) => ({ ...l, key: `${l.category}:${l.task}` }));
-  const summary = all.length
-    ? {
-        category: null,
-        task: fmt(T.work.contractTotal, { n: contract.length }),
-        unclassified: false,
-        hours: sumOf(contract, (l) => l.hours),
-        share: null,
-        amount: sumOf(contract, (l) => l.amount),
-        byMonth: Object.fromEntries(shownMonths.map((m) => [m, sumOf(contract, (l) => l.byMonth[m])])),
-      }
-    : null;
+  // 合計行は運用保守の作業だけ（列の絞り込み後の行で作り直す）
+  const summary = (shown) => {
+    const cs = shown.filter((l) => l.category === "contract");
+    return {
+      category: null,
+      task: fmt(T.work.contractTotal, { n: cs.length }),
+      unclassified: false,
+      hours: sumOf(cs, (l) => l.hours),
+      share: null,
+      amount: sumOf(cs, (l) => l.amount),
+      byMonth: Object.fromEntries(shownMonths.map((m) => [m, sumOf(cs, (l) => l.byMonth[m])])),
+    };
+  };
   const section = html`<section class="yn-work-section">
     ${sectionTitle(title, outside.length ? `${hint ?? ""} ${T.work.outsideTip}`.trim() : hint)}
     ${all.length === 0
