@@ -1737,5 +1737,10 @@ export default {
     themes: { light: "ライト", dark: "ダーク" },
     accents: { blue: "ブルー", indigo: "インディゴ", green: "グリーン", red: "レッド", gray: "グレー" },
     toMasters: "マスタ編集へ",
+    // バージョン情報（§59）。値はビルド時に入る
+    versionTitle: "バージョン情報",
+    version: "バージョン",
+    commit: "コミット",
+    builtAt: "ビルド日時",
   },
 };
