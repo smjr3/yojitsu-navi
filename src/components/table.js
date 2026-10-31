@@ -17,6 +17,7 @@
  * })
  * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
  */
+import { bindColResizer } from "./col-resize.js";
 import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
@@ -211,6 +212,14 @@ const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden
 
 let filterPopSeq = 0;
 
+const COL_W_MIN = 40;
+const COL_W_MAX = 640;
+const COL_LEAD_VW = 60;
+function clampColW(w) {
+  if (!Number.isFinite(w)) return null;
+  return Math.round(Math.min(COL_W_MAX, Math.max(COL_W_MIN, w)));
+}
+
 /**
  * 木構造の表の絞り込み: 一致した行と、その祖先（親子の位置を保つ）を元の並びのまま残す。
  * onKeys(一致した key の集合, 残った子を持つ key の集合)
@@ -366,6 +375,69 @@ export function dataTable({
     });
   }
 
+  // 列幅（見出しの右端をドラッグ。マスタ編集と同じ部品。§76）。画面と表ごとにこのブラウザに覚える
+  const colWKey = caption ? `yojitsu-navi:col-width:${location.pathname}:${caption}` : null;
+  /** @type {Record<string, number>} 列 key → px */
+  const colW = (() => {
+    try {
+      const saved = colWKey ? JSON.parse(localStorage.getItem(colWKey) ?? "null") : null;
+      if (!saved || typeof saved !== "object") return {};
+      return Object.fromEntries(
+        Object.entries(saved)
+          .filter(([k]) => visibleCols.some((c) => c.key === k))
+          .map(([k, v]) => [k, clampColW(Number(v))])
+          .filter(([, v]) => v !== null),
+      );
+    } catch {
+      return {};
+    }
+  })();
+  const saveColW = () => {
+    try {
+      if (!colWKey) return;
+      if (Object.keys(colW).length) localStorage.setItem(colWKey, JSON.stringify(colW));
+      else localStorage.removeItem(colWKey);
+    } catch {
+      /* 無視 */
+    }
+  };
+  /** 1 列の幅を決める（null = 既定）。入りきらない中身は「…」で切る。先頭（名前）の列は左に貼り付くので表示幅の 6 割まで */
+  function sizeColumn(index, w) {
+    const n = visibleCols.length;
+    const v = w === null || w === undefined ? "" : index === 0 ? `min(${w}px, ${COL_LEAD_VW}vw)` : `${w}px`;
+    for (const tr of table.rows) {
+      if (tr.cells.length !== n) continue;
+      const c = tr.cells[index];
+      c.classList.toggle("is-col-sized", v !== "");
+      c.style.width = v;
+      c.style.minWidth = v;
+      c.style.maxWidth = v;
+    }
+  }
+  function applyColWidths() {
+    visibleCols.forEach((col, i) => {
+      if (colW[col.key] !== undefined) sizeColumn(i, colW[col.key]);
+    });
+  }
+  function colResizer(col, index) {
+    const name = fmt(T.masters.colResize, { col: col.label });
+    const handle = html`<span class="yn-col-resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label=${name} title=${name} aria-valuemin=${COL_W_MIN} aria-valuemax=${COL_W_MAX}></span>`;
+    handle.dataset.col = col.key;
+    if (colW[col.key] !== undefined) handle.setAttribute("aria-valuenow", String(colW[col.key]));
+    const current = () => Math.round(handle.closest("th").getBoundingClientRect().width);
+    const maxNow = () => (index === 0 ? Math.max(COL_W_MIN, Math.min(COL_W_MAX, Math.floor((window.innerWidth * COL_LEAD_VW) / 100))) : COL_W_MAX);
+    bindColResizer(handle, current, (w, save) => {
+      const v = w === null ? null : clampColW(Math.min(w, maxNow()));
+      if (v === null) delete colW[col.key];
+      else colW[col.key] = v;
+      sizeColumn(index, v);
+      if (v === null) handle.removeAttribute("aria-valuenow");
+      else handle.setAttribute("aria-valuenow", String(v));
+      if (save) saveColW();
+    });
+    return handle;
+  }
+
   const table = html`<table class="yn-table" id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
   const thead = html`<thead></thead>`;
   const tbody = html`<tbody></tbody>`;
@@ -437,9 +509,14 @@ export function dataTable({
           inner.append(fb);
           th.append(inner);
         }
+        const ci = visibleCols.indexOf(col);
+        th.append(colResizer(col, ci));
+        // 列幅の境目は右隣の見出しにまたがるので、左の見出しほど上に重ねる（固定ヘッダの重なり順。先頭の列は横スクロールでも最前面）
+        th.style.zIndex = String(ci === 0 ? visibleCols.length + 3 : visibleCols.length - ci + 1);
         return th;
       })}</tr>`,
     );
+    applyColWidths();
   }
 
   function cellNode(col, row, isSummary = false) {
@@ -531,6 +608,7 @@ export function dataTable({
       tbody.replaceChildren(...currentRows.map(renderRow));
     }
     renderSummary();
+    applyColWidths();
     if (count)
       count.textContent = tree && filtered
         ? fmt(T.table.rowCountFiltered, { shown: integer(matchedKeys?.size ?? 0), n: integer(rows.length) })

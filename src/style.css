@@ -4345,3 +4345,40 @@ html:has(dialog.yn-dialog[open]) {
     max-width: 160px;
   }
 }
+
+/* 一覧表（dataTable）の列幅: 見出しの右端の境目をドラッグ（マスタ編集と同じ部品。§76）。
+   境目は列の区切りにまたがって置き、ふだんは見せない（見出しにカーソルを載せると細い線） */
+.yn-table-block .yn-table thead th .yn-col-resizer {
+  right: -5px;
+  width: 9px;
+}
+.yn-table-block .yn-table thead th:last-child .yn-col-resizer {
+  right: 0;
+  width: 6px;
+}
+.yn-table-block .yn-table thead th .yn-col-resizer::after {
+  left: 4px;
+  opacity: 0;
+}
+.yn-table-block .yn-table thead th:last-child .yn-col-resizer::after {
+  left: auto;
+  right: 1px;
+}
+.yn-table-block .yn-table thead tr:hover .yn-col-resizer::after,
+.yn-table-block .yn-table thead .yn-col-resizer:focus-visible::after,
+.yn-table-block .yn-table thead .yn-col-resizer.is-dragging::after {
+  opacity: 1;
+}
+.yn-table-block .yn-table .is-col-sized {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-table-block .yn-table .is-col-sized > :not(.yn-col-resizer) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-table-block .yn-table thead th.is-col-sized .yn-th-inner,
+.yn-table-block .yn-table thead th.is-col-sized .yn-th-main {
+  min-width: 0;
+}
