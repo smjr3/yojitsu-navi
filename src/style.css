@@ -481,7 +481,8 @@ body {
   max-width: 240px;
 }
 .yn-filterbar-slot .yn-select {
-  min-height: 30px;
+  /* 期間プリセット・着地見込みのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
+  min-height: 32px;
   padding-top: 2px;
   padding-bottom: 2px;
 }
@@ -934,6 +935,7 @@ h3 {
 .yn-toggle-chip {
   display: inline-flex;
   align-items: center;
+  box-sizing: border-box; /* 枠込みで 32px（フィルタバーの他の部品とそろえる） */
   gap: 6px;
   padding: 4px 10px;
   min-height: 32px;

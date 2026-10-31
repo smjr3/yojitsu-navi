@@ -179,6 +179,16 @@ test("見た目の揃え: タブの文字・カレンダーのアイコンが上
     }
   }
   await page.setViewportSize({ width: 1440, height: 800 });
+  // フィルタバーの選択欄・カレンダー・ボタンの組も同じ高さ（2026-10-31 試用版のコメント）
+  for (const path of ["/", "/members"]) {
+    await gotoPage(page, path);
+    const heights = await page
+      .locator("#yn-filterbar-slot")
+      .evaluate((bar) => [...bar.querySelectorAll(".yn-select, .yn-date-pick, .yn-seg, .yn-radio-group, .yn-toggle-chip")].map((el) => Math.round(el.getBoundingClientRect().height)));
+    expect(heights.length, path).toBeGreaterThan(3);
+    expect(new Set(heights), path).toEqual(new Set([32]));
+  }
+  await gotoPage(page, "/");
   const footer = page.locator("#observablehq-footer");
   await expect(footer).toHaveCSS("text-align", "center");
   for (const width of [320, 390]) {

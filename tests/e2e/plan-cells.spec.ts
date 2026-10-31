@@ -342,3 +342,33 @@ test("下書きの復元待ちのあいだも、行の ＋ 案件・案件の開
   await expect(row.locator('[data-fk="plan:add:M010"]')).toBeDisabled();
   await expect(row.locator('[data-fk="plan:toggle:M010"]')).toBeEnabled();
 });
+
+test("「作業 n ▾」で開いても、表の中のスクロール位置と押した行の位置は変わらない（2026-10-31 試用版のコメント）", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoPage(page, "/plan");
+  const wrap = page.locator("#yn-me-panel .yn-me-table-wrap");
+  await wrap.scrollIntoViewIfNeeded();
+  await wrap.evaluate((el) => {
+    el.scrollTop = 600;
+  });
+  const wrapBox = (await wrap.boundingBox())!;
+  const toggles = page.locator('[data-fk^="plan:toggle:"]');
+  let fk: string | null = null;
+  for (let i = 0; i < (await toggles.count()); i++) {
+    const b = await toggles.nth(i).boundingBox();
+    if (b && b.y > wrapBox.y + 120 && b.y < wrapBox.y + wrapBox.height - 80) {
+      fk = await toggles.nth(i).getAttribute("data-fk");
+      break;
+    }
+  }
+  expect(fk).not.toBeNull();
+  const btn = page.locator(`[data-fk="${fk}"]`);
+  const before = (await btn.boundingBox())!.y;
+  await btn.click();
+  await expect(btn).toHaveAttribute("aria-expanded", "true");
+  expect(await wrap.evaluate((el) => el.scrollTop)).toBe(600);
+  expect(Math.abs((await btn.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
+  await btn.click();
+  await expect(btn).toHaveAttribute("aria-expanded", "false");
+  expect(Math.abs((await btn.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
+});
