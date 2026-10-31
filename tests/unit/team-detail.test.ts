@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aggregate, teamTreeForMonth } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
-import { originTotals, ownTeamScope, teamMemberCosts, teamOrgChanges, teamPath, workOriginOf } from "../../src/core/team-detail.js";
+import { contractOwnScopes, originTotals, ownTeamScope, teamMemberCosts, teamOrgChanges, teamPath, workOriginOf } from "../../src/core/team-detail.js";
 import type { TeamRecord } from "../../src/core/types.js";
 import { contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
 
@@ -144,6 +144,23 @@ describe("teamMemberCosts (作業実績軸)", () => {
     expect(plain.M2!.supportHours).toBe(0);
     expect(plain.M3!.helpHours).toBe(1);
     expect(originTotals(rows)).toEqual({ supportHours: 20, supportAmount: 20_000, helpHours: 1, helpAmount: 1_000 });
+  });
+
+  it("契約ごとの担当組織で応援を判定できる（顧客詳細 §74）。合計は案件ごとの合計と一致", () => {
+    const scopes = contractOwnScopes(model, model.teamTree);
+    expect([...scopes("A")!].sort()).toEqual(["R", "T1"]);
+    expect([...scopes("B")!].sort()).toEqual(["R", "T2"]);
+    expect(scopes("ZZ")).toBeNull();
+    const rows = teamMemberCosts(model, ["A", "B"], period, scopes);
+    const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
+    // M1 は A では自チーム、B では応援。M2 は A で応援
+    expect(by.M1).toMatchObject({ hours: 115, contractIds: ["A", "B"], supportHours: 100, supportAmount: 100_000 });
+    expect(by.M2).toMatchObject({ supportHours: 20 });
+    const each = ["A", "B"].map((id) => originTotals(teamMemberCosts(model, [id], period, ownTeamScope(model.teamTree, model.contracts.find((r) => r.contract.contractId === id)!.contract.teamId))));
+    const t = originTotals(rows);
+    expect(t.supportAmount).toBe(each[0]!.supportAmount + each[1]!.supportAmount);
+    expect(t.helpAmount).toBe(each[0]!.helpAmount + each[1]!.helpAmount);
+    expect(rows.reduce((a, r) => a + r.amount, 0)).toBe(aggregate(model, { period, contractIds: ["A", "B"] }).cost);
   });
 
   it("使った単価と、ヘルプの人の部・課（当時）を返す。メンバーマスタに無い人もヘルプ", () => {
