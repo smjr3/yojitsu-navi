@@ -11,7 +11,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listStaleTempFiles, writeFileAtomic, writeFilesAtomic } from "../../scripts/lib/atomic.js";
-import { computeFingerprint, listInputFiles, resolveAsOf, todayJst } from "../../scripts/lib/inputs.js";
+import { computeFingerprint, isAsOfFixed, listInputFiles, resolveAsOf, todayJst } from "../../scripts/lib/inputs.js";
 import { CACHE_DIR, prepareLoaderCache, STAMP_FILE } from "../../scripts/lib/loader-cache.js";
 import { verifyDist } from "../../scripts/verify-dist.js";
 import { findInvalidJsonValue, serializeChecked } from "../../scripts/lib/json-out.js";
@@ -139,6 +139,17 @@ describe("入力の指紋", () => {
     // UTC 15:00 = JST 翌日 0:00
     expect(todayJst(new Date("2026-10-27T14:59:59Z"))).toBe("2026-10-27");
     expect(todayJst(new Date("2026-10-27T15:00:00Z"))).toBe("2026-10-28");
+  });
+
+  it("固定したかは YOJITSU_AS_OF_FIXED を優先し、無ければ YOJITSU_AS_OF の有無（§74。build.ts は日付を必ず渡すため）", () => {
+    expect(isAsOfFixed({ YOJITSU_AS_OF: "2026-10-27" })).toBe(true);
+    expect(isAsOfFixed({})).toBe(false);
+    expect(isAsOfFixed({ YOJITSU_AS_OF: "2026-10-27", YOJITSU_AS_OF_FIXED: "0" })).toBe(false);
+    expect(isAsOfFixed({ YOJITSU_AS_OF: "2026-10-27", YOJITSU_AS_OF_FIXED: "1" })).toBe(true);
+    // 固定したかで出力（meta.asOfFixed）が変わるので、指紋も変わる
+    const a = computeFingerprint(dir, { asOf: "2026-10-27", git: false, env: { YOJITSU_AS_OF: "2026-10-27" } }).hash;
+    const b = computeFingerprint(dir, { asOf: "2026-10-27", git: false, env: {} }).hash;
+    expect(a).not.toBe(b);
   });
 });
 
