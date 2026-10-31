@@ -396,6 +396,28 @@ test("下書きの当て直し: 「最新のデータを残す」を選ぶと他
   expect(readFileSync((await dl.path())!, "utf-8")).toBe(expectedRates(false));
 });
 
+test("役職はプルダウン（§31.5）: 候補は（なし）→ 単価の役職（ファイル順）→ メンバーだけの役職。単価に役職を足すと候補に出る", async ({ page }) => {
+  await open(page);
+  await addRate(page, "エキスパート", "9000", "2026-11");
+  await selectTab(page, "メンバー");
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await page.locator("table.yn-me-table tbody tr.yn-me-group").first().getByRole("button", { name: /の変更を追加/ }).click();
+  const title = d.locator("#yn-me-f-title");
+  await expect(title).toHaveJSProperty("tagName", "SELECT");
+  const values = await title.locator("option").evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).value));
+  const rateTitles = PAYLOAD.files.rates.text.split("\n").slice(1).map((l) => l.split(",")[0]).filter((k) => k && !/^[MP]\d+$/.test(k));
+  const rateOrder = [...new Set([...rateTitles, "エキスパート"])];
+  expect(values[0]).toBe("");
+  expect(values.slice(1, 1 + rateOrder.length)).toEqual(rateOrder);
+  expect(values).toContain("パートナー");
+  expect(new Set(values).size).toBe(values.length);
+  await expect(d.locator("#yn-me-f-title-hint")).toHaveText("新しい役職は、単価に役職の行を追加すると選べます");
+  await title.selectOption("エキスパート");
+  await d.locator('[data-role="submit"]').click();
+  if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
+  await expect(page.getByRole("table", { name: "メンバーの変更内容" })).toContainText("エキスパート");
+});
+
 test("影響ダイアログ: 所属チームだけ変える行の追加は「組織別の集計」と出し、実績・残予算は変わらないと明記。役職を変えると実績・残予算", async ({ page }) => {
   await open(page);
   await selectTab(page, "メンバー");
@@ -417,7 +439,7 @@ test("影響ダイアログ: 所属チームだけ変える行の追加は「組
   await expect(impact).toHaveAttribute("data-cost-changes", "false");
   await d.getByRole("button", { name: "入力に戻る" }).click();
   await team.selectOption(current);
-  await d.locator("#yn-me-f-title").fill("部長");
+  await d.locator("#yn-me-f-title").selectOption("部長");
   await d.locator('[data-role="submit"]').click();
   await expect(impact).toContainText("時間単価と、実績・残予算・消化率・着地見込みが変わります");
   await expect(impact).not.toContainText("組織別の集計");

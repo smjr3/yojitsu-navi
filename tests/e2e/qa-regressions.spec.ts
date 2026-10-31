@@ -183,7 +183,7 @@ test("マスタ編集の「＋ 変更」では対象の ID を変えられない
   await expect(d.locator("#yn-me-f-member_id-hint")).toHaveText("変更の追加では変えられません");
   // 所属チームは名前で選ぶ欄なので「英数字の ID」の注記は出さない
   await expect(d.locator("#yn-me-f-team_id-hint")).toHaveText("");
-  await d.locator("#yn-me-f-title").fill("部長");
+  await d.locator("#yn-me-f-title").selectOption("部長");
   await d.locator('[data-role="submit"]').click();
   if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
   await expect(page.locator(".yn-me-diff-table")).toContainText("M001");
