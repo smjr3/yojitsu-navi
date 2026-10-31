@@ -78,6 +78,8 @@ import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt } from
 
 /** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
 const PROJECT_FIELD = "__project";
+/** セルの「作業を追加」で運用保守以外の種別を表す候補の値の頭（案件のキーと重ならない） */
+const OUTSIDE_OPTION = "\u0002o:";
 
 export { TOKEN_STORAGE_KEY };
 
@@ -254,6 +256,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       .rows.map((r) => ({ task: r.get("task"), category: parseTaskCategory(r.get("category")), group: r.get("group") }))
       .filter((r) => r.category !== null),
   );
+  // 運用保守以外の実績がある種別（メンバー → [月, 種別]。model.outsideWorkMonths。リソース計画で種別の行を出すかの判定）
+  const outsideActuals = new Map();
+  for (const k of model?.outsideWorkMonths ?? []) {
+    const [memberId, month, ...rest] = k.split("|");
+    if (!outsideActuals.has(memberId)) outsideActuals.set(memberId, []);
+    outsideActuals.get(memberId).push([month, rest.join("|")]);
+  }
   // 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§31.3）
   const projects = new Map();
   for (const c of contracts) {
@@ -1247,11 +1256,26 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const sameType = (a, b) => typeKey(a) === typeKey(b);
   /** 契約外の種別の表示名（空 = 「契約外予定」） */
   const outsideLabel = (type) => (type ? type : T.masterFiles.outside);
-  /** その人の契約外の種別: 分類表の種別 ＋ 行にある種別（分類表に無いもの・種別なし）。何も無ければ種別なしの 1 つ */
-  function memberOutsideTypes(oRows) {
-    const list = [...outsideTypeList];
-    for (const x of oRows) if (!list.some((t) => sameType(t, x.type))) list.push(x.type);
-    return list.length ? list : [""];
+  /**
+   * その人の運用保守以外の種別: 表示中の期間に計画（月の不正な行も）か実績がある種別だけ（2026-10-31 shimaさん「全員が全部やるわけじゃない」）。
+   * 並びは分類表の順、分類表に無い種別はその後。ほかの種別はセルの「作業を追加」から足す
+   */
+  function memberOutsideTypes(oRows, memberId, months = plan.months) {
+    const first = months[0];
+    const last = months[months.length - 1];
+    const ym = /^\d{4}-\d{2}$/;
+    // 保存済みの行も見る（編集中に消しても、保存するまでは行を残して履歴から戻せるように）
+    const doc = docs.outside;
+    const saved = Object.values(doc.originals)
+      .filter((o) => cellOf(doc, o, "member_id") === memberId)
+      .map((o) => ({ type: cellOf(doc, o, "type"), startMonth: cellOf(doc, o, "start_month"), endMonth: cellOf(doc, o, "end_month") }));
+    const planned = [...oRows, ...saved].filter((x) => !ym.test(x.startMonth) || !ym.test(x.endMonth) || (x.startMonth <= last && x.endMonth >= first)).map((x) => x.type);
+    const actual = [];
+    for (const [month, type] of outsideActuals.get(memberId) ?? []) if (month >= first && month <= last) actual.push(type);
+    const used = [...planned, ...actual];
+    const list = [];
+    for (const t of [...outsideTypeList, ...used]) if (used.some((u) => sameType(u, t)) && !list.some((x) => sameType(x, t))) list.push(t);
+    return list;
   }
   /** 期間を契約へ割り当てる（契約外予定は 1 区間） */
   function targetSegments(target) {
@@ -1460,7 +1484,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const counts = rowCounts("assignments", aRows);
       const oCounts = rowCounts("outside", oRows);
       // 開くと出る作業の数 = 案件 ＋ 表示中の期間に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
-      const workCount = projectList.length + new Set(oRows.filter(inFy).map((x) => x.type ?? "")).size;
+      const outTypes = memberOutsideTypes(oRows, r.memberId);
+      const workCount = projectList.length + outTypes.length;
       const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
@@ -1503,7 +1528,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const projRows = projectList
         .sort((a, b) => (a.project.sub + a.project.label).localeCompare(b.project.sub + b.project.label, "ja"))
         .flatMap((g) => subRows({ kind: "project", key: g.project.key }, g.rows, g.project.label, g.project.sub, "is-project"));
-      const outRows = memberOutsideTypes(oRows).flatMap((type) =>
+      const outRows = outTypes.flatMap((type) =>
         subRows({ kind: "outside", type }, oRows.filter((x) => sameType(x.type, type)), outsideLabel(type), type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub, "is-outside"),
       );
       return [
@@ -1547,7 +1572,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     function cellTip(r, m) {
       const aRows = memberPeriodRows("assignments", r.memberId).filter((x) => x.startMonth <= m && m <= x.endMonth);
       const oRows = memberPeriodRows("outside", r.memberId);
-      const outs = memberOutsideTypes(oRows)
+      const outs = memberOutsideTypes(oRows, r.memberId)
         .map((type) => ({ type, v: valueAt(oRows.filter((x) => sameType(x.type, type)), m) }))
         .filter((o) => o.v > 0);
       const out = outs.reduce((s, o) => s + o.v, 0);
@@ -1796,7 +1821,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         return;
       }
       const n = parseNumberCell(text);
-      if (!Number.isFinite(n) || n < 0 || n > 1) {
+      if (!Number.isFinite(n) || n < 0) {
         msg.textContent = T.planEdit.valueRange;
         valueInput()?.focus();
         return;
@@ -1876,7 +1901,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const active = memberPeriodRows("assignments", r.memberId).filter((a) => a.startMonth <= month && month <= a.endMonth);
     const outAll = memberPeriodRows("outside", r.memberId);
     // 契約外予定は種別ごとに 1 欄（§50.1）。同じ月に同じ種別の行が重なっていれば欄を無効にする
-    const outs = memberOutsideTypes(outAll).map((type, i) => {
+    // 出す種別 = 表示中の期間に計画・実績がある種別。分類表に種別が無ければ種別なしの 1 欄
+    const shownTypes = memberOutsideTypes(outAll, r.memberId);
+    if (!shownTypes.length && !outsideTypeList.length) shownTypes.push("");
+    const outs = shownTypes.map((type, i) => {
       const covering = outAll.filter((o) => sameType(o.type, type) && o.startMonth <= month && month <= o.endMonth);
       const before = covering.length === 1 ? covering[0].text : covering.length === 0 ? "" : null;
       const label = outsideLabel(type);
@@ -1889,7 +1917,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const input = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id=${`yn-plan-pop-${i}`} value=${a.text} aria-label=${fmt(T.plan.editRowAria, { project: contractText(a.contractId), month: monthJa(month) })}>`;
       return { a, input, before: a.text };
     });
-    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: projectOptions(), value: "", placeholder: T.masters.projectPlaceholder });
+    // 追加する作業 = 案件 ＋ まだ出ていない運用保守以外の種別（作業の種類は人によって 100 を超えるので検索して選ぶ）
+    const typeOptions = outsideTypeList.filter((t) => !shownTypes.some((x) => sameType(x, t))).map((t) => ({ value: `${OUTSIDE_OPTION}${t}`, label: t, sub: T.planEdit.outsideTypeSub }));
+    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: [...projectOptions(), ...typeOptions], value: "", placeholder: T.masters.workPlaceholder });
     const newNum = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id="yn-plan-pop-new" aria-label=${fmt(T.plan.editRowAria, { project: T.plan.editNewRow, month: monthJa(month) })}>`;
     const msg = html`<p class="yn-me-form-msg" role="alert"></p>`;
     const note = html`<div class="yn-plan-pop-note"></div>`;
@@ -1983,7 +2013,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const isNum = (text) => text.trim() === "" || Number.isFinite(parseNumberCell(allocationFromInput(text, "personMonth", std)));
     const inRange = (text) => {
       const n = parseNumberCell(text);
-      return text.trim() === "" || (Number.isFinite(n) && n >= 0 && n <= 1);
+      return text.trim() === "" || (Number.isFinite(n) && n >= 0);
     };
 
     /** 入力から新しい文書を作る（変わったファイルだけ changes に入れる） */
@@ -1997,10 +2027,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         if (!isNum(o.input.value)) return { error: T.plan.notNumber, focus: o.input };
         if (!inRange(num(o.input.value))) return { error: T.planEdit.valueRange, focus: o.input };
       }
-      const pKey = proj.getValue();
+      const picked = proj.getValue();
+      const newType = picked.startsWith(OUTSIDE_OPTION) ? picked.slice(OUTSIDE_OPTION.length) : null;
+      const pKey = newType === null ? picked : "";
       const newVal = num(newNum.value);
       const newZero = newVal === "" || Math.abs(parseNumberCell(newVal)) < 1e-9;
-      if (!newZero && !pKey) return { error: T.plan.needProject, focus: proj.input };
+      if (!newZero && !picked) return { error: T.plan.needProject, focus: proj.input };
       for (const { a, input, before } of inputs) {
         const after = num(input.value);
         const same = after === before || (after !== "" && before !== "" && Math.abs(parseNumberCell(after) - parseNumberCell(before)) < 1e-9);
@@ -2044,6 +2076,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const to = scope === "month" ? month : o.covering[0] ? o.covering[0].endMonth : fyLast >= month ? fyLast : month;
         const res = rangeEditDoc(outDoc, r.memberId, { kind: "outside", type: o.type }, month, to, after);
         if (res.error) return { error: res.error, focus: o.input };
+        if (res.doc) outDoc = res.doc;
+      }
+      if (newType !== null && !newZero) {
+        const to = scope === "after" ? (fyLast >= month ? fyLast : month) : month;
+        const res = rangeEditDoc(outDoc, r.memberId, { kind: "outside", type: newType }, month, to, newVal);
+        if (res.error) return { error: res.error, focus: newNum };
         if (res.doc) outDoc = res.doc;
       }
       if (outDoc !== docs.outside) changes.push({ fileId: "outside", doc: outDoc });
@@ -2142,13 +2180,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${levelOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
     if (col.input === "outsideType") {
-      // 契約外の種別（§50.1）。分類表の種別から選ぶ（分類表に無い値も消さずに残す）
-      const known = value === "" || outsideTypeList.some((t) => sameType(t, value));
-      return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
-        ${outsideTypeList.length === 0 || value === "" ? html`<option value="" selected=${value === ""}>${T.masterFiles.outsideNoType}</option>` : null}
-        ${outsideTypeList.map((t) => html`<option value=${t} selected=${sameType(t, value)}>${t}</option>`)}
-        ${!known ? html`<option value=${value} selected>${value}${T.masters.invalidValue}</option>` : null}
-      </select>`;
+      // 運用保守以外の種別（§50.1）。分類表の種別から検索して選ぶ（人によって 100 を超えるため）。分類表に無い値も消さずに残す。空 = 種別なし
+      const v = outsideTypeList.find((t) => sameType(t, value)) ?? value;
+      return combobox({ id, name: col.name, options: outsideTypeList.map((t) => ({ value: t, label: t })), value: v, disabled, placeholder: outsideTypeList.length ? T.masters.workTypePlaceholder : T.masterFiles.outsideNoType, describedBy: `${id}-hint`, unknownLabel: (x) => `${x}${T.masters.invalidValue}` });
     }
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
@@ -2541,7 +2575,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         if (/^\d{4}-\d{2}$/.test(month)) applyPlanRange(planRangeIncluding(plan.range, month));
         key = `plan:cell:${memberId}:all:${month}`;
       } else if (row && memberId) {
-        const target = fileId === "outside" ? { kind: "outside", type: memberOutsideTypes(memberPeriodRows("outside", memberId)).find((t) => sameType(t, cellOf(doc, row, "type"))) ?? cellOf(doc, row, "type") } : { kind: "project", key: projectOfContract(cellOf(doc, row, "contract_id")).key };
+        const target = fileId === "outside" ? { kind: "outside", type: memberOutsideTypes(memberPeriodRows("outside", memberId), memberId).find((t) => sameType(t, cellOf(doc, row, "type"))) ?? cellOf(doc, row, "type") } : { kind: "project", key: projectOfContract(cellOf(doc, row, "contract_id")).key };
         plan.hist.add(`${memberId}|${targetId(target)}`);
         key = `edit:${row.id}`;
       } else if (memberId) key = `plan:toggle:${memberId}`;

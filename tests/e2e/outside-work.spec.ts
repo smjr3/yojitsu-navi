@@ -6,7 +6,7 @@
  * 年度・月はデータの基準日から求める（特定の年度を書かない）。金額は URL に unit=yen を付けて比べる。
  */
 import { aggregateMembers, isOutsideRow, type Period } from "../../src/core/index.js";
-import { test, expect, gotoPage, tableByCaption, kpiValue } from "./helpers/app.js";
+import { test, expect, gotoPage, tableByCaption, kpiValue, pickCombo } from "./helpers/app.js";
 import { fiscalPeriod, getModel, yen } from "./helpers/core.js";
 
 const model = getModel();
@@ -94,4 +94,29 @@ test("リソース計画: 種別の行のセルから入れると outside-plans.
   await expect(pop).toHaveCount(0);
   await expect(cellBtn).toHaveText("0.10");
   await expect(page.locator(".yn-me-diff-slot")).toContainText("会社業務");
+});
+
+test("リソース計画: 運用保守以外の種別は、表示中の期間に計画か実績がある種別だけ。ほかの種別はセルの「作業を追加」から検索して足す（§50.3）", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
+  const next = model.meta.fiscalYearMonths.find((m) => m > ASOF) ?? model.meta.fiscalYearMonths[model.meta.fiscalYearMonths.length - 1]!;
+  await gotoPage(page, "/plan?member=M011");
+  // M011 は提案・会社業務の実績だけ。設計・構築は出さない（全員に全種別を並べない）
+  const names = page.locator('tr.yn-me-plan-sub.is-outside[data-member="M011"] .yn-me-plan-name');
+  await expect(names).toHaveText(["提案", "会社業務"]);
+  // 人の行のセル → 「作業を追加」で「構築」を検索して選ぶ（案件と同じ欄。運用保守以外の種別も候補に出る）
+  await page.locator(`[data-fk="plan:cell:M011:all:${next}"]`).click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await expect(pop.getByText("作業を追加")).toBeVisible();
+  await pickCombo(pop.locator("#yn-plan-pop-project"), "構築");
+  await expect(pop.locator("#yn-plan-pop-project")).toHaveValue("構築");
+  await pop.locator("#yn-plan-pop-new").fill("0.1");
+  await pop.getByRole("button", { name: "反映" }).click();
+  await expect(pop).toHaveCount(0);
+  await expect(names).toHaveText(["提案", "構築", "会社業務"]);
+  await expect(page.locator(`[data-fk="plan:cell:M011:o:構築:${next}"]`)).toHaveText("0.10");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("構築");
+  // 出ている種別は「作業を追加」の候補から外す
+  await page.locator(`[data-fk="plan:cell:M011:all:${next}"]`).click();
+  await pop.locator("#yn-plan-pop-project").fill("構築");
+  await expect(pop.locator(".yn-combo-list [role=option]")).toHaveCount(0);
 });

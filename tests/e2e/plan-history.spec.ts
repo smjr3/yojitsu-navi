@@ -46,8 +46,8 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(main).toContainText("1.0 超 3か月");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   const toggle = page.locator('[data-fk="plan:toggle:M010"]');
-  // 案件 1 ＋ 運用保守以外の提案 1 = 作業 2（§57）
-  await expect(toggle).toHaveText(/^作業 2\s*▾$/);
+  // 案件 1 ＋ 運用保守以外の種別 2（提案 = 計画と実績、会社業務 = 実績）= 作業 3（§57・§50.3）
+  await expect(toggle).toHaveText(/^作業 3\s*▾$/);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const proj = await subRow(page, "M010", "倉庫管理");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -58,9 +58,8 @@ test("人ごとに 1 行。開くと案件ごとの行と契約外予定の行�
   await expect(out).toContainText("運用保守以外");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-12"]')).toHaveText("0.20");
   await expect(page.locator('[data-fk="plan:cell:M010:o:提案:2026-10"]')).toHaveText("—");
-  // 種別ごとの行（task-types.csv の契約外の種別すべて。§50.3）
-  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"]')).toHaveCount(4);
-  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"] .yn-me-plan-name')).toHaveText(["提案", "設計", "構築", "会社業務"]);
+  // 種別ごとの行は、表示中の期間に計画か実績がある種別だけ（分類表の順。設計・構築はこの人に無いので出さない。§50.3）
+  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M010"] .yn-me-plan-name')).toHaveText(["提案", "会社業務"]);
   // 合計の下に「うち契約外予定」
   await expect(page.locator("tr.yn-me-plan-foot-sub")).toContainText("0.20");
   // 案件の行は ID を出さない
@@ -142,9 +141,9 @@ test("＋ 変更: 0 で計画を外すと「計画なし」。この月だけ・
   await expect(cell(page, "M012", "2026-08")).toHaveText("0.90");
   // 入力の誤り
   await proj.getByRole("button", { name: /人月を、ある月から変える/ }).click();
-  await d.locator("#yn-me-f-__value").fill("1.5");
+  await d.locator("#yn-me-f-__value").fill("-0.5");
   await d.getByRole("button", { name: "反映" }).click();
-  await expect(d.locator(".yn-me-form-msg")).toContainText("0〜1.0");
+  await expect(d.locator(".yn-me-form-msg")).toContainText("0 以上");
   await d.locator("#yn-me-f-__value").fill("");
   await d.getByRole("button", { name: "反映" }).click();
   await expect(d.locator(".yn-me-form-msg")).toContainText("人月を入れてください");
