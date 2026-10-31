@@ -179,15 +179,22 @@ export interface TeamMemberCost {
  * 契約 contractIds の期間内の CostLine を、作業した人ごとに合算する。
  * 所属チームがどこでも含める（作業実績軸）。所属チームの無い人の作業は help* に数える。
  * teamScope（ownTeamScope の結果）を渡すと、所属がその外の作業を support* に数える（§72）。
+ * 契約ごとに担当組織が違うとき（顧客詳細、§74）は、契約IDから teamScope を返す関数を渡す。
  * 並びは原価の大きい順、同額は memberId 順。合計は同じ契約・期間の aggregate().cost（labor のみのとき）と一致する。
  */
-export function teamMemberCosts(model: Model, contractIds: readonly string[], period: Period, teamScope: ReadonlySet<string> | null = null): TeamMemberCost[] {
+export function teamMemberCosts(
+  model: Model,
+  contractIds: readonly string[],
+  period: Period,
+  teamScope: ReadonlySet<string> | null | ((contractId: string) => ReadonlySet<string> | null) = null,
+): TeamMemberCost[] {
   const set = new Set(contractIds);
   const acc = new Map<string, TeamMemberCost & { months: Set<YearMonth>; contracts: Set<string>; teams: Set<string>; rateSet: Set<number>; orgs: Set<string> }>();
   const known = new Set(model.members.map((m) => m.memberId));
   let total = 0;
   for (const r of model.contracts as ContractResult[]) {
     if (!set.has(r.contract.contractId)) continue;
+    const scope = typeof teamScope === "function" ? teamScope(r.contract.contractId) : teamScope;
     for (const cm of r.months) {
       if (cm.month < period.from || cm.month > period.to) continue;
       for (const l of cm.costLines) {
@@ -203,7 +210,7 @@ export function teamMemberCosts(model: Model, contractIds: readonly string[], pe
         a.contracts.add(r.contract.contractId);
         a.rateSet.add(l.hourlyRate);
         if (l.memberTeamId) a.teams.add(l.memberTeamId);
-        const origin = workOriginOf(l.memberTeamId, teamScope);
+        const origin = workOriginOf(l.memberTeamId, scope);
         if (origin === "help") {
           a.helpHours += l.hours;
           a.helpAmount += l.amount;
@@ -239,6 +246,19 @@ export interface OriginTotals {
   supportAmount: number;
   helpHours: number;
   helpAmount: number;
+}
+
+/** 契約ごとの担当組織（主担当チームと配下・上位）で判定する teamScope（顧客詳細、§74）。主担当チーム未設定の契約は null */
+export function contractOwnScopes(model: Model, tree: Record<string, TeamNode>): (contractId: string) => ReadonlySet<string> | null {
+  const cache = new Map<string, ReadonlySet<string> | null>();
+  const teamOf = new Map((model.contracts as ContractResult[]).map((r) => [r.contract.contractId, r.contract.teamId]));
+  return (contractId) => {
+    if (!cache.has(contractId)) {
+      const teamId = teamOf.get(contractId);
+      cache.set(contractId, teamId ? ownTeamScope(tree, teamId) : null);
+    }
+    return cache.get(contractId)!;
+  };
 }
 
 /** teamMemberCosts の応援・ヘルプの合計 */
