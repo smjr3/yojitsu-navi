@@ -373,10 +373,10 @@ export function serializeMasterDoc(doc: MasterDoc): SerializedDoc {
   return { text: lines.join("\n") + "\n", rowIds };
 }
 
-/** 変更者・変更日の列（リソース計画の変更の履歴に出す。§56）。保存するときに画面が書き込み、フォームでは編集しない */
+/** 変更者・変更日の列（リソース計画の変更の履歴・目標の一覧に出す。§56）。保存するときに画面が書き込み、フォームでは編集しない */
 export const STAMP_COLUMNS = { by: "updated_by", at: "updated_at" } as const;
 /** 変更者・変更日を書き込むファイル */
-export const STAMPED_FILES: readonly MasterFileId[] = ["assignments", "outside"];
+export const STAMPED_FILES: readonly MasterFileId[] = ["assignments", "outside", "targets"];
 
 /**
  * 追加・変更した行に変更者（GitLab のユーザー名。分からなければ空）と変更日（YYYY-MM-DD）を書き込む（§56）。

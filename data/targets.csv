@@ -1,15 +1,15 @@
-target_type,target_id,end_month,remaining_rate,start_month,note
-team,D1,2027-03,15,,事業部の年度目標
-team,T111,2026-09,25,,上期
-team,T111,2027-03,12,,通期
-team,T211,2026-09,15,,上期
-team,T211,2027-03,15,,通期
-team,T212,2026-10,20,2026-10,月次
-team,T212,2026-11,25,2026-11,月次
-team,T212,2026-12,25,2026-12,月次
-customer,青葉物流,2027-03,10,,
-customer,こもれび出版,2027-03,10,,値下げ更新後の立て直し
-project,C007,2027-03,15,2025-04,2 年契約の終了時点
-project,C002,2026-12,25,,
-project,C143,2027-03,-100,,超過を -100% までに
-project,C117,2027-03,-50,,超過を半分に
+target_type,target_id,end_month,remaining_rate,start_month,note,updated_by,updated_at
+team,D1,2027-03,15,,事業部の年度目標,suzuki.a,2026-03-25
+team,T111,2026-09,25,,上期,takahashi.m,2026-03-25
+team,T111,2027-03,12,,通期,sato.k,2026-03-25
+team,T211,2026-09,15,,上期,suzuki.a,2026-03-25
+team,T211,2027-03,15,,通期,takahashi.m,2026-03-25
+team,T212,2026-10,20,2026-10,月次,sato.k,2026-03-25
+team,T212,2026-11,25,2026-11,月次,suzuki.a,2026-03-25
+team,T212,2026-12,25,2026-12,月次,takahashi.m,2026-03-25
+customer,青葉物流,2027-03,10,,,sato.k,2026-03-25
+customer,こもれび出版,2027-03,10,,値下げ更新後の立て直し,suzuki.a,2026-03-25
+project,C007,2027-03,15,2025-04,2 年契約の終了時点,takahashi.m,2026-03-25
+project,C002,2026-12,25,,,sato.k,2026-03-25
+project,C143,2027-03,-100,,超過を -100% までに,suzuki.a,2026-03-25
+project,C117,2027-03,-50,,超過を半分に,takahashi.m,2026-03-25

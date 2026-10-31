@@ -11,7 +11,7 @@ import { test, expect, gotoPage, useDarkTheme, pickCombo } from "./helpers/app.j
 import { getModel } from "./helpers/core.js";
 import { ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
-import { addRow, parseMasterDoc, serializeMasterDoc } from "../../src/core/masterEdit.js";
+import { addRow, parseMasterDoc, serializeMasterDoc, stampChangedRows } from "../../src/core/masterEdit.js";
 import { evaluateTarget, targetsOf, formatPercent } from "../../src/core/index.js";
 
 const model = getModel();
@@ -96,6 +96,8 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   const rows = page.locator("table.yn-me-table tbody tr.yn-me-group");
   const before = parseMasterDoc("targets", TARGETS_TEXT).rows.length;
   await expect(rows).toHaveCount(before);
+  // 誰がいつ入れたか（§56 と同じ記録。ダミーは全行に例がある）
+  await expect(rows.first().locator('[data-role="stamp"]')).toHaveText(/^\d{4}-\d{2}-\d{2}・[a-z.]+$/);
   await page.getByRole("button", { name: "＋ 新しい目標" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   // 対象の種類は対象の欄でまとめて選ぶ（別の欄は無い）
@@ -112,7 +114,9 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(added).toContainText("追加");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /targets\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
-  expect(text).toBe(serializeMasterDoc(addRow(parseMasterDoc("targets", TARGETS_TEXT), { target_type: "team", target_id: "T112", end_month: "2027-03", remaining_rate: "18", start_month: "", note: "" }).doc).text);
+  // 追加した行だけに変更日（ダウンロードでは変更者は空。§56）
+  const today = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()));
+  expect(text).toBe(serializeMasterDoc(stampChangedRows(addRow(parseMasterDoc("targets", TARGETS_TEXT), { target_type: "team", target_id: "T112", end_month: "2027-03", remaining_rate: "18", start_month: "", note: "" }).doc, "", today)).text);
 
   // 顧客に付け替えて修正 → 確認 → 反映
   await added.getByRole("button", { name: "修正" }).click();

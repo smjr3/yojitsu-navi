@@ -212,6 +212,15 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
+/** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。記録が無ければ出さない */
+function stampEl(doc, row) {
+  if (!row || (!doc.header.includes(STAMP_COLUMNS.by) && !doc.header.includes(STAMP_COLUMNS.at))) return null;
+  const by = cellOf(doc, row, STAMP_COLUMNS.by);
+  const at = cellOf(doc, row, STAMP_COLUMNS.at);
+  if (!by && !at) return null;
+  return html`<span class="yn-me-hint yn-me-plan-stamp" data-role="stamp">${by && at ? fmt(T.planEdit.stamp, { by, at }) : fmt(T.planEdit.stampOne, { v: by || at })}</span>`;
+}
+
 export function mastersEditor({ data, config, asOfMonth, minMonth, model = null, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
   const VIEW_IDS = [...views];
   /** この画面で編集するファイル */
@@ -799,7 +808,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const rawKey = g.shown.record[keyColumn] ?? "";
       const keyHint = cellHint(fileId, keyColumn, rawKey);
       const lead = isList
-        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span></th>`
+        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span>${stampEl(doc, rowById.get(g.shown.rowId))}</th>`
         : nameColumn
         ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${nextEl(nameColumn)}</th>`
         : html`<th scope="row">${valueEl(keyColumn, rawKey, "yn-me-val yn-me-lead-name")}${keyHint ? html`<span class="yn-me-hint">${keyHint}</span>` : null}</th>`;
@@ -1466,13 +1475,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 「YYYY-MM から計画なし」は、その月より後に始まる最初の履歴の手前（無ければ最後）に置く（重なりのある履歴の間に挟まないため）
     const ends = [];
     /** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。無ければ出さない */
-    const stampOf = (row) => {
-      if (!row) return null;
-      const by = cellOf(doc, row, STAMP_COLUMNS.by);
-      const at = cellOf(doc, row, STAMP_COLUMNS.at);
-      if (!by && !at) return null;
-      return html`<span class="yn-me-hint yn-me-plan-stamp" data-role="stamp">${by && at ? fmt(T.planEdit.stamp, { by, at }) : fmt(T.planEdit.stampOne, { v: by || at })}</span>`;
-    };
+    const stampOf = (row) => stampEl(doc, row);
     const items = entries.flatMap((e) => {
       const row = doc.rows.find((x) => x.id === e.rowId);
       const st = row ? rowState(doc, row) : "unchanged";

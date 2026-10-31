@@ -4064,7 +4064,7 @@ html:has(dialog.yn-dialog[open]) {
 /* 「目標」列のある一覧は、ノート PC 幅で横スクロールにならないよう名前列を少し詰める（全文は title） */
 @container (max-width: 1300px) {
   .yn-table:has(th[data-key="target"]) .yn-primary-cell {
-    max-width: 185px;
+    max-width: 178px; /* チーム一覧（木構造）にも見出しの絞り込みボタンが付いた分を詰める */
   }
 }
 
