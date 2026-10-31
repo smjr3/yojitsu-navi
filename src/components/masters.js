@@ -189,6 +189,16 @@ function clampPlanNameW(w) {
   return Math.round(Math.min(PLAN_NAME_W_MAX, Math.max(PLAN_NAME_W_MIN, w)));
 }
 
+// マスタ編集の表の列幅（列見出しの右端をドラッグして変える。ファイルごとに、このブラウザだけに覚える）
+const LEDGER_COL_W_KEY = "yojitsu-navi:masters-col-width:";
+const LEDGER_COL_W_MIN = 40;
+const LEDGER_COL_W_MAX = 640;
+const LEDGER_LEAD_VW = 60;
+function clampLedgerColW(w) {
+  if (w == null || !Number.isFinite(w)) return null;
+  return Math.round(Math.min(LEDGER_COL_W_MAX, Math.max(LEDGER_COL_W_MIN, w)));
+}
+
 function fileName(path) {
   return path.split("/").pop();
 }
@@ -386,6 +396,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (column === "contract_id") return contractText(value);
     if (column === "remaining_rate") return `${value}%`;
     if (column === "target_type") return T.targets.kinds[value] ?? value;
+    // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
+    if (fileId === "members" && column === "status") return memberStatus(value).status === "left" ? T.members.chipLeft : T.masters.statusActive;
     return value;
   }
   /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
@@ -419,16 +431,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     return [...s];
   }
+  /** 役職の候補（§31.5）: 単価マスタの役職（並びもそのまま）→ メンバーに書かれている役職。役職マスタは持たない */
   function titleOptions() {
     const s = new Set();
-    for (const r of docs.members.rows) {
-      const t = cellOf(docs.members, r, "title");
-      if (t) s.add(t);
-    }
     const members = new Set(docs.members.rows.map((r) => cellOf(docs.members, r, "member_id")));
     for (const r of docs.rates.rows) {
       const k = cellOf(docs.rates, r, "key");
       if (k && !members.has(k)) s.add(k);
+    }
+    for (const r of docs.members.rows) {
+      const t = cellOf(docs.members, r, "title");
+      if (t) s.add(t);
     }
     return [...s];
   }
@@ -696,6 +709,116 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     )}</ul>`;
   }
 
+  /**
+   * 列幅を変える境目（列見出しの右端）の操作。ドラッグ、または矢印キー（Shift で大きく）で変え、ダブルクリック・Home で既定に戻す。
+   * current() = 今の幅、apply(幅 | null, 覚えるか)。ドラッグ中は表を描き直さず幅だけ変え、覚えるのは離したとき
+   */
+  function bindColResizer(handle, current, apply) {
+    handle.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      const startX = ev.clientX;
+      const startW = current();
+      let last = null;
+      handle.setPointerCapture?.(ev.pointerId);
+      handle.classList.add("is-dragging");
+      const move = (e) => {
+        last = startW + e.clientX - startX;
+        apply(last, false);
+      };
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        handle.classList.remove("is-dragging");
+        if (last != null) apply(last, true);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
+    handle.addEventListener("dblclick", () => apply(null, true));
+    // 列見出しの並べ替えなどへ伝わらないように
+    handle.addEventListener("click", (ev) => ev.stopPropagation());
+    handle.addEventListener("keydown", (ev) => {
+      const step = ev.shiftKey ? 40 : 10;
+      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        apply(current() + (ev.key === "ArrowRight" ? step : -step), true);
+      } else if (ev.key === "Home") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        apply(null, true);
+      }
+    });
+  }
+
+  /** マスタ編集の表の列幅（ファイルごとに「列 → px」。未指定の列は中身に合わせる）。このブラウザに覚える */
+  const ledgerColW = {};
+  function ledgerWidths(fileId) {
+    if (!ledgerColW[fileId]) {
+      let saved = {};
+      try {
+        saved = JSON.parse(local.get(LEDGER_COL_W_KEY + fileId) || "{}") ?? {};
+      } catch {
+        saved = {};
+      }
+      ledgerColW[fileId] = Object.fromEntries(
+        Object.entries(typeof saved === "object" ? saved : {})
+          .map(([k, v]) => [k, clampLedgerColW(Number(v))])
+          .filter(([, v]) => v != null),
+      );
+    }
+    return ledgerColW[fileId];
+  }
+  /** 表の 1 列の幅を決める（null = 既定）。入りきらない中身は「…」で切る。行をまたぐ行（エラーの説明など）はそのまま */
+  function sizeLedgerColumn(table, index, w) {
+    const n = table.tHead.rows[0].cells.length;
+    // 先頭（名前）の列は左に貼り付くので表示幅の 6 割まで（広い幅を覚えたまま狭い画面で開いても他の列が隠れないように）
+    const v = w == null ? "" : index === 0 ? `min(${w}px, ${LEDGER_LEAD_VW}vw)` : `${w}px`;
+    for (const tr of table.rows) {
+      if (tr.cells.length !== n) continue;
+      const c = tr.cells[index];
+      c.classList.toggle("is-col-sized", w != null);
+      c.style.width = v;
+      c.style.minWidth = v;
+      c.style.maxWidth = v;
+    }
+  }
+  function ledgerColResizer(fileId, key, label) {
+    const name = fmt(T.masters.colResize, { col: label });
+    const handle = html`<span class="yn-col-resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label=${name} title=${name} aria-valuemin=${LEDGER_COL_W_MIN} aria-valuemax=${LEDGER_COL_W_MAX}></span>`;
+    handle.dataset.col = key;
+    const ws = ledgerWidths(fileId);
+    const current = () => Math.round(handle.closest("th").getBoundingClientRect().width);
+    // 先頭の列の上限は表示幅の 6 割（sizeLedgerColumn と同じ）
+    const maxNow = () => (key === "__lead" ? Math.max(LEDGER_COL_W_MIN, Math.min(LEDGER_COL_W_MAX, Math.floor((window.innerWidth * LEDGER_LEAD_VW) / 100))) : LEDGER_COL_W_MAX);
+    handle.setAttribute("aria-valuemax", String(maxNow()));
+    if (ws[key] != null) handle.setAttribute("aria-valuenow", String(Math.min(ws[key], maxNow())));
+    const apply = (w, save) => {
+      const v = w == null ? null : clampLedgerColW(Math.min(w, maxNow()));
+      handle.setAttribute("aria-valuemax", String(maxNow()));
+      if (v == null) delete ws[key];
+      else ws[key] = v;
+      const th = handle.closest("th");
+      if (th) sizeLedgerColumn(th.closest("table"), th.cellIndex, v);
+      if (v == null) handle.removeAttribute("aria-valuenow");
+      else handle.setAttribute("aria-valuenow", String(v));
+      if (save) Object.keys(ws).length ? local.set(LEDGER_COL_W_KEY + fileId, JSON.stringify(ws)) : local.remove(LEDGER_COL_W_KEY + fileId);
+    };
+    bindColResizer(handle, current, apply);
+    return handle;
+  }
+  /** 幅を決めて「…」で切った欄は、マウスを載せると全文が出るように */
+  function clippedTitle(ev) {
+    const cell = ev.target.closest?.("td.is-col-sized, tbody th.is-col-sized");
+    if (!cell) return;
+    const clipped = cell.scrollWidth > cell.clientWidth + 1 || [...cell.children].some((x) => x.clientWidth > 0 && x.scrollWidth > x.clientWidth + 1);
+    if (clipped) cell.title = cell.innerText.replace(/\s+/g, " ").trim();
+    else cell.removeAttribute("title");
+  }
+
   let drawnView = null;
   function renderPanel() {
     // 同じ表の描き直しで表の枠のスクロール位置が先頭に戻らないように引き継ぐ（行を開いても位置がずれない。2026-10-31 試用版のコメント）
@@ -904,12 +1027,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>
       </div>
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${fmt(T.masters.tableAria, { file: def.label })}>
-        <table class="yn-table yn-table-compact yn-me-table yn-me-ledger">
+        <table class="yn-table yn-table-compact yn-me-table yn-me-ledger" onmouseover=${clippedTitle}>
           <caption class="visually-hidden">${fmt(T.ledger.caption, { file: def.label, path: meta.path })}</caption>
           <thead><tr>
-            <th scope="col"><span class="yn-me-th">${leadLabel}</span><span class="yn-th-sub">${isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn}</span></th>
-            ${columns.map((c) => html`<th scope="col" class=${c.input === "number" || c.input === "percent" ? "num" : ""}><span class="yn-me-th">${c.label}</span><span class="yn-th-sub">${c.name}</span></th>`)}
-            ${isList ? null : html`<th scope="col">${T.ledger.colHistory}<span class="yn-th-sub">effective_from</span></th>`}
+            <th scope="col"><span class="yn-me-th">${leadLabel}</span><span class="yn-th-sub">${isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn}</span>${ledgerColResizer(fileId, "__lead", leadLabel)}</th>
+            ${columns.map((c) => html`<th scope="col" class=${c.input === "number" || c.input === "percent" ? "num" : ""}><span class="yn-me-th">${c.label}</span><span class="yn-th-sub">${c.name}</span>${ledgerColResizer(fileId, c.name, c.label)}</th>`)}
+            ${isList ? null : html`<th scope="col"><span class="yn-me-th">${T.ledger.colHistory}</span><span class="yn-th-sub">effective_from</span>${ledgerColResizer(fileId, "__hist", T.ledger.colHistory)}</th>`}
             <th scope="col">${T.columns.status}</th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
@@ -930,6 +1053,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${csvBlocked ? null : modeSwitch(fileId, () => renderPanel())}
       ${csv.on && !csvBlocked ? renderCsvEditor(fileId) : tableBody}
     </section>`);
+    // 決めた列幅をあてる（列見出しの右端をドラッグして変えたもの）
+    const ledger = parts.panel.querySelector("table.yn-me-ledger");
+    if (ledger) {
+      const ws = ledgerWidths(fileId);
+      ["__lead", ...columns.map((c) => c.name), ...(isList ? [] : ["__hist"])].forEach((k, i) => ws[k] != null && sizeLedgerColumn(ledger, i, ws[k]));
+    }
   }
 
   /** 対象の最新の履歴の行（「＋ 変更」はこれを写して適用開始月を翌月にする） */
@@ -1368,40 +1497,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       };
       handle.setAttribute("aria-valuemax", String(maxNow()));
       if (plan.nameW != null) handle.setAttribute("aria-valuenow", String(Math.min(plan.nameW, maxNow())));
-      handle.addEventListener("pointerdown", (ev) => {
-        if (ev.button !== 0) return;
-        ev.preventDefault();
-        const startX = ev.clientX;
-        const startW = current();
-        handle.setPointerCapture?.(ev.pointerId);
-        handle.classList.add("is-dragging");
-        const move = (e) => apply(startW + e.clientX - startX, false);
-        const up = () => {
-          handle.removeEventListener("pointermove", move);
-          handle.removeEventListener("pointerup", up);
-          handle.removeEventListener("pointercancel", up);
-          handle.classList.remove("is-dragging");
-          apply(plan.nameW, true);
-        };
-        handle.addEventListener("pointermove", move);
-        handle.addEventListener("pointerup", up);
-        handle.addEventListener("pointercancel", up);
-      });
-      handle.addEventListener("dblclick", () => apply(null, true));
-      // 列見出しの並べ替えなどへ伝わらないように（この表の見出しは押しても何も起きないが念のため）
-      handle.addEventListener("click", (ev) => ev.stopPropagation());
-      handle.addEventListener("keydown", (ev) => {
-        const step = ev.shiftKey ? 40 : 10;
-        if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
-          ev.preventDefault();
-          ev.stopPropagation();
-          apply(current() + (ev.key === "ArrowRight" ? step : -step), true);
-        } else if (ev.key === "Home") {
-          ev.preventDefault();
-          ev.stopPropagation();
-          apply(null, true);
-        }
-      });
+      bindColResizer(handle, current, apply);
       return handle;
     }
 
@@ -2026,11 +2122,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
     }
-    const listId = col.input === "title" ? `${id}-list` : null;
-    const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} list=${listId} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
-    if (!listId) return input;
-    const options = titleOptions().map((t) => ({ v: t, l: T.members.colTitle }));
-    return html`<span class="yn-me-combo">${input}<datalist id=${listId}>${options.map((o) => html`<option value=${o.v} label=${o.l}></option>`)}</datalist></span>`;
+    if (col.input === "title") {
+      // 役職はプルダウンで選ぶ（§31.5）。候補は単価マスタとメンバーの役職から作る（新しい役職は単価マスタに行を足す）
+      const opts = titleOptions();
+      return html`<select id=${id} name=${col.name} class="yn-select" required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>
+        <option value="" selected=${value === ""}>${T.masters.noneOption}</option>
+        ${opts.map((t) => html`<option value=${t} selected=${value === t}>${t}</option>`)}
+        ${value !== "" && !opts.includes(value) ? html`<option value=${value} selected>${value}</option>` : null}
+      </select>`;
+    }
+    return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
   }
 
   /** 過去月への影響の注記。何が変わるかは、過去の月で値が変わる列で出し分ける（§19.1） */

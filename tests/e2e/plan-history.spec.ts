@@ -249,7 +249,7 @@ test("台帳の「＋ 変更」: メンバーの役職を来月から変える�
   const d = dialog(page);
   await expect(d.locator("#yn-me-dialog-title")).toContainText("小林 玲奈 の変更を追加");
   await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11");
-  await d.locator("#yn-me-f-title").fill("課長");
+  await d.locator("#yn-me-f-title").selectOption("課長");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   await expect(g).toContainText("予定 1");

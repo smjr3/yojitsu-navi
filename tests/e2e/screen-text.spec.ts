@@ -12,7 +12,7 @@ const PAGE_BUDGET = 120;
 /** 1 つの段落・注記の文字数の上限（これより長い説明は「?」へ） */
 const ITEM_BUDGET = 70;
 
-const PAGES = ["/", "/teams", "/team?id=S11", "/contracts", "/contract?id=C008", "/customers", "/members", "/member?id=M011", "/workload", "/plan?team=S11", "/masters", "/data-check", "/settings"];
+const PAGES = ["/", "/teams", "/teams?view=chart", "/team?id=S11", "/contracts", "/contract?id=C008", "/customers", "/members", "/member?id=M011", "/workload", "/plan?team=S11", "/masters", "/data-check", "/settings"];
 
 /** 本文に出ている説明的な文章（表・吹き出し・ダイアログ・警告・データの値は除く） */
 async function proseItems(page: Page): Promise<string[]> {
