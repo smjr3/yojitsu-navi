@@ -180,7 +180,7 @@ export default {
       prevFyShort: "前年度",
       thisMonth: "今月",
       lastMonth: "先月",
-      recent3: "直近3か月",
+      next3: "今後3か月",
       recent12: "直近12か月",
     },
   },

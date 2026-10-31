@@ -687,7 +687,21 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     )}</ul>`;
   }
 
+  let drawnView = null;
   function renderPanel() {
+    // 同じ表の描き直しで表の枠のスクロール位置が先頭に戻らないように引き継ぐ（行を開いても位置がずれない。2026-10-31 試用版のコメント）
+    const wrap = drawnView === active ? parts.panel.querySelector(".yn-me-table-wrap") : null;
+    const scroll = wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
+    drawPanel();
+    drawnView = active;
+    const next = scroll && parts.panel.querySelector(".yn-me-table-wrap");
+    if (next) {
+      next.scrollTop = scroll.top;
+      next.scrollLeft = scroll.left;
+    }
+  }
+
+  function drawPanel() {
     if (active === PLAN_VIEW_ID) {
       renderPlanPanel();
       return;
