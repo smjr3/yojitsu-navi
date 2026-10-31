@@ -176,6 +176,8 @@ body {
   padding: 0;
   background: var(--yn-card);
   border-bottom: 1px solid var(--yn-hairline);
+  /* 本文の最大幅（1440px）より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（border-image の外側は横スクロールを生まない） */
+  border-image: linear-gradient(to bottom, var(--yn-card) calc(100% - 1px), var(--yn-hairline) 0) fill 0 / 0 0 1px / 0 100vmax;
   font: 14px/1.5 var(--sans-serif);
 }
 #observablehq-header ~ #observablehq-main {
@@ -376,6 +378,7 @@ body {
 }
 .yn-filterbar-slot {
   border-top: 1px solid var(--yn-hairline);
+  border-image: linear-gradient(var(--yn-hairline) 0 0) 1 0 0 / 1px 0 0 / 0 100vmax;
 }
 .yn-filterbar-slot .yn-filters {
   position: relative; /* visually-hidden など絶対配置の子をバーの中に閉じ込める */
@@ -416,7 +419,7 @@ body {
   gap: 4px;
 }
 /* 着地見込みだけが次の行に落ちないよう、1 行に収まらない幅では期間を 1 行目に、チームと着地見込みを 2 行目にまとめる */
-@media (min-width: 720px) and (max-width: 1365px) {
+@media (min-width: 720px) and (max-width: 1279px) {
   .yn-filterbar-slot .yn-filters:has(.yn-filter-team):has(.yn-filter-method) .yn-filter-period {
     flex-basis: 100%;
   }
@@ -4298,4 +4301,31 @@ html:has(dialog.yn-dialog[open]) {
 /* 漏斗の分だけ見出しが広がらないよう、右の余白を詰める */
 .yn-table thead th.has-filter {
   padding-right: 2px;
+}
+
+/* 1280〜1365px（ノート PC）でも期間・チーム・着地見込みを 1 行に収めるため、余白と選択欄を詰める（Windows のスクロールバー 17px 込み） */
+@media (min-width: 1280px) and (max-width: 1365px) {
+  .yn-filterbar-slot .yn-filters {
+    padding: 8px 24px;
+    gap: 8px 8px;
+  }
+  .yn-filterbar-slot .yn-filter-period .yn-filter-row {
+    gap: 3px;
+  }
+  .yn-filterbar-slot .yn-filter-period .yn-select {
+    width: 118px;
+    padding-left: 6px;
+    padding-right: 2px;
+  }
+  .yn-filterbar-slot .yn-seg-btn,
+  .yn-filterbar-slot .yn-radio {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+  .yn-filterbar-slot .yn-filter-team {
+    flex-basis: 200px;
+  }
+  .yn-filterbar-slot #yn-filter-team {
+    max-width: 160px;
+  }
 }
