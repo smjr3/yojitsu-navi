@@ -109,10 +109,6 @@ test("リソース計画: 運用保守以外の種別は、表示中の期間に
   await expect(pop.getByText("作業を追加")).toBeVisible();
   await pickCombo(pop.locator("#yn-plan-pop-project"), "構築");
   await expect(pop.locator("#yn-plan-pop-project")).toHaveValue("構築");
-  // 運用保守以外は 0〜1 人月
-  await pop.locator("#yn-plan-pop-new").fill("2");
-  await pop.getByRole("button", { name: "反映" }).click();
-  await expect(pop.locator(".yn-me-form-msg")).not.toBeEmpty();
   await pop.locator("#yn-plan-pop-new").fill("0.1");
   await pop.getByRole("button", { name: "反映" }).click();
   await expect(pop).toHaveCount(0);

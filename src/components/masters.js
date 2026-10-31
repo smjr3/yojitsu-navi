@@ -1972,7 +1972,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const newVal = num(newNum.value);
       const newZero = newVal === "" || Math.abs(parseNumberCell(newVal)) < 1e-9;
       if (!newZero && !picked) return { error: T.plan.needProject, focus: proj.input };
-      if (newType !== null && !newZero && !inRange(newVal)) return { error: T.planEdit.valueRange, focus: newNum };
       for (const { a, input, before } of inputs) {
         const after = num(input.value);
         const same = after === before || (after !== "" && before !== "" && Math.abs(parseNumberCell(after) - parseNumberCell(before)) < 1e-9);
