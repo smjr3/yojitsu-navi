@@ -3,7 +3,7 @@
  */
 import { test, expect, gotoPage, tableByCaption, headerIndex, col, cellText, parseNumber, rowKeys } from "./helpers/app.js";
 import { fiscalPeriod, getModel, teamContractIds, treeAt, yen } from "./helpers/core.js";
-import { originTotals, ownTeamScope, teamMemberCosts } from "../../src/core/index.js";
+import { contractOwnScopes, customerKey, originTotals, ownTeamScope, teamMemberCosts } from "../../src/core/index.js";
 
 const model = getModel();
 const FY = fiscalPeriod(model);
@@ -69,4 +69,30 @@ test("チーム詳細: 課長（上位の組織）の作業は応援にしない
   await expect(table.locator('tbody tr[data-key="M301"] [data-origin="help"]')).toHaveText("ヘルプ");
   const o = originTotals(rows);
   await expect(kpiCostSub(page).locator("[data-origin]")).toContainText(`ヘルプ ${yen(o.helpAmount)}`);
+});
+
+test("顧客詳細: 案件を横断したメンバー別の実績。合計・応援・ヘルプが core と一致（§74） @smoke", async ({ page }) => {
+  const c = contract("C002");
+  const key = customerKey(c.customerName);
+  const ids = model.contracts.filter((r) => customerKey(r.contract.customerName) === key).map((r) => r.contract.contractId);
+  const rows = teamMemberCosts(model, ids, FY, contractOwnScopes(model, tree));
+  expect(rows.length).toBeGreaterThan(0);
+  await gotoPage(page, `/customer?key=${encodeURIComponent(key)}&unit=yen`);
+  const table = tableByCaption(page, "メンバー別の実績");
+  expect(new Set(await rowKeys(table))).toEqual(new Set(rows.map((r) => r.memberId)));
+  const h = await headerIndex(table);
+  for (const r of rows) {
+    const row = table.locator(`tbody tr[data-key="${r.memberId}"]`);
+    expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
+    expect(parseNumber(await cellText(row, col(h, "案件数")))).toBe(r.contractIds.length);
+    await expect(row.locator('[data-origin="help"]')).toHaveCount(r.helpHours > 0 ? 1 : 0);
+    await expect(row.locator('[data-origin="support"]')).toHaveCount(r.supportHours > 0 ? 1 : 0);
+  }
+  await expect(table.locator('tbody tr[data-key="M301"] [data-origin="help"]')).toHaveText("ヘルプ");
+  const o = originTotals(rows);
+  await expect(kpiCostSub(page).locator("[data-origin]")).toContainText(`ヘルプ ${yen(o.helpAmount)}`);
+  // 時間を押すと案件・月ごとの内訳
+  const first = table.locator(`tbody tr[data-key="${rows[0]!.memberId}"]`);
+  await first.locator("td").nth(col(h, "時間")).locator("button").click();
+  await expect(page.locator("dialog[open]")).toBeVisible();
 });

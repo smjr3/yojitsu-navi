@@ -988,6 +988,8 @@ export default {
     byTeamHint: "{customer} の案件を、案件に登録された主担当チームごとに集計（{month} 時点の組織名）。行をクリックすると、この顧客のこのチームの案件一覧（案件一覧を顧客とチームで絞った表示）に移動します。",
     changePeriod: "期間を変えてください。",
     hiddenOutside: "期間外の案件 {n}件は非表示",
+    membersHint: "{period} にこの顧客の案件へ作業したメンバーごとの時間と実績。所属が案件の担当チーム（配下・上位を含む）の外の人には「応援」、所属チームの無い人（他部署）には「ヘルプ」を付けています。時間・実績をクリックすると案件・月ごとの内訳が開きます。",
+    noWorkText: "この期間に、この顧客の案件へ紐付いた作業ログはありません。",
   },
 
   // ── チーム詳細 ───────────────────────────────────
@@ -1449,7 +1451,7 @@ export default {
     unknownContractValue: "（存在しない案件 {id}）",
     unknownMemberValue: "（存在しないメンバー {id}）",
     hintTeamId: "英数字の ID（例 S11）",
-    hintTitle: "単価表の役職名と同じ文字にすると、その単価が使われます",
+    hintTitle: "新しい役職は、単価に役職の行を追加すると選べます",
     editTitle: "{file}の行を修正",
     addAssignmentTitle: "アサインを追加",
     editAddedLead: "この画面で追加した行を修正します。",
@@ -1538,6 +1540,7 @@ export default {
     rowsSuffix: "行",
     fileOrderNote: "）。ファイルの行の順に表示",
     colActions: "操作",
+    colResize: "「{col}」の列の幅（ドラッグか矢印キーで変更、ダブルクリックで元に戻す）",
     removedTitle: "削除する行（",
     removedChip: "− 削除",
     undoDelete: "削除を取り消す",

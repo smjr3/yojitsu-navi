@@ -103,6 +103,7 @@ export {
   originTotals,
   ownTeamScope,
   teamMemberCosts,
+  contractOwnScopes,
   teamOrgChanges,
   teamPath,
   workOriginOf,
