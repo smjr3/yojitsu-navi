@@ -1,6 +1,6 @@
 /**
  * 実運用規模のデータ（退職者・長い名前・0 の月）で崩れないこと（SPEC §35、docs/DUMMY_DATA.md）
- *   - 離脱者（退職・育休など）: 一覧・詳細・リソース計画に理由（「退職」「育休」）が出る。離脱後の計画は警告チップ
+ *   - 不在の人（退職・育休など。理由は問わない）: 一覧・詳細・リソース計画に「不在」が出る。不在中の計画は警告チップ
  *   - 値がすべて 0 のグラフ: 棒が全高で描かれず、目盛りが 0.000000 にならない
  *   - 長い案件名・顧客名・作業名: 390px でもページが横にはみ出さない
  */
@@ -22,15 +22,15 @@ const header = memberLines[0]!.split(",");
 const rows = memberLines.slice(1).map((l) => Object.fromEntries(l.split(",").map((v, i) => [header[i], v])) as Record<string, string>);
 /** 今年度より前に退職し、今年度は計画も実績も無い人 */
 const leftBefore = rows.find((r) => r.status === "退職" && r.effective_from! < FY[0]!)!;
-/** 今年度に育休に入った人 */
+/** 今年度に育休に入った人（status は「育休」でも表示は「不在」） */
 const onLeave = rows.find((r) => r.status === "育休")!;
 
-test("退職者の詳細: 退職チップと最後の所属。すべて 0h のグラフは全高の棒にならない", async ({ page }) => {
+test("退職者の詳細: 不在チップと最後の所属。すべて 0h のグラフは全高の棒にならない", async ({ page }) => {
   expect(leftBefore, "今年度より前に退職した人がダミーデータにいる").toBeTruthy();
   await gotoPage(page, `/member?id=${leftBefore.member_id}`);
   await expect(page.locator("h1")).toHaveText(leftBefore.name!);
-  await expect(page.locator(".yn-chip", { hasText: "退職" }).first()).toBeVisible();
-  await expect(page.getByText(/退職（最後の所属:/)).toBeVisible();
+  await expect(page.locator(".yn-chip", { hasText: "不在" }).first()).toBeVisible();
+  await expect(page.getByText(/不在（最後の所属:/)).toBeVisible();
   const svg = page.locator("figure svg, .yn-chart svg").first();
   await expect(svg).toBeVisible();
   await expect(svg).not.toContainText("0.000000");
@@ -40,21 +40,21 @@ test("退職者の詳細: 退職チップと最後の所属。すべて 0h の�
   expect(heights.filter((h) => h > plotH * 0.5).length, "全高に近い棒が無い").toBeLessThanOrEqual(1); // 未来月の背景の帯だけ
 });
 
-test("育休の人の詳細: 「育休」のチップと最後の所属（退職とは書かない）", async ({ page }) => {
+test("育休の人の詳細: 理由に関係なく「不在」のチップと最後の所属", async ({ page }) => {
   expect(onLeave, "育休の人がダミーデータにいる").toBeTruthy();
   await gotoPage(page, `/member?id=${onLeave.member_id}`);
-  await expect(page.locator(".yn-chip", { hasText: "育休" }).first()).toBeVisible();
-  await expect(page.getByText(/育休（最後の所属:/)).toBeVisible();
-  await expect(page.locator(".yn-chip", { hasText: "退職" })).toHaveCount(0);
+  await expect(page.locator(".yn-chip", { hasText: "不在" }).first()).toBeVisible();
+  await expect(page.getByText(/不在（最後の所属:/)).toBeVisible();
+  await expect(page.locator(".yn-chip", { hasText: "育休" })).toHaveCount(0);
 });
 
-test("メンバー一覧: 退職者に退職チップ（色だけに頼らず文字）", async ({ page }) => {
+test("メンバー一覧: 不在の人に「不在」チップ（色だけに頼らず文字）", async ({ page }) => {
   await gotoPage(page, "/members");
-  const left = page.locator("tbody tr").filter({ has: page.locator(".yn-chip", { hasText: "退職" }) });
+  const left = page.locator("tbody tr").filter({ has: page.locator(".yn-chip", { hasText: "不在" }) });
   expect(await left.count()).toBeGreaterThan(0);
 });
 
-test("リソース計画: 離脱後に残った計画は行に「離脱後の計画」の警告チップ", async ({ page }) => {
+test("リソース計画: 不在中に残った計画は行に「不在中の計画」の警告チップ", async ({ page }) => {
   const docs = {
     teams: parseMasterDoc("teams", PAYLOAD.files.teams.text),
     members: parseMasterDoc("members", PAYLOAD.files.members.text),
@@ -62,12 +62,12 @@ test("リソース計画: 離脱後に残った計画は行に「離脱後の計
   };
   const view = planView(planSourcesFromDocs(docs, PAYLOAD.context.contracts), null, FY);
   const target = view.rows.find((r) => r.afterLeftMonths.length > 0);
-  expect(target, "離脱後の計画が残っている人がダミーデータにいる").toBeTruthy();
+  expect(target, "不在中の計画が残っている人がダミーデータにいる").toBeTruthy();
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
   await gotoPage(page, "/plan");
   const row = page.locator(`tr.yn-me-plan-row[data-member="${target!.memberId}"]`);
   await row.scrollIntoViewIfNeeded();
-  await expect(row).toContainText(`離脱後の計画 ${target!.afterLeftMonths.length}か月`);
+  await expect(row).toContainText(`不在中の計画 ${target!.afterLeftMonths.length}か月`);
   await expect(row.locator("td.yn-me-plan-cell.is-left").first()).toBeVisible();
 });
 

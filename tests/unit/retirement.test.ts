@@ -1,17 +1,17 @@
 /**
- * 離脱（退職・休職・産休・育休・契約終了。SPEC §35）: members.csv の任意列 status
- *   - CSV の読み方（空・在籍 = 在籍、退職・休職など・left = 離脱、それ以外はエラー）
- *   - 離脱した月は計画か実績があれば稼働とみなす
- *   - 検証（離脱した月より後の作業実績・アサインは警告）
+ * 不在（退職・休職など。理由は問わない。SPEC §35）: members.csv の任意列 status
+ *   - CSV の読み方（空・在籍 = 在籍、それ以外は何が書いてあっても不在）
+ *   - 不在になった月は計画か実績があれば稼働とみなす
+ *   - 検証（不在になった月より後の作業実績・アサインは警告）
  *   - 実績の計算は変えない（退職後の作業も単価は退職の行の役職で数える）
  *   - リソース計画（退職した月から所属に数えない・退職後の配分を知らせる）
  *   - メンバー別（基準月で退職していれば leftFrom）
- *   - 人事データの取り込み（取り込み元に再び現れたら在籍に戻す。現れない人を退職にはしない）
+ *   - 人事データの取り込み（在籍状態は変えない: 現れない人を不在にせず、不在の人が現れても在籍に戻さない）
  */
 import { describe, expect, it } from "vitest";
 import { T } from "../../src/i18n/index.js";
 import { memberStatus, parseDataset } from "../../src/core/csv.js";
-import { createMasterIndex, isActiveAt, isLeftRecord, isWorkingAt, leaveReasonOf, leftMonthOf, memberAt, workedMonthKeys } from "../../src/core/masters.js";
+import { createMasterIndex, isActiveAt, isLeftRecord, isWorkingAt, leftMonthOf, memberAt, workedMonthKeys } from "../../src/core/masters.js";
 import { parseMasterDoc, planSourcesFromDocs } from "../../src/core/masterEdit.js";
 import { planView } from "../../src/core/plan.js";
 import { validateDataset } from "../../src/core/validate.js";
@@ -34,33 +34,25 @@ describe("status 列の読み方", () => {
     ["産休", "left"],
     ["育休", "left"],
     ["契約終了", "left"],
-    ["休業", "休業"],
+    ["休業", "left"],
+    ["出向", "left"],
   ])("%j → %j", (raw, want) => {
     expect(memberStatus(raw).status).toBe(want);
   });
 
-  it("文言は「退職」に限らない（休職・育休なども同じ扱い）", () => {
-    expect(T.plan.afterLeftChip).toContain("離脱");
-    expect(T.plan.afterLeftTitle).not.toContain("退職の前月");
-    expect(T.checks.assignmentAfterLeft).toContain("{reason}");
-  });
-
-  it("離脱の理由: left・retired は退職、それ以外は書いた値", () => {
-    expect(memberStatus("retired").leaveReason).toBe("退職");
-    expect(memberStatus("育休").leaveReason).toBe("育休");
-    expect(memberStatus("在籍").leaveReason).toBeUndefined();
-    expect(leaveReasonOf([member({ memberId: "M9", effectiveFrom: "2025-04" }), member({ memberId: "M9", effectiveFrom: "2026-04", status: "left", leaveReason: "休職" })])).toBe("休職");
-    expect(leaveReasonOf([member({ memberId: "M9", effectiveFrom: "2026-04", status: "left" })])).toBe("退職");
-    expect(leaveReasonOf([member({ memberId: "M9", effectiveFrom: "2025-04" })])).toBeNull();
+  it("文言は理由を固定しない（「不在」）", () => {
+    expect(T.plan.afterLeftChip).toContain("不在");
+    expect(T.members.chipLeft).toBe("不在");
+    expect(T.checks.assignmentAfterLeft).toContain("から不在");
   });
 
   it("列が無い CSV は全員在籍。列があれば行ごと", () => {
     const base = { config: baseConfig, contracts: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\n", mapping: "worklog_customer_name,worklog_project_name,contract_id\n", assignments: "member_id,contract_id,start_month,end_month,allocation\n", teams: "team_id,name,parent_team_id,effective_from\nT1,T,,2025-04\n", rates: "key,hourly_rate,effective_from\n", holidays: "date,name\n", worklogs: [] };
     const without = parseDataset({ ...base, members: "member_id,name,kind,title,department,section,team_id,effective_from\nM1,A,employee,一般,,,T1,2025-04\n" });
     expect(without.dataset.members[0]!.status).toBeUndefined();
-    const withCol = parseDataset({ ...base, members: "member_id,name,kind,title,department,section,team_id,effective_from,status\nM1,A,employee,一般,,,T1,2025-04,\nM1,A,employee,一般,,,T1,2026-04,退職\nM2,B,employee,一般,,,T1,2025-04,休業\n" });
-    expect(withCol.dataset.members.map((m) => m.status)).toEqual([undefined, "left", "休業"]);
-    expect(withCol.issues.filter((i) => i.code === "MEMBER_STATUS_INVALID").map((i) => i.row)).toEqual([4]);
+    const withCol = parseDataset({ ...base, members: "member_id,name,kind,title,department,section,team_id,effective_from,status\nM1,A,employee,一般,,,T1,2025-04,\nM1,A,employee,一般,,,T1,2026-04,退職\nM2,B,employee,一般,,,T1,2025-04,海外赴任\n" });
+    expect(withCol.dataset.members.map((m) => m.status)).toEqual([undefined, "left", "left"]);
+    expect(withCol.issues.filter((i) => i.severity === "error" && i.file?.includes("members"))).toEqual([]);
   });
 });
 
@@ -87,13 +79,13 @@ describe("在籍の判定", () => {
     expect(isLeftRecord(null)).toBe(false);
   });
 
-  it("isWorkingAt: 離脱した月は計画か実績があれば稼働。翌月からは稼働しない", () => {
+  it("isWorkingAt: 不在になった月は計画か実績があれば稼働。翌月からは稼働しない", () => {
     const at = (id: string, m: string) => memberAt(idx, id, m);
     expect(isWorkingAt(at, "M1", "2026-03", () => false)).toBe(true);
     expect(isWorkingAt(at, "M1", "2026-04", () => false)).toBe(false);
     expect(isWorkingAt(at, "M1", "2026-04", () => true)).toBe(true);
     expect(isWorkingAt(at, "M1", "2026-05", () => true)).toBe(false);
-    // 離脱の行が続く 2 つ目の月は離脱した月ではない
+    // 不在の行が続く 2 つ目の月は不在になった月ではない
     const two = [...members, member({ memberId: "M1", effectiveFrom: "2026-07", status: "left" })];
     const idx2 = createMasterIndex({ members: two, rates: [], teams: [] });
     expect(isWorkingAt((id, m) => memberAt(idx2, id, m), "M1", "2026-07", () => true)).toBe(false);
@@ -123,27 +115,24 @@ describe("検証と計算", () => {
       ],
     });
 
-  it("離脱した月より後の作業実績・アサインは警告（エラーにはしない）。離脱した月は稼働なので警告しない", () => {
+  it("不在になった月より後の作業実績・アサインは警告（エラーにはしない）。不在になった月は稼働なので警告しない", () => {
     const issues = validateDataset(ds());
     const w = issues.find((i) => i.code === "WORKLOG_AFTER_LEFT")!;
     expect(w).toMatchObject({ severity: "warning", ref: { memberId: "M1", hours: 1.5 } });
     expect(w.message).toContain("2026-05-01〜2026-05-01");
     expect(w.message).toContain("1 件");
-    expect(w.message).toContain("2026-04 から退職");
+    expect(w.message).toContain("2026-04 から不在");
     const a = issues.find((i) => i.code === "ASSIGNMENT_AFTER_LEFT")!;
     expect(a).toMatchObject({ severity: "warning", row: 2, ref: { memberId: "M1" } });
     expect(a.message).toContain("2026-05〜2026-06");
     expect(issues.some((i) => i.severity === "error")).toBe(false);
   });
 
-  it("離脱した月までのデータなら警告は出ない。理由（休職など）が文言に入る", () => {
+  it("不在になった月までのデータなら警告は出ない", () => {
     const d = ds();
     d.worklogs = d.worklogs.slice(0, 2);
     d.assignments = [assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-01", endMonth: "2026-04", allocation: 0.5 })];
     expect(validateDataset(d).filter((i) => i.code.endsWith("_AFTER_LEFT"))).toEqual([]);
-    const e = ds();
-    e.members = [member({ memberId: "M1", title: "一般", effectiveFrom: "2025-04" }), member({ memberId: "M1", title: "一般", effectiveFrom: "2026-04", status: "left", leaveReason: "育休" })];
-    expect(validateDataset(e).find((i) => i.code === "ASSIGNMENT_AFTER_LEFT")!.message).toContain("2026-04 から育休");
   });
 
   it("model.worklogMonths: 作業実績のある「メンバー|月」", () => {
@@ -168,7 +157,6 @@ describe("検証と計算", () => {
     const m = buildModel(ds(), { asOf: "2026-10-27" });
     const after = aggregateMembers(m, { period: { from: "2026-01", to: "2026-12" } }).members.find((x) => x.memberId === "M1")!;
     expect(after.leftFrom).toBe("2026-04");
-    expect(after.leaveReason).toBe("退職");
     const before = aggregateMembers(m, { period: { from: "2026-01", to: "2026-03" } }).members.find((x) => x.memberId === "M1")!;
     expect(before.leftFrom).toBeNull();
   });
@@ -203,11 +191,11 @@ describe("リソース計画（planView）", () => {
   it("退職後に残った配分は afterLeftMonths で分かる（終了し忘れ）", () => {
     const v = view();
     expect(v.rows.find((r) => r.memberId === "M2")!.afterLeftMonths).toEqual([]);
-    // 離脱した月（10 月）は計画があるので稼働。11 月から
+    // 不在になった月（10 月）は計画があるので稼働。11 月から
     expect(v.rows.find((r) => r.memberId === "M4")!.afterLeftMonths).toEqual(["2026-11", "2026-12", "2027-01", "2027-02", "2027-03"]);
   });
 
-  it("月ごとの稼働 activeMonths（§58 の人数 × 1.0）: 離脱した月は計画か実績があれば稼働、翌月から外れる。復職すれば戻る", () => {
+  it("月ごとの稼働 activeMonths（§58 の人数 × 1.0）: 不在になった月は計画か実績があれば稼働、翌月から外れる。復職すれば戻る", () => {
     const v = view();
     const active = (id: string) => FY.filter((_, i) => v.rows.find((r) => r.memberId === id)!.activeMonths[i]);
     expect(active("M1")).toEqual(FY);
@@ -221,10 +209,12 @@ describe("リソース計画（planView）", () => {
     expect(FY.filter((_, i) => withWork.activeMonths[i])).toEqual(["2026-04", "2026-05", "2026-06", "2026-07"]);
     const withOutside = planView(planSourcesFromDocs({ ...docs, outside: parseMasterDoc("outside", "member_id,type,start_month,end_month,person_months\nM2,提案,2026-07,2026-07,0.2") }, CONTRACTS), "T1", FY).rows.find((r) => r.memberId === "M2")!;
     expect(withOutside.activeMonths[3]).toBe(true);
-    expect(withOutside.leaveReason).toBe("退職");
-    // 産休 → 育休と続けば、離脱した月は最初の月・理由は新しいもの
-    const chained = planView(planSourcesFromDocs({ ...docs, members: parseMasterDoc("members", `${MEMBERS}\nM6,産休,employee,一般,,,T1,2026-04,\nM6,産休,employee,一般,,,T1,2026-06,産休\nM6,産休,employee,一般,,,T1,2026-08,育休`) }, CONTRACTS), "T1", FY).rows.find((r) => r.memberId === "M6")!;
-    expect(chained).toMatchObject({ leftFrom: "2026-06", leaveReason: "育休" });
+    // 不在の行が続いても、不在になった月は最初の月
+    const chained = planView(planSourcesFromDocs({ ...docs, members: parseMasterDoc("members", `${MEMBERS}
+M6,産休,employee,一般,,,T1,2026-04,
+M6,産休,employee,一般,,,T1,2026-06,産休
+M6,産休,employee,一般,,,T1,2026-08,育休`) }, CONTRACTS), "T1", FY).rows.find((r) => r.memberId === "M6")!;
+    expect(chained.leftFrom).toBe("2026-06");
     // 6 月に退職し 10 月に復職: 6〜9 月は数えない（期間の最後の leftFrom は null になるので、それでは判定できない）
     const rejoin = planView(
       planSourcesFromDocs({ teams: parseMasterDoc("teams", TEAMS), members: parseMasterDoc("members", `${MEMBERS}\nM5,復職,employee,一般,,,T1,2026-04,\nM5,復職,employee,一般,,,T1,2026-06,退職\nM5,復職,employee,一般,,,T1,2026-10,`), assignments: parseMasterDoc("assignments", `${ASSIGN}\nM5,C1,2026-04,2027-03,0.5`) }, CONTRACTS),
@@ -258,22 +248,17 @@ describe("人事データの取り込み（mergeMembers）", () => {
     expect(r.rows.filter((x) => x.status === "退職")).toHaveLength(1);
   });
 
-  it("休職・産休・育休の人は取り込み元にいても在籍に戻さない（在籍のまま一覧に載るため）", () => {
-    const leave = existing.map((x) => (x.status === "退職" ? { ...x, status: "育休" } : x));
-    const r = mergeMembers(leave, [{ memberId: "M2", name: "B", kind: "employee", title: "一般" }], "2026-10");
-    expect(r.changed + r.added).toBe(0);
+  it("不在の人が取り込み元にいても在籍に戻さない（休職中の人も載るため。理由は問わない）", () => {
+    for (const status of ["退職", "育休"]) {
+      const rows = existing.map((x) => (x.status === "退職" ? { ...x, status } : x));
+      const r = mergeMembers(rows, [{ memberId: "M2", name: "B", kind: "employee", title: "一般" }], "2026-10");
+      expect(r.changed + r.added).toBe(0);
+      expect(r.rows).toEqual(rows);
+    }
   });
 
-  it("退職の人が取り込み元に再び現れたら、実行月の行で在籍に戻す（チームは引き継ぐ）", () => {
-    const r = mergeMembers(existing, [{ memberId: "M2", name: "B", kind: "employee", title: "一般" }], "2026-10");
-    expect(r.changed).toBe(1);
-    expect(r.changes[0]).toEqual({ memberId: "M2", kind: "changed", fields: ["status"] });
-    const added = r.rows.at(-1)!;
-    expect(added).toMatchObject({ member_id: "M2", effective_from: "2026-10", status: "", team_id: "T1" });
-    // 退職の行（履歴）は消さない
-    expect(r.rows.filter((x) => x.member_id === "M2" && x.status === "退職")).toHaveLength(1);
-    // もう一度流しても変わらない
-    const again = mergeMembers(r.rows, [{ memberId: "M2", name: "B", kind: "employee", title: "一般" }], "2026-10");
-    expect(again.changed + again.added).toBe(0);
+  it("不在の人の所属などが変わったら行を足すが、不在のまま", () => {
+    const r = mergeMembers(existing, [{ memberId: "M2", name: "B", kind: "employee", title: "主任" }], "2026-10");
+    expect(r.rows.at(-1)).toMatchObject({ member_id: "M2", effective_from: "2026-10", title: "主任", status: "退職" });
   });
 });

@@ -7,7 +7,7 @@
  */
 import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
-import { createEffectiveIndex, isLeftRecord, isWorkingAt, leaveReasonOf, memberMonthKey, teamTreeAt, workedMonthKeys } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { MemberRecord, OutsidePlan, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
 /** 画面で編集中のアサイン 1 行（rowId はマスタ編集の行 id） */
@@ -27,9 +27,9 @@ export interface PlanSources {
   assignments: readonly PlanAssignment[];
   /** 契約 → 担当組織（応援の判定に使う） */
   contractTeams: ReadonlyMap<string, string | null>;
-  /** 運用保守以外の予定（§50。離脱した月の稼働判定にだけ使う） */
+  /** 運用保守以外の予定（§50。不在した月の稼働判定にだけ使う） */
   outsidePlans?: readonly Pick<OutsidePlan, "memberId" | "startMonth" | "endMonth" | "personMonths">[];
-  /** 作業実績のある「メンバー|月」（memberMonthKey。§35。離脱した月の稼働判定に使う。編集中に離脱の月を変えても判定できるよう全部） */
+  /** 作業実績のある「メンバー|月」（memberMonthKey。§35。不在した月の稼働判定に使う。編集中に不在の月を変えても判定できるよう全部） */
   worklogMonths?: readonly string[];
 }
 
@@ -47,13 +47,11 @@ export interface PlanMemberRow {
   overMonths: YearMonth[];
   /** 期間に掛かるアサイン行（契約ID・開始月の順） */
   assignments: PlanAssignment[];
-  /** 離脱した月（§35。期間の最終月までに退職・休職などで離脱していれば その月、在籍中なら null） */
+  /** 不在した月（§35。期間の最終月までに不在（退職・休職など）になっていれば その月、在籍中なら null） */
   leftFrom: YearMonth | null;
-  /** 離脱した月より後に配分が残っている月（§35。アサインの終了し忘れ） */
+  /** 不在した月より後に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
-  /** 離脱の理由（退職・休職など。leftFrom が null なら null） */
-  leaveReason: string | null;
-  /** months と同じ順の稼働（その月の台帳の行があり、離脱していない。離脱した月も計画か実績があれば稼働。復職後は在籍に戻る。§58 の人数 × 1.0） */
+  /** months と同じ順の稼働（その月の台帳の行があり、不在していない。不在した月も計画か実績があれば稼働。復職後は在籍に戻る。§58 の人数 × 1.0） */
   activeMonths: boolean[];
 }
 
@@ -82,7 +80,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   const to = ms[ms.length - 1] as YearMonth;
   const memberIdx = createEffectiveIndex(src.members, (m) => m.memberId, (m) => m.effectiveFrom);
   const at = (id: string, m: YearMonth) => memberIdx.at(id, m);
-  // 離脱した月は計画（アサイン・運用保守以外）か実績があれば稼働とみなす（§35）
+  // 不在した月は計画（アサイン・運用保守以外）か実績があれば稼働とみなす（§35）
   const workedKeys = workedMonthKeys({ assignments: src.assignments, outsidePlans: src.outsidePlans ?? [] });
   for (const k of src.worklogMonths ?? []) workedKeys.add(k);
   const working = (id: string, m: YearMonth) => isWorkingAt(at, id, m, (i, mo) => workedKeys.has(memberMonthKey(i, mo)));
@@ -108,7 +106,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     seen.add(id);
     ids.push(id);
   };
-  // 所属メンバー（members ファイルの初出順）。離脱した月より後（離脱した月も計画・実績が無ければ）は所属に数えない（§35）
+  // 所属メンバー（members ファイルの初出順）。不在した月より後（不在した月も計画・実績が無ければ）は所属に数えない（§35）
   const inTeamAt = (id: string, m: YearMonth) => working(id, m) && inScope(memberIdx.at(id, m)?.teamId, m);
   for (const id of memberIdx.keys()) {
     if (ms.some((m) => inTeamAt(id, m))) add(id);
@@ -139,14 +137,11 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     monthly.forEach((v, i) => (totals[i] = (totals[i] as number) + v));
     let last: MemberRecord | null = null;
     let leftFrom: YearMonth | null = null;
-    let leaveReason: string | null = null;
     for (const m of ms) {
       const rec = memberIdx.at(memberId, m);
       if (rec && !isLeftRecord(rec)) last = rec;
-      if (isLeftRecord(rec)) {
-        leftFrom ??= rec!.effectiveFrom;
-        leaveReason = leaveReasonOf([rec!]); // 産休 → 育休のように続けば新しい理由
-      } else if (rec) leftFrom = leaveReason = null; // 復職
+      if (isLeftRecord(rec)) leftFrom ??= rec!.effectiveFrom;
+      else if (rec) leftFrom = null; // 復職
     }
     if (!last) last = memberIdx.at(memberId, to) ?? null;
     return {
@@ -158,7 +153,6 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       overMonths: ms.filter((_, i) => (monthly[i] as number) > 1 + EPS),
       assignments: list,
       leftFrom,
-      leaveReason,
       afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m)) && !working(memberId, m)),
       activeMonths: ms.map((m) => working(memberId, m)),
     };
