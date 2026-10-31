@@ -20,7 +20,7 @@ import {
   planGapKindOf,
   setForecastPeriod,
 } from "../core/index.js";
-import { forecastMonthlyCost, grossMarginOf } from "./analysis.js";
+import { forecastMonthlyCost, grossMarginOf, memberNameAt } from "./analysis.js";
 import { money, monthJa } from "./format.js";
 import { planCellTooltip } from "./plan-cell.js";
 
@@ -210,7 +210,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     const key = `t${++tipSeq}`;
     tipContent.set(key, () => teamTip(node, mny));
     const delta = node.totalHeadcount - node.prevTotalHeadcount;
-    const leader = node.leaderMemberId ? (model.members.find((m) => m.memberId === node.leaderMemberId)?.name ?? node.leaderMemberId) : "";
+    const leader = node.leaderMemberId ? memberNameAt(model, node.leaderMemberId, month) : "";
     const over = mny.rate !== null && mny.rate < 0;
     // 応援・ヘルプのうち、その月に計画が無く実績だけの人は畳んでおく（スポットの作業で組織の人が埋もれないように）
     const planned = node.guests.filter((p) => p.plannedHours > 0);

@@ -110,3 +110,21 @@ describe("loadLevelOf", () => {
     expect(loadLevelOf(0)).toBe("none");
   });
 });
+
+describe("orgChartAt: 組織の付け替えとリーダー名（Codex レビュー）", () => {
+  const ds2 = dataset({
+    contracts: [contract({ contractId: "A", customerName: "A社", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 1_200_000 })],
+    mappings: [rule("A社", "", "A")],
+    teams: [team("R", null), team("PA", "R"), team("PB", "R"), team("T1", "PA", "2000-01"), team("T1", "PB", "2026-09")],
+    members: [member({ memberId: "M1", title: "SE", teamId: "T1", effectiveFrom: "2026-04" })],
+    rates: [rate("SE", 1000)],
+  });
+  const m2 = buildModel(ds2, { asOf: "2026-10-27" });
+
+  it("1 人のチームが PA から PB へ移ると、前月比は PA −1・PB +1（前月の木で数える）", () => {
+    const c = orgChartAt(m2, "2026-09");
+    expect([c.nodes.PA!.totalHeadcount, c.nodes.PA!.prevTotalHeadcount]).toEqual([0, 1]);
+    expect([c.nodes.PB!.totalHeadcount, c.nodes.PB!.prevTotalHeadcount]).toEqual([1, 0]);
+    expect([c.nodes.R!.totalHeadcount, c.nodes.R!.prevTotalHeadcount]).toEqual([1, 1]);
+  });
+});

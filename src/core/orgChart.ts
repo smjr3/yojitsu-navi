@@ -66,7 +66,7 @@ export interface OrgChartNode {
   /** 直属の人数（今月いる人）と前月の人数 */
   headcount: number;
   prevHeadcount: number;
-  /** 配下を含む人数（今月・前月） */
+  /** 配下を含む人数（今月は今月の組織、前月は前月の組織の配下で数える） */
   totalHeadcount: number;
   prevTotalHeadcount: number;
 }
@@ -168,6 +168,8 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
   }
 
   const unplaced: OrgPerson[] = [];
+  // 前月の直属の人数（前月の組織。今月の木に無いチームも数えて、配下の合計は前月の木でまとめる）
+  const prevDirect = new Map<string, number>();
   const ids = new Set<string>(idx.keys());
   for (const id of mmAt.keys()) ids.add(id);
   for (const memberId of [...ids].sort()) {
@@ -181,6 +183,7 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
       const tid = at(memberId, month)!.teamId;
       unplaced.push(person(memberId, tid, "own", null, null, linesOf(mmAt.get(memberId), null)));
     }
+    if (before) prevDirect.set(before, (prevDirect.get(before) ?? 0) + 1);
     if (before && Object.hasOwn(nodes, before)) {
       nodes[before]!.prevHeadcount += 1;
       if (before !== now) nodes[before]!.members.push(person(memberId, now, "own", "left", now, []));
@@ -208,12 +211,10 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
     n.members.sort((a, b) => Number(a.change === "left") - Number(b.change === "left") || byId(a, b));
     n.guests.sort((a, b) => (a.origin === b.origin ? byId(a, b) : a.origin === "support" ? -1 : 1));
   }
-  // 配下を含む人数（前月の人数は前月の組織で数える。今月の木に無い前月のチームは数えない）
+  // 配下を含む人数。前月は前月の組織の配下で数える（親の付け替えで増減が消えないように。前月に無かった組織は 0）
   for (const n of Object.values(nodes)) {
-    for (const d of n.descendantIds) {
-      n.totalHeadcount += nodes[d]?.headcount ?? 0;
-      n.prevTotalHeadcount += nodes[d]?.prevHeadcount ?? 0;
-    }
+    for (const d of n.descendantIds) n.totalHeadcount += nodes[d]?.headcount ?? 0;
+    for (const d of prevTree[n.teamId]?.descendantIds ?? []) n.prevTotalHeadcount += prevDirect.get(d) ?? 0;
   }
   return { month, prevMonth, rootTeamIds, nodes, unplaced };
 }
