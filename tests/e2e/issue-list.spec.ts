@@ -152,6 +152,8 @@ test("1 行で 1.0 を超える人月はエラーにしない（月合計の警�
   await expect(item(page, "1.0 を超えています")).toBeVisible();
   await expect(page.locator(".yn-me-issue-list > li.is-error")).toHaveCount(0);
   await expect(page.locator(".yn-me-issue-list")).not.toContainText("allocation");
+  // 保存（変更内容の確認）はできる
+  await expect(page.locator(".yn-me-check .yn-chip-danger")).toHaveCount(0);
   await appendAssignments(page, ["M011,C002,2027-07,2027-07,-1"]);
   await expect(page.locator(".yn-me-issue-list")).not.toContainText("allocation");
   await expect(item(page, "配分（人月）は 0 以上の数値")).toBeVisible();

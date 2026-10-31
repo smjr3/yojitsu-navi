@@ -315,6 +315,7 @@ export default {
     outsideUnknownMember: "{file} {row} 行目: 社員番号 {memberId} は members.csv に存在しません",
     outsideMonthInvalid: "{file} {row} 行目: {column} の形式が不正です: {value}",
     outsidePeriodInverted: "{file} {row} 行目: 開始月 {from} が終了月 {to} より後です",
+    outsideOver1: "{file} {row} 行目: 人月が 1.0 を超えています（{value}）。保存はできます",
     outsideOutOfRange: "{file} {row} 行目: 人月は 0 以上の数値で指定してください: {value}",
     outsideOverlap: "{file}: メンバー {memberId} の {month} の運用保守以外の予定（同じ種別）が複数の行（{rows}）にあります。1 か月 1 行にしてください",
     outsideUnknownType: "{file} {row} 行目: 種別「{type}」は task-types.csv の運用保守以外の種別にありません",

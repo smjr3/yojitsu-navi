@@ -157,6 +157,9 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     if (monthsOk && o.startMonth > o.endMonth) push({ severity: "error", code: "OUTSIDE_PERIOD_INVERTED", message: fmt(T.checks.outsidePeriodInverted, { file, row, from: o.startMonth, to: o.endMonth }), file, row });
     if (!Number.isFinite(o.personMonths) || o.personMonths < 0) {
       push({ severity: "error", code: "OUTSIDE_OUT_OF_RANGE", message: fmt(T.checks.outsideOutOfRange, { file, row, value: Number.isFinite(o.personMonths) ? String(o.personMonths) : T.checks.notANumber }), file, row, ref: { memberId: o.memberId } });
+    } else if (o.personMonths > 1 + 1e-9) {
+      // 1.0 超は保存できるが警告（2026-10-31 試用版のコメント「警告はしてほしいが、保存はできるように」）
+      push({ severity: "warning", code: "OUTSIDE_OVER_1", message: fmt(T.checks.outsideOver1, { file, row, value: String(o.personMonths) }), file, row, ref: { memberId: o.memberId } });
     }
     if (!monthsOk || o.startMonth > o.endMonth) return;
     for (const month of monthRange(o.startMonth, o.endMonth)) {

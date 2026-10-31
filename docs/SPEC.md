@@ -591,7 +591,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ### 36.4 契約外予定 `data/outside-plans.csv`（§30.5 の具体化）
 - 列: `member_id, start_month, end_month, person_months, note`（note は任意）。ファイルが無い・空・見出しだけなら「契約外予定なし」（エラーにしない）。画面で初めて保存するときは GitLab に新規作成（`action: create`）。
-- 検証（error）: 存在しないメンバー（`OUTSIDE_UNKNOWN_MEMBER`）、月の形式（`INVALID_MONTH`）、開始 > 終了（`OUTSIDE_PERIOD_INVERTED`）、人月が 0 以上の数値でない（`OUTSIDE_OUT_OF_RANGE`。1.0 超は受け付ける）、同じ人の同じ月に複数行（`OUTSIDE_OVERLAP`、重なりごとに 1 件）。
+- 検証（error）: 存在しないメンバー（`OUTSIDE_UNKNOWN_MEMBER`）、月の形式（`INVALID_MONTH`）、開始 > 終了（`OUTSIDE_PERIOD_INVERTED`）、人月が 0 以上の数値でない（`OUTSIDE_OUT_OF_RANGE`。1.0 超は受け付ける）、同じ人の同じ月に複数行（`OUTSIDE_OVERLAP`、重なりごとに 1 件）。1 行の人月が 1.0 超は警告（`OUTSIDE_OVER_1`。保存はできる）。
 - 保守の配分との合計が 1.0 を超えても保存は止めない（人の行に「1.0 超 n か月」チップ。赤は使わない）。予算・実績・着地見込み・計画額には入れない。表の下に「うち契約外予定」の月合計。
 
 ## 37. 画面の説明文の量（2026-10-28 指摘）
