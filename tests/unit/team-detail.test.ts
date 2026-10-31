@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aggregate, teamTreeForMonth } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
-import { teamMemberCosts, teamOrgChanges, teamPath } from "../../src/core/team-detail.js";
+import { originTotals, ownTeamScope, teamMemberCosts, teamOrgChanges, teamPath, workOriginOf } from "../../src/core/team-detail.js";
 import type { TeamRecord } from "../../src/core/types.js";
 import { contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
 
@@ -133,13 +133,52 @@ describe("teamMemberCosts (作業実績軸)", () => {
     }
   });
 
-  it("teamScope を渡すと所属が外の作業を応援として数える（所属なしも外）", () => {
+  it("teamScope を渡すと所属が外の作業を応援、所属なしをヘルプとして数える（§72）", () => {
     const rows = teamMemberCosts(model, ["A"], period, new Set(["T1"]));
     const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
-    expect(by.M1).toMatchObject({ outsideHours: 0, outsideAmount: 0 });
-    expect(by.M2).toMatchObject({ outsideHours: 20, outsideAmount: 20_000 });
-    expect(by.M3).toMatchObject({ outsideHours: 1, outsideAmount: 1_000 });
-    expect(teamMemberCosts(model, ["A"], period)[0]!.outsideHours).toBe(0);
+    expect(by.M1).toMatchObject({ supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0 });
+    expect(by.M2).toMatchObject({ supportHours: 20, supportAmount: 20_000, helpHours: 0 });
+    expect(by.M3).toMatchObject({ supportHours: 0, helpHours: 1, helpAmount: 1_000, memberUnknown: false });
+    // teamScope なし: 応援は判定しないが、所属なしはヘルプ
+    const plain = Object.fromEntries(teamMemberCosts(model, ["A"], period).map((r) => [r.memberId, r]));
+    expect(plain.M2!.supportHours).toBe(0);
+    expect(plain.M3!.helpHours).toBe(1);
+    expect(originTotals(rows)).toEqual({ supportHours: 20, supportAmount: 20_000, helpHours: 1, helpAmount: 1_000 });
+  });
+
+  it("使った単価と、ヘルプの人の部・課（当時）を返す。メンバーマスタに無い人もヘルプ", () => {
+    const ds2 = dataset({
+      contracts: [contract({ contractId: "A", customerName: "A社", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 1_200_000 })],
+      mappings: [rule("A社", "", "A")],
+      teams: [team("R", null), team("T1", "R")],
+      members: [
+        member({ memberId: "H1", title: "SE", teamId: null, department: "構築部", section: "基盤課" }),
+        member({ memberId: "H1", title: "SE", teamId: null, department: "構築部", section: "NW課", effectiveFrom: "2026-06" }),
+      ],
+      rates: [rate("SE", 1000)],
+      worklogs: [
+        worklog({ date: "2026-05-10", memberId: "H1", hours: 2, customerName: "A社" }),
+        worklog({ date: "2026-06-10", memberId: "H1", hours: 3, customerName: "A社" }),
+        worklog({ date: "2026-06-11", memberId: "X9", memberName: "臨時", hours: 4, customerName: "A社" }),
+      ],
+    });
+    const m2 = buildModel(ds2, { asOf: "2026-10-27" });
+    const rows = teamMemberCosts(m2, ["A"], period, ownTeamScope(m2.teamTree, "T1"));
+    const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
+    expect(by.H1).toMatchObject({ helpHours: 5, helpAmount: 5_000, rates: [1000], orgLabels: ["構築部 NW課", "構築部 基盤課"], memberUnknown: false });
+    expect(by.X9).toMatchObject({ helpHours: 4, helpAmount: 0, memberUnknown: true, orgLabels: [] });
+  });
+
+  it("ownTeamScope は配下と上位を含む（課長・部長の作業を応援にしない）", () => {
+    const tree = model.teamTree;
+    expect([...ownTeamScope(tree, "T1")].sort()).toEqual(["R", "T1"]);
+    expect([...ownTeamScope(tree, "R")].sort()).toEqual(["R", "T1", "T2"]);
+    expect(ownTeamScope(tree, "").size).toBe(0);
+    expect(ownTeamScope(tree, "ZZ").size).toBe(0);
+    expect(workOriginOf(null, null)).toBe("help");
+    expect(workOriginOf("T2", new Set(["T1"]))).toBe("support");
+    expect(workOriginOf("T2", new Set())).toBe("own");
+    expect(workOriginOf("T1", new Set(["T1"]))).toBe("own");
   });
 
   it("期間で絞る・契約が空・作業なしは空配列", () => {

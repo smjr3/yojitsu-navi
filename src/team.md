@@ -12,7 +12,7 @@ title: チーム詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, setForecastPeriod, teamMemberCosts, teamOrgChanges, targetForMonth, teamPath } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, originTotals, ownTeamScope, setForecastPeriod, teamMemberCosts, teamOrgChanges, targetForMonth, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
@@ -24,7 +24,7 @@ import { monthlyChart, monthlyLegend, seriesTable, withTargets } from "./compone
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
-import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS } from "./components/team-detail.js";
+import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS, originChips, originOrgText } from "./components/team-detail.js";
 import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
@@ -68,7 +68,11 @@ const vm = (() => {
   const series = seriesWithForecast(model, scope, state.method);
   const compare = priorYearComparison(model, scope);
   const path = isUnassigned ? [] : teamPath(tree, teamId);
+  // メンバー別の実績と応援・ヘルプの合計（§72）。担当組織 = このチームと配下・上位
+  const memberCosts = teamMemberCosts(model, contractIds, period, isUnassigned ? null : ownTeamScope(tree, teamId));
   return {
+    memberCosts,
+    origin: originTotals(memberCosts),
     ...base,
     exists: true,
     name,
@@ -140,7 +144,7 @@ if (vm && !vm.exists && teamId) {
 ```js
 if (vm?.exists) {
   display(sectionTitle(T.team.summaryTitle, fmt(T.team.summaryHint, { period: periodJa(vm.period), team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, month: monthJa(vm.treeMonth) })));
-  display(summaryKpis({ model, store, scope: vm.scope, totals: vm.totals, forecast: vm.forecast, compare: vm.compare, fy: vm.fy, unit: vm.unit }));
+  display(summaryKpis({ model, store, scope: vm.scope, totals: vm.totals, forecast: vm.forecast, compare: vm.compare, fy: vm.fy, unit: vm.unit, origin: vm.origin }));
 }
 ```
 
@@ -255,13 +259,8 @@ if (vm?.exists) {
 if (vm?.exists) {
   const { period, unit, tree } = vm;
   const inCount = vm.totals.contractCount;
-  const teamScope = vm.node ? new Set(vm.node.descendantIds) : null;
-  const rows = teamMemberCosts(model, vm.contractIds, period, teamScope).map((r) => ({
-    ...r,
-    key: r.memberId,
-    teams: r.teamIds.map((id) => tree[id]?.name ?? model.teams.find((t) => t.teamId === id)?.name ?? id).join("、") || "—",
-    isSupport: r.outsideHours > 0,
-  }));
+  const teamName = (id) => tree[id]?.name ?? model.teams.find((t) => t.teamId === id)?.name ?? id;
+  const rows = vm.memberCosts.map((r) => ({ ...r, key: r.memberId, teams: originOrgText(r, teamName) }));
   display(sectionTitle(T.team.membersTitle, fmt(T.team.membersHint, { period: periodJa(period), team: vm.name, count: inCount > 0 ? fmt(T.team.countParen, { n: inCount }) : "", support: vm.isUnassigned ? "" : T.team.supportNote })));
   if (rows.length === 0) {
     display(emptyState({ title: T.team.noWorkTitle, text: T.team.noWorkText, icon: "○" }));
@@ -272,7 +271,7 @@ if (vm?.exists) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
-        render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${r.isSupport ? html` ${statusChip("neutral", T.team.support, T.team.supportTitle)}` : ""}`,
+        render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.team.supportTitle)}`,
         sortValue: (r) => r.memberName,
       },
       { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },

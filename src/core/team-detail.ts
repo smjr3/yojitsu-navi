@@ -4,7 +4,7 @@
  * いずれも純粋関数。組織の変遷は model.teams（履歴）だけから求める。
  */
 import { addMonths } from "./calendar.js";
-import type { ContractResult, Model, Period, TeamNode, TeamRecord, YearMonth } from "./types.js";
+import type { ContractResult, MemberRecord, Model, Period, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // 組織の変遷
@@ -122,6 +122,30 @@ export function teamPath(tree: Record<string, TeamNode>, teamId: string): TeamNo
 // メンバー別原価（作業実績軸）
 // ---------------------------------------------------------------------------
 
+/**
+ * 作業した人と案件の担当組織の関係（§72）
+ * - own: 担当組織（配下・上位を含む）に所属
+ * - support: 応援。管理対象の組織に所属しているが、担当組織の外
+ * - help: ヘルプ。所属チームが無い（他部署）か、メンバーマスタに無い人
+ */
+export type WorkOrigin = "own" | "support" | "help";
+
+/** 担当組織とみなすチームID: 自分・配下・上位（課長・部長が配下チームの案件をしても応援にしない）。木に無ければ空 */
+export function ownTeamScope(tree: Record<string, TeamNode>, teamId: string | null | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!teamId || !tree[teamId]) return out;
+  for (const id of tree[teamId]!.descendantIds) out.add(id);
+  for (const n of teamPath(tree, teamId)) out.add(n.teamId);
+  return out;
+}
+
+/** 原価行の所属チーム（当時）から応援・ヘルプを判定する。teamScope が null（担当組織なし）のときは応援を判定しない */
+export function workOriginOf(memberTeamId: string | null, teamScope: ReadonlySet<string> | null): WorkOrigin {
+  if (!memberTeamId) return "help";
+  if (teamScope && teamScope.size > 0 && !teamScope.has(memberTeamId)) return "support";
+  return "own";
+}
+
 export interface TeamMemberCost {
   memberId: string;
   memberName: string;
@@ -135,21 +159,32 @@ export interface TeamMemberCost {
   /** 当時の所属チーム（CostLine.memberTeamId の種類。空は含めない） */
   teamIds: string[];
   rateMissing: boolean;
-  /** 所属が teamScope の外の作業（応援）の時間・原価。teamScope を渡さなければ 0 */
-  outsideHours: number;
-  outsideAmount: number;
+  /** 使った時間単価（重複なし・昇順） */
+  rates: number[];
+  /** 応援（所属が teamScope の外）の時間・原価。teamScope を渡さなければ 0 */
+  supportHours: number;
+  supportAmount: number;
+  /** ヘルプ（所属チームなし・メンバーマスタに無い人）の時間・原価 */
+  helpHours: number;
+  helpAmount: number;
+  /** メンバーマスタに無い（ヘルプのうち、単価が引けない人） */
+  memberUnknown: boolean;
+  /** 所属チームが無い月の部・課（当時。メンバーマスタの department・section） */
+  orgLabels: string[];
   /** 全体に対する構成比（合計 0 のとき null） */
   share: number | null;
 }
 
 /**
  * 契約 contractIds の期間内の CostLine を、作業した人ごとに合算する。
- * 所属チームがどこでも含める（作業実績軸）。teamScope（チームと配下のID）を渡すと、所属がその外の作業を outside* に数える。
+ * 所属チームがどこでも含める（作業実績軸）。所属チームの無い人の作業は help* に数える。
+ * teamScope（ownTeamScope の結果）を渡すと、所属がその外の作業を support* に数える（§72）。
  * 並びは原価の大きい順、同額は memberId 順。合計は同じ契約・期間の aggregate().cost（labor のみのとき）と一致する。
  */
 export function teamMemberCosts(model: Model, contractIds: readonly string[], period: Period, teamScope: ReadonlySet<string> | null = null): TeamMemberCost[] {
   const set = new Set(contractIds);
-  const acc = new Map<string, TeamMemberCost & { months: Set<YearMonth>; contracts: Set<string>; teams: Set<string> }>();
+  const acc = new Map<string, TeamMemberCost & { months: Set<YearMonth>; contracts: Set<string>; teams: Set<string>; rateSet: Set<number>; orgs: Set<string> }>();
+  const known = new Set(model.members.map((m) => m.memberId));
   let total = 0;
   for (const r of model.contracts as ContractResult[]) {
     if (!set.has(r.contract.contractId)) continue;
@@ -158,7 +193,7 @@ export function teamMemberCosts(model: Model, contractIds: readonly string[], pe
       for (const l of cm.costLines) {
         let a = acc.get(l.memberId);
         if (!a) {
-          a = { memberId: l.memberId, memberName: l.memberName, hours: 0, amount: 0, monthCount: 0, contractIds: [], teamIds: [], rateMissing: false, outsideHours: 0, outsideAmount: 0, share: null, months: new Set(), contracts: new Set(), teams: new Set() };
+          a = { memberId: l.memberId, memberName: l.memberName, hours: 0, amount: 0, monthCount: 0, contractIds: [], teamIds: [], rateMissing: false, rates: [], supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0, memberUnknown: !known.has(l.memberId), orgLabels: [], share: null, months: new Set(), contracts: new Set(), teams: new Set(), rateSet: new Set(), orgs: new Set() };
           acc.set(l.memberId, a);
         }
         a.hours += l.hours;
@@ -166,16 +201,54 @@ export function teamMemberCosts(model: Model, contractIds: readonly string[], pe
         a.rateMissing ||= l.rateMissing;
         a.months.add(cm.month);
         a.contracts.add(r.contract.contractId);
+        a.rateSet.add(l.hourlyRate);
         if (l.memberTeamId) a.teams.add(l.memberTeamId);
-        if (teamScope && !(l.memberTeamId && teamScope.has(l.memberTeamId))) {
-          a.outsideHours += l.hours;
-          a.outsideAmount += l.amount;
+        const origin = workOriginOf(l.memberTeamId, teamScope);
+        if (origin === "help") {
+          a.helpHours += l.hours;
+          a.helpAmount += l.amount;
+          const org = orgLabelAt(model.members, l.memberId, cm.month);
+          if (org) a.orgs.add(org);
+        } else if (origin === "support") {
+          a.supportHours += l.hours;
+          a.supportAmount += l.amount;
         }
         total += l.amount;
       }
     }
   }
   return [...acc.values()]
-    .map(({ months, contracts, teams, ...a }) => ({ ...a, monthCount: months.size, contractIds: [...contracts].sort(), teamIds: [...teams].sort(), share: total !== 0 ? a.amount / total : null }))
+    .map(({ months, contracts, teams, rateSet, orgs, ...a }) => ({ ...a, monthCount: months.size, contractIds: [...contracts].sort(), teamIds: [...teams].sort(), rates: [...rateSet].sort((x, y) => x - y), orgLabels: [...orgs].sort(), share: total !== 0 ? a.amount / total : null }))
     .sort((a, b) => b.amount - a.amount || (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0));
+}
+
+/** その月のメンバーレコードの部・課（「部 課」。どちらも空なら事業本部、それも空なら空文字） */
+function orgLabelAt(members: readonly MemberRecord[], memberId: string, month: YearMonth): string {
+  let best: MemberRecord | null = null;
+  for (const r of members) {
+    if (r.memberId !== memberId || r.effectiveFrom > month) continue;
+    if (!best || r.effectiveFrom >= best.effectiveFrom) best = r;
+  }
+  if (!best) return "";
+  const dept = [best.department, best.section].filter((x) => x && x.trim() !== "").join(" ");
+  return dept || (best.division ?? "");
+}
+
+export interface OriginTotals {
+  supportHours: number;
+  supportAmount: number;
+  helpHours: number;
+  helpAmount: number;
+}
+
+/** teamMemberCosts の応援・ヘルプの合計 */
+export function originTotals(rows: readonly TeamMemberCost[]): OriginTotals {
+  const t: OriginTotals = { supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0 };
+  for (const r of rows) {
+    t.supportHours += r.supportHours;
+    t.supportAmount += r.supportAmount;
+    t.helpHours += r.helpHours;
+    t.helpAmount += r.helpAmount;
+  }
+  return t;
 }

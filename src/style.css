@@ -728,6 +728,11 @@ h3 {
 .yn-chip-icon {
   font-size: 10px;
 }
+/* ヘルプ（他部署の人。§71）: 応援（塗り）と見分けられるよう枠線だけ */
+.yn-chip-help {
+  background: transparent;
+  border: 1px solid var(--yn-hairline-strong);
+}
 
 /* ---------------------------------------------------------------------------
  * ボタン・入力

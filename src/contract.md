@@ -13,7 +13,7 @@ title: 案件詳細
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } from "./core/index.js";
-import { customerKey, targetForMonth } from "./core/index.js";
+import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCosts } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
@@ -26,6 +26,7 @@ import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from
 import { dataTable } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
+import { originChips, originOrgText, withOrigin } from "./components/team-detail.js";
 import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, methodDescription, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
@@ -70,7 +71,9 @@ const vm = (() => {
   const series = seriesWithForecast(model, scope, state.method);
   const months = result.months.filter((m) => period.from <= m.month && m.month <= period.to);
   const { tree } = treeAt(model, treeMonthFor(model, period));
-  return { contract: c, result, period, inRange, totals, series, months, endForecasts, isWhole, unit: state.unit, method: state.method, teamLabel: contractTeamName(model, c, tree) };
+  // メンバー別の実績と応援・ヘルプ（§72）。担当組織 = 主担当チームと配下・上位
+  const memberCosts = teamMemberCosts(model, [c.contractId], period, ownTeamScope(tree, c.teamId));
+  return { contract: c, result, period, inRange, totals, series, months, endForecasts, isWhole, unit: state.unit, method: state.method, teamLabel: contractTeamName(model, c, tree), memberCosts, origin: originTotals(memberCosts) };
 })();
 ```
 
@@ -138,7 +141,7 @@ if (vm) {
   display(
     kpiRow([
       statTile({ label: fmt(T.contract.budgetPeriod, { period: periodJa(period) }), value: money(totals.budget, unit), sub: `${totals.contractCount ? period.from === c.startMonth && period.to === c.endMonth ? T.contract.wholePeriod : T.contract.sumInPeriod : ""}`, breakdown: () => bd.budgetAggregateSpec({ model, contractIds: [c.contractId], period, unit }) }),
-      statTile({ label: T.columns.cost, value: money(totals.cost, unit), sub: fmt(T.contract.costSub, { hours: formatHours(totals.hours), pm: totals.personMonthsStandard.toFixed(2) }), breakdown: () => bd.costAggregateSpec({ model, contractIds: [c.contractId], period, unit }) }),
+      statTile({ label: T.columns.cost, value: money(totals.cost, unit), sub: withOrigin(fmt(T.contract.costSub, { hours: formatHours(totals.hours), pm: totals.personMonthsStandard.toFixed(2) }), vm.origin, unit), breakdown: () => bd.costAggregateSpec({ model, contractIds: [c.contractId], period, unit }) }),
       statTile({
         label: T.kpi.grossProfit,
         value: money(totals.grossProfit, unit),
@@ -265,26 +268,14 @@ if (vm) {
 ```js
 if (vm) {
   const { contract: c, months, unit } = vm;
-  const byMember = new Map();
-  for (const m of months) {
-    for (const l of m.costLines) {
-      let acc = byMember.get(l.memberId);
-      if (!acc) byMember.set(l.memberId, (acc = { key: l.memberId, memberId: l.memberId, memberName: l.memberName, hours: 0, amount: 0, months: 0, rateMissing: false, teams: new Set(), rates: new Set() }));
-      acc.hours += l.hours;
-      acc.amount += l.amount;
-      acc.months += 1;
-      acc.rateMissing ||= l.rateMissing;
-      if (l.memberTeamId) acc.teams.add(model.teamTree[l.memberTeamId]?.name ?? l.memberTeamId);
-      acc.rates.add(l.hourlyRate);
-    }
-  }
-  const rows = [...byMember.values()].map((r) => ({ ...r, teams: [...r.teams].join("、") || "—", rateText: [...r.rates].map((x) => money(x, "yen")).join(" / "), share: vm.totals.cost ? r.amount / vm.totals.cost : null, isOtherTeam: c.teamId && [...r.teams].length && ![...r.teams].includes(model.teamTree[c.teamId]?.name) }));
+  const teamName = (id) => model.teamTree[id]?.name ?? model.teams.find((t) => t.teamId === id)?.name ?? id;
+  const rows = vm.memberCosts.map((r) => ({ ...r, key: r.memberId, teams: originOrgText(r, teamName), rateText: r.rates.map((x) => money(x, "yen")).join(" / "), months: r.monthCount }));
   display(sectionTitle(T.team.membersTitle, fmt(T.contract.membersHint, { period: periodJa(vm.period) })));
   const columns = [
-    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}` },
+    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`, sortValue: (r) => r.memberName },
     { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
     { key: "hours", label: T.columns.hours, type: "hours" },
-    { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: T.contract.rateExportLabel, exportValue: (r) => (r.rates.size === 1 ? [...r.rates][0] : [...r.rates].join(" / ")) },
+    { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: T.contract.rateExportLabel, exportValue: (r) => (r.rates.length === 1 ? r.rates[0] : r.rates.join(" / ")) },
     { key: "amount", label: T.columns.cost, type: "moneyYen" },
     { key: "share", label: T.team.colShare, type: "percent" },
     { key: "months", label: T.team.colWorkMonths, type: "int", hideOnPhone: true },
