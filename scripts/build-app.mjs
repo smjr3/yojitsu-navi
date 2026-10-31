@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { isImage } from "./lib/image-detect.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const PKG = join(ROOT, "packages/app");
@@ -91,7 +92,15 @@ console.log(`packages/app を作りました（template ${templateFiles(ROOT).le
 // 4. pack
 if (flag("pack")) {
   const out = execFileSync("npm", ["pack", "--json"], { cwd: PKG, encoding: "utf-8" });
-  const name = JSON.parse(out)[0].filename;
+  const packed = JSON.parse(out)[0];
+  const name = packed.filename;
+  // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）。依存（deps/）は外部の npm パッケージなので見ない
+  const images = packed.files.map((f) => f.path).filter((f) => !f.startsWith("deps/") && isImage(f, join(PKG, f)));
+  if (images.length) {
+    rmSync(join(PKG, name), { force: true });
+    console.error(`パッケージに画像が入っています（入れない）: ${images.join(", ")}`);
+    process.exit(1);
+  }
   let file = name;
   if (flag("with-deps")) {
     file = name.replace(/\.tgz$/, "-with-deps.tgz");

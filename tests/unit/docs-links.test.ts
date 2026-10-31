@@ -1,13 +1,17 @@
 /**
  * 文書の古いリンクを残さない・画像を置かない（CONTRIBUTING.md「ドキュメントは同じ変更の中で直す」）
  *   - README・CONTRIBUTING・docs/*.md・tests/e2e/README.md の相対リンクの参照先が存在する
- *   - 文書に画像（スクリーンショット）を載せない。リポジトリに画像ファイルを置かない（画面を変えるたびに古くなるため）
+ *   - 文書に画像（スクリーンショット・バッジ）を載せない。リポジトリに画像ファイルを置かない
+ *     （画面を変えるたびに古くなり、npm パッケージも無駄に大きくなるため）。拡張子と中身（先頭のバイト）の両方で調べ、
+ *     どうしても必要なものだけ IMAGE_ALLOWLIST に理由つきで足す（今は 0 件）
  *   - npm run の名前が package.json にある
  */
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+// @ts-expect-error 型定義の無い .mjs（scripts/build-app.mjs と共通）
+import { isImage } from "../../scripts/lib/image-detect.mjs";
 
 const ROOT = join(__dirname, "..", "..");
 const DOCS = ["README.md", "CONTRIBUTING.md", "tests/e2e/README.md", ...readdirSync(join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
@@ -30,7 +34,7 @@ describe.each(DOCS)("%s", (file) => {
   });
 
   it("画像を載せていない", () => {
-    const images = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|<img\b[^>]*>/gi)].map((m) => m[0]);
+    const images = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|<img\b[^>]*>|<picture\b[^>]*>|<svg\b[^>]*>|^\[[^\]]+\]:\s*\S+\.(?:png|jpe?g|gif|webp|svg|avif)\b/gim)].map((m) => m[0]);
     expect(images).toEqual([]);
   });
 
@@ -46,6 +50,20 @@ const repoFiles = () =>
     .split("\n")
     .filter((f) => f && existsSync(join(ROOT, f)));
 
-it("リポジトリに画像ファイルを置いていない", () => {
-  expect(repoFiles().filter((f) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f))).toEqual([]);
+/**
+ * リポジトリに置いてよい画像（パス → 理由）。どうしても必要なときだけ理由つきで足す。
+ * favicon・アイコンも置かない（Observable Framework の既定で足りる。フォントは画像ではない）
+ */
+const IMAGE_ALLOWLIST: Record<string, string> = {};
+
+it("リポジトリに画像ファイルを置いていない（拡張子・中身の両方。許可リスト以外）", () => {
+  const images = repoFiles().filter((f) => !(f in IMAGE_ALLOWLIST) && isImage(f, join(ROOT, f)));
+  expect(images).toEqual([]);
+});
+
+it("画像の許可リストに理由があり、実在する", () => {
+  for (const [f, why] of Object.entries(IMAGE_ALLOWLIST)) {
+    expect(why.trim(), f).not.toBe("");
+    expect(existsSync(join(ROOT, f)), f).toBe(true);
+  }
 });
