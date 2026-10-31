@@ -508,6 +508,8 @@ export interface Model {
   members: MemberRecord[];
   /** 作業実績のある「メンバー|月」（"memberId|YYYY-MM"。§35。リソース計画で不在になった月を稼働とみなすかの判定に使う） */
   worklogMonths: string[];
+  /** 運用保守以外の実績がある「メンバー|月|種別」（"memberId|YYYY-MM|種別"。§50.3。リソース計画で、その人に出す種別の行を決める） */
+  outsideWorkMonths: string[];
   /** 画面側で過去月の組織（teamTreeAt）を引くための履歴 */
   teams: TeamRecord[];
   /** 画面側で月の状態・営業日を再計算するための祝日 */

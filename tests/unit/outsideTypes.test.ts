@@ -91,6 +91,12 @@ describe("契約外の種別（§50.1）", () => {
   });
 });
 
+describe("運用保守以外の実績がある「メンバー|月|種別」（§50.3。リソース計画で人ごとに出す種別）", () => {
+  it("作業実績から種別（group）ごとに 1 つ。契約内・実績の無い種別は入らない", () => {
+    expect(buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" }).outsideWorkMonths).toEqual([`M1|${m(0)}|会社業務`, `M1|${m(0)}|提案`]);
+  });
+});
+
 describe("顧客名なしの契約外（§50.2）", () => {
   const model = buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" });
   it("契約外は工数の明細に残り、契約内の顧客名なしだけ除外", () => {

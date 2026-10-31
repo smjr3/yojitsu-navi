@@ -105,7 +105,7 @@ test("空のセルから案件を候補で選んで追加（0 で外す、数値
   // 案件を選ばずに人月だけ → 案内
   await p.locator("#yn-plan-pop-new").fill("0.2");
   await p.getByRole("button", { name: "反映" }).click();
-  await expect(p.locator(".yn-me-form-msg")).toContainText("案件を選んでください");
+  await expect(p.locator(".yn-me-form-msg")).toContainText("作業を選んでください");
   // 数値でない → 案内
   await p.locator("#yn-plan-pop-new").fill("abc");
   await p.getByRole("button", { name: "反映" }).click();

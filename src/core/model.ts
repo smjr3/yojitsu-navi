@@ -159,6 +159,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     members: dataset.members,
     // 作業実績のある「メンバー|月」（§35。リソース計画で、編集中の台帳の不在した月を稼働とみなすかの判定に使う）
     worklogMonths: [...workedMonthKeys({ worklogs: dataset.worklogs })].sort(),
+    // 運用保守以外の実績がある「メンバー|月|種別」（§50.3。リソース計画で、その人に出す種別の行を決める）
+    outsideWorkMonths: [...new Set(outsideIn.filter((o) => o.worklog.hours > 0).map((o) => `${o.worklog.memberId}|${o.month}|${classifier.classifyWorklog(o.worklog).group}`))].sort(),
     teams: dataset.teams,
     holidays: dataset.holidays,
     warnings,
