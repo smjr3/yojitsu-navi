@@ -9,7 +9,7 @@
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
  *               filter?: "values"|"range"|false（見出しの絞り込み。既定は数値列 range・それ以外 values）, filterValue?(row) -> string|string[] }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
- *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効）,
+ *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
  *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
  *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
  *   filter?: false（列ごとの絞り込みを付けない）,
@@ -211,6 +211,27 @@ const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden
 
 let filterPopSeq = 0;
 
+/**
+ * 木構造の表の絞り込み: 一致した行と、その祖先（親子の位置を保つ）を元の並びのまま残す。
+ * onKeys(一致した key の集合, 残った子を持つ key の集合)
+ */
+export function treeFilteredRows(rows, matched, onKeys = () => {}) {
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const keys = new Set(matched.map((r) => r.key));
+  const keep = new Set(keys);
+  const parents = new Set();
+  for (const r of matched) {
+    let p = r.parentKey;
+    while (p !== null && p !== undefined && byKey.has(p)) {
+      parents.add(p);
+      keep.add(p);
+      p = byKey.get(p)?.parentKey ?? null;
+    }
+  }
+  onKeys(keys, parents);
+  return rows.filter((r) => keep.has(r.key));
+}
+
 /** ファイル名に使えない文字を _ に（契約IDがそのまま入るため） */
 export function safeFileName(name) {
   return String(name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "export";
@@ -294,8 +315,9 @@ export function dataTable({
   const collapsed = new Set();
   let currentRows = rows;
 
-  // 列ごとの絞り込み（SPEC §70）。木構造の表には付けない。並べ替えと同じくタブ単位で覚える
-  const filterable = !tree && filter !== false && rows.length > 0;
+  // 列ごとの絞り込み（SPEC §70）。並べ替えと同じくタブ単位で覚える。
+  // 木構造の表は一致した行とその親（親子の位置を保つための行。薄く出す）を残す
+  const filterable = filter !== false && rows.length > 0;
   const filterMemoKey = filterable && caption ? `yojitsu-navi:filter:${location.pathname}:${caption}` : null;
   /** @type {Map<string, any>} 列 key → {q, values} | {min, max} */
   const filters = new Map();
@@ -326,11 +348,22 @@ export function dataTable({
     }
   };
   const activeFilters = () => [...filters].filter(([, f]) => isActiveFilter(f));
+  /** 絞り込みに一致した行（木構造の表で、親として残すだけの行と区別する） */
+  let matchedKeys = null;
+  /** 木構造の表で、絞り込み後も子が残っている行（開閉ボタンを出す行） */
+  let parentsShown = null;
   function filteredRows() {
     const act = activeFilters();
+    matchedKeys = null;
+    parentsShown = null;
     if (act.length === 0) return rows;
     const cols = act.map(([key, f]) => [visibleCols.find((c) => c.key === key), f]).filter(([c]) => c);
-    return rows.filter((r) => cols.every(([c, f]) => matchesFilter(c, f, r, unit)));
+    const matched = rows.filter((r) => cols.every(([c, f]) => matchesFilter(c, f, r, unit)));
+    if (!tree) return matched;
+    return treeFilteredRows(rows, matched, (keys, parents) => {
+      matchedKeys = keys;
+      parentsShown = parents;
+    });
   }
 
   const table = html`<table class="yn-table" id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
@@ -342,7 +375,7 @@ export function dataTable({
     if (tree) {
       // 折りたたみ: 祖先が collapsed なら非表示
       const byKey = new Map(rows.map((r) => [r.key, r]));
-      return rows.filter((r) => {
+      return filteredRows().filter((r) => {
         let p = r.parentKey;
         while (p !== null && p !== undefined) {
           if (collapsed.has(p)) return false;
@@ -428,7 +461,8 @@ export function dataTable({
   function renderRow(row, i) {
     const href = rowHref ? rowHref(row) : null;
     const danger = row.isDanger || rowDeficit(row) || row.isOverBudget;
-    const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
+    const context = tree && matchedKeys !== null && !matchedKeys.has(row.key);
+    const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
       const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
@@ -438,7 +472,7 @@ export function dataTable({
         if (tree) {
           const indent = html`<span class="yn-tree-indent" style=${`--depth:${row.depth ?? 0}`}></span>`;
           cell.append(indent);
-          if (row.hasChildren) {
+          if (row.hasChildren && (parentsShown === null || parentsShown.has(row.key))) {
             const open = !collapsed.has(row.key);
             const toggle = html`<button type="button" class="yn-tree-toggle" aria-expanded=${open ? "true" : "false"} aria-label=${fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" })}><span aria-hidden="true">${open ? "▾" : "▸"}</span></button>`;
             toggle.addEventListener("click", (ev) => {
@@ -498,7 +532,9 @@ export function dataTable({
     }
     renderSummary();
     if (count)
-      count.textContent = tree
+      count.textContent = tree && filtered
+        ? fmt(T.table.rowCountFiltered, { shown: integer(matchedKeys?.size ?? 0), n: integer(rows.length) })
+        : tree
         ? currentRows.length < rows.length
           ? fmt(T.table.rowCountTreeCollapsed, { shown: integer(currentRows.length), n: integer(rows.length) })
           : fmt(T.table.rowCountTree, { n: integer(rows.length) })
@@ -761,7 +797,8 @@ export function dataTable({
   const exportBtn = exportName
     ? exportButton(() => ({
         columns: exportCols,
-        rows: tree ? rows.map((r) => ({ ...r, name: `${"　".repeat(r.depth ?? 0)}${r.name ?? ""}` })) : currentRows,
+        // 木構造は折りたたみに関係なく全行（絞り込み中は一致した行とその親）
+        rows: tree ? filteredRows().map((r) => ({ ...r, name: `${"　".repeat(r.depth ?? 0)}${r.name ?? ""}` })) : currentRows,
         unit,
         name: exportName,
         sheet: caption ?? exportName,

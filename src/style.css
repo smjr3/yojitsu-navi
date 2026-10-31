@@ -1691,6 +1691,12 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-table tr.yn-depth-1 th {
   font-weight: 600;
 }
+/* 木構造の表の絞り込み: 一致した行の親（位置を示すために残す行）は薄く */
+.yn-table tr.is-filter-context:not(.is-danger) th,
+.yn-table tr.is-filter-context:not(.is-danger) td {
+  color: var(--yn-text-muted);
+  font-weight: 400;
+}
 
 /* スマホ幅だけで出す補足（列を隠したときの代わり） */
 .only-phone {
