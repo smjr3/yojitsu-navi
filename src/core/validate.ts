@@ -97,7 +97,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     if (!isValidYearMonth(a.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentStartMonthInvalid, { file, row, value: a.startMonth }), file, row });
     if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentEndMonthInvalid, { file, row, value: a.endMonth }), file, row });
     if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: fmt(T.checks.assignmentPeriodInverted, { file, row, from: a.startMonth, to: a.endMonth }), file, row });
-    if (!Number.isFinite(a.allocation) || a.allocation < 0 || a.allocation > 1) {
+    if (!Number.isFinite(a.allocation) || a.allocation < 0) {
       push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: fmt(T.checks.allocationOutOfRange, { file, row, value: Number.isFinite(a.allocation) ? String(a.allocation) : T.checks.notANumber }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
       return;
     }
@@ -155,7 +155,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     if (!isValidYearMonth(o.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "end_month", value: o.endMonth }), file, row });
     const monthsOk = isValidYearMonth(o.startMonth) && isValidYearMonth(o.endMonth);
     if (monthsOk && o.startMonth > o.endMonth) push({ severity: "error", code: "OUTSIDE_PERIOD_INVERTED", message: fmt(T.checks.outsidePeriodInverted, { file, row, from: o.startMonth, to: o.endMonth }), file, row });
-    if (!Number.isFinite(o.personMonths) || o.personMonths < 0 || o.personMonths > 1) {
+    if (!Number.isFinite(o.personMonths) || o.personMonths < 0) {
       push({ severity: "error", code: "OUTSIDE_OUT_OF_RANGE", message: fmt(T.checks.outsideOutOfRange, { file, row, value: Number.isFinite(o.personMonths) ? String(o.personMonths) : T.checks.notANumber }), file, row, ref: { memberId: o.memberId } });
     }
     if (!monthsOk || o.startMonth > o.endMonth) return;

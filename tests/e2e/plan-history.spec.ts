@@ -142,9 +142,9 @@ test("＋ 変更: 0 で計画を外すと「計画なし」。この月だけ・
   await expect(cell(page, "M012", "2026-08")).toHaveText("0.90");
   // 入力の誤り
   await proj.getByRole("button", { name: /人月を、ある月から変える/ }).click();
-  await d.locator("#yn-me-f-__value").fill("1.5");
+  await d.locator("#yn-me-f-__value").fill("-0.5");
   await d.getByRole("button", { name: "反映" }).click();
-  await expect(d.locator(".yn-me-form-msg")).toContainText("0〜1.0");
+  await expect(d.locator(".yn-me-form-msg")).toContainText("0 以上");
   await d.locator("#yn-me-f-__value").fill("");
   await d.getByRole("button", { name: "反映" }).click();
   await expect(d.locator(".yn-me-form-msg")).toContainText("人月を入れてください");

@@ -317,7 +317,7 @@ describe("validateEdited", () => {
     d.rates = addRow(d.rates, { key: "", hourly_rate: "", effective_from: "" }).doc; // 空行は書き出さない
     const r = addRow(d.rates, { key: "課長", hourly_rate: "abc", effective_from: "2026-13" });
     d.rates = r.doc;
-    d.assignments = updateRow(d.assignments, "o0", { member_id: "M404", allocation: "1.5" });
+    d.assignments = updateRow(d.assignments, "o0", { member_id: "M404", allocation: "-0.5" });
     const v = validateEdited(d, context, baseConfig);
     expect(v.errors).toBeGreaterThanOrEqual(4);
     const rateIssues = v.byRow.rates[r.rowId]!.map((i) => i.code).sort();

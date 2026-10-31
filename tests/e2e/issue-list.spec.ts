@@ -38,10 +38,10 @@ test("1.0 超は警告: 保存は止めず、人の名前で 1 件（続いた�
 
 test("エラーは赤・警告は黄。エラーを先に並べ、押すとその履歴の行へ（絞り込み・組織・表示する月を合わせる）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
-  await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2027-05,2027-06,1.5"]);
+  await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2027-05,2027-06,-1.5"]);
   const list = page.locator(".yn-me-issue-list > li");
   await expect(list.first()).toHaveClass(/is-error/);
-  const err = item(page, "0〜1 で指定してください");
+  const err = item(page, "0 以上の数値で指定してください");
   await expect(err.locator(".yn-me-issue-subject")).toHaveText("小林 玲奈 ・ 倉庫管理システム保守");
   await expect(err.locator(".yn-chip")).toHaveClass(/yn-chip-danger/);
   const bg = (sel: ReturnType<Page["locator"]>) => sel.locator(".yn-me-issue-link").evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -56,14 +56,14 @@ test("エラーは赤・警告は黄。エラーを先に並べ、押すとそ�
   await page.locator("#yn-me-plan-q").fill("該当なしの名前");
   await expect(page.locator(".yn-me-plan-table tbody")).toContainText("条件に合う人がいません");
   await err.getByRole("button").click();
-  const entry = page.locator("li.yn-me-plan-entry", { hasText: "1.50 人月" });
+  const entry = page.locator("li.yn-me-plan-entry", { hasText: "-1.50 人月" });
   await expect(entry).toBeVisible();
   await expect(entry.getByRole("button", { name: /修正/ })).toBeFocused();
   await expect(page.locator("#yn-me-plan-q")).toHaveValue("");
   // 行の月が入るように、月数（6 か月）を保って範囲をずらす
   await expect(page.locator("#yn-me-plan-from")).toHaveValue("2026-12");
   await expect(page.locator("#yn-me-plan-to")).toHaveValue("2027-05");
-  await expect(entry.locator(".yn-me-issues li.is-error")).toContainText("0〜1");
+  await expect(entry.locator(".yn-me-issues li.is-error")).toContainText("0 以上");
 });
 
 test("存在しないメンバーのアサインも名前（ID）で示し、押すとその行へ", async ({ page }) => {
@@ -79,15 +79,15 @@ test("存在しないメンバーのアサインも名前（ID）で示し、押
 
 test("他の画面のファイルのエラーは、その画面を開いて行へ移動（マスタ編集 → リソース計画）", async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
-  await appendAssignments(page, ["M011,C002,2026-04,2026-05,1.5"]);
+  await appendAssignments(page, ["M011,C002,2026-04,2026-05,-1.5"]);
   await gotoPage(page, "/masters");
-  const err = item(page, "0〜1 で指定してください");
+  const err = item(page, "0 以上の数値で指定してください");
   await expect(err).toContainText("リソース計画");
   const link = err.getByRole("link");
   await expect(link).toHaveAttribute("href", /plan\?jump=assignments:\d+/);
   await link.click();
   await page.waitForURL(/\/plan/);
-  const entry = page.locator("li.yn-me-plan-entry", { hasText: "1.50 人月" });
+  const entry = page.locator("li.yn-me-plan-entry", { hasText: "-1.50 人月" });
   await expect(entry.getByRole("button", { name: /修正/ })).toBeFocused();
 });
 
@@ -117,7 +117,7 @@ test("台帳のエラー: 名前で示し、押すと絞り込みを外して履
 
 test("9 件以上は先頭 8 件、「すべて表示」で全件", async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
-  const lines = Array.from({ length: 6 }, (_, i) => `M010,C002,2027-0${i + 1},2027-0${i + 1},${i % 2 ? 1.5 : 2}`);
+  const lines = Array.from({ length: 9 }, (_, i) => `M010,C002,2027-0${i + 1},2027-0${i + 1},${i % 2 ? -1.5 : -2}`);
   await appendAssignments(page, lines);
   const all = page.locator(".yn-me-issue-list > li");
   await expect(all).toHaveCount(8);
@@ -134,7 +134,7 @@ for (const [w, dark] of [[390, false], [768, true], [1280, true]] as const) {
     await page.setViewportSize({ width: w, height: 900 });
     if (dark) await page.addInitScript(() => localStorage.setItem("yn-theme", "dark"));
     await gotoPage(page, "/plan?team=S11");
-    await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2026-04,2026-05,1.5"]);
+    await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2026-04,2026-05,-1.5"]);
     const list = page.locator(".yn-me-issue-list");
     await list.scrollIntoViewIfNeeded();
     const box = (await list.boundingBox())!;
@@ -145,3 +145,14 @@ for (const [w, dark] of [[390, false], [768, true], [1280, true]] as const) {
     expect(new Set(colors).size).toBeGreaterThanOrEqual(2);
   });
 }
+
+test("1 行で 1.0 を超える人月はエラーにしない（月合計の警告だけ。2026-10-31 試用版のコメント）。メッセージに列名の英語を出さない", async ({ page }) => {
+  await gotoPage(page, "/plan?team=S11");
+  await appendAssignments(page, ["M011,C002,2027-05,2027-06,1.5"]);
+  await expect(item(page, "1.0 を超えています")).toBeVisible();
+  await expect(page.locator(".yn-me-issue-list > li.is-error")).toHaveCount(0);
+  await expect(page.locator(".yn-me-issue-list")).not.toContainText("allocation");
+  await appendAssignments(page, ["M011,C002,2027-07,2027-07,-1"]);
+  await expect(page.locator(".yn-me-issue-list")).not.toContainText("allocation");
+  await expect(item(page, "配分（人月）は 0 以上の数値")).toBeVisible();
+});

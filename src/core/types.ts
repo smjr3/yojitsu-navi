@@ -172,7 +172,7 @@ export interface Assignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 配分人月（0〜1.0） */
+  /** 配分人月（0 以上。1.0 = 基準時間。1.0 超も可） */
   allocation: number;
 }
 
@@ -183,7 +183,7 @@ export interface OutsidePlan {
   type: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 人月（0〜1.0） */
+  /** 人月（0 以上。1.0 超も可） */
   personMonths: number;
   note: string;
 }
