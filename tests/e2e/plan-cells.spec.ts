@@ -2,9 +2,12 @@
  * リソース計画のセル（SPEC §31.4・§36: 人の行は保守の配分＋契約外予定の合計）・案件で選ぶアサイン（§31.3）・候補から選ぶ入力欄（§31.2）・ID を出さない表示（§31.1）
  */
 import type { Page } from "@playwright/test";
-import { test, expect, gotoPage, pickCombo, useDarkTheme } from "./helpers/app.js";
+import { test, expect, gotoPage, pickCombo, useDarkTheme, usePlanFiscalYear } from "./helpers/app.js";
+import { AS_OF } from "./constants.js";
 
 test.beforeEach(async ({ page }) => {
+  // 年度の月を前提にしたテスト（表示する月の既定は今月から 12 か月。§71）
+  await usePlanFiscalYear(page, AS_OF);
   await page.addInitScript(() => {
     if (sessionStorage.getItem("yn-e2e-keep-draft") !== "1") localStorage.removeItem("yojitsu-navi:masters-draft:v1");
     sessionStorage.removeItem("yojitsu-navi:masters-draft-session");

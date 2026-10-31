@@ -5,9 +5,9 @@
  * - 期間・単位は表示条件を引き継ぐ。390px・ダークで横スクロール無し
  */
 import type { Page } from "@playwright/test";
-import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
+import { test, expect, gotoPage, useDarkTheme, usePlanFiscalYear } from "./helpers/app.js";
 import { getModel } from "./helpers/core.js";
-import { ROOT_DIR } from "./constants.js";
+import { AS_OF, ROOT_DIR } from "./constants.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 import { createMasterIndex, formatYen, planImpact, type Assignment } from "../../src/core/index.js";
 
@@ -17,6 +17,8 @@ const inputs = (assignments: readonly Assignment[]) => ({ masters: createMasterI
 const signed = (yen: number) => (yen > 0 ? `+${formatYen(yen, "yen")}` : formatYen(yen, "yen"));
 
 test.beforeEach(async ({ page }) => {
+  // 年度の月を前提にしたテスト（表示する月の既定は今月から 12 か月。§71）
+  await usePlanFiscalYear(page, AS_OF);
   await page.addInitScript(() => {
     localStorage.removeItem("yojitsu-navi:masters-draft:v1");
     sessionStorage.removeItem("yojitsu-navi:masters-draft-session");
