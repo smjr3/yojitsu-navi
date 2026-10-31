@@ -1470,6 +1470,7 @@ export default {
     rowsSuffix: "行",
     fileOrderNote: "）。ファイルの行の順に表示",
     colActions: "操作",
+    colResize: "「{col}」の列の幅（ドラッグか矢印キーで変更、ダブルクリックで元に戻す）",
     removedTitle: "削除する行（",
     removedChip: "− 削除",
     undoDelete: "削除を取り消す",
