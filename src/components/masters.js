@@ -422,16 +422,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     return [...s];
   }
+  /** 役職の候補（§31.5）: 単価マスタの役職（並びもそのまま）→ メンバーに書かれている役職。役職マスタは持たない */
   function titleOptions() {
     const s = new Set();
-    for (const r of docs.members.rows) {
-      const t = cellOf(docs.members, r, "title");
-      if (t) s.add(t);
-    }
     const members = new Set(docs.members.rows.map((r) => cellOf(docs.members, r, "member_id")));
     for (const r of docs.rates.rows) {
       const k = cellOf(docs.rates, r, "key");
       if (k && !members.has(k)) s.add(k);
+    }
+    for (const r of docs.members.rows) {
+      const t = cellOf(docs.members, r, "title");
+      if (t) s.add(t);
     }
     return [...s];
   }
@@ -2086,11 +2087,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (col.input === "month") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
     }
-    const listId = col.input === "title" ? `${id}-list` : null;
-    const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} list=${listId} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
-    if (!listId) return input;
-    const options = titleOptions().map((t) => ({ v: t, l: T.members.colTitle }));
-    return html`<span class="yn-me-combo">${input}<datalist id=${listId}>${options.map((o) => html`<option value=${o.v} label=${o.l}></option>`)}</datalist></span>`;
+    if (col.input === "title") {
+      // 役職はプルダウンで選ぶ（§31.5）。候補は単価マスタとメンバーの役職から作る（新しい役職は単価マスタに行を足す）
+      const opts = titleOptions();
+      return html`<select id=${id} name=${col.name} class="yn-select" required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>
+        <option value="" selected=${value === ""}>${T.masters.noneOption}</option>
+        ${opts.map((t) => html`<option value=${t} selected=${value === t}>${t}</option>`)}
+        ${value !== "" && !opts.includes(value) ? html`<option value=${value} selected>${value}</option>` : null}
+      </select>`;
+    }
+    return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
   }
 
   /** 過去月への影響の注記。何が変わるかは、過去の月で値が変わる列で出し分ける（§19.1） */
