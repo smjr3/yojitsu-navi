@@ -385,6 +385,9 @@ test("開いた内訳は人の行の配下と分かる: 左端の帯、控えめ
   expect(await subBtn.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe("rgba(0, 0, 0, 0)");
   expect(await mainBtn.evaluate((el) => getComputedStyle(el).borderTopColor)).not.toBe("rgba(0, 0, 0, 0)");
   expect(Math.abs((await subBtn.boundingBox())!.height - (await mainBtn.boundingBox())!.height)).toBeLessThanOrEqual(1);
-  const size = (loc: typeof sub) => loc.locator(".yn-plan-cell-btn").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(await size(sub)).toBeLessThan(await size(main));
+  // 内訳の数値は人の行より大きくせず、控えめな色（以前は 13px で人の行の 12px より大きかった）
+  const cell = (loc: typeof sub) => loc.locator(".yn-plan-cell-btn").first().evaluate((el) => ({ size: parseFloat(getComputedStyle(el).fontSize), color: getComputedStyle(el).color }));
+  const [subCell, mainCell] = [await cell(sub), await cell(main)];
+  expect(subCell.size).toBeLessThanOrEqual(mainCell.size);
+  expect(subCell.color).not.toBe(mainCell.color);
 });
