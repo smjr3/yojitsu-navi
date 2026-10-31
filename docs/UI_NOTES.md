@@ -306,3 +306,5 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 - 赤は「このペースの月末」が上限を超えたときと、今日までの実績が目安を超えたとき（どちらも 100% 超）。黄色は使わない。
 
 列幅（SPEC §76）: `dataTable` の各見出しに `.yn-col-resizer`（`bindColResizer` は `src/components/col-resize.js` でマスタ編集と共通）。境目は右隣の見出しにまたがるので、見出しの `z-index` を左ほど大きくしている（先頭の列は最前面）。幅は `localStorage` `yojitsu-navi:col-width:<path>:<caption>`。描き直しのたびに `applyColWidths()` で全行のセルに幅を当てる。
+
+列の絞り込みの吹き出しは `createFilterPopover({ getRows, unit, getFilter, setFilter })`（table.js）に切り出し、一覧表とマスタ編集の表（§73.1、`listFilter[fileId].cols`・`.sort`）で共通。マスタ編集は表ごと描き直すので、描き直したあと `rebind(key, 新しいボタン)` で開いている吹き出しを付け直す。

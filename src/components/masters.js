@@ -7,6 +7,7 @@
  *   mastersEditor({ data, asOfMonth, minMonth, storage, fetchImpl, now }) → HTMLElement
  */
 import { bindColResizer } from "./col-resize.js";
+import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
 import { addMonths, createMasterIndex, memberStatus, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory, planImpact } from "../core/index.js";
@@ -296,7 +297,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     plan.months = monthRange(r.from, r.to);
     if (save) local.set(PLAN_RANGE_KEY, serializePlanRange(r, asOfMonth));
   }
-  const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
+  // 表の絞り込み: 検索語・変更とエラーの行だけ・列ごとの絞り込み（cols。一覧表と同じ部品 §70）・並べ替え（sort）
+  const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false, cols: {}, sort: null }]));
+  /** 列の絞り込みの吹き出し（ファイルごと） */
+  const ledgerPops = {};
   /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
   const csvEdit = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { on: false, text: null, result: null }]));
   let mode = effectiveSaveMode(data.masterEdit);
@@ -786,6 +790,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
   let drawnView = null;
   function renderPanel() {
+    // 別のタブへ移ったら、前のタブの列の絞り込みの吹き出しを閉じる
+    if (drawnView !== active) for (const p of Object.values(ledgerPops)) p.close();
     // 同じ表の描き直しで表の枠のスクロール位置が先頭に戻らないように引き継ぐ（行を開いても位置がずれない。2026-10-31 試用版のコメント）
     const wrap = drawnView === active ? parts.panel.querySelector(".yn-me-table-wrap") : null;
     const scroll = wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
@@ -821,12 +827,97 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const leadLabel = isList ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
     const colCount = columns.length + (isList ? 3 : 4);
     const rowById = new Map(doc.rows.map((r) => [r.id, r]));
-    const groups = groupsOf(fileId).filter((g) => {
+    // 列ごとの絞り込み・並べ替え（一覧表と同じ部品。§73.1）。対象は今の値（基準月の行）
+    const leadText = (g) => (isList && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || "";
+    const isNum = (c) => c.input === "number" || c.input === "percent";
+    const fcols = [
+      { key: "__lead", label: leadLabel, type: "text", filterValue: (g) => leadText(g), sortValue: (g) => leadText(g) },
+      ...columns.map((c) => ({
+        key: c.name,
+        label: c.label,
+        type: "text",
+        numeric: isNum(c),
+        filterValue: (g) => String(displayValue(fileId, c.name, g.shown.record[c.name] ?? "") ?? ""),
+        sortValue: (g) => {
+          const raw = g.shown.record[c.name] ?? "";
+          if (raw === "") return null;
+          if (isNum(c)) return Number.isFinite(Number(raw)) ? Number(raw) : null;
+          return String(displayValue(fileId, c.name, raw) ?? "");
+        },
+      })),
+    ];
+    const fcolByKey = new Map(fcols.map((c) => [c.key, c]));
+    for (const k of Object.keys(f.cols)) if (!fcolByKey.has(k) || !isActiveFilter(f.cols[k])) delete f.cols[k];
+    if (f.sort && !fcolByKey.has(f.sort.key)) f.sort = null;
+    const activeCols = Object.entries(f.cols).map(([k, v]) => [fcolByKey.get(k), v]);
+    if (!ledgerPops[fileId]) {
+      ledgerPops[fileId] = createFilterPopover({
+        getRows: () => groupsOf(fileId),
+        getFilter: (key) => listFilter[fileId].cols[key],
+        setFilter: (col, v) => {
+          if (isActiveFilter(v)) listFilter[fileId].cols[col.key] = v;
+          else delete listFilter[fileId].cols[col.key];
+          renderPanel();
+        },
+      });
+    }
+    const pop = ledgerPops[fileId];
+    let groups = groupsOf(fileId).filter((g) => {
       const rows = g.entries.map((e) => rowById.get(e.rowId));
       if (f.changedOnly && !rows.some((r) => rowState(doc, r) !== "unchanged" || issues[r.id]?.length > 0)) return false;
       if (q && !rows.some((r) => searchText(fileId, doc, r).includes(q))) return false;
+      if (!activeCols.every(([c, v]) => matchesFilter(c, v, g, "yen"))) return false;
       return true;
     });
+    if (f.sort) {
+      const sc = fcolByKey.get(f.sort.key);
+      const sign = f.sort.dir === "asc" ? 1 : -1;
+      groups = groups
+        .map((g, i) => ({ g, i, v: sc.sortValue(g) }))
+        .sort((a, b) => {
+          // 空は向きに関係なく最後
+          if (a.v === null || a.v === "") return b.v === null || b.v === "" ? a.i - b.i : 1;
+          if (b.v === null || b.v === "") return -1;
+          const d = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : String(a.v).localeCompare(String(b.v), "ja", { numeric: true });
+          return d * sign || a.i - b.i;
+        })
+        .map((x) => x.g);
+    }
+    /** 見出し: 並べ替えのボタン＋絞り込みの漏斗（一覧表と同じ見た目） */
+    const headCell = (key, label, sub) => {
+      const fc = fcolByKey.get(key);
+      const active = f.sort && f.sort.key === key;
+      const sortBtn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label })}><span class="yn-sort-main"><span class="yn-me-th">${label}</span><span class="yn-sort-icon" aria-hidden="true">${active ? (f.sort.dir === "asc" ? "▲" : "▼") : "⇅"}</span></span>${sub ? html`<span class="yn-th-sub">${sub}</span>` : null}</button>`;
+      sortBtn.dataset.fk = `sort:${fileId}:${key}`;
+      sortBtn.addEventListener("click", () => {
+        f.sort = active ? { key, dir: f.sort.dir === "asc" ? "desc" : "asc" } : { key, dir: fc.numeric ? "desc" : "asc" };
+        renderPanel();
+        focusKey(`sort:${fileId}:${key}`);
+      });
+      const on = isActiveFilter(f.cols[key]);
+      const fl = fmt(on ? T.table.filterActive : T.table.filterBy, { label });
+      const fb = html`<button type="button" class=${`yn-filter-btn${on ? " is-active" : ""}`} aria-haspopup="dialog" aria-expanded="false" aria-label=${fl} title=${fl}></button>`;
+      fb.innerHTML = FILTER_ICON;
+      fb.dataset.fcol = key;
+      fb.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (pop.isOpenFor(fc)) pop.close();
+        else pop.open(fc, fb);
+      });
+      return html`<div class="yn-th-inner"><span class="yn-th-main">${sortBtn}</span>${fb}</div>`;
+    };
+    const ariaSort = (key) => (f.sort && f.sort.key === key ? (f.sort.dir === "asc" ? "ascending" : "descending") : "none");
+    const colsFiltered = activeCols.length > 0;
+    const clearCols = colsFiltered ? html`<button type="button" class="yn-btn yn-btn-sm yn-filter-clear-all">${T.table.filterClearAll}</button>` : null;
+    if (clearCols) {
+      clearCols.dataset.fk = `clearcols:${fileId}`;
+      clearCols.addEventListener("click", () => {
+        pop.close({ discard: true });
+        f.cols = {};
+        renderPanel();
+        focusKey(`add:${fileId}`);
+      });
+    }
 
     const search = html`<input type="search" class="yn-input yn-me-search" id=${`yn-me-q-${fileId}`} placeholder=${T.masters.searchPlaceholder} aria-label=${fmt(T.masters.searchAria, { file: def.label })} value=${f.q}>`;
     let timer = null;
@@ -989,14 +1080,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${!editable} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>${T.masters.onlyChanged}</span></label>
-        <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>
+        <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>${clearCols}
       </div>
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${fmt(T.masters.tableAria, { file: def.label })}>
         <table class="yn-table yn-table-compact yn-me-table yn-me-ledger" onmouseover=${clippedTitle}>
           <caption class="visually-hidden">${fmt(T.ledger.caption, { file: def.label, path: meta.path })}</caption>
           <thead><tr>
-            <th scope="col"><span class="yn-me-th">${leadLabel}</span><span class="yn-th-sub">${isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn}</span>${ledgerColResizer(fileId, "__lead", leadLabel)}</th>
-            ${columns.map((c) => html`<th scope="col" class=${c.input === "number" || c.input === "percent" ? "num" : ""}><span class="yn-me-th">${c.label}</span><span class="yn-th-sub">${c.name}</span>${ledgerColResizer(fileId, c.name, c.label)}</th>`)}
+            <th scope="col" class=${`has-filter${f.cols.__lead ? " is-filtered" : ""}`} aria-sort=${ariaSort("__lead")}>${headCell("__lead", leadLabel, isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn)}${ledgerColResizer(fileId, "__lead", leadLabel)}</th>
+            ${columns.map((c) => html`<th scope="col" class=${`${isNum(c) ? "num " : ""}has-filter${f.cols[c.name] ? " is-filtered" : ""}`} aria-sort=${ariaSort(c.name)}>${headCell(c.name, c.label, c.name)}${ledgerColResizer(fileId, c.name, c.label)}</th>`)}
             ${isList ? null : html`<th scope="col"><span class="yn-me-th">${T.ledger.colHistory}</span><span class="yn-th-sub">effective_from</span>${ledgerColResizer(fileId, "__hist", T.ledger.colHistory)}</th>`}
             <th scope="col">${T.columns.status}</th>
             <th scope="col">${T.masters.colActions}</th>
@@ -1018,6 +1109,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${csvBlocked ? null : modeSwitch(fileId, () => renderPanel())}
       ${csv.on && !csvBlocked ? renderCsvEditor(fileId) : tableBody}
     </section>`);
+    // 開いている絞り込みの吹き出しを、描き直した見出しのボタンに付け直す
+    for (const c of fcols) pop.rebind(c.key, parts.panel.querySelector(`.yn-filter-btn[data-fcol="${c.key}"]`));
     // 決めた列幅をあてる（列見出しの右端をドラッグして変えたもの）
     const ledger = parts.panel.querySelector("table.yn-me-ledger");
     if (ledger) {
@@ -2457,6 +2550,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (csvEdit[fileId].on && csvEdit[fileId].text === null) csvEdit[fileId].on = false;
       listFilter[fileId].q = "";
       listFilter[fileId].changedOnly = false;
+      listFilter[fileId].cols = {};
       if (row) {
         openGroupOfRow(fileId, row.id);
         key = `edit:${row.id}`;

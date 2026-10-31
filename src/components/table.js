@@ -204,11 +204,11 @@ export function matchesFilter(col, f, row, unit) {
   return true;
 }
 
-function isActiveFilter(f) {
+export function isActiveFilter(f) {
   return !!f && ((typeof f.q === "string" && f.q !== "") || Array.isArray(f.values) || typeof f.min === "number" || typeof f.max === "number");
 }
 
-const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
+export const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
 
 let filterPopSeq = 0;
 
@@ -498,7 +498,7 @@ export function dataTable({
           fb.innerHTML = FILTER_ICON;
           fb.addEventListener("click", (ev) => {
             ev.stopPropagation();
-            if (openPop && openPop.col === col) closeFilterPop();
+            if (filterPop.isOpenFor(col)) closeFilterPop();
             else openFilterPop(col, fb);
           });
           filterButtons.set(col.key, { btn: fb, col });
@@ -630,235 +630,16 @@ export function dataTable({
     if (clearBtn) clearBtn.hidden = !filtered;
   }
 
-  // ── 絞り込みの吹き出し（body 直下に fixed で出す。表は横スクロールの枠で切られるため） ──
-  let openPop = null;
-  // discard: 入力の反映待ち（デバウンス中）を捨てる（「絞り込みを解除」用）。既定は閉じる前に反映する
-  function closeFilterPop({ focus = false, discard = false } = {}) {
-    if (!openPop) return;
-    const { pop, btn, cleanup, body } = openPop;
-    openPop = null;
-    if (discard) body.cancel();
-    else body.flush();
-    cleanup();
-    pop.remove();
-    btn.setAttribute("aria-expanded", "false");
-    if (focus && btn.isConnected) btn.focus();
-  }
+  // ── 絞り込みの吹き出し（共通の部品。マスタ編集の表でも使う） ──
   function setFilter(col, f) {
     if (isActiveFilter(f)) filters.set(col.key, f);
     else filters.delete(col.key);
     saveFilters();
     renderBody();
   }
-  function openFilterPop(col, btn) {
-    closeFilterPop();
-    const kind = filterKind(col, rows);
-    const popId = `yn-filter-pop-${++filterPopSeq}`;
-    const pop = html`<div class="yn-filter-pop" role="dialog" id=${popId} aria-label=${fmt(T.table.filterBy, { label: col.label })}></div>`;
-    const body = kind === "range" ? rangeBody(col) : valuesBody(col);
-    const clear = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClear}</button>`;
-    const close = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClose}</button>`;
-    clear.addEventListener("click", () => {
-      body.cancel();
-      setFilter(col, null);
-      body.reset();
-    });
-    close.addEventListener("click", () => closeFilterPop({ focus: true }));
-    pop.append(body.node, html`<div class="yn-filter-pop-actions">${clear}${close}</div>`);
-    document.body.append(pop);
-    btn.setAttribute("aria-expanded", "true");
-    btn.setAttribute("aria-controls", popId);
-    const place = () => {
-      const r = btn.getBoundingClientRect();
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
-      const w = Math.min(300, vw - 32);
-      pop.style.width = `${w}px`;
-      pop.style.left = `${Math.max(16, Math.min(r.right - w, vw - w - 16))}px`;
-      const h = pop.offsetHeight;
-      const below = r.bottom + 4;
-      const above = r.top - 4 - h;
-      pop.style.top = `${below + h <= vh - 8 ? below : above >= 8 ? above : Math.max(8, vh - 8 - h)}px`;
-    };
-    place();
-    const onDown = (e) => {
-      if (!pop.contains(e.target) && !btn.contains(e.target)) closeFilterPop();
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        closeFilterPop({ focus: true });
-      }
-    };
-    // 吹き出しは fixed なので、外側がスクロールしたら見出しのボタンに付いて動かし、ボタンが画面から消えたら閉じる
-    // （絞り込みで行が減ると表の枠もスクロールするため、スクロールだけでは閉じない）
-    const onScroll = (e) => {
-      if (e.target instanceof Node && pop.contains(e.target)) return;
-      const r = btn.getBoundingClientRect();
-      if (!btn.isConnected || r.bottom < 0 || r.top > document.documentElement.clientHeight) closeFilterPop();
-      else place();
-    };
-    const onResize = () => closeFilterPop();
-    document.addEventListener("pointerdown", onDown, true);
-    pop.addEventListener("keydown", onKey);
-    addEventListener("scroll", onScroll, { passive: true, capture: true });
-    addEventListener("resize", onResize);
-    openPop = {
-      col,
-      pop,
-      btn,
-      body,
-      cleanup: () => {
-        document.removeEventListener("pointerdown", onDown, true);
-        removeEventListener("scroll", onScroll, { capture: true });
-        removeEventListener("resize", onResize);
-      },
-    };
-    body.focus();
-  }
-
-  /** 値の一覧（チェックボックス）＋検索。検索語は行の部分一致にもなる */
-  function valuesBody(col) {
-    const counts = new Map();
-    for (const r of rows) for (const v of new Set(filterValues(col, r, unit))) counts.set(v, (counts.get(v) ?? 0) + 1);
-    const values = [...counts.keys()];
-    if (col.type !== "status") values.sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ja", { numeric: true })));
-    const cur = () => filters.get(col.key) ?? {};
-    const search = html`<input type="search" class="yn-input yn-filter-search" placeholder=${T.table.filterSearch} aria-label=${fmt(T.table.filterBy, { label: col.label })}>`;
-    search.value = cur().q ?? "";
-    const allBox = html`<input type="checkbox">`;
-    const list = html`<div class="yn-filter-list" role="group" aria-label=${col.label}></div>`;
-    const none = html`<p class="yn-filter-none" hidden>${T.table.filterNoMatch}</p>`;
-    const boxes = values.map((v) => {
-      const input = html`<input type="checkbox" value=${v}>`;
-      const label = html`<label class="yn-filter-item">${input}<span class="yn-filter-item-text">${v === "" ? T.table.filterBlank : v}</span><span class="yn-filter-item-count">${integer(counts.get(v))}</span></label>`;
-      input.addEventListener("change", () => {
-        const f = cur();
-        const selected = new Set(Array.isArray(f.values) ? f.values : values);
-        if (input.checked) selected.add(v);
-        else selected.delete(v);
-        // すべて選んだ状態は「絞り込みなし」と同じに戻す（後から増えた値も出るように）
-        setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
-        sync();
-      });
-      list.append(label);
-      return { v, input, label };
-    });
-    function sync() {
-      const f = cur();
-      const sel = Array.isArray(f.values) ? new Set(f.values) : null;
-      const q = norm(search.value);
-      let shown = 0;
-      let checked = 0;
-      for (const b of boxes) {
-        const vis = !q || norm(b.v).includes(q);
-        b.label.hidden = !vis;
-        b.input.checked = sel ? sel.has(b.v) : true;
-        if (vis) {
-          shown += 1;
-          if (b.input.checked) checked += 1;
-        }
-      }
-      none.hidden = shown > 0;
-      allBox.checked = shown > 0 && checked === shown;
-      allBox.indeterminate = checked > 0 && checked < shown;
-    }
-    allBox.addEventListener("change", () => {
-      const f = cur();
-      const q = norm(search.value);
-      const target = boxes.filter((b) => !q || norm(b.v).includes(q)).map((b) => b.v);
-      const selected = new Set(Array.isArray(f.values) ? f.values : values);
-      for (const v of target) allBox.checked ? selected.add(v) : selected.delete(v);
-      setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
-      sync();
-    });
-    let timer = null;
-    const applySearch = () => {
-      timer = null;
-      setFilter(col, { ...cur(), q: search.value.trim() });
-    };
-    search.addEventListener("input", () => {
-      sync();
-      clearTimeout(timer);
-      timer = setTimeout(applySearch, 150);
-    });
-    sync();
-    const node = html`<div class="yn-filter-values">${search}<label class="yn-filter-item yn-filter-all">${allBox}<span>${T.table.filterAll}</span></label>${list}${none}</div>`;
-    return {
-      node,
-      focus: () => search.focus(),
-      flush: () => {
-        if (timer !== null) {
-          clearTimeout(timer);
-          applySearch();
-        }
-      },
-      cancel: () => {
-        clearTimeout(timer);
-        timer = null;
-      },
-      reset: () => {
-        search.value = "";
-        sync();
-      },
-    };
-  }
-
-  /** 数値の範囲（下限・上限）。入力は画面の単位（百万円・%・h）で、元の値に直して覚える */
-  function rangeBody(col) {
-    const factor = col.type === "moneyYen" ? 1 : rangeFactor(col, unit);
-    const unitLabel = rangeUnitLabel(col, unit);
-    const toInput = (v) => (typeof v === "number" ? String(Math.round((v / factor) * 1e6) / 1e6) : "");
-    const f0 = filters.get(col.key) ?? {};
-    const mk = (label, v) => html`<input type="text" inputmode="decimal" class="yn-input yn-filter-num" aria-label=${`${col.label} ${label}`} placeholder=${label} value=${toInput(v)}>`;
-    const min = mk(T.table.filterMin, f0.min);
-    const max = mk(T.table.filterMax, f0.max);
-    const parse = (el) => {
-      const t = el.value.normalize("NFKC").replace(/[,\s]/g, "").replace(/[−ー‐]/g, "-");
-      if (t === "") return null;
-      const n = Number(t);
-      el.classList.toggle("is-invalid", !Number.isFinite(n));
-      return Number.isFinite(n) ? n * factor : undefined;
-    };
-    let timer = null;
-    const commit = () => {
-      timer = null;
-      const a = parse(min);
-      const b = parse(max);
-      if (a === undefined || b === undefined) return;
-      const f = {};
-      if (a !== null) f.min = a;
-      if (b !== null) f.max = b;
-      setFilter(col, f);
-    };
-    const apply = () => {
-      clearTimeout(timer);
-      timer = setTimeout(commit, 250);
-    };
-    min.addEventListener("input", apply);
-    max.addEventListener("input", apply);
-    const node = html`<div class="yn-filter-range">${min}<span aria-hidden="true">〜</span>${max}${unitLabel ? html`<span class="yn-filter-unit">${unitLabel}</span>` : null}</div>`;
-    return {
-      node,
-      focus: () => min.focus(),
-      flush: () => {
-        if (timer !== null) {
-          clearTimeout(timer);
-          commit();
-        }
-      },
-      cancel: () => {
-        clearTimeout(timer);
-        timer = null;
-      },
-      reset: () => {
-        min.value = "";
-        max.value = "";
-        min.classList.remove("is-invalid");
-        max.classList.remove("is-invalid");
-      },
-    };
-  }
+  const filterPop = createFilterPopover({ getRows: () => rows, unit, getFilter: (key) => filters.get(key), setFilter });
+  const closeFilterPop = (opts) => filterPop.close(opts);
+  const openFilterPop = (col, btn) => filterPop.open(col, btn);
 
   renderHead();
   const count = html`<span class="yn-table-count" aria-live="polite"></span>`;
@@ -987,4 +768,250 @@ export function statusSortValue(row) {
   const danger = rowDeficit(row) || row.isOverBudget;
   const rate = typeof row.burnRate === "number" && Number.isFinite(row.burnRate) ? row.burnRate : -1;
   return (danger ? 0 : 1000) - rate;
+}
+
+/**
+ * 列の絞り込みの吹き出し（body 直下に fixed で出す。表は横スクロールの枠で切られるため）。一覧表とマスタ編集の表で共通（SPEC §70）。
+ * getRows() = 値の一覧を作る行、getFilter(key) = 今の絞り込み、setFilter(col, f) = 変えたとき（表を描き直す）
+ */
+export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilter }) {
+  let openPop = null;
+  // discard: 入力の反映待ち（デバウンス中）を捨てる（「絞り込みを解除」用）。既定は閉じる前に反映する
+  function closeFilterPop({ focus = false, discard = false } = {}) {
+    if (!openPop) return;
+    const { pop, btn, cleanup, body } = openPop;
+    openPop = null;
+    if (discard) body.cancel();
+    else body.flush();
+    cleanup();
+    pop.remove();
+    btn.setAttribute("aria-expanded", "false");
+    if (focus && btn.isConnected) btn.focus();
+  }
+  function openFilterPop(col, btn) {
+    closeFilterPop();
+    const kind = filterKind(col, getRows());
+    const popId = `yn-filter-pop-${++filterPopSeq}`;
+    const pop = html`<div class="yn-filter-pop" role="dialog" id=${popId} aria-label=${fmt(T.table.filterBy, { label: col.label })}></div>`;
+    const body = kind === "range" ? rangeBody(col) : valuesBody(col);
+    const clear = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClear}</button>`;
+    const close = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClose}</button>`;
+    clear.addEventListener("click", () => {
+      body.cancel();
+      setFilter(col, null);
+      body.reset();
+    });
+    close.addEventListener("click", () => closeFilterPop({ focus: true }));
+    pop.append(body.node, html`<div class="yn-filter-pop-actions">${clear}${close}</div>`);
+    document.body.append(pop);
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-controls", popId);
+    const place = () => {
+      const r = (openPop?.btn ?? btn).getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const w = Math.min(300, vw - 32);
+      pop.style.width = `${w}px`;
+      pop.style.left = `${Math.max(16, Math.min(r.right - w, vw - w - 16))}px`;
+      const h = pop.offsetHeight;
+      const below = r.bottom + 4;
+      const above = r.top - 4 - h;
+      pop.style.top = `${below + h <= vh - 8 ? below : above >= 8 ? above : Math.max(8, vh - 8 - h)}px`;
+    };
+    place();
+    const onDown = (e) => {
+      if (!pop.contains(e.target) && !openPop?.btn.contains(e.target)) closeFilterPop();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeFilterPop({ focus: true });
+      }
+    };
+    // 吹き出しは fixed なので、外側がスクロールしたら見出しのボタンに付いて動かし、ボタンが画面から消えたら閉じる
+    // （絞り込みで行が減ると表の枠もスクロールするため、スクロールだけでは閉じない）
+    const onScroll = (e) => {
+      if (e.target instanceof Node && pop.contains(e.target)) return;
+      const cur = openPop?.btn ?? btn;
+      const r = cur.getBoundingClientRect();
+      if (!cur.isConnected || r.bottom < 0 || r.top > document.documentElement.clientHeight) closeFilterPop();
+      else place();
+    };
+    const onResize = () => closeFilterPop();
+    document.addEventListener("pointerdown", onDown, true);
+    pop.addEventListener("keydown", onKey);
+    addEventListener("scroll", onScroll, { passive: true, capture: true });
+    addEventListener("resize", onResize);
+    openPop = {
+      col,
+      pop,
+      btn,
+      body,
+      place,
+      cleanup: () => {
+        document.removeEventListener("pointerdown", onDown, true);
+        removeEventListener("scroll", onScroll, { capture: true });
+        removeEventListener("resize", onResize);
+      },
+    };
+    body.focus();
+  }
+
+  /** 値の一覧（チェックボックス）＋検索。検索語は行の部分一致にもなる */
+  function valuesBody(col) {
+    const counts = new Map();
+    for (const r of getRows()) for (const v of new Set(filterValues(col, r, unit))) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const values = [...counts.keys()];
+    if (col.type !== "status") values.sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ja", { numeric: true })));
+    const cur = () => getFilter(col.key) ?? {};
+    const search = html`<input type="search" class="yn-input yn-filter-search" placeholder=${T.table.filterSearch} aria-label=${fmt(T.table.filterBy, { label: col.label })}>`;
+    search.value = cur().q ?? "";
+    const allBox = html`<input type="checkbox">`;
+    const list = html`<div class="yn-filter-list" role="group" aria-label=${col.label}></div>`;
+    const none = html`<p class="yn-filter-none" hidden>${T.table.filterNoMatch}</p>`;
+    const boxes = values.map((v) => {
+      const input = html`<input type="checkbox" value=${v}>`;
+      const label = html`<label class="yn-filter-item">${input}<span class="yn-filter-item-text">${v === "" ? T.table.filterBlank : v}</span><span class="yn-filter-item-count">${integer(counts.get(v))}</span></label>`;
+      input.addEventListener("change", () => {
+        const f = cur();
+        const selected = new Set(Array.isArray(f.values) ? f.values : values);
+        if (input.checked) selected.add(v);
+        else selected.delete(v);
+        // すべて選んだ状態は「絞り込みなし」と同じに戻す（後から増えた値も出るように）
+        setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
+        sync();
+      });
+      list.append(label);
+      return { v, input, label };
+    });
+    function sync() {
+      const f = cur();
+      const sel = Array.isArray(f.values) ? new Set(f.values) : null;
+      const q = norm(search.value);
+      let shown = 0;
+      let checked = 0;
+      for (const b of boxes) {
+        const vis = !q || norm(b.v).includes(q);
+        b.label.hidden = !vis;
+        b.input.checked = sel ? sel.has(b.v) : true;
+        if (vis) {
+          shown += 1;
+          if (b.input.checked) checked += 1;
+        }
+      }
+      none.hidden = shown > 0;
+      allBox.checked = shown > 0 && checked === shown;
+      allBox.indeterminate = checked > 0 && checked < shown;
+    }
+    allBox.addEventListener("change", () => {
+      const f = cur();
+      const q = norm(search.value);
+      const target = boxes.filter((b) => !q || norm(b.v).includes(q)).map((b) => b.v);
+      const selected = new Set(Array.isArray(f.values) ? f.values : values);
+      for (const v of target) allBox.checked ? selected.add(v) : selected.delete(v);
+      setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
+      sync();
+    });
+    let timer = null;
+    const applySearch = () => {
+      timer = null;
+      setFilter(col, { ...cur(), q: search.value.trim() });
+    };
+    search.addEventListener("input", () => {
+      sync();
+      clearTimeout(timer);
+      timer = setTimeout(applySearch, 150);
+    });
+    sync();
+    const node = html`<div class="yn-filter-values">${search}<label class="yn-filter-item yn-filter-all">${allBox}<span>${T.table.filterAll}</span></label>${list}${none}</div>`;
+    return {
+      node,
+      focus: () => search.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          applySearch();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
+      reset: () => {
+        search.value = "";
+        sync();
+      },
+    };
+  }
+
+  /** 数値の範囲（下限・上限）。入力は画面の単位（百万円・%・h）で、元の値に直して覚える */
+  function rangeBody(col) {
+    const factor = col.type === "moneyYen" ? 1 : rangeFactor(col, unit);
+    const unitLabel = rangeUnitLabel(col, unit);
+    const toInput = (v) => (typeof v === "number" ? String(Math.round((v / factor) * 1e6) / 1e6) : "");
+    const f0 = getFilter(col.key) ?? {};
+    const mk = (label, v) => html`<input type="text" inputmode="decimal" class="yn-input yn-filter-num" aria-label=${`${col.label} ${label}`} placeholder=${label} value=${toInput(v)}>`;
+    const min = mk(T.table.filterMin, f0.min);
+    const max = mk(T.table.filterMax, f0.max);
+    const parse = (el) => {
+      const t = el.value.normalize("NFKC").replace(/[,\s]/g, "").replace(/[−ー‐]/g, "-");
+      if (t === "") return null;
+      const n = Number(t);
+      el.classList.toggle("is-invalid", !Number.isFinite(n));
+      return Number.isFinite(n) ? n * factor : undefined;
+    };
+    let timer = null;
+    const commit = () => {
+      timer = null;
+      const a = parse(min);
+      const b = parse(max);
+      if (a === undefined || b === undefined) return;
+      const f = {};
+      if (a !== null) f.min = a;
+      if (b !== null) f.max = b;
+      setFilter(col, f);
+    };
+    const apply = () => {
+      clearTimeout(timer);
+      timer = setTimeout(commit, 250);
+    };
+    min.addEventListener("input", apply);
+    max.addEventListener("input", apply);
+    const node = html`<div class="yn-filter-range">${min}<span aria-hidden="true">〜</span>${max}${unitLabel ? html`<span class="yn-filter-unit">${unitLabel}</span>` : null}</div>`;
+    return {
+      node,
+      focus: () => min.focus(),
+      flush: () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          commit();
+        }
+      },
+      cancel: () => {
+        clearTimeout(timer);
+        timer = null;
+      },
+      reset: () => {
+        min.value = "";
+        max.value = "";
+        min.classList.remove("is-invalid");
+        max.classList.remove("is-invalid");
+      },
+    };
+  }
+
+
+  return {
+    open: openFilterPop,
+    close: closeFilterPop,
+    isOpenFor: (col) => !!openPop && openPop.col.key === col.key,
+    /** 表を描き直して見出しのボタンが替わったとき、開いている吹き出しを新しいボタンに付け直す */
+    rebind(key, btn) {
+      if (!openPop || openPop.col.key !== key || !btn) return;
+      openPop.btn = btn;
+      btn.setAttribute("aria-expanded", "true");
+      btn.setAttribute("aria-controls", openPop.pop.id);
+      openPop.place();
+    },
+  };
 }
