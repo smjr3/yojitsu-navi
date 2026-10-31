@@ -8,6 +8,7 @@
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { isImage } from "./lib/image-detect.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const PKG = join(ROOT, "packages/core");
@@ -23,7 +24,7 @@ for (const f of ["index.js", "index.d.ts", "ja.js"]) cpSync(join(ROOT, "src/i18n
 if (process.argv.includes("--pack")) {
   const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", PKG], { cwd: PKG, encoding: "utf-8" }))[0];
   // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）
-  const images = packed.files.map((f) => f.path).filter((f) => /\.(png|jpe?g|gif|webp|avif|bmp|tiff?|ico|svgz?)$/i.test(f));
+  const images = packed.files.map((f) => f.path).filter((f) => isImage(f, join(PKG, f)));
   if (images.length) {
     rmSync(join(PKG, packed.filename), { force: true });
     console.error(`パッケージに画像が入っています（入れない）: ${images.join(", ")}`);

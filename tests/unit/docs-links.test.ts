@@ -7,9 +7,11 @@
  *   - npm run の名前が package.json にある
  */
 import { describe, expect, it } from "vitest";
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+// @ts-expect-error 型定義の無い .mjs（scripts/build-app.mjs と共通）
+import { isImage } from "../../scripts/lib/image-detect.mjs";
 
 const ROOT = join(__dirname, "..", "..");
 const DOCS = ["README.md", "CONTRIBUTING.md", "tests/e2e/README.md", ...readdirSync(join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
@@ -54,35 +56,8 @@ const repoFiles = () =>
  */
 const IMAGE_ALLOWLIST: Record<string, string> = {};
 
-const IMAGE_EXT = /\.(png|jpe?g|jfif|gif|webp|avif|heic|heif|bmp|tiff?|ico|icns|svgz?|psd|xcf|eps)$/i;
-
-/** 先頭のバイトで画像と分かるか（拡張子を変えた・付けていない画像も見つける） */
-function looksLikeImage(file: string): boolean {
-  const abs = join(ROOT, file);
-  if (!statSync(abs).isFile()) return false;
-  const buf = Buffer.alloc(64);
-  const fd = openSync(abs, "r");
-  const n = readSync(fd, buf, 0, 64, 0);
-  closeSync(fd);
-  const head = buf.subarray(0, n);
-  const hex = head.toString("hex");
-  const text = head.toString("latin1").trimStart();
-  return (
-    hex.startsWith("89504e47") || // PNG
-    hex.startsWith("ffd8ff") || // JPEG
-    text.startsWith("GIF8") ||
-    (text.startsWith("RIFF") && head.subarray(8, 12).toString("latin1") === "WEBP") ||
-    /^....ftyp(avif|avis|heic|heix|mif1)/s.test(head.toString("latin1")) ||
-    (hex.startsWith("424d") && n >= 18 && [12, 40, 52, 56, 64, 108, 124].includes(head.readUInt32LE(14))) || // BMP（ヘッダ長で確かめる）
-    hex.startsWith("49492a00") || hex.startsWith("4d4d002a") || // TIFF
-    hex.startsWith("00000100") || // ICO
-    text.startsWith("8BPS") || // PSD
-    /^(<\?xml[^>]*\?>\s*)?<svg\b/i.test(text)
-  );
-}
-
 it("リポジトリに画像ファイルを置いていない（拡張子・中身の両方。許可リスト以外）", () => {
-  const images = repoFiles().filter((f) => !(f in IMAGE_ALLOWLIST) && (IMAGE_EXT.test(f) || looksLikeImage(f)));
+  const images = repoFiles().filter((f) => !(f in IMAGE_ALLOWLIST) && isImage(f, join(ROOT, f)));
   expect(images).toEqual([]);
 });
 
