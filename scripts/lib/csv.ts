@@ -69,15 +69,22 @@ export function formatHours(h: number): string {
   return String(Math.round(h * 10000) / 10000);
 }
 
+/**
+ * 並べ替えの比較。実行環境の言語設定（Windows の ja-JP、Linux の en-US など）で順序が変わらないよう、言語を固定する。
+ * en-US なのは既存のデータ（Linux で生成）と同じ順にするため
+ */
+const collator = new Intl.Collator("en-US");
+const cmp = (a: string, b: string): number => collator.compare(a, b);
+
 /** 安定した順序（日付→メンバー→顧客→案件→時間）に並べ替えた新しい配列を返す。生成と取得で共通に使う */
 export function sortWorklogs(rows: readonly Worklog[]): Worklog[] {
   return [...rows].sort(
     (a, b) =>
-      a.date.localeCompare(b.date) ||
-      a.memberId.localeCompare(b.memberId) ||
-      a.customerName.localeCompare(b.customerName) ||
-      a.projectName.localeCompare(b.projectName) ||
+      cmp(a.date, b.date) ||
+      cmp(a.memberId, b.memberId) ||
+      cmp(a.customerName, b.customerName) ||
+      cmp(a.projectName, b.projectName) ||
       a.hours - b.hours ||
-      a.task.localeCompare(b.task),
+      cmp(a.task, b.task),
   );
 }

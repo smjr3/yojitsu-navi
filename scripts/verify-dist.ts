@@ -11,7 +11,7 @@
  *   - 契約の件数が contracts.csv と一致し、契約ごとの作業ログ明細が過不足なくある
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeFingerprint, resolveAsOf, type Fingerprint } from "./lib/inputs.js";
 import { loadDataset } from "./lib/load.js";
@@ -77,7 +77,7 @@ export function verifyDist(rootDir: string, fp: Fingerprint, distDir: string = j
   // 契約の件数と作業ログ明細
   const { dataset } = loadDataset(rootDir);
   const ids = [...new Set(dataset.contracts.map((c) => c.contractId))];
-  const modelPath = files.find((p) => /\/model\.[0-9a-f]{8}\.json$/.test(p));
+  const modelPath = files.find((p) => /^model\.[0-9a-f]{8}\.json$/.test(basename(p)));
   if (modelPath) {
     const model = read(modelPath) as { contracts?: unknown[]; meta?: { asOf?: unknown } } | undefined;
     if (model) {

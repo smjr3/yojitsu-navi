@@ -31,6 +31,12 @@
 #   - 外に出るのは npm ci（NPM_CONFIG_REGISTRY で社内ミラーに向けられる。依存込みで作ったプロジェクトは vendor/npm-cache から入れるので出ない）とイメージの取得だけ
 #   - 手順は docs/DEPLOY_GITLAB.md
 #
+# Runner の OS:
+#   - Windows・Linux のどちらの Runner でも動く（社内の Runner は Windows。Linux に変わってもこのままでよい）。
+#     そのため script には OS ごとのシェル（sh / PowerShell）で書き方が変わるもの（if・変数の展開・find など）を書かず、
+#     node scripts/ci/*.mjs と npm run だけを並べる。変数は variables: で渡す
+#   - image: は Docker executor のときだけ使われる（shell executor では無視され、Runner のマシンの Node を使う）
+#
 # 注意:
 #   - Pages のジョブ名は必ず `pages`、成果物は `public/` にする（GitLab の仕様）
 #   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は CI/CD 変数 NODE_IMAGE で差し替える
@@ -75,15 +81,9 @@ cache:
 
 default:
   before_script:
-    # 社内ミラーがあれば NPM_CONFIG_REGISTRY を変数で渡すだけで切り替わる（npm が自動で読む）
-    - if [ -n "$NPM_CONFIG_REGISTRY" ]; then echo "npm registry: $NPM_CONFIG_REGISTRY"; fi
-    # 依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で作ったプロジェクトは、同梱のキャッシュだけで入れる（外に出ない。SPEC §44）
-    - |
-      if [ -d vendor/npm-cache ]; then
-        npm ci --offline --cache vendor/npm-cache --no-audit --no-fund
-      else
-        npm ci --prefer-offline --no-audit --no-fund
-      fi
+    # npm ci。依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で作ったプロジェクトは、同梱のキャッシュだけで入れる
+    # （npm ci --offline --cache vendor/npm-cache。外に出ない。SPEC §44）。社内ミラーは NPM_CONFIG_REGISTRY で切り替わる
+    - node scripts/ci/install.mjs
 
 # スケジュール実行以外（push / MR / 手動）で動く共通条件
 .normal-rules: &normal-rules
@@ -128,17 +128,13 @@ build:
     # マスタ編集（src/data/masters.json.ts）が各 CSV の最終コミット ID を履歴から取るため、浅いクローンにしない
     # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
     GIT_DEPTH: "0"
-  script:
     # マスタ編集の保存先（config.json の apiBaseUrl・projectId が空のとき）をこのプロジェクトにする（§39.1）
-    - YOJITSU_GITLAB_API_URL="$CI_API_V4_URL" YOJITSU_GITLAB_PROJECT="$CI_PROJECT_PATH" npm run build
+    YOJITSU_GITLAB_API_URL: $CI_API_V4_URL
+    YOJITSU_GITLAB_PROJECT: $CI_PROJECT_PATH
+  script:
+    - npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
-    - |
-      if [ "$PLAYWRIGHT_E2E" = "1" ] && [ -f tests/e2e/playwright.config.ts ]; then
-        npx playwright install --with-deps chromium
-        npm run test:e2e
-      else
-        echo "E2E はスキップ（PLAYWRIGHT_E2E 未設定または tests/e2e/playwright.config.ts が無い）"
-      fi
+    - node scripts/ci/e2e.mjs
   artifacts:
     paths:
       - dist/
@@ -154,17 +150,14 @@ pages:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  # build の成果物を移すだけなので、リポジトリの取得・npm ci・キャッシュは不要
+  # build の成果物を移すだけなので、npm ci・キャッシュは不要（移すスクリプトのためにリポジトリは浅く取る）
   variables:
-    GIT_STRATEGY: none
+    GIT_DEPTH: "1"
   before_script: []
   cache: []
   script:
-    - test -f dist/index.html || { echo "dist/index.html がありません（build ジョブの成果物を確認）"; exit 1; }
-    - rm -rf public
-    - mv dist public
-    # 圧縮版（.gz）を並べておくと GitLab Pages が gzip で配信する（約 3 MB の JSON が数百 KB になり、初回表示が速くなる）
-    - find public -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' -o -name '*.txt' -o -name '*.csv' \) -exec gzip -k -f -9 {} +
+    # dist/ を public/ に移し、圧縮版（.gz）を並べる（GitLab Pages が gzip で配信し、約 3 MB の JSON が数百 KB になる）
+    - node scripts/ci/pages.mjs
   artifacts:
     paths:
       - public/
@@ -185,19 +178,8 @@ publish-core:
   rules:
     - if: $CI_COMMIT_TAG =~ /^core-v/
   script:
-    - VERSION="$(node -p "require('./packages/core/package.json').version")"
-    - test "$CI_COMMIT_TAG" = "core-v$VERSION" || { echo "タグ $CI_COMMIT_TAG と packages/core/package.json の version $VERSION が一致しません"; exit 1; }
-    # 公開する前に、計算のテストと配布物の検査を通す
-    - npm run typecheck
-    - npx vitest run
-    - npm run core:build
-    - REGISTRY="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/npm/"
-    - |
-      {
-        echo "@yojitsu-navi:registry=${REGISTRY}"
-        echo "${REGISTRY#https:}:_authToken=${CI_JOB_TOKEN}"
-      } > packages/core/.npmrc
-    - cd packages/core && npm publish
+    # タグと版の一致 → 型チェック・テスト・ビルド → CI_JOB_TOKEN で npm publish
+    - node scripts/ci/publish-core.mjs
 
 # --------------------------------------------------------------------------
 # fetch-worklogs: スケジュール実行（例: 平日 06:00）で作業実績を取り直し、MR で反映する
@@ -211,15 +193,9 @@ fetch-worklogs:
   variables:
     GIT_STRATEGY: clone
   script:
-    - test -n "$WORKLOG_API_TOKEN" || { echo "WORKLOG_API_TOKEN が未設定です"; exit 1; }
-    - test -n "$GIT_PUSH_TOKEN" || { echo "GIT_PUSH_TOKEN が未設定です"; exit 1; }
-    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
-    # 直近 refetchMonths か月を取り直して data/worklogs/ を更新
-    - npm run fetch
-    # 取り直した結果で検証が通ることを確認してから反映する
-    - npm run validate
-    # main は直接プッシュ不可（保護ブランチ）なので、data/worklogs-<日時> の MR を作って自動マージする
-    - bash scripts/ci/push-data-mr.sh worklogs "chore(data): 作業実績を更新 ($(date -u +%Y-%m-%dT%H:%MZ))" data/worklogs
+    # 直近 refetchMonths か月を取り直して data/worklogs/ を更新 → 検証 →
+    # main は直接プッシュ不可（保護ブランチ）なので、data/worklogs-<日時> の MR を作って自動マージする（scripts/ci/push-data-mr.mjs）
+    - node scripts/ci/fetch-data.mjs worklogs
 
 # --------------------------------------------------------------------------
 # fetch-members: 所属・役職を人事データから取り込み、data/masters/members.csv に書き戻す
@@ -235,9 +211,5 @@ fetch-members:
   variables:
     GIT_STRATEGY: clone
   script:
-    - test -n "$GIT_PUSH_TOKEN" || { echo "GIT_PUSH_TOKEN が未設定です"; exit 1; }
-    - git checkout -B "$CI_COMMIT_BRANCH" "origin/$CI_COMMIT_BRANCH"
-    - npm run fetch:members
-    - npm run validate
-    # fetch-worklogs とは別の MR（data/members-<日時>）。触るファイルが違うので互いに競合しない
-    - bash scripts/ci/push-data-mr.sh members "chore(data): メンバーの所属・役職を更新 ($(date -u +%Y-%m-%dT%H:%MZ))" data/masters/members.csv
+    # fetch:members → 検証 → fetch-worklogs とは別の MR（data/members-<日時>）。触るファイルが違うので互いに競合しない
+    - node scripts/ci/fetch-data.mjs members

@@ -1,0 +1,7 @@
+# 改行は OS によらず LF に固定する（Windows の core.autocrlf=true でも CSV・スクリプトが CRLF にならないように）
+* text=auto eol=lf
+*.woff2 binary
+*.ttf binary
+*.xlsx binary
+*.tgz binary
+*.png binary

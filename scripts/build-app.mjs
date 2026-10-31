@@ -13,10 +13,12 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeF
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { npm } from "./lib/npm.mjs";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { isImage } from "./lib/image-detect.mjs";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PKG = join(ROOT, "packages/app");
 const TEMPLATE = join(PKG, "template");
 const DIST = join(PKG, "dist");
@@ -66,23 +68,23 @@ if (flag("with-deps")) {
   mkdirSync(work, { recursive: true });
   cpSync(join(ROOT, "package.json"), join(work, "package.json"));
   cpSync(join(ROOT, "package-lock.json"), join(work, "package-lock.json"));
-  // この PC（Linux x64 = CI と同じ）の分を入れる
-  execFileSync("npm", ["ci", "--cache", cache, "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: work, stdio: "inherit" });
-  // Windows x64 の PC で npm ci するときに要る、OS ごとのバイナリ（esbuild・rollup）
+  // この PC の分を入れる
+  npm(["ci", "--cache", cache, "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: work, stdio: "inherit" });
+  // もう一方の OS（Linux x64 / Windows x64。Runner と PC のどちらでも npm ci できるように）で要る、OS ごとのバイナリ（esbuild・rollup）
   const lock = JSON.parse(readFileSync(join(ROOT, "package-lock.json"), "utf-8"));
   for (const spec of extraPlatformPackages(lock)) {
-    execFileSync("npm", ["cache", "add", spec, "--cache", cache], { cwd: work, stdio: "inherit" });
+    npm(["cache", "add", spec, "--cache", cache], { cwd: work, stdio: "inherit" });
   }
   rmSync(join(cache, "_logs"), { recursive: true, force: true });
   rmSync(work, { recursive: true, force: true });
 }
 
-/** package-lock.json のうち、Windows x64 だけで使う OS 別のパッケージ（name@version） */
+/** package-lock.json のうち、Linux x64・Windows x64 で使う OS 別のパッケージ（name@version）。この PC の分はすでに入っていて、足しても変わらない */
 function extraPlatformPackages(lock) {
   const specs = new Set();
   for (const [key, v] of Object.entries(lock.packages ?? {})) {
     if (!key || !v.os || !v.cpu) continue;
-    if (v.os.includes("win32") && v.cpu.includes("x64")) specs.add(`${key.replace(/^.*node_modules\//, "")}@${v.version}`);
+    if ((v.os.includes("win32") || v.os.includes("linux")) && v.cpu.includes("x64")) specs.add(`${key.replace(/^.*node_modules\//, "")}@${v.version}`);
   }
   return [...specs].sort();
 }
@@ -91,7 +93,7 @@ console.log(`packages/app を作りました（template ${templateFiles(ROOT).le
 
 // 4. pack
 if (flag("pack")) {
-  const out = execFileSync("npm", ["pack", "--json"], { cwd: PKG, encoding: "utf-8" });
+  const out = npm(["pack", "--json"], { cwd: PKG, encoding: "utf-8" });
   const packed = JSON.parse(out)[0];
   const name = packed.filename;
   // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）。依存（deps/）は外部の npm パッケージなので見ない

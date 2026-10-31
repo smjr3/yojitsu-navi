@@ -126,7 +126,7 @@ scripts/
   fetch-members.ts       所属・役職の取り込み（members.csv に追記）
   validate-data.ts       データ検証（CI）
   gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
-  ci/push-data-mr.sh     定期取り込みの結果を MR で反映（GitLab CI）
+  ci/                    GitLab CI の各ジョブ（Windows・Linux の Runner で動く Node のスクリプト。定期取り込みの MR など）
   fonts/build_fonts.py   同梱フォント（src/fonts/）の作り直し（SPEC §46）
   adapters/              取り込みアダプタ（csv / dummy / http）
   lib/                   Node 用の補助（CSV・文字コード・読み込み・原子的な書き込み・指紋）

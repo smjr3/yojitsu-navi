@@ -8,9 +8,11 @@
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { npm } from "./lib/npm.mjs";
+import { fileURLToPath } from "node:url";
 import { isImage } from "./lib/image-detect.mjs";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PKG = join(ROOT, "packages/core");
 const DIST = join(PKG, "dist");
 
@@ -22,7 +24,7 @@ mkdirSync(join(DIST, "i18n"), { recursive: true });
 for (const f of ["index.js", "index.d.ts", "ja.js"]) cpSync(join(ROOT, "src/i18n", f), join(DIST, "i18n", f));
 
 if (process.argv.includes("--pack")) {
-  const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", PKG], { cwd: PKG, encoding: "utf-8" }))[0];
+  const packed = JSON.parse(npm(["pack", "--json", "--pack-destination", PKG], { cwd: PKG, encoding: "utf-8" }))[0];
   // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）
   const images = packed.files.map((f) => f.path).filter((f) => isImage(f, join(PKG, f)));
   if (images.length) {
