@@ -288,9 +288,8 @@ export default {
     teamUnknownLeader: "{file} {row} 行目: リーダー {leaderMemberId} は members.csv に存在しません",
     memberIdEmpty: "{file} {row} 行目: member_id が空です",
     memberKindInvalid: "{file} {row} 行目: メンバー {memberId} の区分は employee か partner で指定してください: {value}",
-    memberStatusInvalid: "{file} {row} 行目: メンバー {memberId} の在籍状態（status）は空（在籍）か「退職」「休職」「産休」「育休」「契約終了」で指定してください: {value}",
-    assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から{reason}ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
-    worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から{reason}ですが、翌月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
+    assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から不在ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
+    worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から不在ですが、翌月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
@@ -1056,9 +1055,10 @@ export default {
     colKind: "区分",
     kindPartner: "パートナー",
     kindEmployee: "社員",
-    // 離脱（退職・休職・産休・育休・契約終了。§35）
-    chipLeftTitle: "{month} から{reason}",
-    leftLastTeam: "{reason}（最後の所属: {team}）",
+    // 不在（退職・休職など。理由は問わない。§35）
+    chipLeft: "不在",
+    chipLeftTitle: "{month} から不在",
+    leftLastTeam: "不在（最後の所属: {team}）",
     varianceSub: "（計画−実績）",
     varianceExport: "差額（計画−実績）（円）",
     caption: "メンバー別の計画と実績",
@@ -1473,7 +1473,7 @@ export default {
     hintRemainingRate: "%（例: 20。超過を減らす目標は -50）。100 以下",
     hintTargetStart: "空なら終了月を含む年度の最初の月。月ごとの目標は終了月と同じ月",
     statusActive: "在籍",
-    statusHint: "退職・休職などの行の適用開始月から在籍しません（その月に計画か実績があれば、その月までは稼働）",
+    statusHint: "不在（退職・休職など）は適用開始月から在籍しません（その月に計画か実績があれば、その月までは稼働）",
     noneOption: "（なし）",
     choose: "選んでください",
     impact1: "過去の計算結果が変わります（影響:",
@@ -1548,9 +1548,9 @@ export default {
 
   // ── リソース計画（画面と、マスタ編集の「リソース計画」タブ） ─────────────────
   plan: {
-    // 離脱（退職・休職など。§35）
-    afterLeftChip: "離脱後の計画 {n}か月",
-    afterLeftTitle: "退職・休職などの翌月以降にもアサインが残っています。終了月を見直してください",
+    // 不在（退職・休職など。§35）
+    afterLeftChip: "不在中の計画 {n}か月",
+    afterLeftTitle: "不在になった翌月以降にもアサインが残っています。終了月を見直してください",
     // 変更の影響（§65）
     impact: {
       title: "変更の影響",

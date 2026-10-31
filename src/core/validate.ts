@@ -259,19 +259,16 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
       push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: m.memberId, teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
     }
     if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
-    if (m.status !== undefined && m.status !== "left") {
-      push({ severity: "error", code: "MEMBER_STATUS_INVALID", message: fmt(T.checks.memberStatusInvalid, { file, row, memberId: m.memberId, value: m.status }), file, row, ref: { memberId: m.memberId } });
-    }
   });
 }
 
-/** 離脱した月より後に残っているアサイン（§35。終了月の直し忘れ。離脱した月は計画があれば稼働とみなす）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */
+/** 不在した月より後に残っているアサイン（§35。終了月の直し忘れ。不在した月は計画があれば稼働とみなす）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */
 function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
   const file = "assignments.csv";
   const masters = createMasterIndex(dataset);
   const at = (id: string, m: YearMonth) => memberAt(masters, id, m);
   const worked = workedMonthKeys(dataset);
-  const hit = new Map<string, { rows: number[]; first: YearMonth; last: YearMonth; leftFrom: YearMonth; reason: string }>();
+  const hit = new Map<string, { rows: number[]; first: YearMonth; last: YearMonth; leftFrom: YearMonth }>();
   dataset.assignments.forEach((a, i) => {
     if (!isValidYearMonth(a.startMonth) || !isValidYearMonth(a.endMonth) || a.startMonth > a.endMonth || !(a.allocation > 0)) return;
     for (const m of monthRange(a.startMonth, a.endMonth)) {
@@ -282,20 +279,20 @@ function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
         if (!acc.rows.includes(rowOf(i))) acc.rows.push(rowOf(i));
         if (m < acc.first) acc.first = m;
         if (m > acc.last) acc.last = m;
-      } else hit.set(a.memberId, { rows: [rowOf(i)], first: m, last: m, leftFrom: rec!.effectiveFrom, reason: rec!.leaveReason ?? "退職" });
+      } else hit.set(a.memberId, { rows: [rowOf(i)], first: m, last: m, leftFrom: rec!.effectiveFrom });
     }
   });
   for (const [memberId, h] of [...hit].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, reason: h.reason, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId, month: h.first } });
+    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId, month: h.first } });
   }
 }
 
-/** 離脱した月より後に付いた作業実績（§35。離脱した月の実績は稼働として扱う）。実績には数える（単価は離脱の行の役職）が、入力の誤りの可能性が高いので警告。メンバーごとにまとめる */
+/** 不在した月より後に付いた作業実績（§35。不在した月の実績は稼働として扱う）。実績には数える（単価は不在の行の役職）が、入力の誤りの可能性が高いので警告。メンバーごとにまとめる */
 function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
   const file = "worklogs";
   const masters = createMasterIndex(dataset);
   const at = (id: string, m: YearMonth) => memberAt(masters, id, m);
-  const hit = new Map<string, { memberId: string; memberName: string; leftFrom: YearMonth; reason: string; hours: number; first: string; last: string; count: number }>();
+  const hit = new Map<string, { memberId: string; memberName: string; leftFrom: YearMonth; hours: number; first: string; last: string; count: number }>();
   for (const w of dataset.worklogs) {
     if (!isValidISODate(w.date) || !Number.isFinite(w.hours) || w.hours <= 0) continue;
     const rec = memberAt(masters, w.memberId, monthOfDate(w.date));
@@ -306,11 +303,11 @@ function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
       acc.count++;
       if (w.date < acc.first) acc.first = w.date;
       if (w.date > acc.last) acc.last = w.date;
-    } else hit.set(w.memberId, { memberId: w.memberId, memberName: rec?.name || w.memberName, leftFrom: rec!.effectiveFrom, reason: rec!.leaveReason ?? "退職", hours: w.hours, first: w.date, last: w.date, count: 1 });
+    } else hit.set(w.memberId, { memberId: w.memberId, memberName: rec?.name || w.memberName, leftFrom: rec!.effectiveFrom, hours: w.hours, first: w.date, last: w.date, count: 1 });
   }
   for (const h of [...hit.values()].sort((a, b) => (a.memberId < b.memberId ? -1 : 1))) {
     const hours = Math.round(h.hours * 100) / 100;
-    push({ severity: "warning", code: "WORKLOG_AFTER_LEFT", message: fmt(T.checks.worklogAfterLeft, { file, memberId: h.memberId, memberName: h.memberName, leftFrom: h.leftFrom, reason: h.reason, count: h.count, hours, first: h.first, last: h.last }), file, ref: { memberId: h.memberId, hours } });
+    push({ severity: "warning", code: "WORKLOG_AFTER_LEFT", message: fmt(T.checks.worklogAfterLeft, { file, memberId: h.memberId, memberName: h.memberName, leftFrom: h.leftFrom, count: h.count, hours, first: h.first, last: h.last }), file, ref: { memberId: h.memberId, hours } });
   }
 }
 

@@ -74,7 +74,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
       { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
-      // 在籍状態（§35）。省略可。「退職」の行の effective_from から在籍しない
+      // 在籍状態（§35）。省略可。何か書いてある行（退職・休職など）の effective_from から不在
       { name: "status", label: T.masterFiles.colStatus, input: "status", required: false },
     ],
   },
@@ -1212,7 +1212,7 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
 
 /**
  * 編集中（保存前）の組織・メンバー・アサイン（・運用保守以外の予定）と、契約の担当組織からリソース計画の計算の入力を作る。
- * worklogMonths は作業実績のある「メンバー|月」（§35 の離脱した月の稼働判定。model.json の worklogMonths）
+ * worklogMonths は作業実績のある「メンバー|月」（§35 の不在した月の稼働判定。model.json の worklogMonths）
  */
 export function planSourcesFromDocs(
   docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "outside">>,

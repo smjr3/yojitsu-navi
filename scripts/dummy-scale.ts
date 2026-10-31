@@ -8,7 +8,7 @@
  * 実運用でよくあることを、ふつうに混ぜてある（docs/DUMMY_DATA.md「実運用規模の部分」）:
  *   - 予算超過（予実マイナス）が 3 割前後。大幅超過（150〜250%）や大幅な余り（30〜60%）も少しある
  *   - 終了した案件（更新しなかった・途中解約）、変更契約（途中で金額が変わり別契約行）、3 年契約、将来開始
- *   - 離脱者（status=退職・休職・育休・契約終了 の履歴行。離脱した月から工数なし。1 人は退職月の前半まで工数あり、1 人は退職の翌月に工数が付いている）・入社・異動・昇格
+ *   - 不在の人（status に退職・休職・育休・契約終了などを書いた履歴行。理由は問わない。不在になった月から工数なし。1 人は退職月の前半まで工数あり、1 人は退職の翌月に工数が付いている）・入社・異動・昇格
  *   - 長い顧客名・案件名・作業名・氏名、同姓同名、名称の表記ゆれ
  *   - 組織変更（課の廃止で配下チームの付け替え、チーム名の変更、新設チーム、5 段目の「班」、リーダー交代）
  *   - アサインの頻繁な変更（契約ごとに 1〜3 区間、期中に配分が変わる）。人×月の配分合計は 1.0 以下（0.05 刻み）
@@ -367,7 +367,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const t = rng.pick(leafTeams.filter((x) => !x.from || x.from <= m));
     hire(t.id, "一般", rng.chance(0.25) ? "partner" : "employee", m);
   }
-  // 昇格（一般 → 主任）6 人、異動 8 人、離脱 12 人（退職 10・休職 1・育休 1。重ならないように別々の人を選ぶ）
+  // 昇格（一般 → 主任）6 人、異動 8 人、不在 12 人（status は退職 10・休職 1・育休 1。重ならないように別々の人を選ぶ）
   const pool = workers().filter((p) => p.rows[0]!.effective_from === FIRST && p.rows[0]!.title === "一般" && p.kind === "employee");
   const take = (n: number) => {
     const out: Person[] = [];
@@ -385,7 +385,7 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   retirees.forEach((p, i) => addRow(p, retireMonths[i] as YearMonth, { status: leaveReasons[i] ?? "退職" }));
   // パートナーの契約終了 2 人
   for (const p of workers().filter((x) => x.kind === "partner" && x.rows.length === 1).slice(0, 2)) addRow(p, c.m(0, 4), { status: "契約終了" });
-  // 離脱した人を戻すことはしない。退職の翌月に精算の工数が 1 件だけ付いている人（データの誤り）を 1 人作る
+  // 不在の人を戻すことはしない。退職の翌月に精算の工数が 1 件だけ付いている人（データの誤り）を 1 人作る
   const lateLogger = retirees.find((p) => lastRow(p).effective_from <= c.m(0, 7));
   // 月の途中で退職し、退職した月の前半まで工数がある人（§35。その月は稼働として数える）
   const midMonthLeaver = retirees[7];
