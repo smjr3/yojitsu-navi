@@ -1,5 +1,5 @@
 /**
- * 応援・ヘルプ（SPEC §71）: 担当チームの外の人（応援）と、所属チームの無い他部署の人（ヘルプ）を見分ける
+ * 応援・ヘルプ（SPEC §72）: 担当チームの外の人（応援）と、所属チームの無い他部署の人（ヘルプ）を見分ける
  */
 import { test, expect, gotoPage, tableByCaption, headerIndex, col, cellText, parseNumber, rowKeys } from "./helpers/app.js";
 import { fiscalPeriod, getModel, teamContractIds, treeAt, yen } from "./helpers/core.js";

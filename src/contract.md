@@ -71,7 +71,7 @@ const vm = (() => {
   const series = seriesWithForecast(model, scope, state.method);
   const months = result.months.filter((m) => period.from <= m.month && m.month <= period.to);
   const { tree } = treeAt(model, treeMonthFor(model, period));
-  // メンバー別の実績と応援・ヘルプ（§71）。担当組織 = 主担当チームと配下・上位
+  // メンバー別の実績と応援・ヘルプ（§72）。担当組織 = 主担当チームと配下・上位
   const memberCosts = teamMemberCosts(model, [c.contractId], period, ownTeamScope(tree, c.teamId));
   return { contract: c, result, period, inRange, totals, series, months, endForecasts, isWhole, unit: state.unit, method: state.method, teamLabel: contractTeamName(model, c, tree), memberCosts, origin: originTotals(memberCosts) };
 })();

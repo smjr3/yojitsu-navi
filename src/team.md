@@ -68,7 +68,7 @@ const vm = (() => {
   const series = seriesWithForecast(model, scope, state.method);
   const compare = priorYearComparison(model, scope);
   const path = isUnassigned ? [] : teamPath(tree, teamId);
-  // メンバー別の実績と応援・ヘルプの合計（§71）。担当組織 = このチームと配下・上位
+  // メンバー別の実績と応援・ヘルプの合計（§72）。担当組織 = このチームと配下・上位
   const memberCosts = teamMemberCosts(model, contractIds, period, isUnassigned ? null : ownTeamScope(tree, teamId));
   return {
     memberCosts,

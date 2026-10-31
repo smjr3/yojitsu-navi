@@ -41,7 +41,24 @@ import {
   planSourcesFromDocs,
   validateEdited,
 } from "../core/masterEdit.js";
-import { allocationFromInput, contractSegments, editMonthAllocation, flattenTeamTree, hoursFromAllocation, memberTeamAt, mergeAdjacent, planView, projectKey } from "../core/plan.js";
+import {
+  allocationFromInput,
+  contractSegments,
+  editMonthAllocation,
+  flattenTeamTree,
+  hoursFromAllocation,
+  memberTeamAt,
+  mergeAdjacent,
+  parsePlanRange,
+  planRangeIncluding,
+  planRangeOptions,
+  planView,
+  projectKey,
+  serializePlanRange,
+  setPlanRangeFrom,
+  setPlanRangeTo,
+  shiftPlanRange,
+} from "../core/plan.js";
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
@@ -116,14 +133,6 @@ const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: 
 /** 目標（§63）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
 const TARGET_FIELD = "__target";
 
-/** 月 m を含む年度の 12 か月 */
-function fiscalMonths(month, startMonth) {
-  const [y, m] = month.split("-").map(Number);
-  const fy = m >= startMonth ? y : y - 1;
-  const first = `${fy}-${String(startMonth).padStart(2, "0")}`;
-  return Array.from({ length: 12 }, (_, i) => addMonths(first, i));
-}
-
 /** 人月の表示（小数 2 桁）。保存・表示は人月に統一（§23.2） */
 function pm(v) {
   return (Math.round(v * 100) / 100).toFixed(2);
@@ -169,6 +178,8 @@ function safeStorage(kind) {
 
 // リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
 const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+// リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
+const PLAN_RANGE_KEY = "yojitsu-navi:plan-range";
 const PLAN_NAME_W_MIN = 100;
 const PLAN_NAME_W_MAX = 480;
 function clampPlanNameW(w) {
@@ -244,10 +255,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   let rebasedInfo = {};
   let active = VIEW_IDS.includes(initialView) ? initialView : VIEW_IDS[0];
   const std = config.standardHoursPerMonth;
-  // リソース計画タブの状態: 組織（null = すべて）・年度の 12 か月・強調するメンバー・開いているメンバー
+  // リソース計画タブの状態: 組織（null = すべて）・表示する月の範囲（§71）・強調するメンバー・開いているメンバー
+  const initialRange = parsePlanRange(local.get(PLAN_RANGE_KEY), asOfMonth);
   const plan = {
     teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []).members, initialMember, asOfMonth) : null),
-    months: fiscalMonths(asOfMonth, config.fiscalYearStartMonth),
+    range: initialRange,
+    months: monthRange(initialRange.from, initialRange.to),
     focusMember: initialMember,
     open: new Set(initialMember ? [initialMember] : []),
     /** 変更の履歴を開いている「メンバー|対象」 */
@@ -257,6 +270,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
   };
+  /** 表示する月の範囲を変える。save = 人が選んだ範囲（このブラウザに覚える。問題への移動などで動かしたときは覚えない） */
+  function applyPlanRange(r, save = false) {
+    plan.range = r;
+    plan.months = monthRange(r.from, r.to);
+    if (save) local.set(PLAN_RANGE_KEY, serializePlanRange(r, asOfMonth));
+  }
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false }]));
   /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
   const csvEdit = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { on: false, text: null, result: null }]));
@@ -1088,12 +1107,22 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const unit = plan.teamId ? tree[plan.teamId] : null;
     const leaderText = (id) => (id ? names.get(id) || fmt(T.masters.unknownMemberValue, { id }) : T.plan.leaderUnset);
     const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) || T.plan.unknownMember }) : ""}`;
-    const fyLabel = fmt(T.plan.fyLabel, { fy: months[0].slice(0, 4), first: monthJa(months[0]), last: monthJa(last) });
-    const shiftYear = (d) => {
-      plan.months = months.map((m) => addMonths(m, 12 * d));
+    const fyLabel = fmt(T.plan.rangeLabel, { first: monthJa(months[0]), last: monthJa(last), n: months.length });
+    const changeRange = (r, fk) => {
+      applyPlanRange(r, true);
       renderPanel();
-      focusKey(d < 0 ? "plan:prev" : "plan:next");
+      focusKey(fk);
     };
+    const rangeOptions = planRangeOptions(asOfMonth, minMonth, plan.range);
+    const monthSelect = (id, fk, value, aria, onPick) => {
+      const sel = html`<select id=${id} class="yn-select yn-me-plan-month" data-fk=${fk} aria-label=${aria}>
+        ${rangeOptions.map((m) => html`<option value=${m} selected=${m === value}>${monthJa(m)}</option>`)}
+      </select>`;
+      sel.addEventListener("change", () => changeRange(onPick(sel.value), fk));
+      return sel;
+    };
+    const fromSel = monthSelect("yn-me-plan-from", "plan:from", plan.range.from, T.plan.rangeFrom, (v) => setPlanRangeFrom(plan.range, v));
+    const toSel = monthSelect("yn-me-plan-to", "plan:to", plan.range.to, T.plan.rangeTo, (v) => setPlanRangeTo(plan.range, v));
     const teamSel = html`<select id="yn-me-plan-team" class="yn-select" data-fk="plan:team">
       <option value="" selected=${plan.teamId === null}>${T.plan.allUnits}</option>
       ${flat.map((n) => html`<option value=${n.teamId} selected=${plan.teamId === n.teamId}>${optLabel(n)}</option>`)}
@@ -1223,7 +1252,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         if (monthly[i] > 1 + 1e-9) overCounts[i] += 1;
       });
       const overMonths = months.filter((_, i) => monthly[i] > 1 + 1e-9);
-      // 案件ごと（この年度に掛かる計画のある案件。月の不正な行も見せる）
+      // 案件ごと（表示中の期間に掛かる計画のある案件。月の不正な行も見せる）
       const byProject = new Map();
       for (const x of aRows) {
         const p = projectOfContract(x.contractId);
@@ -1234,7 +1263,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const projectList = [...byProject.values()].filter((g) => g.rows.some((x) => inFy(x) || !/^\d{4}-\d{2}$/.test(x.startMonth) || !/^\d{4}-\d{2}$/.test(x.endMonth)));
       const counts = rowCounts("assignments", aRows);
       const oCounts = rowCounts("outside", oRows);
-      // 開くと出る作業の数 = 案件 ＋ その年度に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
+      // 開くと出る作業の数 = 案件 ＋ 表示中の期間に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
       const workCount = projectList.length + new Set(oRows.filter(inFy).map((x) => x.type ?? "")).size;
       const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
@@ -1383,9 +1412,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-toolbar yn-me-plan-toolbar">
         <label class="yn-me-plan-label" for="yn-me-plan-team">${T.plan.unitLabel}</label>${teamSel}
         <span class="yn-me-plan-fy">
-          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:prev" aria-label=${T.plan.prevYear} onclick=${() => shiftYear(-1)}>◀</button>
-          <span aria-live="polite">${fyLabel}</span>
-          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:next" aria-label=${T.plan.nextYear} onclick=${() => shiftYear(1)}>▶</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:prev" aria-label=${T.plan.prevMonth} onclick=${() => changeRange(shiftPlanRange(plan.range, -1), "plan:prev")}>◀</button>
+          ${fromSel}<span aria-hidden="true">〜</span>${toSel}
+          <button type="button" class="yn-btn yn-btn-sm" data-fk="plan:next" aria-label=${T.plan.nextMonth} onclick=${() => changeRange(shiftPlanRange(plan.range, 1), "plan:next")}>▶</button>
         </span>
         <button type="button" class="yn-btn yn-btn-primary" data-fk="add:plan" disabled=${!editable} onclick=${() => addFor(null, "add:plan")}>${T.plan.add}</button>
       </div>
@@ -1400,7 +1429,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
           <thead><tr>
             <th scope="col" class="yn-me-plan-name-th">${T.plan.colMember}${planNameResizer()}</th>
-            ${months.map((m) => html`<th scope="col" class="num">${fmt(T.plan.colMonth, { m: Number(m.slice(5)) })}</th>`)}
+            ${months.map((m, i) => html`<th scope="col" class="num">${fmt(T.plan.colMonth, { m: Number(m.slice(5)) })}${i === 0 || m.endsWith("-01") ? html`<span class="yn-th-sub">${fmt(T.plan.colYear, { y: m.slice(0, 4) })}</span>` : null}</th>`)}
             <th scope="col" class="num">${T.plan.colFyTotal}<span class="yn-th-sub">${T.plan.unitPersonMonth}</span></th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
@@ -1502,7 +1531,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const next = addMonths(asOfMonth, 1);
     const startDefault = next >= plan.months[0] && next <= fyLast ? next : plan.months[0];
     const rows = targetRows(r.memberId, target).filter((x) => /^\d{4}-\d{2}$/.test(x.startMonth) && /^\d{4}-\d{2}$/.test(x.endMonth));
-    /** 「計画の終わりまで」の終了月: 月 from 以降に掛かる計画の最後の月。無ければ年度末（案件は契約の終わりまで） */
+    /** 「計画の終わりまで」の終了月: 月 from 以降に掛かる計画の最後の月。無ければ表示中の期間の終わり（案件は契約の終わりまで） */
     const planEnd = (from) => {
       const ends = rows.filter((x) => x.endMonth >= from).map((x) => x.endMonth);
       if (ends.length) return ends.reduce((a, b) => (a > b ? a : b));
@@ -1847,7 +1876,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         for (const id of drop) doc = deleteRow(doc, id);
       }
       const changes = touched.size ? [{ fileId: "assignments", doc }] : [];
-      // 契約外予定: この月だけ／この月以降（掛かっている行の終わりまで、無ければ年度末まで）
+      // 契約外予定: この月だけ／この月以降（掛かっている行の終わりまで、無ければ表示中の期間の終わりまで）
       // 種別ごとに順に当てる（前の種別の変更を土台に次の種別を書き直す）
       let outDoc = docs.outside;
       for (const o of outs) {
@@ -2317,7 +2346,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     return jump ? `${base}${base.includes("?") ? "&" : "?"}${jump}` : base;
   }
 
-  /** 該当箇所を見せてフォーカスする（絞り込み・年度・組織を合わせ、閉じている履歴を開く） */
+  /** 該当箇所を見せてフォーカスする（絞り込み・期間・組織を合わせ、閉じている履歴を開く） */
   function revealIssue(i) {
     const fileId = i.fileId;
     if (!fileId || !pageFiles.includes(fileId)) return;
@@ -2329,7 +2358,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (csvEdit.assignments.on && csvEdit.assignments.text === null) csvEdit.assignments.on = false;
       const memberId = row ? cellOf(doc, row, "member_id") : i.ref?.memberId != null ? String(i.ref.memberId) : "";
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
-      if (/^\d{4}-\d{2}$/.test(start) && !plan.months.includes(start)) plan.months = fiscalMonths(start, config.fiscalYearStartMonth);
+      if (/^\d{4}-\d{2}$/.test(start)) applyPlanRange(planRangeIncluding(plan.range, start));
       plan.q = "";
       const src = planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
@@ -2342,7 +2371,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (PERSON_ISSUES.has(i.code) && memberId) {
         // 人の行の、問題の最初の月のセルへ
         const month = String(i.ref?.month ?? start);
-        if (/^\d{4}-\d{2}$/.test(month) && !plan.months.includes(month)) plan.months = fiscalMonths(month, config.fiscalYearStartMonth);
+        if (/^\d{4}-\d{2}$/.test(month)) applyPlanRange(planRangeIncluding(plan.range, month));
         key = `plan:cell:${memberId}:all:${month}`;
       } else if (row && memberId) {
         const target = fileId === "outside" ? { kind: "outside", type: memberOutsideTypes(memberPeriodRows("outside", memberId)).find((t) => sameType(t, cellOf(doc, row, "type"))) ?? cellOf(doc, row, "type") } : { kind: "project", key: projectOfContract(cellOf(doc, row, "contract_id")).key };

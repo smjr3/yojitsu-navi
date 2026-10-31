@@ -133,7 +133,7 @@ describe("teamMemberCosts (作業実績軸)", () => {
     }
   });
 
-  it("teamScope を渡すと所属が外の作業を応援、所属なしをヘルプとして数える（§71）", () => {
+  it("teamScope を渡すと所属が外の作業を応援、所属なしをヘルプとして数える（§72）", () => {
     const rows = teamMemberCosts(model, ["A"], period, new Set(["T1"]));
     const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
     expect(by.M1).toMatchObject({ supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0 });

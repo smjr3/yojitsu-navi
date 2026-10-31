@@ -59,6 +59,19 @@ export async function useDarkTheme(page: Page): Promise<void> {
   });
 }
 
+/**
+ * リソース計画の表示する月（§71）を基準日の年度（4月〜3月）にする。年度の月を前提にしたテスト用（既定は今月から 12 か月）
+ */
+export async function usePlanFiscalYear(page: Page, asOf: string): Promise<void> {
+  const m = Number(asOf.slice(5, 7));
+  const offset = -((m - 4 + 12) % 12);
+  await page.addInitScript((text) => {
+    try {
+      localStorage.setItem("yojitsu-navi:plan-range", text);
+    } catch {}
+  }, `${offset}:12`);
+}
+
 /** ページを開き、ヘッダ（モデル読み込み後に描画）と h1 が出るまで待つ */
 export async function gotoPage(page: Page, path: string): Promise<void> {
   await page.goto(path);

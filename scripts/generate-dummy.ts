@@ -199,7 +199,7 @@ const membersOf = (c: FyCalendar): MemberRow[] => [
 ];
 
 /**
- * 他部署（導入・設計・構築）の人: 運用保守の組織に所属しない（team_id 空）が、スポットで運用保守の案件をヘルプする（§71）。
+ * 他部署（導入・設計・構築）の人: 運用保守の組織に所属しない（team_id 空）が、スポットで運用保守の案件をヘルプする（§72）。
  * 人事取り込みでメンバーマスタに入り、役職単価で計算される。
  */
 const helpMembersOf = (c: FyCalendar): MemberRow[] => [
@@ -715,7 +715,7 @@ export function generate(opts: GenOptions): Generated {
     push({ date: c.d(0, 5, 13), memberId: "M014", memberName: "佐々木 美月", customerName: "", projectName: "", task: "問い合わせ対応", hours: 1.5 });
   }
 
-  // 他部署の人のヘルプ（§71。別の乱数列。基本シナリオの数値は変わらない）
+  // 他部署の人のヘルプ（§72。別の乱数列。基本シナリオの数値は変わらない）
   const HELP_MEMBERS = helpMembersOf(c);
   const rngHelp = new Rng(opts.seed + 104729);
   for (const date of days) {

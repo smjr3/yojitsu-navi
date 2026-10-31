@@ -4,13 +4,15 @@
  */
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
-import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
-import { ROOT_DIR } from "./constants.js";
+import { test, expect, gotoPage, useDarkTheme, usePlanFiscalYear } from "./helpers/app.js";
+import { AS_OF, ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
 
 const PAYLOAD = buildMastersPayload(ROOT_DIR);
 
 test.beforeEach(async ({ page }) => {
+  // 年度の月を前提にしたテスト（表示する月の既定は今月から 12 か月。§71）
+  await usePlanFiscalYear(page, AS_OF);
   await page.addInitScript(() => {
     if (sessionStorage.getItem("yn-e2e-keep-draft") !== "1") localStorage.removeItem("yojitsu-navi:masters-draft:v1");
     sessionStorage.removeItem("yojitsu-navi:plan-cell-scope");

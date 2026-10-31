@@ -2774,6 +2774,26 @@ html:has(dialog.yn-dialog[open]) {
   gap: 6px;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .yn-me-plan-fy {
+    gap: 4px;
+  }
+  .yn-me-plan-fy .yn-me-plan-month {
+    padding-left: 6px;
+  }
+}
+/* 表示する月の範囲（§71）: 月の選択欄は中身の幅だけ */
+.yn-me-plan-fy .yn-me-plan-month {
+  width: auto;
+  min-width: 0;
+}
+/* ◀ ▶ は月の選択欄と同じ高さに揃える */
+.yn-me-plan-fy > .yn-btn {
+  align-self: stretch;
+  height: auto;
+  min-width: 28px;
 }
 .yn-me-plan-unit {
   font-size: 13px;

@@ -123,7 +123,7 @@ export function teamPath(tree: Record<string, TeamNode>, teamId: string): TeamNo
 // ---------------------------------------------------------------------------
 
 /**
- * 作業した人と案件の担当組織の関係（§71）
+ * 作業した人と案件の担当組織の関係（§72）
  * - own: 担当組織（配下・上位を含む）に所属
  * - support: 応援。管理対象の組織に所属しているが、担当組織の外
  * - help: ヘルプ。所属チームが無い（他部署）か、メンバーマスタに無い人
@@ -178,7 +178,7 @@ export interface TeamMemberCost {
 /**
  * 契約 contractIds の期間内の CostLine を、作業した人ごとに合算する。
  * 所属チームがどこでも含める（作業実績軸）。所属チームの無い人の作業は help* に数える。
- * teamScope（ownTeamScope の結果）を渡すと、所属がその外の作業を support* に数える（§71）。
+ * teamScope（ownTeamScope の結果）を渡すと、所属がその外の作業を support* に数える（§72）。
  * 並びは原価の大きい順、同額は memberId 順。合計は同じ契約・期間の aggregate().cost（labor のみのとき）と一致する。
  */
 export function teamMemberCosts(model: Model, contractIds: readonly string[], period: Period, teamScope: ReadonlySet<string> | null = null): TeamMemberCost[] {
