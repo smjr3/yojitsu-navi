@@ -68,9 +68,11 @@ test("月を送ると前月との増減（＋/−）が変わる。◀ ▶・ス
   await expect(page.locator('[data-org="next"]')).toBeFocused();
   await page.locator('[data-org="prev"]').click();
   await expect(page.locator(".yn-org")).toHaveAttribute("data-month", month);
+  // スライダーの左端 = データの最初の月（描き直しを待ってから URL を見る）
+  const first = model.meta.minMonth < asOf ? model.meta.minMonth : asOf;
   await page.locator(".yn-org-slider").fill("0");
-  await expect(page.locator(".yn-org")).toHaveAttribute("data-month", /\d{4}-\d{2}/);
-  expect(new URL(page.url()).searchParams.get("month")).toBe(await page.locator(".yn-org").getAttribute("data-month"));
+  await expect(page.locator(".yn-org")).toHaveAttribute("data-month", first);
+  await expect.poll(() => new URL(page.url()).searchParams.get("month")).toBe(first);
 });
 
 test("吹き出し: チームは担当顧客、メンバーは計画・実績の内訳（未来の月は計画だけ）", async ({ page }) => {
