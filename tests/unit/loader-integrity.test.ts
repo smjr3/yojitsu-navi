@@ -141,7 +141,7 @@ describe("入力の指紋", () => {
     expect(todayJst(new Date("2026-10-27T15:00:00Z"))).toBe("2026-10-28");
   });
 
-  it("固定したかは YOJITSU_AS_OF_FIXED を優先し、無ければ YOJITSU_AS_OF の有無（§74。build.ts は日付を必ず渡すため）", () => {
+  it("固定したかは YOJITSU_AS_OF_FIXED を優先し、無ければ YOJITSU_AS_OF の有無（§75。build.ts は日付を必ず渡すため）", () => {
     expect(isAsOfFixed({ YOJITSU_AS_OF: "2026-10-27" })).toBe(true);
     expect(isAsOfFixed({})).toBe(false);
     expect(isAsOfFixed({ YOJITSU_AS_OF: "2026-10-27", YOJITSU_AS_OF_FIXED: "0" })).toBe(false);

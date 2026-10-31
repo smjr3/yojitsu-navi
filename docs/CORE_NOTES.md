@@ -111,7 +111,7 @@
 
 ### model.json のサイズ
 
-`memberMonths` は全ページが読む model.json に入れるとほぼ倍になるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`）でメンバー別の画面だけに配る（5 倍のダミーデータで model.json 約 3.1 MB・member-months.json 約 3.0 MB）。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
+`memberMonths` は全ページが読む model.json に入れるとほぼ倍になるため、`src/data/model.json.ts` では `memberMonths: []` にし、`src/data/member-months.json.ts`（`{asOf, memberMonths, rateHistory}`）でメンバー別の画面とチーム一覧の体制図（§76）だけに配る（5 倍のダミーデータで model.json 約 3.1 MB・member-months.json 約 3.0 MB）。型（`Model.memberMonths`）は変えず、画面で `{...model, memberMonths}` に戻して core の関数にそのまま渡す。
 
 ### 性能
 

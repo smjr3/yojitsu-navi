@@ -20,7 +20,7 @@ import { T, fmt } from "../i18n/index.js";
 export interface BuildModelOptions {
   /** 計算基準日 */
   asOf: ISODate;
-  /** 計算基準日を固定したか（meta.asOfFixed に入れる。§74） */
+  /** 計算基準日を固定したか（meta.asOfFixed に入れる。§75） */
   asOfFixed?: boolean;
   /** meta.generatedAt に入れる値。省略時は現在時刻（決定的にしたい場合は指定する） */
   generatedAt?: string;

@@ -2,7 +2,7 @@
  * データローダ共通: data/ を読んで Model を作る（Node 側専用。画面からは import しない）
  *
  * asOf は環境変数 YOJITSU_AS_OF（YYYY-MM-DD）、無ければ今日（JST）。
- * 固定しないビルドの asOf はビルドした日で、画面が開いた人の今日（JST）に置き換える（SPEC §74）。
+ * 固定しないビルドの asOf はビルドした日で、画面が開いた人の今日（JST）に置き換える（SPEC §75）。
  *
  * 壊れた出力を出さないための決まり（docs/DATA_LOADERS.md）:
  *   - 標準出力には成果物（JSON）だけを書く。console.log は標準エラーに回す（ログが JSON に混ざらない）

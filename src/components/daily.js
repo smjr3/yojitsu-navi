@@ -27,7 +27,7 @@ export function loadDaily(attachment) {
 }
 
 /**
- * 選択中の期間が今月（asOf の月 = 開いた人の今日の月。§74）を含み、今月の予算があるときだけ進みを返す。
+ * 選択中の期間が今月（asOf の月 = 開いた人の今日の月。§75）を含み、今月の予算があるときだけ進みを返す。
  * daily.json が前の月のもの（月が替わってから取り込みが無い）なら、今月の実績は 0 として出す。
  * target（今月を含む目標。core の targetForMonth）があれば、今月の上限 = 予算 ×（1 − 目標の残予算率）
  */
@@ -153,7 +153,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       Plot.line(projLine, { x: "day", y: "v", stroke: c.cost, strokeWidth: 2, strokeDasharray: "2 3" }),
       Plot.line(done, { x: "day", y: "cumulative", stroke: c.cost, strokeWidth: 2.5, curve: "linear" }),
       last ? Plot.dot([last], { x: "day", y: "cumulative", fill: c.cost, r: 4, stroke: c.surface, strokeWidth: 2 }) : null,
-      // 今日（§74）。取り込みが止まると、累計の線が今日の手前で終わって見分けられる
+      // 今日（§75）。取り込みが止まると、累計の線が今日の手前で終わって見分けられる
       todayDay ? Plot.ruleX([todayDay], { stroke: c.muted, strokeWidth: 1, strokeDasharray: "1 3" }) : null,
       todayDay ? Plot.text([todayDay], { x: (d) => d, frameAnchor: "top", dy: -14, text: () => T.daily.todayMark, fill: c.muted, fontSize: 11 }) : null,
       Plot.ruleX(pts, Plot.pointerX({ x: "day", stroke: c.muted, strokeOpacity: 0.6 })),

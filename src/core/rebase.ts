@@ -1,5 +1,5 @@
 /**
- * 計算基準日の置き換え（SPEC §74）
+ * 計算基準日の置き換え（SPEC §75）
  *
  * 作業実績の取り込みは毎日成功するとは限らないので、画面の「今日」は取り込んだ日（＝ビルドした日）ではなく、
  * 開いている人の今日（日本時間）にする。ビルド済みの Model（作業ログ明細なし）だけで、asOf に依る値を計算し直す:
@@ -28,7 +28,7 @@ export function viewerAsOf(meta: Pick<ModelMeta, "asOf" | "asOfFixed">, now: Dat
 }
 
 /**
- * 作業実績の取り込みが止まっているか: 最後に取り込んだ日（日本時間）が今日の前日より前（§74）。
+ * 作業実績の取り込みが止まっているか: 最後に取り込んだ日（日本時間）が今日の前日より前（§75）。
  * 毎日の取り込みが朝でも夜でも、1 回抜けたら true になる。取り込んだことが無ければ false（「未取得」と出す）
  */
 export function isWorklogStale(meta: Pick<ModelMeta, "asOf" | "worklogFetchedAt">): boolean {

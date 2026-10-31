@@ -1,5 +1,5 @@
 /**
- * 計算基準日の置き換え（SPEC §74）: ビルドした日の Model を、画面で開いた人の今日に置き換える。
+ * 計算基準日の置き換え（SPEC §75）: ビルドした日の Model を、画面で開いた人の今日に置き換える。
  * 置き換えた Model は、その日にビルドした Model と（作業ログから作る値はそのままで）同じになる。
  */
 import { beforeAll, describe, expect, it } from "vitest";

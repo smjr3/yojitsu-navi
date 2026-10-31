@@ -38,7 +38,7 @@ async function main(): Promise<number> {
       (prep.cleared ? `ローダのキャッシュを捨てて作り直します（${why}）` : "前回と同じ入力なのでキャッシュを使います") +
       (prep.removedLeftovers ? `。失敗・中断の残り ${prep.removedLeftovers} 件を消しました` : ""),
   );
-  // 日付はローダ全体で揃えるため必ず渡す。呼び出し側が固定したか（画面で今日に置き換えるか。SPEC §74）は別に渡す
+  // 日付はローダ全体で揃えるため必ず渡す。呼び出し側が固定したか（画面で今日に置き換えるか。SPEC §75）は別に渡す
   const code = await run(["build"], { ...process.env, YOJITSU_AS_OF: asOf, YOJITSU_AS_OF_FIXED: isAsOfFixed() ? "1" : "0", YOJITSU_INPUT_HASH: fp.hash });
   if (code !== 0) {
     console.error(`[build] observable build が失敗しました（終了コード ${code}）`);

@@ -156,7 +156,7 @@ export async function loadJson(file, { skeleton } = {}) {
 }
 
 /**
- * 計算基準日を開いている人の今日（日本時間）に置き換える（SPEC §74）。
+ * 計算基準日を開いている人の今日（日本時間）に置き換える（SPEC §75）。
  * 作業実績の取り込みが止まった日も「今日」は進む。YOJITSU_AS_OF で固定したビルドはそのまま
  */
 export function withToday(model) {

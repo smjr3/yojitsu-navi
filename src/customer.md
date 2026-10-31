@@ -12,13 +12,14 @@ title: 顧客詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, targetForMonth } from "./core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, targetForMonth, contractOwnScopes, originTotals, teamMemberCosts } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
-import { statTile, kpiRow, forecastStatus } from "./components/kpi.js";
+import { statTile, kpiRow, forecastStatus, statusChip } from "./components/kpi.js";
+import { memberCostSpec, originChips, originOrgText, withOrigin } from "./components/team-detail.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
@@ -65,7 +66,9 @@ const vm = (() => {
   const series = seriesWithForecast(model, scope, state.method);
   const compare = priorYearComparison(model, scope);
   const { tree } = treeAt(model, treeMonthFor(model, period));
-  return { scope, totals, forecast, series, compare, tree, fy: periodFiscalYear(model, period), unit: state.unit, method: state.method };
+  // メンバー別の実績と応援・ヘルプ（§74）。応援は案件ごとの担当組織（主担当チームと配下・上位）で判定する（案件詳細と同じ）
+  const memberCosts = teamMemberCosts(model, contractIds, period, contractOwnScopes(model, tree));
+  return { scope, totals, forecast, series, compare, tree, memberCosts, origin: originTotals(memberCosts), fy: periodFiscalYear(model, period), unit: state.unit, method: state.method };
 })();
 ```
 
@@ -153,7 +156,7 @@ if (vm) {
       statTile({
         label: T.kpi.cost,
         value: money(totals.cost, unit),
-        sub: fmt(T.kpi.costSub, { costRatio: formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin), hours: integer(Math.round(totals.hours)) }),
+        sub: withOrigin(fmt(T.kpi.costSub, { costRatio: formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin), hours: integer(Math.round(totals.hours)) }), vm.origin, unit),
         compare: cmp("cost", { good: (d) => d <= 0 }),
         breakdown: () => bd.costAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, detailHref }),
       }),
@@ -311,6 +314,38 @@ if (vm) {
         rowHref: (r) => store.href("./contracts", { team: r.teamId }, { customer: group.key, direct: 1 }),
       }),
     );
+  }
+}
+```
+
+```js
+// メンバー別の実績（§74）。誰がこの顧客の案件にどれだけ作業したか（作業実績軸。所属チームが別の人・他部署の人も含める）
+if (vm) {
+  const { scope, unit, tree } = vm;
+  const teamName = (id) => tree[id]?.name ?? model.teams.find((t) => t.teamId === id)?.name ?? id;
+  const rows = vm.memberCosts.map((r) => ({ ...r, key: r.memberId, teams: originOrgText(r, teamName) }));
+  display(sectionTitle(T.team.membersTitle, fmt(T.customer.membersHint, { period: periodJa(scope.period) })));
+  if (rows.length === 0) {
+    display(emptyState({ title: T.team.noWorkTitle, text: T.customer.noWorkText, icon: "○" }));
+  } else {
+    const detailHref = (id) => store.href("./contract", {}, { id });
+    const spec = (r) => memberCostSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, member: r, detailHref });
+    const columns = [
+      {
+        key: "memberName",
+        label: T.breakdown.colMember,
+        type: "text",
+        render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`,
+        sortValue: (r) => r.memberName,
+      },
+      { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
+      { key: "hours", label: T.columns.hours, type: "hours", breakdown: spec },
+      { key: "amount", label: T.columns.cost, type: "moneyYen", breakdown: spec },
+      { key: "share", label: T.team.colShare, type: "percent" },
+      { key: "contractCount", label: T.columns.contractCount, type: "int", hideOnPhone: true, get: (r) => r.contractIds.length },
+      { key: "monthCount", label: T.team.colWorkMonths, type: "int", hideOnPhone: true, hideNarrow: true },
+    ];
+    display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `customer_members_${scope.period.from}_${scope.period.to}`, sort: { key: "amount", dir: "desc" } }));
   }
 }
 ```

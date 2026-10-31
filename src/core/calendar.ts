@@ -92,7 +92,7 @@ export function isValidISODate(value: unknown): value is ISODate {
 }
 
 /**
- * 日本時間（Asia/Tokyo、UTC+9・夏時間なし）の今日を YYYY-MM-DD で返す（§74）。
+ * 日本時間（Asia/Tokyo、UTC+9・夏時間なし）の今日を YYYY-MM-DD で返す（§75）。
  * 端末のタイムゾーン設定に依らない。画面の「今日」と、ビルド時の既定の計算基準日に使う。
  */
 export function todayJst(now: Date = new Date()): ISODate {

@@ -49,7 +49,7 @@ export function todayJst(now: Date = new Date()): string {
 }
 
 /**
- * 計算基準日を呼び出し側が YOJITSU_AS_OF で固定したか（固定したビルドは画面でも今日に置き換えない。§74）。
+ * 計算基準日を呼び出し側が YOJITSU_AS_OF で固定したか（固定したビルドは画面でも今日に置き換えない。§75）。
  * scripts/build.ts はローダの日付を揃えるため YOJITSU_AS_OF を必ず渡すので、呼び出し側が固定したかは
  * YOJITSU_AS_OF_FIXED（"1" / "0"）で別に渡す。これがあればそちらを優先する
  */

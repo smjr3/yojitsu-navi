@@ -7,7 +7,7 @@ Observable Framework 1.13 で作った画面側の構成と決定事項。計算
 ```
 src/
   data/
-    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)。画面で開いた人の今日に置き換える（SPEC §74）。出力は emitJson で検査。docs/DATA_LOADERS.md）
+    _shared.ts                   データローダ共通（data/ を読んで buildModel。asOf = YOJITSU_AS_OF か今日(JST)。画面で開いた人の今日に置き換える（SPEC §75）。出力は emitJson で検査。docs/DATA_LOADERS.md）
     model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（約 3.1 MB / 5 倍のダミーデータ）
     worklogs/[contractId].json.js 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
@@ -42,7 +42,7 @@ src/
 | ページ | 問い | 構成 |
 |---|---|---|
 | `/` 全体サマリー | 会社全体（or 選んだチーム）は今どうか | KPI 5 枚（予算・実績・残予算＋残予算率・消化率・期間の終わりの着地見込みの差＋超過見込み件数。§54）→ 月次推移 → 超過見込み契約 → チーム別 |
-| `/teams` チーム一覧 | どの組織が悪いか | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ |
+| `/teams` チーム一覧 | どの組織が悪いか・どんな体制か | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ。「表 / 体制図」の切り替えで、月を選んで組織・メンバー・応援／ヘルプと負荷の色を見る（表示だけ。SPEC §76） |
 | `/team?id=` チーム詳細（タブには出さない。「チーム」タブが選択状態） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 案件一覧 → メンバー別実績 → 組織の変遷 |
 | `/contracts` 案件一覧 | どの契約が悪いか | 並べ替え可能な一覧 ＋ 絞り込み（超過見込み／消化率超過／速報含む／期間外も表示／検索）＋ 合計行 |
 | `/contract?id=` 案件詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 3 方式の着地比較 → 作業ログ（遅延読み込み） |
@@ -83,7 +83,7 @@ src/
 
 ## データの流れ
 
-1. `npm run build` → `src/data/model.json.ts` が `data/` を読み `buildModel()`。`asOf` は `YOJITSU_AS_OF`（テスト・試用版で固定したい場合）か今日（JST）。固定しないビルドは、画面が `model.json` を読んだ直後に開いた人の今日（JST）へ置き換える（`loadModel`→`rebaseModel`。SPEC §74）。
+1. `npm run build` → `src/data/model.json.ts` が `data/` を読み `buildModel()`。`asOf` は `YOJITSU_AS_OF`（テスト・試用版で固定したい場合）か今日（JST）。固定しないビルドは、画面が `model.json` を読んだ直後に開いた人の今日（JST）へ置き換える（`loadModel`→`rebaseModel`。SPEC §75）。
 2. `model.json` には `worklogs` 明細を含めない（`costLines` までは含む）。明細は `src/data/worklogs/[contractId].json.js` が契約ごとに出力し、`observablehq.config.js` の `dynamicPaths` が `data/contracts.csv` の契約ID から `/data/worklogs/<id>.json` を列挙する。
 3. 画面は `breakdown.js` の `fetchWorklogs(id)` で必要なときだけ取得する。ビルド済みサイトでは `/data/worklogs/<id>.json`、`npm run dev` では `/_file/data/worklogs/<id>.json` で配信されるので順に試す（プレビューでは最初の 404 がコンソールに出るが動作に影響なし）。契約 ID はパスに入れる前に `encodeURIComponent` する（`dynamicPaths` 側も同じ。ローダは `decodeURIComponent` で元に戻す）ので、`/` や空白を含む ID でも列挙から漏れない。Excel のファイル名も `safeFileName()` で `\ / : * ? " < > |` を `_` に置換する。
 4. 生成物の大きさ（ダミーデータ）: `model.json` 540 KB、`dataset-issues.json` 6 KB、作業ログ明細は契約ごとに 1 KB〜650 KB（合計約 4.3 MB、`dist/` 全体 6.3 MB）。
@@ -170,12 +170,13 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 - `/customers`（上部タブ: チームの次）と `/customer?key=`（タブには出さない）。部品は `src/components/customers.js`（`customerHref` / `idsRow` / `groupBreakdowns` / `contractListColumns`）。表は `standardColumns()` を再利用し他画面と列順を揃える（顧客・契約数・予算・実績・残予算・残予算率・消化率・着地差・状態）。
 - URL の `key` は `encodeURIComponent`（`customerHref`）。読むのは `URLSearchParams.get`。日本語・記号・空白・`/ # ? % + &` を含む顧客名で往復できる（E2E は model.json を書き換えて確認）。見つからない key・key なしは空状態。
 - 一覧: 選んだチーム（配下含む）の契約だけで顧客を集計。期間内に契約が無い顧客は既定で非表示（「期間外の顧客も表示」で出す）。検索は `normalizeName` で両辺を正規化した部分一致（URL の `q` で復元）。合計行は表示中の顧客の全契約を母集団にした `aggregate()` / `forecastTotals()`。着地差は年度に掛かる契約が 0 件の顧客だけ「—」。状態チップはチーム行と同じ（赤字 N件・予算超過）。
-- 詳細: KPI 5 枚（全体サマリーと同じ。前年同期比も同じ規則）→ 月次推移 → この顧客の案件（期間外は既定で非表示、切替あり）→ 担当チーム別（契約の `teamId` ごと。配下はまとめない。行クリックは `/contracts?team=&q=<顧客名>`）。顧客詳細はチームフィルタを持たない（期間・方式・単位のみ）。
+- 詳細: KPI 5 枚（全体サマリーと同じ。前年同期比も同じ規則）→ 月次推移 → この顧客の案件（期間外は既定で非表示、切替あり）→ 担当チーム別（契約の `teamId` ごと。配下はまとめない。行クリックは `/contracts?team=&q=<顧客名>`）→ メンバー別の実績（チーム詳細と同じ列・根拠パネル。応援は案件ごとの担当組織で判定、SPEC §74）→ 作業種別の内訳。顧客詳細はチームフィルタを持たない（期間・方式・単位のみ）。
 - 案件詳細の顧客名から顧客詳細へのリンク（追加のみ）。
 
 ## マスタ編集 `/masters`（2 回目リリース、SPEC §19）
 
 問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 台帳のタブ（メンバー・単価・組織）→ 表（1 対象 1 行・開くと変更の履歴）→ 検証 → 変更内容（差分）→ 保存。
+- 表の列幅（SPEC §73）: 列見出しの右端の境目をドラッグ／矢印キーで変える（状態・操作の列以外）。幅を決めた列は「…」で切り、全文は title。ファイルごとに localStorage へ覚える。
 アサイン・運用保守以外の予定はリソース計画 `/plan`（同じ `mastersEditor` を `views: PLAN_VIEWS` で開く）。台帳とリソース計画の持ち方は下の「台帳とリソース計画（SPEC §36）」。
 
 | ファイル | 役割 |
@@ -249,7 +250,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 ### データの流れ
 
-- 両ページは `model.json` と `data/member-months.json`（`src/data/member-months.json.ts`）を `Promise.all` で並行して読み、`{...model, memberMonths}` にして core の `aggregateMembers` / `memberMonthlySeries` に渡す（`loadJson` に `{json: async () => ...}` を渡して読み込み中・エラー表示を共通化）。他のページは member-months.json を読まない（model.json は 540 KB のまま）。
+- 両ページは `model.json` と `data/member-months.json`（`src/data/member-months.json.ts`）を `Promise.all` で並行して読み、`{...model, memberMonths}` にして core の `aggregateMembers` / `memberMonthlySeries` に渡す（`loadJson` に `{json: async () => ...}` を渡して読み込み中・エラー表示を共通化）。他のページは member-months.json を読まない（model.json は 540 KB のまま）。チーム一覧は体制図に切り替えたときだけ読む（SPEC §76）。
 - 単価の変遷は member-months.json の `rateHistory[memberId]`（ビルド時に `memberRateHistory` で計算）。
 
 ### 決定事項
