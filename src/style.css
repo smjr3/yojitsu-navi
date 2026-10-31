@@ -481,7 +481,8 @@ body {
   max-width: 240px;
 }
 .yn-filterbar-slot .yn-select {
-  min-height: 30px;
+  /* 期間プリセット・着地見込みのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
+  min-height: 32px;
   padding-top: 2px;
   padding-bottom: 2px;
 }
@@ -939,6 +940,7 @@ h3 {
 .yn-toggle-chip {
   display: inline-flex;
   align-items: center;
+  box-sizing: border-box; /* 枠込みで 32px（フィルタバーの他の部品とそろえる） */
   gap: 6px;
   padding: 4px 10px;
   min-height: 32px;
@@ -3687,6 +3689,31 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-plan-sub > th {
   padding-left: 22px !important;
+}
+/* 開いた内訳は人の行の配下と分かるように: 左端の帯、控えめな数値、枠なしの小さな操作ボタン（押せる範囲は同じ。2026-10-31 試用版のコメント） */
+.yn-me-plan-row.is-open > th,
+.yn-me-plan-sub > th,
+.yn-me-plan-sub.is-empty > td:first-child,
+.yn-me-plan-hist > td {
+  box-shadow: inset 3px 0 0 var(--yn-focus);
+}
+.yn-me-plan-sub .yn-plan-cell-btn,
+.yn-me-plan-sub > td.num {
+  color: var(--yn-text-2);
+  font-size: 12px;
+}
+.yn-me-plan-sub .yn-me-row-actions .yn-btn {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--yn-link);
+  font-weight: 400;
+}
+.yn-me-plan-sub .yn-me-row-actions .yn-btn:hover:not(:disabled) {
+  background: var(--yn-wash-strong);
+}
+.yn-me-plan-sub .yn-me-row-actions .yn-btn:disabled {
+  color: var(--yn-text-muted);
 }
 .yn-me-plan-sub.is-outside > th,
 .yn-me-plan-sub.is-outside > td {
