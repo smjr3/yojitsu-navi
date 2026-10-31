@@ -685,6 +685,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルを上書きしたら一覧で知らせる。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。
 - `yojitsu-navi gitlab-setup [--apply]`: §39.2 と同じ。接続先は `config.json`、空なら `git remote` の `origin`（https）から読む。トークンは `GITLAB_TOKEN`、無ければ画面に出さずにその場で聞く（Windows のコマンドプロンプトでも使えるように。引数では受け取らない）。
 - 手順は `docs/DEPLOY_GITLAB.md`（手順 0〜2、「新しい版にする」）。
+- **画像を入れない**（2026-10-31 要望「画像はリポジトリにどうしても必要な場合を除いて不要。npm 化で無駄に大きくなる」）: リポジトリに画像を置かない（favicon・アイコンも置かない。フォントは画像ではないので対象外）ので template にも入らない。`npm run app:pack`・`core:pack` は中身に画像があると止まる（依存込み版の `deps/` は外部の npm パッケージなので見ない）。リポジトリ全体の検査は `tests/unit/docs-links.test.ts`（拡張子と先頭のバイト。どうしても必要なものだけ `IMAGE_ALLOWLIST` に理由つきで足す）。
 - 再発防止: `tests/integration/app-package.test.ts`（依存なし・入るファイル・リポジトリ一式が揃う・個人の情報と接続先が無い（個人名は `YOJITSU_PRIVATE_WORDS` で渡して検査）・gitlab-setup の JS が動く・init と update の各ケース・CI のオフライン対応）。
 
 ## 45. ヘッダーの並び（2026-10-29 要望）

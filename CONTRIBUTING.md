@@ -17,7 +17,7 @@ PR を出す前に確認すること:
   - ビルド・ローダ → [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)
   - 設定・運用・公開 → [docs/OPERATIONS.md](docs/OPERATIONS.md)、[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)
   - テスト → [tests/e2e/README.md](tests/e2e/README.md)
-- [ ] README・docs に画像（スクリーンショット）を載せていない・リポジトリに画像ファイルを置いていない（画面を変えるたびに古くなるため。画面は `npm run dev` で確かめる）
+- [ ] README・docs に画像（スクリーンショット・バッジ）を載せていない・リポジトリに画像ファイルを置いていない（画面を変えるたびに古くなり、npm パッケージも大きくなるため。画面は `npm run dev` で確かめる）。どうしても必要な画像だけ `tests/unit/docs-links.test.ts` の `IMAGE_ALLOWLIST` に理由つきで足す（今は 0 件）
 - [ ] 文書の中のリンク・ファイル名・コマンドが今も存在する
 - [ ] PR の説明に「ドキュメント: 何を直したか」を書いた（直す必要が無ければ理由）
 
