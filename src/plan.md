@@ -10,14 +10,14 @@ title: リソース計画
 
 ```js
 import { T } from "./i18n/index.js";
-import { pageHeader, loadJson, errorState } from "./components/layout.js";
+import { pageHeader, errorState, loadModel } from "./components/layout.js";
 import { mastersEditor, PLAN_VIEWS } from "./components/masters.js";
 import { savedState } from "./components/state.js";
 import { UNASSIGNED_TEAM_ID } from "./core/index.js";
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const mastersData = model ? await FileAttachment("./data/masters.json").json().catch((error) => ({ error })) : null;
 ```
 

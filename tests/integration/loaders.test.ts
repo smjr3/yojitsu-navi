@@ -28,6 +28,18 @@ describe("データローダ（別プロセス）", () => {
     expect(v._build).toEqual({ inputHash: HASH, asOf: "2026-10-27" });
   }, 120_000);
 
+  it("model.json の asOfFixed: build.ts は日付を必ず渡すので、呼び出し側が固定したかは YOJITSU_AS_OF_FIXED で決まる（§75）", () => {
+    const meta = (extra: Record<string, string>) => {
+      const r = spawnSync(TSX, [join(ROOT, "src/data/model.json.ts")], { cwd: ROOT, env: { ...ENV, ...extra }, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
+      expect(r.status, r.stderr).toBe(0);
+      return JSON.parse(r.stdout).meta;
+    };
+    // 本番（YOJITSU_AS_OF を指定せずに npm run build）: 画面で今日に置き換える
+    expect(meta({ YOJITSU_AS_OF_FIXED: "0" }).asOfFixed).toBeUndefined();
+    // テスト・試用版（YOJITSU_AS_OF=… npm run build）
+    expect(meta({ YOJITSU_AS_OF_FIXED: "1" }).asOfFixed).toBe(true);
+  }, 240_000);
+
   it("作業ログ明細: 1 回目で全契約分を作り置きし、2 回目はそれを読む（同じ内容）", () => {
     rmSync(MEMO, { recursive: true, force: true });
     const file = "src/data/worklogs/[contractId].json.js";

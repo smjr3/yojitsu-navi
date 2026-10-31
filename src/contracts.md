@@ -16,7 +16,7 @@ import { UNASSIGNED_TEAM_ID } from "./core/index.js";
 import { customerGroups } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -25,7 +25,7 @@ import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js"
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const store = model ? createStore(model) : null;
 ```
 

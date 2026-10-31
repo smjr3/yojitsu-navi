@@ -17,7 +17,7 @@ import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCost
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
@@ -31,7 +31,7 @@ import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, p
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 // 前後の空白は無視し、完全一致が無ければ大文字・小文字の違いだけの契約を探す（URL を手で打ったとき用）
 const contractId = (new URLSearchParams(location.search).get("id") ?? "").trim();
 const result = model
@@ -360,8 +360,9 @@ const worklogSection = (() => {
     loadBtn.textContent = T.common.loading;
     try {
       const data = await bd.fetchWorklogs(c.contractId);
-      const monthSet = new Set(months.map((m) => m.month));
-      const entries = data.months.filter((m) => monthSet.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: m.status })));
+      // 状態は明細のファイル（ビルドした日の状態）ではなく、今日に置き換えた Model の月から取る（SPEC §75）
+      const statusOf = new Map(months.map((m) => [m.month, m.status]));
+      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: statusOf.get(m.month) })));
       status.hidden = false;
       status.textContent = fmt(T.contract.worklogStatus, { n: integer(entries.length), period: periodJa(vm.period), fetchedAt: data.worklogFetchedAt ?? "—" });
       loadBtn.remove();

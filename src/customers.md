@@ -15,7 +15,7 @@ import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor } from "./components/analysis.js";
 import { customerGroups, customerHref, idsRow, groupBreakdowns } from "./components/customers.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -24,7 +24,7 @@ import { monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const store = model ? createStore(model) : null;
 ```
 

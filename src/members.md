@@ -15,7 +15,7 @@ import { T, fmt } from "./i18n/index.js";
 import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName, planGaps } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
-import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, loadJson, note, withToday } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 // KPI 4 枚（計画原価・実績原価・差額・稼働率）。1024px でも 4 枚が 1 行（狭いと 2×2）に並ぶようにクラスを足す
@@ -34,7 +34,7 @@ import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPerce
 const model = await loadJson(
   {
     json: async () => {
-      const [m, d] = await Promise.all([FileAttachment("./data/model.json").json(), FileAttachment("./data/member-months.json").json()]);
+      const [m, d] = await Promise.all([FileAttachment("./data/model.json").json().then(withToday), FileAttachment("./data/member-months.json").json()]);
       return { ...m, memberMonths: d.memberMonths };
     },
   },

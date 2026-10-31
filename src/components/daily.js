@@ -27,14 +27,18 @@ export function loadDaily(attachment) {
 }
 
 /**
- * 選択中の期間が今月（asOf の月）を含み、今月の予算があるときだけ進みを返す。
+ * 選択中の期間が今月（asOf の月 = 開いた人の今日の月。§75）を含み、今月の予算があるときだけ進みを返す。
+ * daily.json が前の月のもの（月が替わってから取り込みが無い）なら、今月の実績は 0 として出す。
  * target（今月を含む目標。core の targetForMonth）があれば、今月の上限 = 予算 ×（1 − 目標の残予算率）
  */
 export function dailyFor(model, daily, contractIds, period, target = null) {
-  if (!daily || !daily.month || daily.month !== model.meta.asOfMonth) return null;
-  if (period.from > daily.month || period.to < daily.month) return null;
-  const p = dailyProgress(model, daily, contractIds, target ? { capRatio: 1 - target.remainingRate } : {});
-  return p && { ...p, target };
+  const month = model.meta.asOfMonth;
+  if (!daily || !daily.month || daily.month > month) return null;
+  const file = daily.month === month ? daily : { asOf: model.meta.asOf, month, lastDate: null, days: {}, members: {} };
+  if (period.from > month || period.to < month) return null;
+  const p = dailyProgress(model, file, contractIds, { today: model.meta.asOf, ...(target ? { capRatio: 1 - target.remainingRate } : {}) });
+  // daily は実際に使ったファイル（メンバー×日の表も同じものを使う）
+  return p && { ...p, target, daily: file };
 }
 
 /** 目標の残予算率（整数なら小数なし） */
@@ -120,6 +124,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
   const n = pts.length;
   const done = pts.filter((d) => d.cumulative !== null);
   const last = done[done.length - 1] ?? null;
+  const todayDay = p.today ? Number(p.today.slice(8, 10)) : null;
   const projLine = last && last.day < n ? [{ day: last.day, v: last.cumulative }, { day: n, v: p.projection }] : [];
   const peak = Math.max(p.cap, p.projection, last?.cumulative ?? 0, 1);
   const axisUnit = peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
@@ -148,6 +153,9 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       Plot.line(projLine, { x: "day", y: "v", stroke: c.cost, strokeWidth: 2, strokeDasharray: "2 3" }),
       Plot.line(done, { x: "day", y: "cumulative", stroke: c.cost, strokeWidth: 2.5, curve: "linear" }),
       last ? Plot.dot([last], { x: "day", y: "cumulative", fill: c.cost, r: 4, stroke: c.surface, strokeWidth: 2 }) : null,
+      // 今日（§75）。取り込みが止まると、累計の線が今日の手前で終わって見分けられる
+      todayDay ? Plot.ruleX([todayDay], { stroke: c.muted, strokeWidth: 1, strokeDasharray: "1 3" }) : null,
+      todayDay ? Plot.text([todayDay], { x: (d) => d, frameAnchor: "top", dy: -14, text: () => T.daily.todayMark, fill: c.muted, fontSize: 11 }) : null,
       Plot.ruleX(pts, Plot.pointerX({ x: "day", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
         pts,
@@ -235,7 +243,7 @@ export function dailyMemberTable(p, rows, { nameOf, hrefOf }) {
 export function dailySection(p, { unit, dark, subtitle, exportName, members = null }) {
   // display(null) は「null」と表示されるので、出さないときは空の断片を返す
   if (!p) return document.createDocumentFragment();
-  const memberRows = members ? dailyMembers(members.model, members.daily, p, members.contractIds) : [];
+  const memberRows = members ? dailyMembers(members.model, p.daily ?? members.daily, p, members.contractIds) : [];
   const title = fmt(T.daily.sectionTitle, { month: monthJa(p.month) });
   return html`<section class="yn-daily" id="yn-daily">
     ${sectionTitle(title, fmt(T.daily.hint, { date: p.lastDate ?? "—" }))}
