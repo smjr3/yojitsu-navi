@@ -123,13 +123,14 @@ npm run fetch:members                           # members.csv を更新
     "apiBaseUrl": "",              // 例 https://gitlab.example.local/api/v4（空の間は download で動く）
     "projectId": "",               // 数値ID または "group/yojitsu-navi"
     "targetBranch": "main",
-    "commitMode": "mr"             // "mr"（ブランチ masters/<日時>-<ユーザー> にコミットして MR）| "direct"（非推奨）
+    "commitMode": "mr",            // "mr"（ブランチ masters/<日時>-<ユーザー> にコミットして MR）| "direct"（非推奨）
+    "tokenUrl": ""                 // 設定画面の「トークンを作成」の開く先。空 = 標準の場所、"/…" = GitLab 上のパス、"https://…" = そのまま（SPEC §78）
   }
 }
 ```
 
 1. 接続先: 社内 GitLab の CI でビルドすると、`apiBaseUrl`・`projectId` が空ならそのプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）が自動で入る（SPEC §39.1）。別のプロジェクトに保存したいときだけ値を入れる。ローカルのビルドで両方空なら CSV ダウンロードになる。
-2. 各自が GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token（scope: `api`）を作り、設定画面（右上の歯車）で登録する。マスタ編集・リソース計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
+2. 各自が設定画面（右上の歯車）の「トークンを作成 ↗」で GitLab の作成画面を開き（名前と scope `api` は入力済み）、Personal Access Token を作って同じ画面で登録する。開く先が社内の GitLab と合わない（古い版で 404 など）ときは `tokenUrl` に正しいパス（例 `/-/profile/personal_access_tokens`）を入れる。マスタ編集・リソース計画の保存欄には入力欄を置かず、未登録なら「設定へ」のリンクが出る。
    既定はそのタブの `sessionStorage` だけ（タブを閉じると消える）。設定画面で「このブラウザに記憶する」を選ぶと `localStorage`。画面に再表示しない・サーバーやリポジトリには保存しない。
 3. 権限: 保存（MR 作成）は Developer 以上、**マージはリーダー層（Maintainer）だけ**。GitLab 側で `main` を保護ブランチにする（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)「推奨構成」。`npm run gitlab:setup -- --apply` で設定できる）。
    設定画面の「接続を確認」は、トークンの scope・公開範囲・Pages の閲覧制限・保護ブランチが推奨と違えば「GitLab の設定に N 件の不足があります」と出す（SPEC §39.3）。

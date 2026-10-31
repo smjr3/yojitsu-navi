@@ -278,7 +278,8 @@ actualCost(x,c,m)   = 同 CostLine の amount
     "apiBaseUrl": "",         // 例 https://gitlab.example.local/api/v4（空なら Pages の URL から推定しない。download に自動で落とす）
     "projectId": "",          // 数値ID または "group/project"
     "targetBranch": "main",
-    "commitMode": "mr"        // "mr"（ブランチを作り MR を作成）| "direct"（targetBranch へ直接コミット）
+    "commitMode": "mr",       // "mr"（ブランチを作り MR を作成）| "direct"（targetBranch へ直接コミット）
+    "tokenUrl": ""            // トークン作成画面（§78）。空 = GitLab の標準の場所、"/…" = GitLab 上のパス、"https://…" = そのまま
   }
 }
 ```
@@ -410,7 +411,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ## 28. 設定画面 `/settings`
 ヘッダー右端に「設定」（歯車のアイコン）を置き、次をまとめる。
-- **GitLab 接続**: 接続先（`apiBaseUrl`・`projectId`・`targetBranch` を表示のみ。変更は `config.json`）、個人アクセストークン（scope `api`）の登録・削除、「このブラウザに記憶する」（既定オフ = タブを閉じると消える `sessionStorage`。オンなら `localStorage`）、「接続を確認」（`GET /user` と `GET /projects/:id` で、ユーザー名と権限〈Developer／Maintainer など〉、マージできる立場かを表示）。トークンは画面に再表示しない。
+- **GitLab 接続**: 接続先（`apiBaseUrl`・`projectId`・`targetBranch` を表示のみ。変更は `config.json`）、個人アクセストークン（scope `api`）の登録・削除・作成画面へのボタン（§78）、「このブラウザに記憶する」（既定オフ = タブを閉じると消える `sessionStorage`。オンなら `localStorage`）、「接続を確認」（`GET /user` と `GET /projects/:id` で、ユーザー名と権限〈Developer／Maintainer など〉、マージできる立場かを表示）。トークンは画面に再表示しない。
 - **表示**: 表示モード（自動／ライト／ダーク）とテーマカラー（§53）。
 - GitLab に関する設定（トークン・接続先の表示・接続の確認）は **この画面だけ** に置く。マスタ編集・リソース計画・マージ待ちの変更は、トークンが無いとき「設定へ」のリンクを出すだけ（2026-10-28 指摘）。
 - ~~ヘッダーのテーマ切替（☾／☀）~~ は §51 で廃止。テーマは設定画面だけで切り替える。
@@ -1103,3 +1104,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 幅を決めた列は入りきらない中身を「…」で切る（数値のボタン・チップも同じ）。合計行も同じ幅。
 - 画面と表ごとに、このブラウザ（`localStorage` の `yojitsu-navi:col-width:<パス>:<表の名前>`、`{列: px}`）に覚える。並べ替え・絞り込み・単位の切り替え・再読み込みで保つ。表に無い列の値は読み捨てる。
 - 再発防止: `tests/e2e/table-col-width.spec.ts`。
+
+## 78. 設定画面からトークンの作成画面を開く（2026-10-31 要望）
+- 設定画面のトークン欄の「登録」の右に「トークンを作成 ↗」を置く。GitLab の個人アクセストークンの作成画面を新しいタブで開く。登録済みのときも「削除」の右に出す（期限切れ・scope 不足で作り直すため）。
+- 開く先の既定 = `apiBaseUrl` から `/api/v4` を除いた GitLab の URL ＋ `/-/user_settings/personal_access_tokens`（GitLab 15 以降の標準の場所）。名前 `yojitsu-navi` と scope `api` をクエリ（`?name=…&scopes=api`）で入れておく。
+- 開く先は `config.json` の `masterEdit.gitlab.tokenUrl` で変えられる: `"/…"` = GitLab 上のパス（例 古い版の `/-/profile/personal_access_tokens`）、`"https://…"` = そのまま使う。`?` を含まない URL には名前と scope を付ける。リポジトリには社内の URL を書かない（本番の config で入れる）。
+- 作れないとき（`apiBaseUrl` が `…/api/v4` でなく `tokenUrl` も無い）はボタンを出さない。デモは開く先が無いので押せないボタンだけ出す。
+- 横展開: 接続先の「プロジェクト」も `group/project` 形式なら GitLab のプロジェクト画面へのリンクにする（新しいタブ）。
+- 実装: `src/core/gitlab.ts` の `tokenPageUrl`・`webProjectUrl`・`webOrigin`、`src/components/settings.js`。

@@ -21,7 +21,7 @@ export type SaveMode = "gitlab" | "download";
 
 export const DEFAULT_MASTER_EDIT: MasterEditConfig = {
   mode: "gitlab",
-  gitlab: { apiBaseUrl: "", projectId: "", targetBranch: "main", commitMode: "mr" },
+  gitlab: { apiBaseUrl: "", projectId: "", targetBranch: "main", commitMode: "mr", tokenUrl: "" },
 };
 
 /** デモ（§29）の接続先。ブラウザ内の模擬（gitlab-mock.ts）がこの URL を受ける */
@@ -41,6 +41,7 @@ export function resolveMasterEdit(cfg: Partial<MasterEditConfig> | null | undefi
       projectId: mode === "demo" ? DEMO_PROJECT_ID : projectId,
       targetBranch: typeof g.targetBranch === "string" && g.targetBranch.trim() !== "" ? g.targetBranch.trim() : "main",
       commitMode: g.commitMode === "direct" && mode !== "demo" ? "direct" : "mr",
+      tokenUrl: typeof g.tokenUrl === "string" ? g.tokenUrl.trim() : "",
     },
   };
 }
@@ -61,16 +62,59 @@ export function projectPath(cfg: MasterEditConfig): string {
   return `${cfg.gitlab.apiBaseUrl}/projects/${encodeURIComponent(cfg.gitlab.projectId)}`;
 }
 
+/** GitLab の Web 画面の URL の根元（apiBaseUrl が …/api/v4 のときだけ。デモ・未設定は null） */
+export function webOrigin(cfg: MasterEditConfig): string | null {
+  const { apiBaseUrl } = cfg.gitlab;
+  if (cfg.mode === "demo" || apiBaseUrl === "") return null;
+  const origin = apiBaseUrl.replace(/\/api\/v4$/, "");
+  return origin === apiBaseUrl ? null : origin;
+}
+
+/** 数値 ID ではない "group/project" か */
+const isPathId = (projectId: string): boolean => projectId !== "" && !/^\d+$/.test(projectId);
+
 /**
  * GitLab の Web 画面のファイル URL（projectId が "group/project" 形式のときだけ作れる。数値 ID なら null）。
  * download モードの手順で「このファイルを開く」リンクに使う
  */
 export function webFileUrl(cfg: MasterEditConfig, path: string): string | null {
-  const { apiBaseUrl, projectId, targetBranch } = cfg.gitlab;
-  if (apiBaseUrl === "" || projectId === "" || /^\d+$/.test(projectId)) return null;
-  const origin = apiBaseUrl.replace(/\/api\/v4$/, "");
-  if (origin === apiBaseUrl) return null;
-  return `${origin}/${projectId}/-/blob/${encodeURIComponent(targetBranch)}/${path}`;
+  const origin = webOrigin(cfg);
+  if (origin === null || !isPathId(cfg.gitlab.projectId)) return null;
+  return `${origin}/${cfg.gitlab.projectId}/-/blob/${encodeURIComponent(cfg.gitlab.targetBranch)}/${path}`;
+}
+
+/** 保存先プロジェクトの Web 画面（設定画面の接続先のリンク。§28） */
+export function webProjectUrl(cfg: MasterEditConfig): string | null {
+  const origin = webOrigin(cfg);
+  if (origin === null || !isPathId(cfg.gitlab.projectId)) return null;
+  return `${origin}/${cfg.gitlab.projectId}`;
+}
+
+/** 個人アクセストークンの作成画面（GitLab 15.x 以降の標準の場所） */
+export const TOKEN_PAGE_PATH = "/-/user_settings/personal_access_tokens";
+/** 作成画面に前もって入れるトークン名と scope（このアプリに要る最小の権限） */
+export const TOKEN_NAME = "yojitsu-navi";
+export const TOKEN_SCOPES = ["api"];
+
+/**
+ * 個人アクセストークンの作成画面の URL（設定画面の「トークンを作成」。§28）。
+ * 既定 = GitLab の Web 画面 + TOKEN_PAGE_PATH。config の masterEdit.gitlab.tokenUrl で変えられる:
+ *   "/…" = GitLab 上のパス（例 古い版の /-/profile/personal_access_tokens）、"https://…" = そのまま使う。
+ * "?" を含まない URL には名前と scope を付ける（GitLab が作成画面に入れておく）。作れないときは null
+ */
+export function tokenPageUrl(cfg: MasterEditConfig): string | null {
+  if (cfg.mode === "demo") return null;
+  const custom = typeof cfg.gitlab.tokenUrl === "string" ? cfg.gitlab.tokenUrl.trim() : "";
+  let base: string;
+  if (/^https?:\/\/[^/?#\s]+/i.test(custom)) base = custom;
+  else {
+    const origin = webOrigin(cfg);
+    if (origin === null) return null;
+    base = origin + (/^\/[^/\s]/.test(custom) ? custom : TOKEN_PAGE_PATH);
+  }
+  if (base.includes("?")) return base;
+  const [path, hash] = base.split("#", 2);
+  return `${path}?name=${encodeURIComponent(TOKEN_NAME)}&scopes=${TOKEN_SCOPES.join(",")}${hash !== undefined ? `#${hash}` : ""}`;
 }
 
 /** ブランチ名 masters/<YYYYMMDD-HHmmss>-<user>（日時は JST。user は英数・.-_ 以外を - に） */
