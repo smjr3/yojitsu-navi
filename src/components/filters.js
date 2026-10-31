@@ -3,7 +3,7 @@
  * すべてのグラフ・表はこの 1 行の条件で再計算される（グラフごとのフィルタは持たない）。
  */
 import { html } from "htl";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, monthRange } from "../core/index.js";
+import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, isWorklogStale, monthRange } from "../core/index.js";
 import { METHOD_LABELS, UNITS, dateTimeJst, methodDescription, monthJa } from "./format.js";
 import { periodPresets } from "./state.js";
 import { T } from "../i18n/index.js";
@@ -154,7 +154,8 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   // 作業実績の取得日時（mountFilterBar で上段の単位の左に移す）
   const fetchedAt = model.meta?.worklogFetchedAt;
   if (fetchedAt) {
-    form.append(html`<div class="yn-filter-fetched"><span>${T.layout.fetchedAt}</span><time datetime=${fetchedAt}>${dateTimeJst(fetchedAt)}</time></div>`);
+    const stale = isWorklogStale(model.meta);
+    form.append(html`<div class=${`yn-filter-fetched${stale ? " is-stale" : ""}`} title=${stale ? T.layout.fetchedStale : null}><span>${T.layout.fetchedAt}</span><time datetime=${fetchedAt}>${dateTimeJst(fetchedAt)}</time></div>`);
   }
 
   const sync = (s) => syncers.forEach((f) => f(s));

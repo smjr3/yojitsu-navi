@@ -15,7 +15,7 @@ import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, originTotals, ownTeamScope, setForecastPeriod, teamMemberCosts, teamOrgChanges, targetForMonth, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
@@ -29,7 +29,7 @@ import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fi
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const teamId = new URLSearchParams(location.search).get("id") ?? "";
 const store = model ? createStore(model) : null;
 ```

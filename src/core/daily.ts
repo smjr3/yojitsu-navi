@@ -5,7 +5,9 @@
  * - 月の上限 = 月の予算（目標があれば呼び出し側で予算 ×（1 − 目標の残予算率）にして渡す）
  * - 目安 = 月の上限を営業日で按分した累計（土日・祝日は増えない）
  * - 経過した営業日 = 「実績のある最終日」（データ全体で作業ログがある最後の日。asOf を超えない）までの営業日
- * - このペースの月末 = 実績 + これまでの営業日 1 日あたりの平均 × 残りの営業日
+ * - 残りの営業日 = 今日（画面を開いた人の今日。§75）から月末までの営業日。ただし実績のある最終日より後だけ数える
+ *   （取り込みが止まっても、残りの日数は今日で数える）
+ * - このペースの月末 = 実績 + これまでの営業日 1 日あたりの平均 × 実績がまだ無い営業日（実績のある最終日より後）
  *
  * 画面用には data/daily.json（encodeDaily）で配り、dailyProgress で対象の案件を合算する。
  */
@@ -44,7 +46,10 @@ export interface DailyProgress {
   cap: number;
   businessDays: number;
   elapsedBusinessDays: number;
+  /** 今日から月末までの営業日（実績のある最終日より後だけ。§75） */
   remainingBusinessDays: number;
+  /** 今日（月の外なら null） */
+  today: ISODate | null;
   actual: number;
   hours: number;
   /** 今日までの目安 */
@@ -102,7 +107,7 @@ export function dailyProgress(
   model: Pick<Model, "contracts" | "holidays">,
   daily: DailyFile,
   contractIds: readonly string[],
-  { capRatio = 1 }: { capRatio?: number } = {},
+  { capRatio = 1, today = null }: { capRatio?: number; today?: ISODate | null } = {},
 ): DailyProgress | null {
   const ids = new Set(contractIds);
   let budget = 0;
@@ -122,7 +127,7 @@ export function dailyProgress(
       byDay.set(d, acc);
     }
   }
-  return progressFromDays(daily.month, daily.lastDate, budget, cap, byDay, model.holidays);
+  return progressFromDays(daily.month, daily.lastDate, budget, cap, byDay, model.holidays, today);
 }
 
 /** 日ごとの実績から進みを計算する（dailyProgress の本体。テストしやすいよう分けてある） */
@@ -133,12 +138,16 @@ export function progressFromDays(
   cap: number,
   byDay: ReadonlyMap<number, { amount: number; hours: number }>,
   holidays: HolidayLookup,
+  today: ISODate | null = null,
 ): DailyProgress {
   const { year, month: mm } = parseYearMonth(month);
   const total = daysInMonth(year, mm);
   // 行の無い年は国民の祝日で補う（§49。buildModel と同じ HolidaySet）。Set を渡されたらそのまま使う
   const set = holidays instanceof Set ? holidays : new HolidaySet(holidays as readonly Holiday[]);
   const lastDay = lastDate && lastDate.slice(0, 7) === month ? Number(lastDate.slice(8, 10)) : 0;
+  // 今日（月の外なら null）。今日の分はまだ実績に入っていないものとして、今日も残りの営業日に数える
+  const todayDay = today && today.slice(0, 7) === month ? Number(today.slice(8, 10)) : null;
+  const restFrom = Math.max(lastDay, todayDay === null ? 0 : todayDay - 1);
   const dates = Array.from({ length: total }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
   const bizFlags = dates.map((d) => isBusinessDay(d, set));
   const businessDays = bizFlags.filter(Boolean).length;
@@ -169,7 +178,8 @@ export function progressFromDays(
     };
   });
   const actual = cumulative;
-  const remainingBusinessDays = businessDays - elapsedBusinessDays;
+  const unrecordedBusinessDays = businessDays - elapsedBusinessDays;
+  const remainingBusinessDays = bizFlags.filter((b, i) => b && i + 1 > restFrom).length;
   const paceToDate = businessDays > 0 ? (cap * elapsedBusinessDays) / businessDays : cap;
   const remaining = cap - actual;
   const averagePerDay = elapsedBusinessDays > 0 ? actual / elapsedBusinessDays : null;
@@ -181,13 +191,14 @@ export function progressFromDays(
     businessDays,
     elapsedBusinessDays,
     remainingBusinessDays,
+    today: todayDay === null ? null : (dates[todayDay - 1] ?? null),
     actual,
     hours,
     paceToDate,
     remaining,
     perDayRemaining: remainingBusinessDays > 0 ? remaining / remainingBusinessDays : null,
     averagePerDay,
-    projection: actual + (averagePerDay ?? 0) * remainingBusinessDays,
+    projection: actual + (averagePerDay ?? 0) * unrecordedBusinessDays,
     points,
   };
 }

@@ -48,7 +48,7 @@ npm run dev                                           # http://localhost:3000（
 | `npm run check` | 型チェック + データ検証 + テスト（unit / property / integration） |
 | `npm run test:e2e` | 画面の E2E 全件（Playwright。[tests/e2e/README.md](tests/e2e/README.md)） |
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
-| `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
+| `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定。本番は指定せず、画面が開いた人の今日（日本時間）で計算する）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run app:pack` | 社内へ持ち込むパッケージ `packages/app/yojitsu-navi-<版>.tgz` を作る（`-- --with-deps` で依存込み。使い方は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#0-持ち込むもの)） |
 | `npm run core:build` / `npm run core:pack` | 計算コアを npm パッケージ `@yojitsu-navi/core` として `packages/core/` に出力する（`pack` は `.tgz` も作る。公開は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)） |
 | `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
