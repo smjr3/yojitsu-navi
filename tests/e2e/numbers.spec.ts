@@ -108,7 +108,7 @@ test.describe("全体サマリー", () => {
     }
   });
 
-  for (const preset of ["prevFy", "thisMonth", "lastMonth", "recent3", "recent12", "fy"] as const) {
+  for (const preset of ["prevFy", "thisMonth", "lastMonth", "next3", "recent12", "fy"] as const) {
     test(`期間プリセット ${preset} で KPI が core の値になる`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
       const period = presetPeriod(preset, model);
@@ -229,8 +229,8 @@ test.describe("全体サマリー", () => {
     await gotoPage(page, "/");
     await page.locator(".yn-seg-btn[data-unit=k]").click();
     await page.locator("#yn-method-all").check();
-    await page.locator(".yn-seg-btn[data-preset=recent3]").click();
-    const period = presetPeriod("recent3", model);
+    await page.locator(".yn-seg-btn[data-preset=next3]").click();
+    const period = presetPeriod("next3", model);
     await expectKpis(page, period, "", "all", "k");
     const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "k", method: "all", from: period.from, to: period.to });

@@ -1,5 +1,5 @@
 /**
- * 期間プリセット（今年度・今月・先月・直近3/12か月・前年度）と、期間の値の検証（範囲外・逆順）
+ * 期間プリセット（今年度・今月・先月・今後3か月・直近12か月・前年度）と、期間の値の検証（範囲外・逆順）
  * カレンダーで選んだ日付も、URL で渡された期間も、最後は sanitize でデータ範囲に収まる
  */
 import { describe, it, expect } from "vitest";
@@ -26,8 +26,8 @@ describe("periodPresets", () => {
     expect(byId(makeModel()).thisMonth).toEqual({ from: "2026-10", to: "2026-10" });
   });
 
-  it("並びは 今年度・今月・先月・直近3か月・直近12か月・前年度（前年度は右端）", () => {
-    expect(periodPresets(makeModel()).map((p: { id: string }) => p.id)).toEqual(["fy", "thisMonth", "lastMonth", "recent3", "recent12", "prevFy"]);
+  it("並びは 今年度・今月・先月・今後3か月・直近12か月・前年度（前年度は右端）", () => {
+    expect(periodPresets(makeModel()).map((p: { id: string }) => p.id)).toEqual(["fy", "thisMonth", "lastMonth", "next3", "recent12", "prevFy"]);
   });
 
   it("先月は基準月の前の 1 か月だけ（年またぎも）", () => {
@@ -53,8 +53,16 @@ describe("periodPresets", () => {
     }
   });
 
-  it("年またぎ: 1 月の直近3か月は前年 11 月から", () => {
-    expect(byId(makeModel({ asOfMonth: "2027-01" })).recent3).toEqual({ from: "2026-11", to: "2027-01" });
+  it("今後3か月は今月から 2 か月先まで（過去の月を含まない）", () => {
+    expect(byId(makeModel()).next3).toEqual({ from: "2026-10", to: "2026-12" });
+  });
+
+  it("年またぎ: 11 月の今後3か月は翌年 1 月まで", () => {
+    expect(byId(makeModel({ asOfMonth: "2026-11" })).next3).toEqual({ from: "2026-11", to: "2027-01" });
+  });
+
+  it("データの最終月を越える分は最終月で止める", () => {
+    expect(byId(makeModel({ asOfMonth: "2027-11" })).next3).toEqual({ from: "2027-11", to: "2027-12" });
   });
 });
 
