@@ -372,3 +372,19 @@ test("「作業 n ▾」で開いても、表の中のスクロール位置と�
   await expect(btn).toHaveAttribute("aria-expanded", "false");
   expect(Math.abs((await btn.boundingBox())!.y - before)).toBeLessThanOrEqual(1);
 });
+
+test("開いた内訳は人の行の配下と分かる: 左端の帯、控えめな数値、枠なしの操作ボタン（押せる高さは同じ。2026-10-31 試用版のコメント）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  const main = page.locator('tr.yn-me-plan-row[data-member="M010"]');
+  await main.locator('[data-fk="plan:toggle:M010"]').click();
+  const sub = page.locator('tr.yn-me-plan-sub[data-parent="M010"]').first();
+  await expect(sub).toBeVisible();
+  expect(await sub.locator("th").evaluate((el) => getComputedStyle(el).boxShadow)).toContain("inset");
+  const subBtn = sub.locator(".yn-me-row-actions .yn-btn").first();
+  const mainBtn = main.locator(".yn-me-row-actions .yn-btn").first();
+  expect(await subBtn.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe("rgba(0, 0, 0, 0)");
+  expect(await mainBtn.evaluate((el) => getComputedStyle(el).borderTopColor)).not.toBe("rgba(0, 0, 0, 0)");
+  expect(Math.abs((await subBtn.boundingBox())!.height - (await mainBtn.boundingBox())!.height)).toBeLessThanOrEqual(1);
+  const size = (loc: typeof sub) => loc.locator(".yn-plan-cell-btn").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(await size(sub)).toBeLessThan(await size(main));
+});
