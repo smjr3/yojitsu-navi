@@ -150,3 +150,4 @@ export {
   type WorkTotals,
 } from "./workTypes.js";
 export { dailyMembers, dailyProgress, encodeDaily, progressFromDays, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress } from "./daily.js";
+export { loadLevelOf, orgChartAt, type OrgChange, type OrgChart, type OrgChartNode, type OrgLoadLevel, type OrgLoadLine, type OrgPerson } from "./orgChart.js";

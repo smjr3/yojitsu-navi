@@ -375,7 +375,7 @@ export function dataTable({
     });
   }
 
-  // 列幅（見出しの右端をドラッグ。マスタ編集と同じ部品。§76）。画面と表ごとにこのブラウザに覚える
+  // 列幅（見出しの右端をドラッグ。マスタ編集と同じ部品。§77）。画面と表ごとにこのブラウザに覚える
   const colWKey = caption ? `yojitsu-navi:col-width:${location.pathname}:${caption}` : null;
   /** @type {Record<string, number>} 列 key → px */
   const colW = (() => {
