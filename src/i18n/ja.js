@@ -1381,7 +1381,7 @@ export default {
     unknownContractValue: "（存在しない案件 {id}）",
     unknownMemberValue: "（存在しないメンバー {id}）",
     hintTeamId: "英数字の ID（例 S11）",
-    hintTitle: "単価表の役職名と同じ文字にすると、その単価が使われます",
+    hintTitle: "新しい役職は、単価に役職の行を追加すると選べます",
     editTitle: "{file}の行を修正",
     addAssignmentTitle: "アサインを追加",
     editAddedLead: "この画面で追加した行を修正します。",
