@@ -432,6 +432,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     return [...s];
   }
+  /** 事業本部・部・課の候補（§31.5）: メンバーに書かれている値（多い順） */
+  function orgOptions(column) {
+    const n = new Map();
+    for (const r of docs.members.rows) {
+      const v = cellOf(docs.members, r, column);
+      if (v) n.set(v, (n.get(v) ?? 0) + 1);
+    }
+    return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja")).map(([v]) => v);
+  }
   /** 役職の候補（§31.5）: 単価マスタの役職（並びもそのまま）→ メンバーに書かれている役職。役職マスタは持たない */
   function titleOptions() {
     const s = new Set();
@@ -2029,6 +2038,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       input.addEventListener("input", update);
       update();
       return html`<span class="yn-me-alloc">${input}<label class="visually-hidden" for=${`${id}-unit`}>${T.plan.unitSelectLabel}</label>${unitSel}</span>${conv}`;
+    }
+    if (col.input === "org") {
+      // 事業本部・部・課（§31.5）。役職と同じく既存の値から選べる。組織のマスタは持たないので、新しい名前もそのまま書ける
+      const listId = `${id}-list`;
+      return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${orgOptions(col.name).map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
     if (col.input === "level") {
       const listId = `${id}-list`;

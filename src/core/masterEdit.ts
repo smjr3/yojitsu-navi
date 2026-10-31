@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "allocation" | "outsideType" | "targetType" | "target" | "percent";
+  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent";
   required: boolean;
 }
 
@@ -69,9 +69,9 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "kind", label: T.masterFiles.colKind, input: "kind", required: true },
       { name: "title", label: T.masterFiles.colTitle, input: "title", required: false },
       // 所属の 3 段（事業本部・部・課）。事業本部は省略可（旧ファイルには無い。無ければ見出しの末尾に足す。§60）
-      { name: "division", label: T.masterFiles.colDivision, input: "text", required: false },
-      { name: "department", label: T.masterFiles.colDepartment, input: "text", required: false },
-      { name: "section", label: T.masterFiles.colSection, input: "text", required: false },
+      { name: "division", label: T.masterFiles.colDivision, input: "org", required: false },
+      { name: "department", label: T.masterFiles.colDepartment, input: "org", required: false },
+      { name: "section", label: T.masterFiles.colSection, input: "org", required: false },
       { name: "team_id", label: T.masterFiles.colTeamId, input: "team", required: false },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
       // 在籍状態（§35）。省略可。何か書いてある行（退職・休職など）の effective_from から不在
