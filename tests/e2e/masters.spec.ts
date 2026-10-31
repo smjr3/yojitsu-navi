@@ -396,7 +396,7 @@ test("下書きの当て直し: 「最新のデータを残す」を選ぶと他
   expect(readFileSync((await dl.path())!, "utf-8")).toBe(expectedRates(false));
 });
 
-test("役職はプルダウン（§31.4）: 候補は（なし）→ 単価の役職（ファイル順）→ メンバーだけの役職。単価に役職を足すと候補に出る", async ({ page }) => {
+test("役職はプルダウン（§31.5）: 候補は（なし）→ 単価の役職（ファイル順）→ メンバーだけの役職。単価に役職を足すと候補に出る", async ({ page }) => {
   await open(page);
   await addRate(page, "エキスパート", "9000", "2026-11");
   await selectTab(page, "メンバー");

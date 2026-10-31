@@ -422,7 +422,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     return [...s];
   }
-  /** 役職の候補（§31.4）: 単価マスタの役職（並びもそのまま）→ メンバーに書かれている役職。役職マスタは持たない */
+  /** 役職の候補（§31.5）: 単価マスタの役職（並びもそのまま）→ メンバーに書かれている役職。役職マスタは持たない */
   function titleOptions() {
     const s = new Set();
     const members = new Set(docs.members.rows.map((r) => cellOf(docs.members, r, "member_id")));
@@ -2088,7 +2088,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return html`<input id=${id} name=${col.name} class="yn-input" type="month" value=${/^\d{4}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
     }
     if (col.input === "title") {
-      // 役職はプルダウンで選ぶ（§31.4）。候補は単価マスタとメンバーの役職から作る（新しい役職は単価マスタに行を足す）
+      // 役職はプルダウンで選ぶ（§31.5）。候補は単価マスタとメンバーの役職から作る（新しい役職は単価マスタに行を足す）
       const opts = titleOptions();
       return html`<select id=${id} name=${col.name} class="yn-select" required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>
         <option value="" selected=${value === ""}>${T.masters.noneOption}</option>
