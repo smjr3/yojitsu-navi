@@ -23,6 +23,7 @@ export {
   nthBusinessDay,
   parseYearMonth,
   toHolidaySet,
+  todayJst,
   type HolidayLookup,
 } from "./calendar.js";
 export { HolidaySet, nationalHolidays } from "./holidays.js";
@@ -68,6 +69,7 @@ export {
 export { lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } from "./status.js";
 export { FORECAST_METHODS, assignmentPlanOf, forecastAllMethods, forecastAllMethodsForMonths, forecastContract, forecastForMonths, type ForecastBasis, type ForecastContext } from "./forecast.js";
 export { buildModel, type BuildModelOptions } from "./model.js";
+export { isWorklogStale, rebaseModel, viewerAsOf } from "./rebase.js";
 export {
   aggregateMembers,
   buildMemberMonths,

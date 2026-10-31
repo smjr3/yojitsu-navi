@@ -3,6 +3,7 @@
  */
 import { html } from "htl";
 import { dateIso, dateTimeJst, fiscalYearLabel } from "./format.js";
+import { isWorklogStale, rebaseModel, viewerAsOf } from "../core/index.js";
 import { T, fmt } from "../i18n/index.js";
 
 /** 速報バッジ（期間に速報月を含むとき） */
@@ -36,7 +37,7 @@ export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreli
           <div><dt>${T.layout.asOf}</dt><dd><time datetime=${meta.asOf}>${dateIso(meta.asOf)}</time></dd></div>
           <div><dt>${T.layout.fiscalYear}</dt><dd>${fmt(T.layout.fiscalYearValue, { fy: fiscalYearLabel(meta.fiscalYear), from: meta.fiscalYearMonths[0], to: meta.fiscalYearMonths[meta.fiscalYearMonths.length - 1] })}</dd></div>
           <div><dt>${T.layout.lastFinal}</dt><dd>${fmt(T.layout.lastFinalValue, { month: meta.lastFinalMonth })}</dd></div>
-          <div><dt>${T.layout.fetchedAt}</dt><dd>${meta.worklogFetchedAt ? html`<time datetime=${meta.worklogFetchedAt}>${dateTimeJst(meta.worklogFetchedAt)}</time>` : T.layout.notFetched}</dd></div>
+          <div class=${isWorklogStale(meta) ? "is-stale" : null} title=${isWorklogStale(meta) ? T.layout.fetchedStale : null}><dt>${T.layout.fetchedAt}</dt><dd>${meta.worklogFetchedAt ? html`<time datetime=${meta.worklogFetchedAt}>${dateTimeJst(meta.worklogFetchedAt)}</time>` : T.layout.notFetched}</dd></div>
           <div class="yn-meta-badge"><dt class="visually-hidden">${T.layout.prelimHidden}</dt><dd>${preliminaryBadge(includesPreliminary)}</dd></div>
         </dl>`
       : null}
@@ -152,6 +153,19 @@ export async function loadJson(file, { skeleton } = {}) {
     }
     return null;
   }
+}
+
+/**
+ * 計算基準日を開いている人の今日（日本時間）に置き換える（SPEC §74）。
+ * 作業実績の取り込みが止まった日も「今日」は進む。YOJITSU_AS_OF で固定したビルドはそのまま
+ */
+export function withToday(model) {
+  return model?.meta?.asOf ? rebaseModel(model, viewerAsOf(model.meta)) : model;
+}
+
+/** model.json を読んで、計算基準日を今日にする（loadJson と同じく失敗したら null） */
+export function loadModel(file, options) {
+  return loadJson({ json: async () => withToday(await file.json()) }, options);
 }
 
 /** ノート（注記） */

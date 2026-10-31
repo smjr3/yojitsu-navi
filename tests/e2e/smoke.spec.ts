@@ -1,5 +1,5 @@
 /**
- * スモーク: 全ページが読み込め、コンソールエラー 0・失敗リクエスト 0・h1 あり・計算基準日が固定値
+ * スモーク: 全ページが読み込め、コンソールエラー 0・失敗リクエスト 0・h1 あり・今日（計算基準日）が固定値
  * このファイルのテストはすべて @smoke（PR 時の縮小版 E2E `npm run test:e2e:smoke` に入る）
  */
 import { test, expect, gotoPage } from "./helpers/app.js";
@@ -25,15 +25,15 @@ const PAGES: Array<{ path: string; h1: string; extra?: string; noMeta?: boolean 
 ];
 
 for (const p of PAGES) {
-  test(`${p.path} が読み込める（エラー 0・h1${p.noMeta ? "" : `・計算基準日 ${AS_OF}`}）`, { tag: "@smoke" }, async ({ page }) => {
+  test(`${p.path} が読み込める（エラー 0・h1${p.noMeta ? "" : `・今日 ${AS_OF}`}）`, { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, p.path);
     await expect(page.locator("h1")).toHaveCount(1);
     if (p.h1) await expect(page.locator("h1")).toContainText(p.h1);
     else await expect(page.locator("h1")).not.toBeEmpty();
-    // 編集・設定の画面には計算基準日の表示が無い
+    // 編集・設定の画面には今日の表示が無い
     if (!p.noMeta) {
       const meta = page.locator(".yn-meta").first();
-      await expect(meta).toContainText("計算基準日");
+      await expect(meta).toContainText("今日");
       await expect(meta.locator("time").first()).toHaveText(AS_OF);
     }
     if (p.extra) await expect(page.getByText(p.extra)).toBeVisible();

@@ -14,7 +14,7 @@ import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, aggregate } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, flattenTree, teamRow, memberNameAt } from "./components/analysis.js";
-import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
@@ -23,7 +23,7 @@ import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js"
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const store = model ? createStore(model) : null;
 ```
 

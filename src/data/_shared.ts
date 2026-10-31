@@ -2,6 +2,7 @@
  * データローダ共通: data/ を読んで Model を作る（Node 側専用。画面からは import しない）
  *
  * asOf は環境変数 YOJITSU_AS_OF（YYYY-MM-DD）、無ければ今日（JST）。
+ * 固定しないビルドの asOf はビルドした日で、画面が開いた人の今日（JST）に置き換える（SPEC §74）。
  *
  * 壊れた出力を出さないための決まり（docs/DATA_LOADERS.md）:
  *   - 標準出力には成果物（JSON）だけを書く。console.log は標準エラーに回す（ログが JSON に混ざらない）
@@ -14,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildModel, type Model, type ContractResult } from "../core/index.js";
 import { loadDataset } from "../../scripts/lib/load.js";
-import { computeFingerprint, resolveAsOf as resolveAsOfEnv, todayJst as todayJstNow } from "../../scripts/lib/inputs.js";
+import { computeFingerprint, isAsOfFixed, resolveAsOf as resolveAsOfEnv, todayJst as todayJstNow } from "../../scripts/lib/inputs.js";
 import { writeFileAtomic } from "../../scripts/lib/atomic.js";
 import { serializeChecked } from "../../scripts/lib/json-out.js";
 
@@ -56,7 +57,7 @@ export function loadParsed(): ParsedDataset {
 }
 
 export function buildModelFromData(parsed: ParsedDataset = loadParsed()): Model {
-  return buildModel(parsed.dataset, { asOf: resolveAsOf() });
+  return buildModel(parsed.dataset, { asOf: resolveAsOf(), asOfFixed: isAsOfFixed(process.env) });
 }
 
 /** 画面用に worklogs（元の作業ログ）を落とした ContractResult */

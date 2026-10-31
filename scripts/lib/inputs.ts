@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { GITLAB_ENV_KEYS } from "../../src/components/gitlab-env.js";
+import { todayJst as todayJstCore } from "../../src/core/calendar.js";
 
 /** 指紋の計算方法を変えたら上げる（古い指紋のキャッシュを確実に捨てるため） */
 export const FINGERPRINT_VERSION = 2;
@@ -44,8 +45,13 @@ export const INPUT_PATHS = [
 
 /** 今日の日付（JST）を YYYY-MM-DD で返す */
 export function todayJst(now: Date = new Date()): string {
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return jst.toISOString().slice(0, 10);
+  return todayJstCore(now);
+}
+
+/** 計算基準日を YOJITSU_AS_OF で固定したか（固定したビルドは画面でも今日に置き換えない。§74） */
+export function isAsOfFixed(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = env.YOJITSU_AS_OF?.trim();
+  return Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
 }
 
 /** 計算基準日: 環境変数 YOJITSU_AS_OF（YYYY-MM-DD）、無ければ今日（JST） */

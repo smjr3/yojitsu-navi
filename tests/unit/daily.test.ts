@@ -75,6 +75,44 @@ describe("progressFromDays", () => {
     expect(p.elapsedBusinessDays).toBe(0);
     expect(p.actual).toBe(0);
   });
+
+  it("今日（§74）: 残りの営業日は今日から数え、取り込みが止まった日は残りに入れない。月末見込みは実績の無い営業日すべてに平均を延ばす", () => {
+    const biz = bizDays(30);
+    const last = biz[4]!; // 5 営業日目まで実績あり
+    const today = biz[9]!; // 10 営業日目が今日（間の 4 営業日は取り込みが止まっていた）
+    const byDay = new Map(biz.slice(0, 5).map((d) => [Number(d.slice(8)), { amount: 100, hours: 1 }]));
+    const p = progressFromDays(MONTH, last, 3000, 3000, byDay, [], today);
+    const total = businessDaysInMonth(MONTH, []);
+    expect(p.today).toBe(today);
+    expect(p.elapsedBusinessDays).toBe(5);
+    // 今日を含めて月末まで
+    expect(p.remainingBusinessDays).toBe(total - 9);
+    expect(p.perDayRemaining).toBeCloseTo((3000 - 500) / (total - 9));
+    // 目安は実績のある日まで（実績と同じ日で比べる）
+    expect(p.paceToDate).toBeCloseTo((3000 * 5) / total);
+    expect(p.projection).toBeCloseTo(500 + 100 * (total - 5));
+  });
+
+  it("今日の取り込み済み・取り込みが新しいときは、従来どおり実績のある最終日の翌日から数える", () => {
+    const biz = bizDays(30);
+    const byDay = new Map(biz.slice(0, 5).map((d) => [Number(d.slice(8)), { amount: 100, hours: 1 }]));
+    const total = businessDaysInMonth(MONTH, []);
+    // 昨日まで実績 → 今日から
+    const nextDay = date(Number(biz[4]!.slice(8)) + 1);
+    expect(progressFromDays(MONTH, biz[4]!, 1000, 1000, byDay, [], nextDay).remainingBusinessDays).toBe(total - 5);
+    // 今日の分まで実績 → 明日から
+    expect(progressFromDays(MONTH, biz[4]!, 1000, 1000, byDay, [], biz[4]!).remainingBusinessDays).toBe(total - 5);
+    // 今日を渡さない（従来）
+    expect(progressFromDays(MONTH, biz[4]!, 1000, 1000, byDay, []).remainingBusinessDays).toBe(total - 5);
+    expect(progressFromDays(MONTH, biz[4]!, 1000, 1000, byDay, []).today).toBeNull();
+  });
+
+  it("今日が月初で実績が無い（月が替わってから取り込みが無い）: 実績 0・残りは月の全営業日", () => {
+    const p = progressFromDays(MONTH, null, 1000, 1000, new Map(), [], date(1));
+    expect(p.actual).toBe(0);
+    expect(p.remainingBusinessDays).toBe(businessDaysInMonth(MONTH, []));
+    expect(p.today).toBe(date(1));
+  });
 });
 
 describe("dailyProgress", () => {

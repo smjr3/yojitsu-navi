@@ -20,6 +20,8 @@ import { T, fmt } from "../i18n/index.js";
 export interface BuildModelOptions {
   /** 計算基準日 */
   asOf: ISODate;
+  /** 計算基準日を固定したか（meta.asOfFixed に入れる。§74） */
+  asOfFixed?: boolean;
   /** meta.generatedAt に入れる値。省略時は現在時刻（決定的にしたい場合は指定する） */
   generatedAt?: string;
   /** 追加の原価プロバイダ（labor 以外）。labor は常に組み込まれる */
@@ -142,6 +144,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   return {
     meta: {
       asOf,
+      ...(options.asOfFixed ? { asOfFixed: true } : {}),
       asOfMonth,
       lastFinalMonth: lastFinal,
       fiscalYear,

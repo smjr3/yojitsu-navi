@@ -17,7 +17,7 @@ import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCost
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
 import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
@@ -31,7 +31,7 @@ import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, p
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 // 前後の空白は無視し、完全一致が無ければ大文字・小文字の違いだけの契約を探す（URL を手で打ったとき用）
 const contractId = (new URLSearchParams(location.search).get("id") ?? "").trim();
 const result = model

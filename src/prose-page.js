@@ -48,12 +48,12 @@ title: ${JSON.stringify(title)}
 
 \`\`\`js
 import { T, fmt } from "./i18n/index.js";
-import { pageHeader, loadJson } from "./components/layout.js";
+import { pageHeader, loadModel } from "./components/layout.js";
 import { formatPercent, monthJa, METHOD_LABELS } from "./components/format.js";
 \`\`\`
 
 \`\`\`js
-const model = await loadJson(FileAttachment("./data/model.json"));
+const model = await loadModel(FileAttachment("./data/model.json"));
 const config = model?.config ?? {};
 const meta = model?.meta ?? {};
 const fyStartMonth = config.fiscalYearStartMonth ?? 4;

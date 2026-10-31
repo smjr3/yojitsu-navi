@@ -91,6 +91,14 @@ export function isValidISODate(value: unknown): value is ISODate {
   return day >= 1 && day <= daysInMonth(year, month);
 }
 
+/**
+ * 日本時間（Asia/Tokyo、UTC+9・夏時間なし）の今日を YYYY-MM-DD で返す（§74）。
+ * 端末のタイムゾーン設定に依らない。画面の「今日」と、ビルド時の既定の計算基準日に使う。
+ */
+export function todayJst(now: Date = new Date()): ISODate {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /** 日付の年月部分 */
 export function monthOfDate(date: ISODate): YearMonth {
   if (!isValidISODate(date)) throw new RangeError(`日付の形式が不正です: ${String(date)}`);

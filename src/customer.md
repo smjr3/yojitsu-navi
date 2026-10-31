@@ -16,7 +16,7 @@ import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, targetForMonth } from "./cor
 import { createStore, periodFiscalYear } from "./components/state.js";
 import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamName, treeAt, treeMonthFor } from "./components/analysis.js";
 import { customerGroups, idsRow, groupBreakdowns, contractListColumns } from "./components/customers.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, forecastStatus } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
@@ -29,7 +29,7 @@ import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, 
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 // URLSearchParams が %XX を復号する（一覧のリンクは encodeURIComponent で作る）
 const customerKey = new URLSearchParams(location.search).get("key") ?? "";
 const group = model ? customerGroups(model).find((g) => g.key === customerKey) ?? null : null;

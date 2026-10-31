@@ -289,6 +289,13 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
+/* 取り込みが止まっている（最後の取得が今日の前日より前。§74）: 警告色で今日とのずれを見せる */
+.yn-filter-fetched.is-stale,
+.yn-meta > .is-stale dt,
+.yn-meta > .is-stale dd {
+  color: var(--yn-warn-text);
+  font-weight: 600;
+}
 /* 上段に入らない幅では出さない（ページ見出しの下の「作業実績の取得」で見られる） */
 @media (max-width: 879px), (min-width: 1024px) and (max-width: 1279px) {
   .yn-filter-fetched {
