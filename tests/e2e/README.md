@@ -68,6 +68,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `header-nav.spec.ts` | ヘッダーの並び（右上はリソース計画だけで大きめ、マスタ編集・使い方・データ確認・計算ルールは「⋯」のメニュー・開閉・選択状態・スマホ幅で 1 段）。SPEC §45・§52 |
 | `scale-data.spec.ts` | 実運用規模のデータ: 不在の人（退職・育休など）の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
 | `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
+| `org-chart.spec.ts` | 体制図（表 ⇄ 体制図の切り替えと URL・表示だけ・組織とメンバーと色が core と一致・＋／−・月送りとフォーカス・吹き出し・応援／ヘルプ・ずれは確定月だけ・各幅ダークではみ出さない）。SPEC §76 |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |
 | `monkey.spec.ts` | シード付きランダム操作（クリック・キー・select・リサイズ・戻る/進む）。毎操作後に 例外 0・`NaN` 等の非表示・h1 あり・ダイアログが Esc で閉じる、を確認。候補の判定はページ内で 1 回にまとめている（5 倍データでボタンが数千あるため） |
 

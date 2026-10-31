@@ -42,7 +42,7 @@ src/
 | ページ | 問い | 構成 |
 |---|---|---|
 | `/` 全体サマリー | 会社全体（or 選んだチーム）は今どうか | KPI 5 枚（予算・実績・残予算＋残予算率・消化率・期間の終わりの着地見込みの差＋超過見込み件数。§54）→ 月次推移 → 超過見込み契約 → チーム別 |
-| `/teams` チーム一覧 | どの組織が悪いか | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ |
+| `/teams` チーム一覧 | どの組織が悪いか・どんな体制か | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ。「表 / 体制図」の切り替えで、月を選んで組織・メンバー・応援／ヘルプと負荷の色を見る（表示だけ。SPEC §76） |
 | `/team?id=` チーム詳細（タブには出さない。「チーム」タブが選択状態） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 案件一覧 → メンバー別実績 → 組織の変遷 |
 | `/contracts` 案件一覧 | どの契約が悪いか | 並べ替え可能な一覧 ＋ 絞り込み（超過見込み／消化率超過／速報含む／期間外も表示／検索）＋ 合計行 |
 | `/contract?id=` 案件詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 3 方式の着地比較 → 作業ログ（遅延読み込み） |
@@ -250,7 +250,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 ### データの流れ
 
-- 両ページは `model.json` と `data/member-months.json`（`src/data/member-months.json.ts`）を `Promise.all` で並行して読み、`{...model, memberMonths}` にして core の `aggregateMembers` / `memberMonthlySeries` に渡す（`loadJson` に `{json: async () => ...}` を渡して読み込み中・エラー表示を共通化）。他のページは member-months.json を読まない（model.json は 540 KB のまま）。
+- 両ページは `model.json` と `data/member-months.json`（`src/data/member-months.json.ts`）を `Promise.all` で並行して読み、`{...model, memberMonths}` にして core の `aggregateMembers` / `memberMonthlySeries` に渡す（`loadJson` に `{json: async () => ...}` を渡して読み込み中・エラー表示を共通化）。他のページは member-months.json を読まない（model.json は 540 KB のまま）。チーム一覧は体制図に切り替えたときだけ読む（SPEC §76）。
 - 単価の変遷は member-months.json の `rateHistory[memberId]`（ビルド時に `memberRateHistory` で計算）。
 
 ### 決定事項
