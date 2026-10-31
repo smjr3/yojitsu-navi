@@ -181,7 +181,7 @@ isDeficit           = forecastGrossProfit < 0
 `scripts/validate-data.ts` は以下で非0終了する:
 - 契約: ID重複、期間逆転、金額が数値でない／負／円の整数でない／9,007,199,254,740,991 円超、主担当チームが teams.csv に無い（`CONTRACT_UNKNOWN_TEAM`）
 - マッピング: 存在しない契約ID
-- アサイン: 未知の社員番号／契約ID、allocation が 0〜1 の外
+- アサイン: 未知の社員番号／契約ID、allocation が 0 未満・数値でない（1.0 超は受け付ける。2026-10-31 試用版のコメント。1 人の月合計 > 1.0 は下の警告）
 - チーム: 未知の親ID、自分自身を親にした行（`TEAM_SELF_PARENT`。行番号つき）、循環、未知のリーダー（`TEAM_UNKNOWN_LEADER`。§22）、同じ team_id・effective_from の重複行（`DUPLICATE_TEAM_ROW`）
 - メンバー: 未知のチームID、区分が employee/partner 以外、同じ member_id・effective_from の重複行（`DUPLICATE_MEMBER_ROW`）
 - 単価: 数値でない／負、同じ key・effective_from の重複行（`DUPLICATE_RATE_ROW`）
@@ -592,7 +592,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ### 36.4 契約外予定 `data/outside-plans.csv`（§30.5 の具体化）
 - 列: `member_id, start_month, end_month, person_months, note`（note は任意）。ファイルが無い・空・見出しだけなら「契約外予定なし」（エラーにしない）。画面で初めて保存するときは GitLab に新規作成（`action: create`）。
-- 検証（error）: 存在しないメンバー（`OUTSIDE_UNKNOWN_MEMBER`）、月の形式（`INVALID_MONTH`）、開始 > 終了（`OUTSIDE_PERIOD_INVERTED`）、人月が 0〜1.0 の数値でない（`OUTSIDE_OUT_OF_RANGE`）、同じ人の同じ月に複数行（`OUTSIDE_OVERLAP`、重なりごとに 1 件）。
+- 検証（error）: 存在しないメンバー（`OUTSIDE_UNKNOWN_MEMBER`）、月の形式（`INVALID_MONTH`）、開始 > 終了（`OUTSIDE_PERIOD_INVERTED`）、人月が 0 以上の数値でない（`OUTSIDE_OUT_OF_RANGE`。1.0 超は受け付ける）、同じ人の同じ月に複数行（`OUTSIDE_OVERLAP`、重なりごとに 1 件）。1 行の人月が 1.0 超は警告（`OUTSIDE_OVER_1`。保存はできる）。
 - 保守の配分との合計が 1.0 を超えても保存は止めない（人の行に「1.0 超 n か月」チップ。赤は使わない）。予算・実績・着地見込み・計画額には入れない。表の下に「うち契約外予定」の月合計。
 
 ## 37. 画面の説明文の量（2026-10-28 指摘）

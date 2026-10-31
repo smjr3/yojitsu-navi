@@ -1821,7 +1821,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         return;
       }
       const n = parseNumberCell(text);
-      if (!Number.isFinite(n) || n < 0 || n > 1) {
+      if (!Number.isFinite(n) || n < 0) {
         msg.textContent = T.planEdit.valueRange;
         valueInput()?.focus();
         return;
@@ -2013,7 +2013,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const isNum = (text) => text.trim() === "" || Number.isFinite(parseNumberCell(allocationFromInput(text, "personMonth", std)));
     const inRange = (text) => {
       const n = parseNumberCell(text);
-      return text.trim() === "" || (Number.isFinite(n) && n >= 0 && n <= 1);
+      return text.trim() === "" || (Number.isFinite(n) && n >= 0);
     };
 
     /** 入力から新しい文書を作る（変わったファイルだけ changes に入れる） */

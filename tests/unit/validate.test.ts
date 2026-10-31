@@ -46,6 +46,12 @@ describe("validateDataset (SPEC §14) — エラー", () => {
     expect(issues).toEqual([{ severity: "error", code: "MAPPING_UNKNOWN_CONTRACT", message: expect.stringContaining("NOPE"), file: "mapping.csv", row: 3, ref: { contractId: "NOPE" } }]);
   });
 
+  it("アサイン: 1 行で 1.0 を超える配分も受け付け、月合計 > 1 の警告だけ（2026-10-31 試用版のコメント）", () => {
+    const ds = dataset({ contracts: [contract({ contractId: "C1" })], members: [member({ memberId: "M1" })], assignments: [assignment({ memberId: "M1", contractId: "C1", allocation: 1.5, startMonth: "2026-04", endMonth: "2026-04" })] });
+    const issues = validateDataset(ds);
+    expect(issues.map((i) => [i.code, i.severity])).toEqual([["ALLOCATION_OVER_1", "warning"]]);
+  });
+
   it("アサイン: 未知のメンバー・契約、allocation の範囲、月合計 > 1", () => {
     const ds = dataset({
       contracts: [contract({ contractId: "C1" }), contract({ contractId: "C2" })],
@@ -53,7 +59,7 @@ describe("validateDataset (SPEC §14) — エラー", () => {
       assignments: [
         assignment({ memberId: "GHOST", contractId: "C1" }),
         assignment({ memberId: "M1", contractId: "NOPE", startMonth: "2020-01", endMonth: "2020-01" }),
-        assignment({ memberId: "M1", contractId: "C1", allocation: 1.5 }),
+        assignment({ memberId: "M1", contractId: "C1", allocation: -1.5 }),
         assignment({ memberId: "M1", contractId: "C1", allocation: -0.1 }),
         assignment({ memberId: "M1", contractId: "C1", allocation: Number.NaN }),
         assignment({ memberId: "M1", contractId: "C1", allocation: 0.7, startMonth: "2026-04", endMonth: "2026-06" }),
