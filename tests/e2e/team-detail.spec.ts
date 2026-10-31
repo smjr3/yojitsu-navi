@@ -4,7 +4,7 @@
 import { createRequire } from "node:module";
 import { test, expect, useDarkTheme, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
 import { UNASSIGNED_TEAM_ID, contractsInPeriod, contractRowExpected, fiscalPeriod, forecastFor, formatPercent, getModel, teamContractIds, totalsFor, treeAt, yen } from "./helpers/core.js";
-import { teamMemberCosts, teamOrgChanges } from "../../src/core/index.js";
+import { ownTeamScope, teamMemberCosts, teamOrgChanges } from "../../src/core/index.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
@@ -135,7 +135,7 @@ test("メンバー別実績: 作業実績軸（所属が別でも含む）。cor
   await gotoPage(page, "/team?id=S21&unit=yen");
   const table = tableByCaption(page, "メンバー別の実績");
   const ids = teamContractIds("S21", FY, model)!;
-  const rows = teamMemberCosts(model, ids, FY, new Set(tree.S21!.descendantIds));
+  const rows = teamMemberCosts(model, ids, FY, ownTeamScope(tree, "S21"));
   expect(rows.length).toBeGreaterThan(0);
   expect(new Set(await rowKeys(table))).toEqual(new Set(rows.map((r) => r.memberId)));
   expect((await rowKeys(table))[0]).toBe(rows[0]!.memberId); // 既定は実績の大きい順
@@ -144,10 +144,12 @@ test("メンバー別実績: 作業実績軸（所属が別でも含む）。cor
     const row = table.locator(`tbody tr[data-key="${r.memberId}"]`);
     expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
     expect(parseNumber(await cellText(row, col(h, "時間")))).toBeCloseTo(r.hours, 2);
-    if (r.outsideHours > 0) await expect(row).toContainText("応援");
+    if (r.supportHours > 0) await expect(row).toContainText("応援");
     else await expect(row).not.toContainText("応援");
+    if (r.helpHours > 0) await expect(row.locator('[data-origin="help"]')).toHaveText("ヘルプ");
+    else await expect(row.locator('[data-origin="help"]')).toHaveCount(0);
   }
-  expect(rows.some((r) => r.outsideHours > 0), "他チームの応援を含むデータである").toBe(true);
+  expect(rows.some((r) => r.supportHours > 0), "他チームの応援を含むデータである").toBe(true);
   expect(rows.reduce((a, r) => a + r.amount, 0)).toBe(totalsFor(FY, ids, model).cost);
   // 根拠
   const top = rows[0]!;

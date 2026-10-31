@@ -52,4 +52,4 @@
 | `kindMap` | 区分値の読み替え。例 `{ "正社員": "employee", "委託": "partner" }` |
 | `filters` | 取り込まない行の条件（退職者の除外など）。csv・http 共通 |
 
-`npm run fetch:members` で `data/masters/members.csv` を更新する。`team_id` は取り込まない。変化した人だけ `effective_from = 実行月` の行を追加（`team_id` は引き継ぎ）、取り込み元に無い人は削除しない。何度流しても同じ結果。
+`npm run fetch:members` で `data/masters/members.csv` を更新する。`team_id` は取り込まない。運用保守の案件をスポットで手伝う他部署（導入・設計・構築など）の人も取り込み対象に含める（`filters` で外さない）と、役職単価で実績に入り、`team_id` 空のまま「ヘルプ」として区別される（SPEC §71）。マスタに無い人の作業は単価 0 円で、データ確認に `UNKNOWN_MEMBER` が出る。変化した人だけ `effective_from = 実行月` の行を追加（`team_id` は引き継ぎ）、取り込み元に無い人は削除しない。何度流しても同じ結果。

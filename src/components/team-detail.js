@@ -14,7 +14,7 @@ import { money, moneySigned, pointsSigned, formatPercent, formatHours, monthJa, 
  * 全体サマリーと同じ KPI 5 枚（年度予算・原価・粗利・消化率・着地見込み粗利）。
  * scope = {period, contractIds, teamLabel}、compare = priorYearComparison() の結果 or null。
  */
-export function summaryKpis({ model, store, scope, totals, forecast, compare, fy, unit }) {
+export function summaryKpis({ model, store, scope, totals, forecast, compare, fy, unit, origin = null }) {
   const asOfMonth = model.meta.asOfMonth;
   const subtitle = `${periodJa(scope.period)} ・ ${scope.teamLabel}`;
   const spanLabel = (p) => monthSpanJa([p.from, p.to]);
@@ -41,7 +41,7 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
     statTile({
       label: T.kpi.cost,
       value: money(totals.cost, unit),
-      sub: fmt(T.kpi.costSub, { costRatio: formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin), hours: integer(Math.round(totals.hours)) }),
+      sub: withOrigin(fmt(T.kpi.costSub, { costRatio: formatPercent(totals.grossMargin === null ? null : 1 - totals.grossMargin), hours: integer(Math.round(totals.hours)) }), origin, unit),
       compare: cmp("cost", { good: (d) => d <= 0 }),
       breakdown: () => bd.costAggregateSpec({ model, contractIds: scope.contractIds, period: scope.period, unit, detailHref }),
     }),
@@ -132,3 +132,39 @@ export function orgChangeText(c) {
 
 export const ORG_CHANGE_LABELS = { created: T.teamDetail.kindCreated, renamed: T.teamDetail.kindRenamed, moved: T.teamDetail.kindMoved };
 
+
+// ---------------------------------------------------------------------------
+// 応援・ヘルプ（§71）: チーム詳細と案件詳細のメンバー表・実績の KPI で共通
+// ---------------------------------------------------------------------------
+
+/** 実績の KPI の下に「うち応援 ○・ヘルプ ○」を足す（どちらも 0 なら元のまま） */
+export function withOrigin(sub, origin, unit) {
+  const line = originLine(origin, unit);
+  return line ? html.fragment`<span>${sub}</span>${line}` : sub;
+}
+
+/** 「うち応援 ○・ヘルプ ○」（時間のある方だけ）。どちらも 0 なら null */
+export function originLine(origin, unit) {
+  if (!origin) return null;
+  const parts = [];
+  if (origin.supportHours > 0) parts.push(fmt(T.team.originSupport, { amount: money(origin.supportAmount, unit) }));
+  if (origin.helpHours > 0) parts.push(fmt(T.team.originHelp, { amount: money(origin.helpAmount, unit) }));
+  if (parts.length === 0) return null;
+  return html`<span class="yn-kpi-origin" data-origin>${fmt(T.team.originPrefix, { parts: parts.join(T.team.originSep) })}</span>`;
+}
+
+/** メンバー表の氏名の横のチップ（応援・ヘルプ）。supportTitle は画面ごとの説明 */
+export function originChips(r, supportTitle) {
+  const chips = [];
+  if (r.supportHours > 0) chips.push(html` <span class="yn-chip yn-chip-neutral" data-origin="support" title=${supportTitle}>${T.team.support}</span>`);
+  if (r.helpHours > 0) chips.push(html` <span class="yn-chip yn-chip-neutral yn-chip-help" data-origin="help" title=${r.memberUnknown ? T.team.helpUnknownTitle : T.team.helpTitle}>${T.team.help}</span>`);
+  return chips;
+}
+
+/** 所属（当時）の列: チーム名。所属チームの無い月は部・課、メンバーマスタに無ければ「マスタ未登録」 */
+export function originOrgText(r, teamName) {
+  const parts = r.teamIds.map(teamName);
+  for (const o of r.orgLabels ?? []) if (!parts.includes(o)) parts.push(o);
+  if (r.memberUnknown) parts.push(T.team.unregistered);
+  return parts.join("、") || "—";
+}

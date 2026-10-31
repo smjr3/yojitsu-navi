@@ -198,6 +198,21 @@ const membersOf = (c: FyCalendar): MemberRow[] => [
   member("P004", "近藤 雅子", "partner", "パートナー", "T221", c.m(-1, 4)),
 ];
 
+/**
+ * 他部署（導入・設計・構築）の人: 運用保守の組織に所属しない（team_id 空）が、スポットで運用保守の案件をヘルプする（§71）。
+ * 人事取り込みでメンバーマスタに入り、役職単価で計算される。
+ */
+const helpMembersOf = (c: FyCalendar): MemberRow[] => [
+  member("M301", "大野 誠", "employee", "主任", "", c.m(-1, 4), { department: "システム構築部", section: "基盤構築課" }),
+  member("M302", "岡本 舞", "employee", "一般", "", c.m(-1, 4), { department: "システム構築部", section: "アプリ設計課" }),
+];
+
+/** 他部署の人のヘルプ（社員番号・案件・期間・1 日に入る確率・時間）。今年度の数か月だけ */
+const helpWorkOf = (c: FyCalendar) => [
+  { memberId: "M301", contractId: "C002", from: c.m(0, 6), to: c.m(0, 9), p: 0.12, task: "障害対応", hours: [2, 3, 4] },
+  { memberId: "M302", contractId: "C005", from: c.m(0, 8), to: c.m(0, 10), p: 0.1, task: "問い合わせ対応", hours: [1.5, 2, 3] },
+];
+
 /** members.csv に存在しないが工数には現れるメンバー（UNKNOWN_MEMBER） */
 const GHOST_MEMBER = { id: "M099", name: "臨時 太郎" };
 
@@ -700,8 +715,23 @@ export function generate(opts: GenOptions): Generated {
     push({ date: c.d(0, 5, 13), memberId: "M014", memberName: "佐々木 美月", customerName: "", projectName: "", task: "問い合わせ対応", hours: 1.5 });
   }
 
+  // 他部署の人のヘルプ（§71。別の乱数列。基本シナリオの数値は変わらない）
+  const HELP_MEMBERS = helpMembersOf(c);
+  const rngHelp = new Rng(opts.seed + 104729);
+  for (const date of days) {
+    const month = ymOf(date);
+    for (const h of helpWorkOf(c)) {
+      if (month < h.from || month > h.to || !rngHelp.chance(h.p)) continue;
+      const m = memberAt(HELP_MEMBERS, h.memberId, month);
+      const ct = CONTRACTS.find((x) => x.contract_id === h.contractId);
+      if (!m || !ct) continue;
+      const names = pickNames(rngHelp, ct);
+      push({ date, memberId: m.member_id, memberName: m.name, customerName: names.customer, projectName: names.project, task: h.task, hours: rngHelp.pick(h.hours) });
+    }
+  }
+
   // 実運用規模の部分（別の乱数列・別のメンバーと契約。基本シナリオの数値は変わらない）
-  const out = { teams: [...TEAMS], members: [...MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], outsidePlans: [...OUTSIDE_PLANS], taskTypes: [...TASK_TYPES] };
+  const out = { teams: [...TEAMS], members: [...MEMBERS, ...HELP_MEMBERS], rates: [...RATES], contracts: [...CONTRACTS], mappings: [...MAPPINGS], assignments: [...ASSIGNMENTS], outsidePlans: [...OUTSIDE_PLANS], taskTypes: [...TASK_TYPES] };
   if ((opts.scale ?? "full") === "full") {
     const x = generateScale({ seed: opts.seed, asOf: opts.asOf, cal: c, days, baseRates: RATES });
     out.teams.push(...x.teams);

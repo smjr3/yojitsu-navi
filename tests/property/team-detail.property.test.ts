@@ -112,9 +112,11 @@ describe("teamMemberCosts の不変条件", () => {
         expect(rows.reduce((a, r) => a + r.hours, 0)).toBeCloseTo(totals.hours, 6);
         if (rows.length && totals.cost > 0) expect(rows.reduce((a, r) => a + (r.share ?? 0), 0)).toBeCloseTo(1, 9);
         for (const r of rows) {
-          expect(r.outsideAmount).toBeLessThanOrEqual(r.amount);
-          expect(r.outsideHours).toBeLessThanOrEqual(r.hours + 1e-9);
-          if (!scoped) expect(r.outsideAmount).toBe(0);
+          expect(r.supportAmount + r.helpAmount).toBeLessThanOrEqual(r.amount);
+          expect(r.supportHours + r.helpHours).toBeLessThanOrEqual(r.hours + 1e-9);
+          if (!scoped) expect(r.supportAmount).toBe(0);
+          // 所属なし（M3）の作業はすべてヘルプ
+          if (r.memberId === "M3") expect(r.helpHours).toBeCloseTo(r.hours, 9);
         }
         for (let i = 1; i < rows.length; i++) expect(rows[i - 1]!.amount).toBeGreaterThanOrEqual(rows[i]!.amount);
         expect(new Set(rows.map((r) => r.memberId)).size).toBe(rows.length);

@@ -100,9 +100,14 @@ export { planImpact, type PlanImpact, type PlanImpactRow, type PlanImpactTarget,
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";
 export {
+  originTotals,
+  ownTeamScope,
   teamMemberCosts,
   teamOrgChanges,
   teamPath,
+  workOriginOf,
+  type OriginTotals,
+  type WorkOrigin,
   type TeamMemberCost,
   type TeamOrgChange,
   type TeamOrgChangeKind,
