@@ -1,11 +1,11 @@
 /**
- * 設定画面（SPEC §28）: GitLab 接続（トークン・接続の確認・デモの立場）と表示（表示モード・テーマカラー、§53）・バージョン情報（§59）
+ * 設定画面（SPEC §28）: GitLab 接続（トークン・作成画面へのリンク・接続の確認・デモの立場）と表示（表示モード・テーマカラー、§53）・バージョン情報（§59）
  *
  *   settingsPanel({ masterEdit, fetchImpl }) → HTMLElement
  */
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
-import { ACCESS_LEVELS, checkConnection, effectiveSaveMode } from "../core/gitlab.js";
+import { ACCESS_LEVELS, checkConnection, effectiveSaveMode, tokenPageUrl, webProjectUrl } from "../core/gitlab.js";
 import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
 import { infoTip, sectionTitle } from "./layout.js";
 import { ACCENTS } from "./appearance.js";
@@ -38,6 +38,17 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
   let notice = "";
 
   const focus = (sel) => root.querySelector(sel)?.focus();
+  const tokenUrl = tokenPageUrl(cfg);
+  const projectUrl = webProjectUrl(cfg);
+
+  /** GitLab のトークン作成画面を新しいタブで開く（名前・scope は入力済み）。デモは開く先が無いので押せない形だけ出す */
+  function tokenLink(sm = false) {
+    const cls = `yn-btn${sm ? " yn-btn-sm" : ""} yn-settings-token-link`;
+    if (tokenUrl === null) {
+      return demo ? html`<button type="button" class=${cls} data-role="token-create" disabled title=${T.settings.tokenCreateDemo}>${T.settings.tokenCreate} <span aria-hidden="true">↗</span></button>` : null;
+    }
+    return html`<a class=${cls} data-role="token-create" href=${tokenUrl} target="_blank" rel="noopener noreferrer" title=${T.settings.tokenCreateTitle}>${T.settings.tokenCreate} <span aria-hidden="true">↗</span></a>`;
+  }
 
   function renderTarget() {
     if (demo) return html`<p class="yn-note yn-note-info" data-role="demo-note">${T.settings.demo}</p>`;
@@ -45,7 +56,9 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     if (!usable) return html`<p class="yn-note yn-note-warn" data-role="not-configured">${T.settings.notConfigured}</p>`;
     return html`<dl class="yn-settings-target" aria-label=${T.settings.target}>
       <div><dt>${T.settings.targetApi}</dt><dd><code>${cfg.gitlab.apiBaseUrl}</code></dd></div>
-      <div><dt>${T.settings.targetProject}</dt><dd><code>${cfg.gitlab.projectId}</code></dd></div>
+      <div><dt>${T.settings.targetProject}</dt><dd>${projectUrl
+        ? html`<a href=${projectUrl} target="_blank" rel="noopener noreferrer" data-role="project-link" title=${T.settings.openProject}><code>${cfg.gitlab.projectId}</code> <span aria-hidden="true">↗</span></a>`
+        : html`<code>${cfg.gitlab.projectId}</code>`}</dd></div>
       <div><dt>${T.settings.targetBranch}</dt><dd><code>${cfg.gitlab.targetBranch}</code></dd></div>
     </dl>`;
   }
@@ -101,7 +114,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
             check = null;
             renderGitlab();
             focus("#yn-set-token");
-          }}>${T.settings.tokenClear}</button></p>
+          }}>${T.settings.tokenClear}</button>${tokenLink(true)}</p>
       </div>`;
     }
     const input = html`<input type="password" id="yn-set-token" class="yn-input" autocomplete="off" spellcheck="false" placeholder=${demo ? "demo" : T.settings.tokenPlaceholder}>`;
@@ -122,7 +135,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
     });
     return html`<div class="yn-settings-field">
       <div class="yn-title-with-tip"><label class="yn-me-label" for="yn-set-token">${T.settings.tokenLabel}</label>${infoTip(`${demo ? T.settings.tokenDemoHelp : T.settings.tokenHelp} ${T.settings.rememberHint}`, { label: T.settings.tokenTipLabel })}</div>
-      <div class="yn-me-inline">${input}<button type="button" class="yn-btn yn-btn-primary" data-role="token-save" onclick=${save}>${T.settings.tokenSave}</button></div>
+      <div class="yn-me-inline">${input}<button type="button" class="yn-btn yn-btn-primary" data-role="token-save" onclick=${save}>${T.settings.tokenSave}</button>${tokenLink()}</div>
       <label class="yn-settings-check-label" for="yn-set-remember">${remember} ${T.settings.remember}</label>
     </div>`;
   }

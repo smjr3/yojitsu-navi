@@ -322,11 +322,49 @@ test.describe("設定画面とヘッダー", () => {
     await gotoPage(page, "/settings");
     await expect(page.locator('[data-role="not-configured"]')).toContainText("接続先が未設定");
     await expect(page.locator("#yn-set-token")).toHaveCount(0);
+    await expect(page.locator('[data-role="token-create"]')).toHaveCount(0);
+  });
+
+  test("トークンを作成: GitLab の作成画面（名前・scope 入り）を新しいタブで開く。登録後も出す。プロジェクトは GitLab へのリンク", async ({ page }) => {
+    await patchMasters(page, cfg);
+    await gotoPage(page, "/settings");
+    const link = page.getByRole("link", { name: "トークンを作成" });
+    await expect(link).toHaveAttribute("href", "https://gitlab.test/-/user_settings/personal_access_tokens?name=yojitsu-navi&scopes=api");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", /noopener/);
+    // 入力欄・登録ボタンと同じ行
+    const [inputBox, linkBox] = await Promise.all([page.locator("#yn-set-token").boundingBox(), link.boundingBox()]);
+    expect(Math.abs((inputBox?.y ?? 0) + (inputBox?.height ?? 0) / 2 - ((linkBox?.y ?? 0) + (linkBox?.height ?? 0) / 2))).toBeLessThan(4);
+    const project = page.locator('[data-role="project-link"]');
+    await expect(project).toHaveAttribute("href", "https://gitlab.test/grp/yn");
+    await expect(project).toHaveAttribute("target", "_blank");
+    await expect(project).toContainText("grp/yn");
+    // 登録済み: 作り直し用に「削除」の右にも出す
+    await page.route(`${GITLAB}/**`, (route: Route) => {
+      const url = route.request().url();
+      const body = url.endsWith("/user") ? { username: "u", name: "u" } : url.endsWith("/personal_access_tokens/self") ? { scopes: ["api"] } : { visibility: "private", pages_access_level: "private", permissions: { project_access: { access_level: 30 } } };
+      return route.fulfill({ status: 200, headers: CORS, body: JSON.stringify(body) });
+    });
+    await page.locator("#yn-set-token").fill("glpat-x");
+    await page.getByRole("button", { name: "登録" }).click();
+    await expect(page.locator('[data-role="check-result"]')).toContainText("接続できました");
+    await expect(page.getByRole("link", { name: "トークンを作成" })).toHaveAttribute("href", /\/-\/user_settings\/personal_access_tokens\?/);
+  });
+
+  test("トークンを作成: 開く先は config の tokenUrl で変えられる（GitLab 上のパス）", async ({ page }) => {
+    await patchMasters(page, { ...cfg, gitlab: { ...cfg.gitlab, projectId: "123", tokenUrl: "/-/profile/personal_access_tokens" } });
+    await gotoPage(page, "/settings");
+    await expect(page.getByRole("link", { name: "トークンを作成" })).toHaveAttribute("href", "https://gitlab.test/-/profile/personal_access_tokens?name=yojitsu-navi&scopes=api");
+    // 数値 ID のプロジェクトはリンクにしない
+    await expect(page.locator('[data-role="project-link"]')).toHaveCount(0);
   });
 
   test("デモ: トークン登録で接続を自動確認（権限 Maintainer）。記憶する／削除、デモの立場の切替", async ({ page }) => {
     await useDemo(page, { token: null });
     await gotoPage(page, "/settings");
+    // デモは開く先が無いので押せない形だけ
+    await expect(page.getByRole("button", { name: "トークンを作成" })).toBeDisabled();
+    await expect(page.getByRole("link", { name: "トークンを作成" })).toHaveCount(0);
     await page.locator("#yn-set-token").fill("demo-token");
     await page.getByLabel("このブラウザに記憶する").check();
     await page.locator("#yn-set-token").press("Enter");

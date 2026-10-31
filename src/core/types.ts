@@ -64,6 +64,8 @@ export interface MasterEditConfig {
     targetBranch: string;
     /** mr = 新しいブランチにコミットして MR を作成、direct = targetBranch へ直接コミット */
     commitMode: "mr" | "direct";
+    /** 個人アクセストークンの作成画面（空 = GitLab の標準の場所。"/…" = GitLab 上のパス、"https://…" = そのまま。§28） */
+    tokenUrl?: string;
   };
 }
 

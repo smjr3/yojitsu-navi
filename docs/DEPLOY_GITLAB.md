@@ -164,9 +164,9 @@ git push -u origin update-<新しい版>
   - 期待: (1) 全体サマリーが出る。(2) GitLab のログイン画面か 404 になる。
   - だめなら: `npm run gitlab:setup` の「Pages の閲覧」が ✗ のままなら、GitLab 管理者に Pages のアクセス制御（`gitlab_pages['access_control']`）の有効化を依頼する。有効になるまでは公開しない。
 - [ ] **トークン**
-  - 手順: GitLab の「ユーザー設定 → アクセストークン」で Personal Access Token を作る画面を開く。
-  - 期待: 作成が許可されていて、scope `api` を選べる。有効期限の上限を控えておく（期限が切れたら作り直して設定画面で登録し直す）。
-  - だめなら: 会社で PAT が禁止なら、管理者にグループアクセストークン等の代わりを相談する。決まるまでは `masterEdit.mode` を `"download"`（CSV をダウンロードして GitLab の画面でアップロード）にする。
+  - 手順: 設定画面の「トークンを作成 ↗」で GitLab の Personal Access Token を作る画面を開く。
+  - 期待: 作成画面が開き（404 にならない）、名前 `yojitsu-navi` と scope `api` が入っている。作成が許可されている。有効期限の上限を控えておく（期限が切れたら作り直して設定画面で登録し直す）。
+  - だめなら: 404 なら `config.json` の `masterEdit.gitlab.tokenUrl` に社内の GitLab の作成画面のパス（古い版は `/-/profile/personal_access_tokens`）か URL を入れる。会社で PAT が禁止なら、管理者にグループアクセストークン等の代わりを相談する。決まるまでは `masterEdit.mode` を `"download"`（CSV をダウンロードして GitLab の画面でアップロード）にする。
 - [ ] **CORS（画面から GitLab API を呼べるか）**
   - 手順: Developer の人が Pages の画面右上の歯車（設定画面）でトークンを登録する（登録すると自動で「接続を確認」が走る）。
   - 期待: 「接続できました」と、ユーザー名・権限（Developer）・「マージはリーダー（Maintainer）が行います」が出る。

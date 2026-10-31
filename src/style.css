@@ -748,6 +748,8 @@ h3 {
  * ボタン・入力
  * ------------------------------------------------------------------------- */
 .yn-btn {
+  /* button は既定で border-box、a（リンクのボタン）は content-box。そろえないと a だけ高さが余白・枠のぶん大きくなる */
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3565,6 +3567,9 @@ html:has(dialog.yn-dialog[open]) {
 .yn-settings-target dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.yn-settings-token-link:disabled {
+  cursor: not-allowed;
 }
 .yn-settings-field {
   display: flex;

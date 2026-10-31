@@ -1296,7 +1296,7 @@ export default {
 
   // ── マスタ編集: GitLab への保存のエラー ──────────────────
   gitlab: {
-    tokenInvalid: "トークンが無効か期限切れです。GitLab で Personal Access Token（scope: api）を作り直して入力してください。",
+    tokenInvalid: "トークンが無効か期限切れです。設定画面の「トークンを作成」で Personal Access Token（scope: api）を作り直して登録してください。",
     noPermission: "このプロジェクトに保存する権限がありません。保存できるのは Developer 以上のメンバーです（保護ブランチへの直接コミットは Maintainer が必要なこともあります）。",
     conflict: "他の人が先に同じファイルを更新しました。あなたの編集内容は下書きに残っています。他の人の更新が画面に反映されたあと（数分）にこのページを再読み込みすると、下書きの変更を最新のデータに当て直して復元できます（同じ行を両方で変えていれば、どちらを残すか選べます）。",
     notFound: "プロジェクトかブランチが見つかりません。config.json の masterEdit.gitlab（projectId・targetBranch）を確認してください。権限が無い場合も 404 になります。",
@@ -1951,9 +1951,15 @@ export default {
     downloadMode: "この環境は CSV ダウンロードで保存する設定です（config.json の masterEdit.mode が download）。",
     demo: "デモ（GitLab に接続せず、このブラウザの中だけで動きます）",
     tokenLabel: "個人アクセストークン（scope: api）",
-    tokenHelp: "GitLab の「ユーザー設定 → アクセストークン」で作成します。画面には再表示しません。サーバーやファイルには保存しません。",
+    tokenHelp: "「トークンを作成」で GitLab の作成画面が開きます（名前と scope「api」は入力済み）。有効期限を選んで作成し、表示された値を貼り付けて登録します。画面には再表示しません。サーバーやファイルには保存しません。",
     tokenDemoHelp: "デモでは任意の文字列でかまいません（例: demo）。",
     tokenPlaceholder: "glpat-…",
+    // GitLab の個人アクセストークンの作成画面を新しいタブで開くボタン（開く先は config.json の masterEdit.gitlab.tokenUrl で変えられる）
+    tokenCreate: "トークンを作成",
+    tokenCreateTitle: "GitLab のトークン作成画面を新しいタブで開く",
+    tokenCreateDemo: "デモでは開きません",
+    // 接続先のプロジェクト名のリンク（GitLab で開く）
+    openProject: "GitLab でプロジェクトを開く",
     tokenTipLabel: "トークンの説明",
     demoRoleTipLabel: "デモの立場の説明",
     tokenSave: "登録",

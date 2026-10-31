@@ -53,7 +53,8 @@
       "apiBaseUrl": "",
       "projectId": "",
       "targetBranch": "main",
-      "commitMode": "mr"
+      "commitMode": "mr",
+      "tokenUrl": ""
     }
   }
 }

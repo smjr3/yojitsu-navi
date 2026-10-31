@@ -15,6 +15,9 @@ import {
   resolveMasterEdit,
   saveToGitLab,
   webFileUrl,
+  webOrigin,
+  webProjectUrl,
+  tokenPageUrl,
   type FetchLike,
 } from "../../src/core/gitlab.js";
 import type { MasterEditConfig } from "../../src/core/types.js";
@@ -58,8 +61,10 @@ describe("設定", () => {
     expect(resolveMasterEdit({ mode: "x" as never })).toEqual(DEFAULT_MASTER_EDIT);
     expect(resolveMasterEdit({ mode: "gitlab", gitlab: { apiBaseUrl: " https://g/api/v4/ ", projectId: 42 as never, targetBranch: "", commitMode: "direct" } })).toEqual({
       mode: "gitlab",
-      gitlab: { apiBaseUrl: "https://g/api/v4", projectId: "42", targetBranch: "main", commitMode: "direct" },
+      gitlab: { apiBaseUrl: "https://g/api/v4", projectId: "42", targetBranch: "main", commitMode: "direct", tokenUrl: "" },
     });
+    expect(resolveMasterEdit({ mode: "gitlab", gitlab: { apiBaseUrl: "", projectId: "", targetBranch: "main", commitMode: "mr", tokenUrl: " /-/profile/personal_access_tokens " } }).gitlab.tokenUrl).toBe("/-/profile/personal_access_tokens");
+    expect(resolveMasterEdit({ mode: "gitlab", gitlab: { tokenUrl: 1 as never } as never }).gitlab.tokenUrl).toBe("");
   });
 
   it("effectiveSaveMode: gitlab でも apiBaseUrl / projectId が空なら download", () => {
@@ -79,6 +84,35 @@ describe("設定", () => {
     expect(webFileUrl(cfg({ projectId: "123" }), "x")).toBeNull();
     expect(webFileUrl(cfg({ apiBaseUrl: "" }), "x")).toBeNull();
     expect(webFileUrl(cfg({ apiBaseUrl: "https://g/custom" }), "x")).toBeNull();
+  });
+
+  it("webOrigin / webProjectUrl: …/api/v4 のときだけ。デモ・数値 ID は null", () => {
+    expect(webOrigin(cfg())).toBe("https://gitlab.example.local");
+    expect(webOrigin(cfg({ apiBaseUrl: "https://g/custom" }))).toBeNull();
+    expect(webOrigin(cfg({}, "demo"))).toBeNull();
+    expect(webProjectUrl(cfg())).toBe("https://gitlab.example.local/grp/yojitsu-navi");
+    expect(webProjectUrl(cfg({ projectId: "123" }))).toBeNull();
+    expect(webProjectUrl(cfg({ apiBaseUrl: "" }))).toBeNull();
+  });
+
+  it("tokenPageUrl: 既定は標準の作成画面に名前と scope を付ける。tokenUrl でパス・URL を変えられる", () => {
+    const q = "?name=yojitsu-navi&scopes=api";
+    expect(tokenPageUrl(cfg())).toBe(`https://gitlab.example.local/-/user_settings/personal_access_tokens${q}`);
+    // 数値 ID でも作れる（プロジェクトに依らない）
+    expect(tokenPageUrl(cfg({ projectId: "123" }))).toBe(`https://gitlab.example.local/-/user_settings/personal_access_tokens${q}`);
+    expect(tokenPageUrl(cfg({ tokenUrl: "/-/profile/personal_access_tokens" }))).toBe(`https://gitlab.example.local/-/profile/personal_access_tokens${q}`);
+    expect(tokenPageUrl(cfg({ tokenUrl: "https://sso.example.local/gitlab/tokens" }))).toBe(`https://sso.example.local/gitlab/tokens${q}`);
+    // ? があればそのまま、# は後ろに残す
+    expect(tokenPageUrl(cfg({ tokenUrl: "https://x.example.local/t?name=a" }))).toBe("https://x.example.local/t?name=a");
+    expect(tokenPageUrl(cfg({ tokenUrl: "/-/t#new" }))).toBe(`https://gitlab.example.local/-/t${q}#new`);
+    // 絶対 URL なら apiBaseUrl が独自形式でも作れる
+    expect(tokenPageUrl(cfg({ apiBaseUrl: "https://g/custom", tokenUrl: "https://g/t" }))).toBe(`https://g/t${q}`);
+    // 作れない・危ない値
+    expect(tokenPageUrl(cfg({ apiBaseUrl: "https://g/custom" }))).toBeNull();
+    expect(tokenPageUrl(cfg({}, "demo"))).toBeNull();
+    expect(tokenPageUrl(cfg({ tokenUrl: "javascript:alert(1)" }))).toBe(`https://gitlab.example.local/-/user_settings/personal_access_tokens${q}`);
+    expect(tokenPageUrl(cfg({ tokenUrl: "//evil.example/x" }))).toBe(`https://gitlab.example.local/-/user_settings/personal_access_tokens${q}`);
+    expect(tokenPageUrl({ mode: "gitlab", gitlab: { apiBaseUrl: "https://g/api/v4", projectId: "p", targetBranch: "main", commitMode: "mr" } })).toBe(`https://g/-/user_settings/personal_access_tokens${q}`);
   });
 
   it("masterBranchName: masters/<YYYYMMDD-HHmmss(JST)>-<user>、user の記号は - に", () => {
