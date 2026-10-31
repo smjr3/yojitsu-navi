@@ -772,6 +772,14 @@ function withStamps<T extends { start_month: YearMonth }>(rows: readonly T[], as
   });
 }
 
+/** 目標の変更者・変更日（§56・§63）の例: 年度の始まる前月 25 日（基準日より後なら基準日）に入れた体 */
+function withTargetStamps<T>(rows: readonly T[], asOf: string): Array<T & { updated_by: string; updated_at: string }> {
+  const fyStart = new FyCalendar(asOf).m(0, 4);
+  const [y] = fyStart.split("-").map(Number) as [number];
+  const at = `${y}-03-25` < asOf ? `${y}-03-25` : asOf;
+  return rows.map((r, i) => ({ ...r, updated_by: STAMP_USERS[(i + 1) % STAMP_USERS.length] as string, updated_at: at }));
+}
+
 export interface WriteOptions extends GenOptions {
   outDir: string;
 }
@@ -787,7 +795,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
-  writeFileSync(join(out, "targets.csv"), csv(g.targets, ["target_type", "target_id", "end_month", "remaining_rate", "start_month", "note"]));
+  writeFileSync(join(out, "targets.csv"), csv(withTargetStamps(g.targets, opts.asOf), ["target_type", "target_id", "end_month", "remaining_rate", "start_month", "note", "updated_by", "updated_at"]));
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));

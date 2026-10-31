@@ -272,7 +272,7 @@ for (const width of [1280, 1024, 768, 390]) {
   });
 }
 
-for (const width of [1440, 1366, 1280, 1024, 768]) {
+for (const width of [1440, 1366, 1300, 1280, 1279, 1024, 768]) {
   test(`フィルタ: 着地見込みだけが次の行に落ちない（チームと同じ行。${width}px）`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await gotoPage(page, "/");
@@ -281,8 +281,13 @@ for (const width of [1440, 1366, 1280, 1024, 768]) {
     const team = await box(".yn-filter-team");
     const method = await box(".yn-filter-method");
     expect(Math.abs(team.y + team.height / 2 - (method.y + method.height / 2))).toBeLessThanOrEqual(2);
-    // 1366px 以上は 1 行、それより狭いと期間の下にチームと着地見込みが並ぶ
-    if (width >= 1366) expect(Math.abs(period.y - team.y)).toBeLessThanOrEqual(4);
+    // 1280px 以上は 1 行、それより狭いと期間の下にチームと着地見込みが並ぶ
+    if (width >= 1280) {
+      expect(Math.abs(period.y - team.y)).toBeLessThanOrEqual(4);
+      // Windows のスクロールバー（17px）が出ても 1 行に収まる余り
+      const right = await page.evaluate(() => Math.max(...[...document.querySelectorAll(".yn-filterbar-slot .yn-filters > *")].map((e) => e.getBoundingClientRect().right)));
+      expect(right).toBeLessThanOrEqual(width - 24 - 17);
+    }
     else expect(team.y).toBeGreaterThan(period.y + period.height - 1);
     // チームの見出しは折り返さない
     const label = await box(".yn-filter-team label");
@@ -393,4 +398,36 @@ test("開いた内訳は人の行の配下と分かる: 左端の帯、控えめ
   const [subCell, mainCell] = [await cell(sub), await cell(main)];
   expect(subCell.size).toBeLessThanOrEqual(mainCell.size);
   expect(subCell.color).not.toBe(mainCell.color);
+});
+
+test("1440px より広い画面でも、ヘッダーの帯と下線はブラウザの端まで（横スクロールなし）", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 600 });
+  await gotoPage(page, "/contracts");
+  // 帯の外（左右の余白）でもヘッダーの面の色になっている
+  const colors = await page.evaluate(() => {
+    const h = document.querySelector("#observablehq-header")!.getBoundingClientRect();
+    return { left: h.left, right: h.right, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
+  });
+  expect(colors.left).toBeGreaterThan(0); // 本文は最大幅で中央
+  expect(colors.sw).toBeLessThanOrEqual(colors.cw);
+  const shot = await page.screenshot({ clip: { x: 0, y: 0, width: 1920, height: 120 } });
+  // スクリーンショットの画素をページ内の canvas で読む（左右の端と、ヘッダー内の空き部分の色を比べる）
+  const px = await page.evaluate(
+    async ({ b64, xs }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      return xs.map(([x, y]) => [...ctx.getImageData(x, y, 1, 1).data.slice(0, 3)].join(","));
+    },
+    { b64: shot.toString("base64"), xs: [[4, 30], [1915, 30], [Math.round(colors.left) + 8, 4], [4, 80]] as [number, number][] },
+  );
+  expect(px[0]).toBe(px[2]);
+  expect(px[1]).toBe(px[2]);
+  // フィルタバーの段も端まで同じ面
+  expect(px[3]).toBe(px[2]);
 });

@@ -2,7 +2,7 @@
  * 表の列ごとの絞り込み（SPEC §70）
  *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は下限〜上限（表示単位で入力、元の値で比較）
  *   - 件数「n 件 / 全 m 件」と「絞り込みを解除」、合計行は絞り込み後の行で作り直す
- *   - 並べ替えと同じくタブ単位で覚える（詳細から戻っても残る）。木構造の表には付けない
+ *   - 並べ替えと同じくタブ単位で覚える（詳細から戻っても残る）。木構造の表は一致行＋親を残す
  *   - 作業ログ・作業別の内訳にも付く。狭い画面・ダークでも吹き出しが画面内
  */
 import type { Locator, Page } from "@playwright/test";
@@ -135,7 +135,7 @@ test("案件詳細の作業ログ: 作業内容で絞ると合計行が絞り込
   }).toPass();
 });
 
-test("作業別の内訳と木構造の表: 作業別には付き、チーム一覧（木構造）には付かない", async ({ page }) => {
+test("作業別の内訳: 作業別には付き、単価の列は値の一覧で絞る", async ({ page }) => {
   await gotoPage(page, "/contract?id=C008");
   const work = tableByCaption(page, "作業種別の内訳");
   await expect(filterBtn(work, "task")).toBeVisible();
@@ -148,10 +148,38 @@ test("作業別の内訳と木構造の表: 作業別には付き、チーム一
   expect(await dataRows(members).count()).toBeLessThan(n);
   await pop(page).getByRole("button", { name: "解除" }).click();
   await expect(dataRows(members)).toHaveCount(n);
-  await page.keyboard.press("Escape");
+});
+
+test("木構造の表（チーム一覧・稼働実績のチーム軸）: 一致した行と親を残し、親だけの行は薄く出す", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/teams");
-  await expect(page.locator("table.yn-table").first()).toBeVisible();
-  await expect(page.locator("table.yn-table").first().locator(".yn-filter-btn")).toHaveCount(0);
+  const table = tableByCaption(page, "チーム一覧");
+  const all = await dataRows(table).count();
+  await filterBtn(table, "name").click();
+  await pop(page).getByRole("searchbox").fill("クラウド運用");
+  await expect(count(table)).toHaveText(/^\d+ 件 \/ 全 \d+ 件$/);
+  await page.keyboard.press("Escape");
+  const rows = dataRows(table);
+  const n = await rows.count();
+  expect(n).toBeGreaterThan(1);
+  expect(n).toBeLessThan(all);
+  // 最後の行が一致した行（親より後ろ）。親は薄い行として先に並ぶ
+  await expect(rows.last()).not.toHaveClass(/is-filter-context/);
+  await expect(rows.last().locator("th")).toContainText("クラウド運用");
+  await expect(rows.first()).toHaveClass(/is-filter-context/);
+  // 一致した行の深さは親より深い（親子の位置を保つ）
+  const depth = async (i: number) => Number((await rows.nth(i).getAttribute("class"))!.match(/yn-depth-(\d+)/)![1]);
+  expect(await depth(n - 1)).toBeGreaterThan(await depth(0));
+  // 詳細から戻っても残り、解除で全行に戻る
+  await rows.last().locator("a.yn-row-link").click();
+  await page.waitForURL(/\/team/);
+  await page.goBack();
+  await expect(dataRows(tableByCaption(page, "チーム一覧"))).toHaveCount(n);
+  await clearAll(tableByCaption(page, "チーム一覧")).click();
+  await expect(dataRows(tableByCaption(page, "チーム一覧"))).toHaveCount(all);
+
+  await gotoPage(page, "/workload?axis=team");
+  const work = tableByCaption(page, "所属チームごとの稼働実績");
+  await expect(filterBtn(work, "name")).toBeVisible();
 });
 
 test("全部外した絞り込みは、表を作り直しても（単位の切り替え・再読み込み）残る", async ({ page }) => {

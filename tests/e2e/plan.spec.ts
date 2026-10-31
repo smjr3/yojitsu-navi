@@ -179,3 +179,18 @@ test("組織の種別とリーダー: チーム一覧の列、チーム詳細の
   await expect(g).toContainText("小林 玲奈");
   await expect(g).toContainText("追加");
 });
+
+test("上部の「リソース計画」ボタンは、ほかの画面で選んでいる組織を引き継ぐ（未設定は「すべて」）", async ({ page }) => {
+  await gotoPage(page, "/contracts?team=S21");
+  await page.locator("#observablehq-header a.yn-tool").click();
+  await page.waitForURL(/\/plan/);
+  await expect(page.locator("#yn-me-plan-team")).toHaveValue("S21");
+  // URL の指定が優先
+  await gotoPage(page, "/plan?team=T211");
+  await expect(page.locator("#yn-me-plan-team")).toHaveValue("T211");
+  // 未設定のチームは引き継がない
+  await gotoPage(page, "/contracts?team=__unassigned__");
+  await page.locator("#observablehq-header a.yn-tool").click();
+  await page.waitForURL(/\/plan/);
+  await expect(page.locator("#yn-me-plan-team")).toHaveValue("");
+});

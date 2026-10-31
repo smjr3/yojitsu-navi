@@ -176,6 +176,8 @@ body {
   padding: 0;
   background: var(--yn-card);
   border-bottom: 1px solid var(--yn-hairline);
+  /* 本文の最大幅（1440px）より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（border-image の外側は横スクロールを生まない） */
+  border-image: linear-gradient(to bottom, var(--yn-card) calc(100% - 1px), var(--yn-hairline) 0) fill 0 / 0 0 1px / 0 100vmax;
   font: 14px/1.5 var(--sans-serif);
 }
 #observablehq-header ~ #observablehq-main {
@@ -376,6 +378,7 @@ body {
 }
 .yn-filterbar-slot {
   border-top: 1px solid var(--yn-hairline);
+  border-image: linear-gradient(var(--yn-hairline) 0 0) 1 0 0 / 1px 0 0 / 0 100vmax;
 }
 .yn-filterbar-slot .yn-filters {
   position: relative; /* visually-hidden など絶対配置の子をバーの中に閉じ込める */
@@ -416,7 +419,7 @@ body {
   gap: 4px;
 }
 /* 着地見込みだけが次の行に落ちないよう、1 行に収まらない幅では期間を 1 行目に、チームと着地見込みを 2 行目にまとめる */
-@media (min-width: 720px) and (max-width: 1365px) {
+@media (min-width: 720px) and (max-width: 1279px) {
   .yn-filterbar-slot .yn-filters:has(.yn-filter-team):has(.yn-filter-method) .yn-filter-period {
     flex-basis: 100%;
   }
@@ -1690,6 +1693,12 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-table tr.yn-depth-1 th {
   font-weight: 600;
+}
+/* 木構造の表の絞り込み: 一致した行の親（位置を示すために残す行）は薄く */
+.yn-table tr.is-filter-context:not(.is-danger) th,
+.yn-table tr.is-filter-context:not(.is-danger) td {
+  color: var(--yn-text-muted);
+  font-weight: 400;
 }
 
 /* スマホ幅だけで出す補足（列を隠したときの代わり） */
@@ -4071,7 +4080,7 @@ html:has(dialog.yn-dialog[open]) {
 /* 「目標」列のある一覧は、ノート PC 幅で横スクロールにならないよう名前列を少し詰める（全文は title） */
 @container (max-width: 1300px) {
   .yn-table:has(th[data-key="target"]) .yn-primary-cell {
-    max-width: 185px;
+    max-width: 178px; /* チーム一覧（木構造）にも見出しの絞り込みボタンが付いた分を詰める */
   }
 }
 
@@ -4308,6 +4317,88 @@ html:has(dialog.yn-dialog[open]) {
 /* 漏斗の分だけ見出しが広がらないよう、右の余白を詰める */
 .yn-table thead th.has-filter {
   padding-right: 2px;
+}
+
+/* 1280〜1365px（ノート PC）でも期間・チーム・着地見込みを 1 行に収めるため、余白と選択欄を詰める（Windows のスクロールバー 17px 込み） */
+@media (min-width: 1280px) and (max-width: 1365px) {
+  .yn-filterbar-slot .yn-filters {
+    padding: 8px 24px;
+    gap: 8px 8px;
+  }
+  .yn-filterbar-slot .yn-filter-period .yn-filter-row {
+    gap: 3px;
+  }
+  .yn-filterbar-slot .yn-filter-period .yn-select {
+    width: 118px;
+    padding-left: 6px;
+    padding-right: 2px;
+  }
+  .yn-filterbar-slot .yn-seg-btn,
+  .yn-filterbar-slot .yn-radio {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+  .yn-filterbar-slot .yn-filter-team {
+    flex-basis: 200px;
+  }
+  .yn-filterbar-slot #yn-filter-team {
+    max-width: 160px;
+  }
+}
+
+/* 一覧表（dataTable）の列幅: 見出しの右端の境目をドラッグ（マスタ編集と同じ部品。§77）。
+   境目は列の区切りにまたがって置き、ふだんは見せない（見出しにカーソルを載せると細い線） */
+.yn-table-block .yn-table thead th .yn-col-resizer {
+  right: -5px;
+  width: 9px;
+}
+.yn-table-block .yn-table thead th:last-child .yn-col-resizer {
+  right: 0;
+  width: 6px;
+}
+.yn-table-block .yn-table thead th .yn-col-resizer::after {
+  left: 4px;
+  opacity: 0;
+}
+.yn-table-block .yn-table thead th:last-child .yn-col-resizer::after {
+  left: auto;
+  right: 1px;
+}
+.yn-table-block .yn-table thead tr:hover .yn-col-resizer::after,
+.yn-table-block .yn-table thead .yn-col-resizer:focus-visible::after,
+.yn-table-block .yn-table thead .yn-col-resizer.is-dragging::after {
+  opacity: 1;
+}
+.yn-table-block .yn-table .is-col-sized {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-table-block .yn-table .is-col-sized > :not(.yn-col-resizer) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-table-block .yn-table thead th.is-col-sized .yn-th-inner,
+.yn-table-block .yn-table thead th.is-col-sized .yn-th-main {
+  min-width: 0;
+}
+
+/* マスタ編集の表の見出し: 並べ替え・絞り込み（一覧表と同じ部品）。右端は列幅の境目のために空けておく */
+.yn-me-ledger thead th.has-filter {
+  padding-right: 12px;
+}
+.yn-me-ledger thead .yn-sort-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.yn-me-ledger thead .yn-sort {
+  text-align: left;
+}
+.yn-me-ledger thead th.num .yn-sort {
+  justify-content: flex-end;
+  text-align: right;
 }
 
 /* ---------------------------------------------------------------------------
