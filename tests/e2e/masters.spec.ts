@@ -418,6 +418,29 @@ test("役職はプルダウン（§31.5）: 候補は（なし）→ 単価の�
   await expect(page.getByRole("table", { name: "メンバーの変更内容" })).toContainText("エキスパート");
 });
 
+test("事業本部・部・課は既存の値から選べ、新しい名前も書ける（§31.5 の横展開）", async ({ page }) => {
+  await open(page);
+  await selectTab(page, "メンバー");
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await page.locator("table.yn-me-table tbody tr.yn-me-group").first().getByRole("button", { name: /の変更を追加/ }).click();
+  const header = PAYLOAD.files.members.text.split("\n")[0]!.split(",");
+  const rows = PAYLOAD.files.members.text.split("\n").slice(1).filter(Boolean).map((l) => l.split(","));
+  for (const col of ["division", "department", "section"]) {
+    const input = d.locator(`#yn-me-f-${col}`);
+    if ((await input.count()) === 0) continue; // 列ごと省略できる（division）
+    const listId = await input.getAttribute("list");
+    expect(listId).toBeTruthy();
+    const opts = await d.locator(`datalist[id="${listId}"] option`).evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));
+    const i = header.indexOf(col);
+    const expected = new Set(rows.map((r) => r[i] ?? "").filter(Boolean));
+    expect(new Set(opts)).toEqual(expected);
+    expect(opts.length).toBe(expected.size);
+  }
+  // 候補に無い新しい部の名前もそのまま入れられる
+  await d.locator("#yn-me-f-department").fill("新設部");
+  await expect(d.locator("#yn-me-f-department")).toHaveValue("新設部");
+});
+
 test("影響ダイアログ: 所属チームだけ変える行の追加は「組織別の集計」と出し、実績・残予算は変わらないと明記。役職を変えると実績・残予算", async ({ page }) => {
   await open(page);
   await selectTab(page, "メンバー");
