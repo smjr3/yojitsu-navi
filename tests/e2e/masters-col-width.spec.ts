@@ -101,6 +101,19 @@ test("矢印キーで変えられ、上限・下限で止まる。Home で戻る
   await expect(handle(page, "title")).toHaveAttribute("aria-valuenow", "640");
 });
 
+test("名前の列を広く覚えたまま狭い画面で開いても、表示幅の 6 割までで他の列が見える", async ({ page }) => {
+  await page.addInitScript((k) => localStorage.setItem(k, JSON.stringify({ __lead: 640 })), KEY);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoPage(page, "/masters");
+  expect(await colWidth(page, "__lead")).toBeLessThanOrEqual(Math.floor(390 * 0.6) + 1);
+  await expect(handle(page, "__lead")).toHaveAttribute("aria-valuenow", String(Math.floor(390 * 0.6)));
+  await expect(handle(page, "__lead")).toBeInViewport();
+  const lead = handle(page, "__lead");
+  await lead.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(lead).toHaveAttribute("aria-valuenow", String(Math.floor(390 * 0.6)));
+});
+
 test("ダーク・スマホ幅でも区切りが見え、狭くした列で行の高さが崩れない", async ({ page }) => {
   await useDarkTheme(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -114,4 +127,12 @@ test("ダーク・スマホ幅でも区切りが見え、狭くした列で行�
   const rowH2 = await panel(page).locator("tbody tr.yn-me-group").first().evaluate((tr) => Math.round(tr.getBoundingClientRect().height));
   expect(Math.abs(rowH2 - rowH)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+});
+
+test("在籍の列は理由（退職・休職など）を出さず一律「不在」（§35）", async ({ page }) => {
+  await gotoPage(page, "/masters");
+  const idx = await handle(page, "status").evaluate((h) => (h.closest("th") as HTMLTableCellElement).cellIndex);
+  const texts = await panel(page).locator("tbody tr.yn-me-group").evaluateAll((trs, i) => trs.map((tr) => (tr as HTMLTableRowElement).cells[i]!.innerText.trim()), idx);
+  expect(texts).toContain("不在");
+  for (const t of texts) expect(["不在", "在籍", "—", ""]).toContain(t);
 });

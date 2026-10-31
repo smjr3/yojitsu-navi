@@ -191,6 +191,7 @@ function clampPlanNameW(w) {
 const LEDGER_COL_W_KEY = "yojitsu-navi:masters-col-width:";
 const LEDGER_COL_W_MIN = 40;
 const LEDGER_COL_W_MAX = 640;
+const LEDGER_LEAD_VW = 60;
 function clampLedgerColW(w) {
   if (w == null || !Number.isFinite(w)) return null;
   return Math.round(Math.min(LEDGER_COL_W_MAX, Math.max(LEDGER_COL_W_MIN, w)));
@@ -386,6 +387,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (column === "contract_id") return contractText(value);
     if (column === "remaining_rate") return `${value}%`;
     if (column === "target_type") return T.targets.kinds[value] ?? value;
+    // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
+    if (fileId === "members" && column === "status") return memberStatus(value).status === "left" ? T.members.chipLeft : T.masters.statusActive;
     return value;
   }
   /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
@@ -762,7 +765,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 表の 1 列の幅を決める（null = 既定）。入りきらない中身は「…」で切る。行をまたぐ行（エラーの説明など）はそのまま */
   function sizeLedgerColumn(table, index, w) {
     const n = table.tHead.rows[0].cells.length;
-    const v = w == null ? "" : `${w}px`;
+    // 先頭（名前）の列は左に貼り付くので表示幅の 6 割まで（広い幅を覚えたまま狭い画面で開いても他の列が隠れないように）
+    const v = w == null ? "" : index === 0 ? `min(${w}px, ${LEDGER_LEAD_VW}vw)` : `${w}px`;
     for (const tr of table.rows) {
       if (tr.cells.length !== n) continue;
       const c = tr.cells[index];
@@ -777,10 +781,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const handle = html`<span class="yn-col-resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label=${name} title=${name} aria-valuemin=${LEDGER_COL_W_MIN} aria-valuemax=${LEDGER_COL_W_MAX}></span>`;
     handle.dataset.col = key;
     const ws = ledgerWidths(fileId);
-    if (ws[key] != null) handle.setAttribute("aria-valuenow", String(ws[key]));
     const current = () => Math.round(handle.closest("th").getBoundingClientRect().width);
+    // 先頭の列の上限は表示幅の 6 割（sizeLedgerColumn と同じ）
+    const maxNow = () => (key === "__lead" ? Math.max(LEDGER_COL_W_MIN, Math.min(LEDGER_COL_W_MAX, Math.floor((window.innerWidth * LEDGER_LEAD_VW) / 100))) : LEDGER_COL_W_MAX);
+    handle.setAttribute("aria-valuemax", String(maxNow()));
+    if (ws[key] != null) handle.setAttribute("aria-valuenow", String(Math.min(ws[key], maxNow())));
     const apply = (w, save) => {
-      const v = w == null ? null : clampLedgerColW(w);
+      const v = w == null ? null : clampLedgerColW(Math.min(w, maxNow()));
+      handle.setAttribute("aria-valuemax", String(maxNow()));
       if (v == null) delete ws[key];
       else ws[key] = v;
       const th = handle.closest("th");
