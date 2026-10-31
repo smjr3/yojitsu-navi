@@ -11,3 +11,5 @@ export interface FilterColumn {
 export type ColumnFilter = { q?: string; values?: string[] | null } | { min?: number; max?: number } | null;
 export function matchesFilter(col: FilterColumn, f: ColumnFilter, row: any, unit: string): boolean;
 export function safeFileName(name: string): string;
+/** 木構造の表の絞り込み: 一致した行とその祖先を元の並びで残す（SPEC §70） */
+export function treeFilteredRows<T extends { key: any; parentKey?: any }>(rows: T[], matched: T[], onKeys?: (matched: Set<any>, parents: Set<any>) => void): T[];

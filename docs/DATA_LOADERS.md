@@ -11,7 +11,7 @@
 
 ## 1. 入力の指紋で古いキャッシュを捨てる（`scripts/lib/inputs.ts`・`loader-cache.ts`）
 
-- ローダの入力（`data/`・`config.json`・`package-lock.json`・`src/core`・`src/data`・`src/i18n`・`scripts/lib`・`scripts/adapters` など。一覧は `INPUT_PATHS`）と計算基準日（`YOJITSU_AS_OF`、無ければ今日の JST）・git の HEAD・GitLab の接続先の環境変数（`YOJITSU_GITLAB_*`。SPEC §39.1）から sha256 の指紋を作る。
+- ローダの入力（`data/`・`config.json`・`package-lock.json`・`src/core`・`src/data`・`src/i18n`・`scripts/lib`・`scripts/adapters` など。一覧は `INPUT_PATHS`）と計算基準日（`YOJITSU_AS_OF`、無ければ今日の JST。画面ではさらに開いた人の今日に置き換える。SPEC §75）・固定したか（`YOJITSU_AS_OF_FIXED`）・git の HEAD・GitLab の接続先の環境変数（`YOJITSU_GITLAB_*`。SPEC §39.1）から sha256 の指紋を作る。
 - `npm run build`（`scripts/build.ts`）と `npm run dev`（`scripts/dev.ts`）は、前回の指紋（`src/.observablehq/cache/.yojitsu-inputs.json`）と違えばキャッシュを丸ごと消してから動かす。
   - 同じ指紋でも、書きかけのファイル（`*.tmp-*`・`*.json.<pid>`）と失敗の印（`*.err`）は毎回消す。
   - `npm run dev` は入力を監視し、変わればキャッシュを消してローダを作り直させる（画面の再読み込みで新しい数字になる）。

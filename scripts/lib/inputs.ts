@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { GITLAB_ENV_KEYS } from "../../src/components/gitlab-env.js";
+import { todayJst as todayJstCore } from "../../src/core/calendar.js";
 
 /** 指紋の計算方法を変えたら上げる（古い指紋のキャッシュを確実に捨てるため） */
 export const FINGERPRINT_VERSION = 2;
@@ -44,8 +45,19 @@ export const INPUT_PATHS = [
 
 /** 今日の日付（JST）を YYYY-MM-DD で返す */
 export function todayJst(now: Date = new Date()): string {
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return jst.toISOString().slice(0, 10);
+  return todayJstCore(now);
+}
+
+/**
+ * 計算基準日を呼び出し側が YOJITSU_AS_OF で固定したか（固定したビルドは画面でも今日に置き換えない。§75）。
+ * scripts/build.ts はローダの日付を揃えるため YOJITSU_AS_OF を必ず渡すので、呼び出し側が固定したかは
+ * YOJITSU_AS_OF_FIXED（"1" / "0"）で別に渡す。これがあればそちらを優先する
+ */
+export function isAsOfFixed(env: NodeJS.ProcessEnv = process.env): boolean {
+  const flag = env.YOJITSU_AS_OF_FIXED?.trim();
+  if (flag === "1" || flag === "0") return flag === "1";
+  const v = env.YOJITSU_AS_OF?.trim();
+  return Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
 }
 
 /** 計算基準日: 環境変数 YOJITSU_AS_OF（YYYY-MM-DD）、無ければ今日（JST） */
@@ -101,7 +113,7 @@ export interface Fingerprint {
 export function computeFingerprint(rootDir: string, opts: { asOf?: string; git?: boolean; paths?: readonly string[]; env?: NodeJS.ProcessEnv } = {}): Fingerprint {
   const asOf = opts.asOf ?? resolveAsOf();
   const h = createHash("sha256");
-  h.update(`v${FINGERPRINT_VERSION}\0asOf=${asOf}\0`);
+  h.update(`v${FINGERPRINT_VERSION}\0asOf=${asOf}\0fixed=${isAsOfFixed(opts.env ?? process.env) ? 1 : 0}\0`);
   // マスタ編集の接続先（masters.json）は環境変数でも変わる
   for (const k of GITLAB_ENV_KEYS) h.update(`${k}=${(opts.env ?? process.env)[k] ?? ""}\0`);
   const files = listInputFiles(rootDir, opts.paths ?? INPUT_PATHS);

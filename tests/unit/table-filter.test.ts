@@ -2,7 +2,7 @@
  * 表の列ごとの絞り込み（SPEC §70）の判定: 値の一覧・検索語・数値の範囲
  */
 import { describe, expect, it } from "vitest";
-import { matchesFilter } from "../../src/components/table.js";
+import { matchesFilter, treeFilteredRows } from "../../src/components/table.js";
 
 const text = { key: "task", label: "作業内容", type: "text" };
 const money = { key: "budget", label: "予算", type: "money" };
@@ -49,5 +49,38 @@ describe("matchesFilter", () => {
   it("filterValue を指定した列はその値で絞る", () => {
     const col = { ...text, filterValue: (r: any) => [r.a, r.b] };
     expect(matchesFilter(col, { values: ["B"] }, { a: "A", b: "B" }, "m")).toBe(true);
+  });
+});
+
+describe("treeFilteredRows（木構造の表の絞り込み）", () => {
+  const rows = [
+    { key: "D1", parentKey: null, name: "第1部" },
+    { key: "S11", parentKey: "D1", name: "第1課" },
+    { key: "T111", parentKey: "S11", name: "Web保守" },
+    { key: "T112", parentKey: "S11", name: "基盤" },
+    { key: "S12", parentKey: "D1", name: "第2課" },
+    { key: "D2", parentKey: null, name: "第2部" },
+  ];
+  const pick = (...keys: string[]) => rows.filter((r) => keys.includes(r.key));
+
+  it("一致した行と祖先を元の並びで残し、子の残る行を返す", () => {
+    let matched: Set<string> = new Set();
+    let parents: Set<string> = new Set();
+    const out = treeFilteredRows(rows, pick("T112"), (k: Set<string>, p: Set<string>) => {
+      matched = k;
+      parents = p;
+    });
+    expect(out.map((r) => r.key)).toEqual(["D1", "S11", "T112"]);
+    expect([...matched]).toEqual(["T112"]);
+    expect([...parents].sort()).toEqual(["D1", "S11"]);
+  });
+
+  it("親そのものが一致しても子は足さない（一致した行だけ）", () => {
+    const out = treeFilteredRows(rows, pick("S12", "D2"));
+    expect(out.map((r) => r.key)).toEqual(["D1", "S12", "D2"]);
+  });
+
+  it("一致なしは空", () => {
+    expect(treeFilteredRows(rows, [])).toEqual([]);
   });
 });

@@ -614,6 +614,14 @@ describe("stampChangedRows（変更者・変更日、§56）", () => {
     expect(stampChangedRows(rates, "taro", "2025-10-01")).toBe(rates);
   });
 
+  it("目標（targets.csv）にも書く（2026-10-31 指摘の横展開）", () => {
+    let doc = parseMasterDoc("targets", TARGETS_EMPTY + "team,T1,2026-03,20,,通期\n");
+    doc = updateRow(doc, "o0", { remaining_rate: "15" });
+    expect(serializeMasterDoc(stampChangedRows(doc, "taro", "2025-10-01")).text).toBe(
+      "target_type,target_id,end_month,remaining_rate,start_month,note,updated_by,updated_at\nteam,T1,2026-03,15,,通期,taro,2025-10-01\n",
+    );
+  });
+
   it("元の文書は変えない", () => {
     let doc = parseMasterDoc("outside", "member_id,type,start_month,end_month,person_months,note\nM1,提案,2025-04,2025-04,0.1,\n");
     doc = updateRow(doc, "o0", { person_months: "0.2" });

@@ -480,8 +480,13 @@ export interface KeywordUnmatchedGroup {
 }
 
 export interface ModelMeta {
-  /** 計算基準日 */
+  /**
+   * 計算基準日（＝今日）。ビルド時はビルドした日（日本時間）。画面では rebaseModel で
+   * 開いた人の今日（日本時間）に置き換える（asOfFixed のときを除く。§75）
+   */
   asOf: ISODate;
+  /** 計算基準日を YOJITSU_AS_OF で固定したビルドか（テスト・試用版。画面でも今日に置き換えない。§75） */
+  asOfFixed?: boolean;
   asOfMonth: YearMonth;
   /** 確定済みの最新月（asOf が前月分の確定日以降なら前月、そうでなければ前々月） */
   lastFinalMonth: YearMonth;

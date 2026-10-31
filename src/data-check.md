@@ -12,14 +12,14 @@ title: データ確認
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, emptyState, loadJson, note, loadModel } from "./components/layout.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { formatHours, integer, dateTimeJst, monthJa, WARNING_LABELS, UNMAPPED_REASON_LABELS } from "./components/format.js";
 ```
 
 ```js
-const model = await loadJson(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
+const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const issuesData = await loadJson(FileAttachment("./data/dataset-issues.json"));
 ```
 

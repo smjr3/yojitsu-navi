@@ -15,7 +15,7 @@ import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_WORK_KEY, aggregateWork, customerKey, decodeWorkRows, elapsedMonthCount, memberTeamsAt, monthRange, personMonths, workMonthlySeries, workTotals } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
-import { pageHeader, sectionTitle, loadJson, note } from "./components/layout.js";
+import { pageHeader, sectionTitle, loadJson, note, withToday } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
@@ -30,7 +30,7 @@ import { pm, workGroupChart, workHoursChart, workHoursLegend, workSeriesTable, w
 const model = await loadJson(
   {
     json: async () => {
-      const [m, d] = await Promise.all([FileAttachment("./data/model.json").json(), FileAttachment("./data/work-hours.json").json()]);
+      const [m, d] = await Promise.all([FileAttachment("./data/model.json").json().then(withToday), FileAttachment("./data/work-hours.json").json()]);
       return { ...m, workRows: decodeWorkRows(d) };
     },
   },
