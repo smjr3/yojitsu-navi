@@ -84,3 +84,15 @@ test("固定したビルド（テスト・試用版）は、ブラウザの時�
   await expect(page.locator(".yn-meta time").first()).toHaveText(AS_OF);
   await expect(page.locator(".yn-meta > div.is-stale")).toHaveCount(0);
 });
+
+test("固定しないビルド: 案件の作業ログの状態も今日で決まる（工数の確定日を過ぎた月は「確定」）", async ({ page }) => {
+  // AS_OF の月が確定する翌月 10 日（確定日 = 翌月の第 n 営業日。10 日なら過ぎている）
+  const today = `${addMonths(AS_OF.slice(0, 7), 1)}-10`;
+  await openAsProduction(page, today);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoPage(page, "/contract?id=C008");
+  await page.getByRole("button", { name: "作業ログを読み込む" }).click();
+  const cells = page.locator(".yn-worklog-holder tbody td");
+  await expect(cells.filter({ hasText: /^確定$/ }).first()).toBeVisible();
+  await expect(cells.filter({ hasText: /^速報$/ })).toHaveCount(0);
+});

@@ -360,8 +360,9 @@ const worklogSection = (() => {
     loadBtn.textContent = T.common.loading;
     try {
       const data = await bd.fetchWorklogs(c.contractId);
-      const monthSet = new Set(months.map((m) => m.month));
-      const entries = data.months.filter((m) => monthSet.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: m.status })));
+      // 状態は明細のファイル（ビルドした日の状態）ではなく、今日に置き換えた Model の月から取る（SPEC §74）
+      const statusOf = new Map(months.map((m) => [m.month, m.status]));
+      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: statusOf.get(m.month) })));
       status.hidden = false;
       status.textContent = fmt(T.contract.worklogStatus, { n: integer(entries.length), period: periodJa(vm.period), fetchedAt: data.worklogFetchedAt ?? "—" });
       loadBtn.remove();
