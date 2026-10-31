@@ -7,6 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
+import { npm } from "../../scripts/lib/npm.mjs";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +25,8 @@ beforeAll(() => {
   consumer = mkdtempSync(join(tmpdir(), "yojitsu-core-"));
   writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "consumer", private: true, type: "module" }));
   mkdirSync(join(consumer, "node_modules", "@yojitsu-navi"), { recursive: true });
-  symlinkSync(PKG, join(consumer, "node_modules", "@yojitsu-navi", "core"), "dir");
+  // Windows は管理者権限なしでシンボリックリンクを作れないので、ジャンクションにする
+  symlinkSync(PKG, join(consumer, "node_modules", "@yojitsu-navi", "core"), process.platform === "win32" ? "junction" : "dir");
 }, 60_000);
 
 afterAll(() => {
@@ -57,7 +59,7 @@ describe("@yojitsu-navi/core", () => {
   });
 
   it("パッケージに入るのは dist と README だけ", () => {
-    const out = execFileSync("npm", ["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" });
+    const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
     const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
     expect(files).toContain("dist/core/index.js");
     expect(files).toContain("dist/core/index.d.ts");

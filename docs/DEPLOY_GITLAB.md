@@ -74,7 +74,7 @@ Premium 以上なら、保護ブランチの「Allowed to merge」に特定の�
 | ファイル | 大きさ | 使う場面 |
 |---|---|---|
 | `yojitsu-navi-<版>.tgz` | 約 8 MB | 社内に npm のミラー（Nexus・Artifactory など）がある。CI/CD 変数 `NPM_CONFIG_REGISTRY` を設定する（手順 4） |
-| `yojitsu-navi-<版>-with-deps.tgz` | 約 64 MB | 社内に npm のミラーが無い。依存（npm のキャッシュ）を `vendor/npm-cache/` に入れ、CI は外に出ずに `npm ci --offline` する。Linux x64 の Runner と Windows x64 の PC で使える |
+| `yojitsu-navi-<版>-with-deps.tgz` | 約 64 MB | 社内に npm のミラーが無い。依存（npm のキャッシュ）を `vendor/npm-cache/` に入れ、CI は外に出ずに `npm ci --offline` する。Linux x64・Windows x64 の Runner と PC で使える |
 
 どちらも、開発元のリポジトリで `npm run app:pack`（依存込みは `npm run app:pack -- --with-deps`）を実行すると `packages/app/` にできます。
 社内で使う PC には Node.js 20 以上と git が要ります。パッケージ自体は依存を持たないので、入れるときに外部へ接続しません。
@@ -120,8 +120,10 @@ yojitsu-navi gitlab-setup --apply
 ### 4. Runner と CI/CD 変数
 
 **Runner**: Settings > CI/CD > Runners で、このプロジェクトに使える Runner（緑の丸）があることを確認します。
-`.gitlab-ci.yml` は `image:` を使うので **Docker（または Kubernetes）executor** の Runner が必要です。
-shell executor しか無い場合は、Runner のマシンに Node.js 20 以上を入れ、管理者に相談してください。
+Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gitlab-ci.yml` の各ジョブは `node scripts/ci/*.mjs` と `npm run` だけで、シェルの違いに左右されません）。
+- **shell executor**（Windows の Runner に多い）: Runner のマシンに Node.js 22（20 以上）と Git を入れておきます。`image:` は使われません。
+- **Docker（または Kubernetes）executor**: `image:` の `node:22` を使います。Windows コンテナの Runner では、Windows 用の Node のイメージを `NODE_IMAGE` で指定します。
+- Runner にタグが付いていてタグなしのジョブを受けない設定なら、管理者に「タグなしのジョブも実行する」を有効にしてもらうか、各ジョブに `tags:` を足します。
 
 **CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
 
@@ -238,5 +240,5 @@ git push -u origin update-<新しい版>
 3. Build > Pipeline schedules で平日朝（例 `0 6 * * 1-5`、Asia/Tokyo、対象 `main`）を登録
 4. `npm run gitlab:setup` で `GIT_PUSH_TOKEN` の行が ✓ になることを確認
 
-取り込み結果は `data/<種類>-<日時>` ブランチの MR になり、パイプラインが成功すると自動でマージされます（`scripts/ci/push-data-mr.sh`。`main` は直接プッシュ不可のため）。
+取り込み結果は `data/<種類>-<日時>` ブランチの MR になり、パイプラインが成功すると自動でマージされます（`scripts/ci/fetch-data.mjs` → `push-data-mr.mjs`。`main` は直接プッシュ不可のため）。
 マージで `main` のパイプラインが走り、Pages まで更新されます。検証で失敗した MR は開いたまま残るので、ログの理由を直すか、MR を閉じてください（翌日の取り込みは最新の `main` から作り直します）。

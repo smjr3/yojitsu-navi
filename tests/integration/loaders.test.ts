@@ -11,12 +11,13 @@ import { join } from "node:path";
 import { worklogKey } from "../../src/components/worklog-key.js";
 
 const ROOT = join(__dirname, "..", "..");
-const TSX = join(ROOT, "node_modules", ".bin", "tsx");
+// tsx は node --import tsx で動かす（node_modules/.bin/tsx は Windows では .cmd で、直接起動できない）
+const TSX_ARGS = ["--import", "tsx"];
 const HASH = "e".repeat(64);
 const ENV = { ...process.env, YOJITSU_AS_OF: "2026-10-27", YOJITSU_INPUT_HASH: HASH };
 const MEMO = join(ROOT, "src", ".observablehq", "cache", ".yojitsu", `worklogs-${HASH.slice(0, 16)}`);
 
-const run = (file: string, args: string[] = []) => spawnSync(file.endsWith(".js") ? process.execPath : TSX, [join(ROOT, file), ...args], { cwd: ROOT, env: ENV, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
+const run = (file: string, args: string[] = []) => spawnSync(process.execPath, [...(file.endsWith(".js") ? [] : TSX_ARGS), join(ROOT, file), ...args], { cwd: ROOT, env: ENV, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
 
 afterAll(() => rmSync(MEMO, { recursive: true, force: true }));
 
@@ -30,7 +31,7 @@ describe("データローダ（別プロセス）", () => {
 
   it("model.json の asOfFixed: build.ts は日付を必ず渡すので、呼び出し側が固定したかは YOJITSU_AS_OF_FIXED で決まる（§75）", () => {
     const meta = (extra: Record<string, string>) => {
-      const r = spawnSync(TSX, [join(ROOT, "src/data/model.json.ts")], { cwd: ROOT, env: { ...ENV, ...extra }, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
+      const r = spawnSync(process.execPath, [...TSX_ARGS, join(ROOT, "src/data/model.json.ts")], { cwd: ROOT, env: { ...ENV, ...extra }, encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
       expect(r.status, r.stderr).toBe(0);
       return JSON.parse(r.stdout).meta;
     };

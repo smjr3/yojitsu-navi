@@ -44,8 +44,8 @@ describe("withGitLabEnv", () => {
   });
 });
 
-describe("scripts/ci/push-data-mr.sh（取り込み結果を MR で反映）", () => {
-  const SCRIPT = join(process.cwd(), "scripts/ci/push-data-mr.sh");
+describe("scripts/ci/push-data-mr.mjs（取り込み結果を MR で反映。Windows・Linux の Runner で動く）", () => {
+  const SCRIPT = join(process.cwd(), "scripts/ci/push-data-mr.mjs");
   let dir = "";
   afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
@@ -58,8 +58,11 @@ describe("scripts/ci/push-data-mr.sh（取り込み結果を MR で反映）", (
     const remote = join(dir, "remote.git");
     const work = join(dir, "work");
     git(dir, "init", "-q", "--bare", "-b", "main", remote);
-    git(remote, "config", "receive.advertisePushOptions", "true");
-    writeFileSync(join(remote, "hooks", "pre-receive"), `#!/bin/sh\nread line\ni=0\nwhile [ "$i" -lt "\${GIT_PUSH_OPTION_COUNT:-0}" ]; do eval "echo \\$GIT_PUSH_OPTION_$i"; i=$((i+1)); done > "${join(dir, "options.txt")}"\n`, { mode: 0o755 });
+    // bare リポジトリの中を cwd にすると Windows の git が「not in a git directory」になるので --git-dir で指定する
+    git(dir, `--git-dir=${remote}`, "config", "receive.advertisePushOptions", "true");
+    // フックは git 同梱の sh が動かす。Windows のパスの \ を sh が解釈しないよう / にする
+    const out = join(dir, "options.txt").replace(/\\/g, "/");
+    writeFileSync(join(remote, "hooks", "pre-receive"), `#!/bin/sh\nread line\ni=0\nwhile [ "$i" -lt "\${GIT_PUSH_OPTION_COUNT:-0}" ]; do eval "echo \\$GIT_PUSH_OPTION_$i"; i=$((i+1)); done > "${out}"\n`, { mode: 0o755 });
     git(dir, "clone", "-q", remote, work);
     mkdirSync(join(work, "data/worklogs"), { recursive: true });
     writeFileSync(join(work, "data/worklogs/2026-10.csv"), "a\n");
@@ -70,7 +73,7 @@ describe("scripts/ci/push-data-mr.sh（取り込み結果を MR で反映）", (
     return { remote, work };
   }
   const run = (work: string, remote: string) =>
-    execFileSync("bash", [SCRIPT, "worklogs", "chore(data): 作業実績を更新", "data/worklogs"], {
+    execFileSync(process.execPath, [SCRIPT, "worklogs", "chore(data): 作業実績を更新", "data/worklogs"], {
       cwd: work,
       encoding: "utf-8",
       env: { ...process.env, DATA_PUSH_REMOTE: remote, CI_COMMIT_BRANCH: "main", GIT_PUSH_TOKEN: "" },
@@ -102,7 +105,12 @@ describe("scripts/ci/push-data-mr.sh（取り込み結果を MR で反映）", (
     const { work } = setup();
     writeFileSync(join(work, "data/worklogs/2026-10.csv"), "c\n");
     expect(() =>
-      execFileSync("bash", [SCRIPT, "worklogs", "m", "data/worklogs"], { cwd: work, stdio: "pipe", env: { ...process.env, DATA_PUSH_REMOTE: "", GIT_PUSH_TOKEN: "", CI_COMMIT_BRANCH: "main" } }),
+      execFileSync(process.execPath, [SCRIPT, "worklogs", "m", "data/worklogs"], { cwd: work, stdio: "pipe", env: { ...process.env, DATA_PUSH_REMOTE: "", GIT_PUSH_TOKEN: "", CI_COMMIT_BRANCH: "main" } }),
     ).toThrow(/GIT_PUSH_TOKEN/);
+  });
+  it("トークン付きの URL（ポート付きもそのまま）・ブランチ名は UTC の日時", async () => {
+    const { remoteUrl, dataBranch } = await import("../../scripts/ci/push-data-mr.mjs");
+    expect(remoteUrl({ GIT_PUSH_TOKEN: "tk", CI_SERVER_URL: "https://gl.example.local:8443", CI_PROJECT_PATH: "g/p" })).toBe("https://oauth2:tk@gl.example.local:8443/g/p.git");
+    expect(dataBranch("members", new Date(Date.UTC(2026, 0, 2, 3, 4, 5)))).toBe("data/members-20260102-030405");
   });
 });

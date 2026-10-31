@@ -635,7 +635,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 取れない項目（古い GitLab に無い API、権限で読めない、通信失敗）は警告しない。デモの模擬は推奨どおりの値を返す。
 
 ### 39.4 定期取り込みは MR で反映する
-`main` が直接プッシュ不可なので、`fetch-worklogs`・`fetch-members` は変更を `data/<種類>-<日時>` に 1 コミットして push し、push オプション（`merge_request.create`・`target`・`merge_when_pipeline_succeeds`・`remove_source_branch`・`title`）で MR の作成と、パイプライン成功後の自動マージを指定する（`scripts/ci/push-data-mr.sh`）。変更が無ければ何もしない。
+`main` が直接プッシュ不可なので、`fetch-worklogs`・`fetch-members` は変更を `data/<種類>-<日時>` に 1 コミットして push し、push オプション（`merge_request.create`・`target`・`merge_when_pipeline_succeeds`・`remove_source_branch`・`title`）で MR の作成と、パイプライン成功後の自動マージを指定する（`scripts/ci/push-data-mr.mjs`）。変更が無ければ何もしない。
 - CI の重複を避けるため、`.gitlab-ci.yml` の `workflow:rules` で、開いている MR があるブランチへの push は MR のパイプラインだけにする。
 
 ## 40. 検証の一覧（2026-10-29 要望）
@@ -685,7 +685,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 「この仕組みを npm パッケージで社内に持ち込む」への対応。社内は外部（開発元のリポジトリ）に接続できない前提で、`.tgz` のファイル 1 つから社内 GitLab のプロジェクトを作り、Pages まで流せるようにする。画面は変えない。
 - パッケージ名 `yojitsu-navi`（コマンド `yojitsu-navi`）、置き場 `packages/app/`。**依存を持たない**（Node の標準モジュールだけ）ので、`npm install -g` や `npx` で入れるときに外部へ接続しない。版はルートの `package.json` と同じ値にする（違うと `npm run app:pack` が止まる）。
 - 中身: `template/` = git が管理するファイル一式（`.github/` を除く。`.gitignore` は `_gitignore` として入れ、`init` で戻す）、`bin/`・`lib/` = コマンド、`dist/gitlab-setup.mjs` = `scripts/gitlab-setup.ts` の型を外した JS（依存なしで §39.2 の確認・適用ができる）。`template`・`dist`・`deps` と `.tgz` は git に入れない。
-- **依存の扱い（決定）**: 2 種類を作る。社内に npm のミラーがあれば依存なし版（約 8 MB。うち画面フォント約 4 MB §46、CI は `NPM_CONFIG_REGISTRY` で取る）。無ければ依存込み版（`--with-deps`、約 64 MB）で、`package-lock.json` の依存を npm のキャッシュとして `deps/npm-cache/` に入れ、`init` が `vendor/npm-cache/` に写す。`.gitlab-ci.yml` はこのフォルダがあれば `npm ci --offline --cache vendor/npm-cache` する。キャッシュは Linux x64（CI の Runner）の分と、Windows x64 の PC で使う OS 別バイナリ（esbuild・rollup）を入れる。理由: 社内のミラーの有無が未確認で、どちらでも止まらないようにするため。node_modules をそのまま入れる案は OS ごとのバイナリが合わず採らない。
+- **依存の扱い（決定）**: 2 種類を作る。社内に npm のミラーがあれば依存なし版（約 8 MB。うち画面フォント約 4 MB §46、CI は `NPM_CONFIG_REGISTRY` で取る）。無ければ依存込み版（`--with-deps`、約 64 MB）で、`package-lock.json` の依存を npm のキャッシュとして `deps/npm-cache/` に入れ、`init` が `vendor/npm-cache/` に写す。`.gitlab-ci.yml` はこのフォルダがあれば `npm ci --offline --cache vendor/npm-cache` する。キャッシュには Linux x64 と Windows x64 の両方の OS 別バイナリ（esbuild・rollup）を入れる（Runner・PC がどちらの OS でも `npm ci` できる。§79）。理由: 社内のミラーの有無が未確認で、どちらでも止まらないようにするため。node_modules をそのまま入れる案は OS ごとのバイナリが合わず採らない。
 - **計算コアとの関係（決定）**: `@yojitsu-navi/core`（§43）は別パッケージのまま残す（monorepo の 2 パッケージ）。core はほかのプロジェクトが `import` して使う部品、`yojitsu-navi` は予実ナビのプロジェクトを作る道具で、使う人と更新の仕方が違うため。`yojitsu-navi` の template には `packages/core/` も入るので、社内でも §43 の手順で core を公開できる。
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
@@ -1113,3 +1113,13 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 作れないとき（`apiBaseUrl` が `…/api/v4` でなく `tokenUrl` も無い）はボタンを出さない。デモは開く先が無いので押せないボタンだけ出す。
 - 横展開: 接続先の「プロジェクト」も `group/project` 形式なら GitLab のプロジェクト画面へのリンクにする（新しいタブ）。
 - 実装: `src/core/gitlab.ts` の `tokenPageUrl`・`webProjectUrl`・`webOrigin`、`src/components/settings.js`。
+
+## 79. Windows・Linux のどちらでも動く（2026-10-31 依頼者）
+社内の GitLab Runner は Windows。Linux に変わることもあるので、ビルド・テスト・取り込み・公開はどちらの OS でも同じに動かす。
+- `.gitlab-ci.yml` の `script` は `node scripts/ci/*.mjs`・`npm run`・`npx vitest` だけにする。sh と PowerShell で意味が変わる書き方（`if`・`$変数` の展開・`find`・`gzip` など）は Node のスクリプト（`scripts/ci/`: `install`・`e2e`・`pages`・`publish-core`・`fetch-data`・`push-data-mr`）に入れ、変数は `variables:` で渡す。`tests/unit/ci-portable.test.ts` で検査。
+- 改行は `.gitattributes` で LF に固定する（Windows の `core.autocrlf=true` でも CSV・スクリプトが CRLF にならない）。
+- 作業実績の並び順（`sortWorklogs`）は言語を `en-US` に固定して比べる（OS の言語設定で半角カナと全角カナの順が変わらない。既存のデータと同じ順）。
+- スクリプトのパスは `fileURLToPath`・`path.join`・`basename` で扱い、`/` 区切りを前提にしない。npm は `scripts/lib/npm.mjs` で `npm-cli.js` を Node で直接動かす（Windows の `npm.cmd` を起動しない）。
+- テストも同じ: `bash`・`grep` を使わない、シンボリックリンクは Windows ではジャンクション、`tsx` は `node --import tsx`。
+- 確認済みは Linux だけ。Windows では 2026-10-31 の外部の実行結果（改行・ロケール・`npm`/`tsx`/`grep`/`bash` の起動・シンボリックリンク・パス区切り）で落ちた箇所を直した。社内の Runner での確認は持ち込み後。
+

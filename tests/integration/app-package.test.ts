@@ -7,9 +7,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { npm } from "../../scripts/lib/npm.mjs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = join(__dirname, "..", "..");
@@ -61,7 +62,7 @@ describe("パッケージの中身", () => {
   });
 
   it("入るのは bin・lib・dist・template・README だけで、リポジトリ一式が揃っている", () => {
-    const out = execFileSync("npm", ["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" });
+    const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
     const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
     expect(files.filter((f) => !/^(bin|lib|dist|template)\//.test(f) && f !== "README.md" && f !== "package.json")).toEqual([]);
     for (const f of ["bin/yojitsu-navi.mjs", "lib/project.mjs", "dist/gitlab-setup.mjs", "template/package.json", "template/package-lock.json", "template/.gitlab-ci.yml", "template/_gitignore", "template/config.json", "template/src/index.md", "template/data/contracts.csv", "template/docs/DEPLOY_GITLAB.md"]) {
@@ -77,13 +78,26 @@ describe("パッケージの中身", () => {
   it("template に個人・会社の情報と接続先が入っていない", () => {
     // 個人名・アカウント名はここにも書けないので、持ち込む人が環境変数 YOJITSU_PRIVATE_WORDS（カンマ区切り）で渡す
     const words = (process.env.YOJITSU_PRIVATE_WORDS ?? "").split(",").map((w) => w.trim()).filter(Boolean);
-    const grep = (args: string[]) => spawnSync("grep", ["-rIl", ...args, join(PKG, "template")], { encoding: "utf-8" }).stdout.trim().split("\n").filter(Boolean);
-    if (words.length) expect(grep(["-i", ...words.flatMap((w) => ["-e", w])])).toEqual([]);
+    // grep は Windows に無いので Node で探す（grep -I と同じく、中身に NUL がある＝バイナリのファイルは見ない）
+    const textFiles = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) return textFiles(p);
+        const buf = readFileSync(p);
+        return buf.includes(0) ? [] : [p];
+      });
+    const tpl = textFiles(join(PKG, "template"));
+    const grep = (re: RegExp) => tpl.filter((f) => re.test(readFileSync(f, "utf-8")));
+    const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (words.length) expect(grep(new RegExp(words.map(escape).join("|"), "i"))).toEqual([]);
     // GitHub のアカウントへのリンク（npm の依存の寄付先 = package-lock.json と、フォントの著作権表示 = src/fonts/OFL.txt は除く。
     // OFL はライセンス本文と著作権表示をそのまま添えることが条件で、書き換えられない。§46）・メールアドレス（例示用のドメインは除く）
-    expect(grep(["-e", "github\\.com/"]).filter((f) => !f.endsWith("package-lock.json") && !f.endsWith(join("src", "fonts", "OFL.txt")))).toEqual([]);
-    const mails = spawnSync("grep", ["-rIohE", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[a-z]{2,}", join(PKG, "template", "src"), join(PKG, "template", "docs"), join(PKG, "template", "scripts"), join(PKG, "template", "README.md")], { encoding: "utf-8" }).stdout;
-    expect(mails.split("\n").filter((m) => m && !/@(example\.(local|com|jp)|users\.noreply)/.test(m) && !/@[0-9]/.test(m))).toEqual([]);
+    expect(grep(/github\.com\//).filter((f) => !f.endsWith("package-lock.json") && !f.endsWith(join("src", "fonts", "OFL.txt")))).toEqual([]);
+    const mailRoots = ["src", "docs", "scripts", "README.md"].map((d) => join(PKG, "template", d));
+    const mails = tpl
+      .filter((f) => mailRoots.some((r) => f === r || f.startsWith(r + sep)))
+      .flatMap((f) => readFileSync(f, "utf-8").match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/g) ?? []);
+    expect(mails.filter((m) => !/@(example\.(local|com|jp)|users\.noreply)/.test(m) && !/@[0-9]/.test(m))).toEqual([]);
     const g = JSON.parse(readFileSync(join(PKG, "template", "config.json"), "utf-8")).masterEdit.gitlab;
     expect([g.apiBaseUrl, g.projectId]).toEqual(["", ""]);
   });
@@ -243,7 +257,10 @@ describe("update", () => {
 describe("CI 定義", () => {
   it("依存込みのプロジェクトは vendor/npm-cache から外に出ずに入れる", () => {
     const ci = readFileSync(join(ROOT, ".gitlab-ci.yml"), "utf-8");
-    expect(ci).toContain("npm ci --offline --cache vendor/npm-cache");
+    expect(ci).toContain("node scripts/ci/install.mjs");
+    const install = readFileSync(join(ROOT, "scripts", "ci", "install.mjs"), "utf-8");
+    expect(install).toContain('existsSync("vendor/npm-cache")');
+    expect(install).toContain('["ci", "--offline", "--cache", "vendor/npm-cache"');
     expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain("vendor/npm-cache/_logs/");
   });
 });

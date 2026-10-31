@@ -8,8 +8,9 @@
 // Framework を更新してビルドが registry.npmjs.org への接続で失敗したら、エラーに出た名前をここに足す。
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const VERSIONS = [
   "@observablehq/plot@0.6.17",
   "@observablehq/sample-datasets@1.0.1",
