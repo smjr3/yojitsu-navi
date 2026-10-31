@@ -297,8 +297,9 @@ body {
   flex-wrap: nowrap;
 }
 .yn-unit-slot .yn-seg-btn {
-  min-height: 28px;
-  padding: 2px 8px;
+  box-sizing: border-box;
+  min-height: 32px; /* 右の「リソース計画」・アイコンと同じ高さに揃える */
+  padding: 0 10px;
   white-space: nowrap;
 }
 .yn-unit-slot .yn-seg-btn[aria-pressed="true"]::before {
@@ -313,9 +314,13 @@ body {
 .yn-unit-slot:empty + .yn-tools {
   margin-left: auto;
 }
-/* 右上の業務リンク（リソース計画）。よく使うので大きめに（§52） */
+/* 右上の業務リンク（リソース計画）。よく使うので大きめに（§52）。高さは単位の切替・アイコンと揃える */
 .yn-tool {
-  padding: 6px 20px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 20px;
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   color: var(--yn-text-1) !important;
@@ -3337,6 +3342,12 @@ html:has(dialog.yn-dialog[open]) {
   .yn-icon-btn {
     width: 30px;
     height: 30px;
+  }
+  .yn-tool {
+    height: 30px;
+  }
+  .yn-unit-slot .yn-seg-btn {
+    min-height: 30px;
   }
 }
 

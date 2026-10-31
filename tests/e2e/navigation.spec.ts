@@ -147,7 +147,7 @@ test("作業実績の取得日時は上段（単位の左）に常に出し、�
   await expect(fetched).toBeVisible();
 });
 
-test("見た目の揃え: タブの文字・カレンダーのアイコンが上下の中央、狭い幅でもタブが切れない、フッターは中央（§66）", async ({ page }) => {
+test("見た目の揃え: タブの文字・カレンダーのアイコンが上下の中央、上段右の操作の高さがそろう、狭い幅でもタブが切れない、フッターは中央（§66）", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 800 });
   await gotoPage(page, "/");
   const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
@@ -166,6 +166,20 @@ test("見た目の揃え: タブの文字・カレンダーのアイコンが上
     const icon = (await pick.locator("svg").boundingBox())!;
     expect(Math.abs(mid(icon) - mid(box))).toBeLessThanOrEqual(1);
   }
+  // 上段右の単位の切替・リソース計画・アイコンは同じ高さで、上下の中央もそろう（2026-10-31 試用版のコメント）
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 800 });
+    const boxes = await Promise.all(
+      [page.locator("#yn-unit-slot .yn-seg-btn").first(), page.locator(".yn-tool").first(), page.locator(".yn-icon-btn").first()].map(
+        async (l) => (await l.boundingBox())!,
+      ),
+    );
+    for (const b of boxes) {
+      expect(Math.abs(b.height - boxes[0]!.height)).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(mid(b) - mid(boxes[0]!))).toBeLessThanOrEqual(0.5);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 800 });
   const footer = page.locator("#observablehq-footer");
   await expect(footer).toHaveCSS("text-align", "center");
   for (const width of [320, 390]) {
