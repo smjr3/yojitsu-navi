@@ -320,3 +320,85 @@ export function mergeAdjacent<T extends AllocationPiece & { id: string }>(rows: 
   }
   return { keep, drop };
 }
+
+// ---- 表示する月の範囲（§71） ----
+
+/** リソース計画で表示する月の範囲（両端含む） */
+export interface PlanRange {
+  from: YearMonth;
+  to: YearMonth;
+}
+
+/** 範囲の既定: 今月から 12 か月（計画は先の月に入れることが多いため未来寄り） */
+export const PLAN_RANGE_DEFAULT_MONTHS = 12;
+/** 範囲の最大の月数（表が横に長くなりすぎないように） */
+export const PLAN_RANGE_MAX_MONTHS = 24;
+
+function rangeLength(r: PlanRange): number {
+  return monthRange(r.from, r.to).length;
+}
+
+/** 既定の範囲（基準月から 12 か月） */
+export function defaultPlanRange(asOfMonth: YearMonth): PlanRange {
+  return { from: asOfMonth, to: addMonths(asOfMonth, PLAN_RANGE_DEFAULT_MONTHS - 1) };
+}
+
+/** 開始月を変える。終了月はそのまま（開始より前なら同じ月数を保って後ろへ、最大の月数を超えたら縮める） */
+export function setPlanRangeFrom(r: PlanRange, from: YearMonth): PlanRange {
+  if (!isValidYearMonth(from)) return r;
+  let to = r.to;
+  if (to < from) to = addMonths(from, rangeLength(r) - 1);
+  if (monthRange(from, to).length > PLAN_RANGE_MAX_MONTHS) to = addMonths(from, PLAN_RANGE_MAX_MONTHS - 1);
+  return { from, to };
+}
+
+/** 終了月を変える。開始月はそのまま（終了より後なら同じ月数を保って前へ、最大の月数を超えたら縮める） */
+export function setPlanRangeTo(r: PlanRange, to: YearMonth): PlanRange {
+  if (!isValidYearMonth(to)) return r;
+  let from = r.from;
+  if (from > to) from = addMonths(to, -(rangeLength(r) - 1));
+  if (monthRange(from, to).length > PLAN_RANGE_MAX_MONTHS) from = addMonths(to, -(PLAN_RANGE_MAX_MONTHS - 1));
+  return { from, to };
+}
+
+/** 範囲を n か月ずらす（月数はそのまま） */
+export function shiftPlanRange(r: PlanRange, n: number): PlanRange {
+  return { from: addMonths(r.from, n), to: addMonths(r.to, n) };
+}
+
+/** 月 m が入るように範囲をずらす（入っていればそのまま。月数はそのまま） */
+export function planRangeIncluding(r: PlanRange, m: YearMonth): PlanRange {
+  if (!isValidYearMonth(m) || (r.from <= m && m <= r.to)) return r;
+  const len = rangeLength(r);
+  return m < r.from ? { from: m, to: addMonths(m, len - 1) } : { from: addMonths(m, -(len - 1)), to: m };
+}
+
+/**
+ * ブラウザに覚える形「開始の基準月からのずれ:月数」（例 "0:12"）。基準月が進むと範囲も一緒に進む
+ */
+export function serializePlanRange(r: PlanRange, asOfMonth: YearMonth): string {
+  const offset = r.from >= asOfMonth ? monthRange(asOfMonth, r.from).length - 1 : -(monthRange(r.from, asOfMonth).length - 1);
+  return `${offset}:${rangeLength(r)}`;
+}
+
+/** serializePlanRange の逆。読めなければ既定の範囲 */
+export function parsePlanRange(text: string | null | undefined, asOfMonth: YearMonth): PlanRange {
+  const m = /^(-?\d{1,3}):(\d{1,2})$/.exec(String(text ?? ""));
+  if (!m) return defaultPlanRange(asOfMonth);
+  const offset = Number(m[1]);
+  const len = Number(m[2]);
+  if (len < 1 || len > PLAN_RANGE_MAX_MONTHS || Math.abs(offset) > 120) return defaultPlanRange(asOfMonth);
+  const from = addMonths(asOfMonth, offset);
+  return { from, to: addMonths(from, len - 1) };
+}
+
+/** 開始月・終了月の選択肢: データの最初の月（2 年前より前なら 2 年前）〜 3 年先。表示中の範囲は必ず含める */
+export function planRangeOptions(asOfMonth: YearMonth, minMonth: YearMonth | null | undefined, r: PlanRange): YearMonth[] {
+  const twoYearsAgo = addMonths(asOfMonth, -24);
+  let first = minMonth && isValidYearMonth(minMonth) && minMonth > twoYearsAgo ? minMonth : twoYearsAgo;
+  if (first > asOfMonth) first = asOfMonth;
+  let last = addMonths(asOfMonth, 36);
+  if (r.from < first) first = r.from;
+  if (r.to > last) last = r.to;
+  return monthRange(first, last);
+}

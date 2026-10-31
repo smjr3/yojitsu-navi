@@ -36,7 +36,7 @@ test("1.0 超は警告: 保存は止めず、人の名前で 1 件（続いた�
   await expect(page.locator('[data-fk="plan:cell:M010:all:2026-11"]')).toBeInViewport();
 });
 
-test("エラーは赤・警告は黄。エラーを先に並べ、押すとその履歴の行へ（絞り込み・組織・年度を合わせる）", { tag: "@smoke" }, async ({ page }) => {
+test("エラーは赤・警告は黄。エラーを先に並べ、押すとその履歴の行へ（絞り込み・組織・表示する月を合わせる）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   await appendAssignments(page, ["M010,C002,2026-11,2026-12,0.5", "M011,C002,2027-05,2027-06,1.5"]);
   const list = page.locator(".yn-me-issue-list > li");
@@ -48,7 +48,9 @@ test("エラーは赤・警告は黄。エラーを先に並べ、押すとそ�
   expect(await bg(err)).not.toBe(await bg(item(page, "1.0 を超えています")));
   await expect(page.locator(".yn-me-check .yn-chip-danger")).toContainText("エラー 1");
 
-  // 別の組織・年度・絞り込みにしてから押しても、その行が出る
+  // 別の組織・表示する月（§71）・絞り込みにしてから押しても、その行が出る
+  await page.locator("#yn-me-plan-from").selectOption("2026-04");
+  await page.locator("#yn-me-plan-to").selectOption("2026-09");
   const other = await page.locator("#yn-me-plan-team option", { hasText: "ネットワーク保守チーム" }).first().getAttribute("value");
   await page.locator("#yn-me-plan-team").selectOption(other!);
   await page.locator("#yn-me-plan-q").fill("該当なしの名前");
@@ -58,7 +60,9 @@ test("エラーは赤・警告は黄。エラーを先に並べ、押すとそ�
   await expect(entry).toBeVisible();
   await expect(entry.getByRole("button", { name: /修正/ })).toBeFocused();
   await expect(page.locator("#yn-me-plan-q")).toHaveValue("");
-  await expect(page.locator(".yn-me-plan-fy")).toContainText("2027年度");
+  // 行の月が入るように、月数（6 か月）を保って範囲をずらす
+  await expect(page.locator("#yn-me-plan-from")).toHaveValue("2026-12");
+  await expect(page.locator("#yn-me-plan-to")).toHaveValue("2027-05");
   await expect(entry.locator(".yn-me-issues li.is-error")).toContainText("0〜1");
 });
 

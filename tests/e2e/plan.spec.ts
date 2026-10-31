@@ -1,8 +1,8 @@
 /**
  * リソース計画 /plan（SPEC §23・§36）と、組織の種別・リーダーの表示（§21・§22）
  */
-import { test, expect, gotoPage, pickCombo } from "./helpers/app.js";
-import { ROOT_DIR } from "./constants.js";
+import { test, expect, gotoPage, pickCombo, usePlanFiscalYear } from "./helpers/app.js";
+import { AS_OF, ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
 import { addRow, parseMasterDoc, planSourcesFromDocs, serializeMasterDoc } from "../../src/core/masterEdit.js";
 import { planView } from "../../src/core/plan.js";
@@ -26,6 +26,8 @@ function outsideAt(memberId: string, month: string): number {
 }
 
 test.beforeEach(async ({ page }) => {
+  // 年度の月を前提にしたテスト（表示する月の既定は今月から 12 か月。§71）
+  await usePlanFiscalYear(page, AS_OF);
   await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
 });
 
