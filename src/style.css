@@ -2912,6 +2912,22 @@ html:has(dialog.yn-dialog[open]) {
 .yn-col-resizer:focus-visible {
   outline: none;
 }
+/* マスタ編集の表: 列見出しの右端をドラッグして列幅を変える。幅を決めた列は入りきらない中身を「…」で切る */
+.yn-me-ledger thead th {
+  padding-right: 12px;
+}
+.yn-me-ledger .yn-col-resizer {
+  right: 0;
+}
+.yn-me-ledger .is-col-sized {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yn-me-ledger .is-col-sized > :not(.yn-col-resizer) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .yn-me-plan-table.is-name-sized thead th:first-child,
 .yn-me-plan-table.is-name-sized tbody th[scope="row"],
 .yn-me-plan-table.is-name-sized tfoot th:first-child {
