@@ -29,11 +29,11 @@ export function planCellTooltip() {
   const el = html`<div class="yn-plan-tip" role="tooltip" id="yn-plan-tip" hidden></div>`;
   let anchor = null;
   const onScroll = () => hide();
-  function show(a, content) {
+  function show(a, content, width = 300) {
     anchor = a;
     el.replaceChildren(content);
     el.hidden = false;
-    placeNear(el, a, { width: 300 });
+    placeNear(el, a, { width });
     a.setAttribute("aria-describedby", "yn-plan-tip");
     addEventListener("scroll", onScroll, { passive: true, capture: true });
   }
