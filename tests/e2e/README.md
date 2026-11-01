@@ -11,7 +11,7 @@ npm run test:e2e:smoke                # 縮小版 = 上に --grep @smoke
 
 ## 縮小版（`@smoke`）
 
-GitHub Actions の分数を節約するため、CI は Pull Request では縮小版、`main` への push（マージ）では全件を走らせる（`.github/workflows/ci.yml`）。
+GitHub Actions の分数を節約するため、CI は Pull Request では縮小版、`main` への push（マージ）では全件を 3 分割（`--shard`）で並べて走らせる（`.github/workflows/ci.yml` の `e2e-full`。1 本だと 60 分を超えるため）。
 縮小版は `{ tag: "@smoke" }` を付けたテストだけ（約 40 件、ローカル 2 workers で 40 秒前後）:
 
 - `smoke.spec.ts` のすべて（全ページがエラー 0 で開く、404）

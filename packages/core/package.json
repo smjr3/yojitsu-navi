@@ -2,6 +2,12 @@
   "name": "@yojitsu-navi/core",
   "version": "0.2.0",
   "description": "予実ナビの計算コア（予算・実績・残予算・着地見込みの計算と型）",
+  "keywords": [
+    "予実",
+    "budget",
+    "forecast"
+  ],
+  "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/core/index.js",
   "types": "./dist/core/index.d.ts",
@@ -22,5 +28,8 @@
   "sideEffects": false,
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/check-publish.mjs core"
   }
 }

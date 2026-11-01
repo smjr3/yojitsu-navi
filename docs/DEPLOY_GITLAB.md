@@ -207,6 +207,8 @@ git push -u origin update-<新しい版>
 |---|---|
 | `publish-core` が「タグと version が一致しません」 | タグの版と `packages/core/package.json` が違う。タグを消して正しい版で打ち直す |
 | `npm publish` が 403 | 同じ版が公開済み（上書きできない）。版を上げてやり直す |
+| `npm publish` が「公開先が公開の npm です」で止まる | `.npmrc`（`@yojitsu-navi:registry=…`）か `--registry` で Package Registry を指定していない。公開の npm には出さない（SPEC §82） |
+| `npm publish` が「配布物がありません」で止まる | `npm run core:build`（アプリは `npm run app:build`）を先に実行する |
 | 使う側の `npm install` が 404 / 401 | `.npmrc` のスコープ（`@yojitsu-navi`）・グループ ID・トークンの scope（`read_api` か `read_package_registry`）を確認 |
 
 ## 困ったとき
