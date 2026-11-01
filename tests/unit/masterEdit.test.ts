@@ -21,6 +21,7 @@ import {
   isPristine,
   issueText,
   makeDraft,
+  nextContractId,
   parseDraft,
   parseMasterDoc,
   rebaseDraftFile,
@@ -300,6 +301,7 @@ describe("validateEdited", () => {
     members: parseMasterDoc("members", members),
     rates: parseMasterDoc("rates", RATES),
     teams: parseMasterDoc("teams", teams),
+    contracts: parseMasterDoc("contracts", context.contracts),
     assignments: parseMasterDoc("assignments", assignments),
     outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
     targets: parseMasterDoc("targets", TARGETS_EMPTY),
@@ -355,6 +357,7 @@ describe("下書き", () => {
     members: { text: "member_id,name,kind,title,department,section,team_id,effective_from\n", lastCommitId: "a" },
     rates: { text: RATES, lastCommitId: "b" },
     teams: { text: "team_id,name,parent_team_id,effective_from\n", lastCommitId: "c" },
+    contracts: { text: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount,note\n", lastCommitId: "d" },
     assignments: { text: "member_id,contract_id,start_month,end_month,allocation\n", lastCommitId: null },
     outside: { text: OUTSIDE_EMPTY, lastCommitId: null },
     targets: { text: TARGETS_EMPTY, lastCommitId: null },
@@ -363,6 +366,7 @@ describe("下書き", () => {
     members: parseMasterDoc("members", bases.members.text),
     rates: parseMasterDoc("rates", bases.rates.text),
     teams: parseMasterDoc("teams", bases.teams.text),
+    contracts: parseMasterDoc("contracts", bases.contracts.text),
     assignments: parseMasterDoc("assignments", bases.assignments.text),
     outside: parseMasterDoc("outside", bases.outside.text),
     targets: parseMasterDoc("targets", bases.targets.text),
@@ -629,5 +633,64 @@ describe("stampChangedRows（変更者・変更日、§56）", () => {
     const stamped = stampChangedRows(doc, "", "2025-10-01");
     expect(JSON.stringify(doc)).toBe(before);
     expect(serializeMasterDoc(stamped).text).toBe("member_id,type,start_month,end_month,person_months,note,updated_by,updated_at\nM1,提案,2025-04,2025-04,0.2,,,2025-10-01\n");
+  });
+});
+
+describe("案件（contracts.csv。§80）", () => {
+  const CONTRACTS = "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount,note\nC1,A社,保守,T1,2025-04,2026-03,1200000,\nC2,B社,運用,T1,2025-10,2026-09,600000,\n";
+  const range = { fromMonth: "2025-04", toMonth: "2025-12" };
+
+  it("金額を変えると、表示期間のうち案件の期間の月すべてに影響（予算は均等割り）", () => {
+    const before = parseMasterDoc("contracts", CONTRACTS);
+    const after = updateRow(before, "o1", { total_amount: "900000" });
+    const impact = impactBetween(before, after, range);
+    expect(impact.months).toEqual(["2025-10", "2025-11", "2025-12"]);
+    expect(impact.keys).toEqual(["C2"]);
+    expect(impact.columns).toEqual(["total_amount"]);
+    const eff = describeImpactEffects("contracts", impact.columns);
+    expect(eff.costChanges).toBe(false);
+    expect(eff.effects.join("")).toContain("予算");
+  });
+
+  it("担当チームの変更は担当チームの集計、未来だけの新しい案件は影響なし", () => {
+    const before = parseMasterDoc("contracts", CONTRACTS);
+    const team = impactBetween(before, updateRow(before, "o0", { team_id: "T2" }), range);
+    expect(team.months).toHaveLength(9);
+    expect(describeImpactEffects("contracts", team.columns).effects.join("")).toContain("担当チーム");
+    const future = addRow(before, { contract_id: "C3", customer_name: "C社", project_name: "保守", team_id: "T1", start_month: "2026-04", end_month: "2027-03", total_amount: "100", note: "" }).doc;
+    expect(impactBetween(before, future, range).months).toEqual([]);
+    // メモだけの変更は数値に効かない
+    expect(impactBetween(before, updateRow(before, "o0", { note: "メモ" }), range).months).toEqual([]);
+  });
+
+  it("新しい案件ID は続き番号（桁数を揃え、使っている ID は飛ばす）", () => {
+    expect(nextContractId(["C001", "C002", "C104"])).toBe("C105");
+    expect(nextContractId(["C098", "C099"])).toBe("C100");
+    expect(nextContractId(["C1", "X9", "C2"])).toBe("C3");
+    expect(nextContractId(["C009", "C9"])).toBe("C010");
+    expect(nextContractId(["保守A"])).toBe("");
+    expect(nextContractId([])).toBe("");
+  });
+
+  it("変更者・変更日を書く", () => {
+    const doc = updateRow(parseMasterDoc("contracts", CONTRACTS), "o0", { total_amount: "1300000" });
+    expect(serializeMasterDoc(stampChangedRows(doc, "taro", "2025-10-01")).text.split("\n")[1]).toBe("C1,A社,保守,T1,2025-04,2026-03,1300000,,taro,2025-10-01");
+  });
+
+  it("validateEdited は編集中の案件で検証する（重複 ID・存在しないチームを行に結び付ける）", () => {
+    const docs = {
+      members: parseMasterDoc("members", "member_id,name,kind,title,department,section,team_id,effective_from\n"),
+      rates: parseMasterDoc("rates", RATES),
+      teams: parseMasterDoc("teams", "team_id,name,parent_team_id,effective_from\nT1,本部,,2025-04\n"),
+      contracts: parseMasterDoc("contracts", CONTRACTS),
+      assignments: parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation\n"),
+      outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
+      targets: parseMasterDoc("targets", TARGETS_EMPTY),
+    };
+    const { doc, rowId } = addRow(docs.contracts, { contract_id: "C1", customer_name: "C社", project_name: "新規", team_id: "T9", start_month: "2026-04", end_month: "2027-03", total_amount: "100", note: "" });
+    const context = { contracts: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\n", mapping: "worklog_customer_name,worklog_project_name,contract_id\n", holidays: "date,name\n" };
+    const v = validateEdited({ ...docs, contracts: doc }, context, baseConfig);
+    expect(v.byRow.contracts[rowId]?.map((i) => i.code).sort()).toEqual(["CONTRACT_UNKNOWN_TEAM", "DUPLICATE_CONTRACT_ID"]);
+    expect(v.texts.contracts).toBe(serializeMasterDoc(doc).text);
   });
 });

@@ -116,6 +116,7 @@ describe("マスタ編集での契約外予定", () => {
       members: parseMasterDoc("members", f.members),
       rates: parseMasterDoc("rates", f.rates),
       teams: parseMasterDoc("teams", f.teams),
+      contracts: parseMasterDoc("contracts", f.contracts),
       assignments: parseMasterDoc("assignments", f.assignments),
       outside: parseMasterDoc("outside", HEADER),
       targets: parseMasterDoc("targets", emptyMasterText("targets")),

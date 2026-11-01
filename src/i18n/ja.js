@@ -1358,6 +1358,13 @@ export default {
     colOutsideType: "種別",
     outsideNoType: "（種別なし）",
     colNote: "メモ",
+    // 案件（contracts.csv。§80）
+    contracts: "案件",
+    colContractKey: "案件ID",
+    colCustomer: "顧客",
+    colProjectName: "案件名",
+    colTotalAmount: "金額（円・税抜）",
+    colContractTeam: "担当チーム",
     targets: "目標",
     colTarget: "対象",
     colTargetType: "対象の種類",
@@ -1377,6 +1384,9 @@ export default {
     effectLeader: "組織のリーダーの表示",
     effectAllocation: "着地見込み（計画値）とメンバー別の計画（計画時間・計画額）",
     effectOutside: "リソース計画の「超過」の判定（計画額・着地見込みは変わりません）",
+    effectContractBudget: "期間の月の予算と、残予算・消化率・着地見込み",
+    effectContractTeam: "担当チームによるチーム別の集計",
+    effectContractName: "顧客・案件の名前と顧客別の集計",
     effectDefault: "その月の行の値",
     noCostChangeNote: "実績・残予算・消化率・着地見込みは変わりません（単価は役職で、案件の担当チームは案件で決まるため）。",
     oneMonth: "{first}（1か月）",
@@ -1400,6 +1410,9 @@ export default {
     outsideWhat: "提案・設計・会社業務など、保守の契約の外で使う見込みの人月（人 × 種別 × 期間）。種別は task-types.csv の運用保守以外の種別。",
     outsideEffect: "「1.0 超」の判定と、メンバー別で「運用保守以外を含む」にしたときの計画が変わります。予算・実績・着地見込みは変わりません。",
     outsideHowto: "リソース計画で人の行を開き、種別の行の「＋ 変更」かセルから入れます。",
+    contractsWhat: "保守案件の顧客・案件名・期間・金額・担当チーム。1 行 = 1 件（更新ごとに別の行）。",
+    contractsEffect: "予算 = 金額を期間の月数で均等に割った額。金額・期間を変えると期間の月の予算・残予算・着地見込みが変わります。担当チームはチーム別の集計に使います。",
+    contractsHowto: "新しい案件は「＋ 新しい案件」。更新・金額変更は、同じ顧客・案件名で新しい案件ID の行を足します（前の行は終了月で終わらせる）。",
     targetsWhat: "チーム・顧客・案件ごとに「終了月までに残予算率 ◯% 以上」を目指す目標。",
     targetsEffect: "各一覧の「目標」列と、詳細画面の「目標」が変わります。予算・実績・着地見込みは変わりません。",
     targetsHowto: "「＋ 新しい目標」で対象・終了月・目標の残予算率を入れます。開始月を空にすると、終了月を含む年度の最初の月から数えます。",
@@ -1550,6 +1563,11 @@ export default {
     removedChip: "− 削除",
     undoDelete: "削除を取り消す",
     invalidValue: "（不正な値）",
+    contractEditAria: "{key} の案件（{id}）を修正",
+    contractDeleteAria: "{key} の案件（{id}）を削除",
+    hintContractKey: "重複しない ID（続き番号を入れてあります）。アサイン・名称の対応で使うので、保存後は変えないでください",
+    hintCustomer: "既存の顧客から選ぶか、新しい顧客名を入力",
+    hintTotalAmount: "期間全体の金額（円・税抜）。予算は月数で均等に割ります",
     targetEditAria: "{key} の終了月 {month} の目標を修正",
     targetDeleteAria: "{key} の終了月 {month} の目標を削除",
     targetPlaceholder: "チーム・顧客・案件の名前で検索",
@@ -1737,8 +1755,8 @@ export default {
 
   // ── 台帳の見せ方（マスタ編集: 対象ごとに 1 行＋変更の履歴。§36） ──
   ledger: {
-    addNew: { members: "＋ 新しいメンバー", rates: "＋ 新しい単価", teams: "＋ 新しい組織", targets: "＋ 新しい目標" },
-    unit: { members: "人", rates: "件", teams: "組織", targets: "件" },
+    addNew: { members: "＋ 新しいメンバー", rates: "＋ 新しい単価", teams: "＋ 新しい組織", contracts: "＋ 新しい案件", targets: "＋ 新しい目標" },
+    unit: { members: "人", rates: "件", teams: "組織", contracts: "件", targets: "件" },
     count: "{n} / {total} {unit}",
     caption: "{file}（{path}）。1 行 = 1 つの対象（基準月の値）。開くと適用開始月ごとの変更の履歴",
     colHistory: "変更の履歴",
@@ -1853,7 +1871,7 @@ export default {
 
   // ── マスタ編集画面の説明（<strong>…</strong> は太字。タグはそのまま残してください） ──
   mastersPage: {
-    lead: "メンバーの所属・役職、時間単価、組織の台帳を直す画面です（1 行 = 1 人・1 役職・1 組織。行を開くと、いつから何が変わったかの履歴）。表でも CSV でも編集できます。保存すると GitLab のマージリクエストになり、リーダーがこの画面の「マージ待ちの変更」でマージすると、数分で自動的に各画面の数値へ反映されます。途中で変わるときは、今の値は書き換えず行の「＋ 変更」で残します。編集中の内容はこのブラウザに下書きとして自動保存されます。",
+    lead: "メンバーの所属・役職、時間単価、組織の台帳と、案件の一覧を直す画面です（1 行 = 1 人・1 役職・1 組織・1 案件。行を開くと、いつから何が変わったかの履歴）。表でも CSV でも編集できます。保存すると GitLab のマージリクエストになり、リーダーがこの画面の「マージ待ちの変更」でマージすると、数分で自動的に各画面の数値へ反映されます。途中で変わるときは、今の値は書き換えず行の「＋ 変更」で残します。編集中の内容はこのブラウザに下書きとして自動保存されます。",
     loadFailed: "マスタのデータを読み込めませんでした",
   },
 

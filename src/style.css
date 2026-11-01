@@ -2937,6 +2937,13 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-ledger .yn-col-resizer {
   right: 0;
 }
+/* 自由に書く文字の列（案件名・メモなど）は折り返す（長い案件名で表が横に伸びないように。§80） */
+.yn-me-ledger td.is-text:not(.is-col-sized) {
+  white-space: normal;
+  min-width: 12em;
+  max-width: 22em;
+  overflow-wrap: anywhere;
+}
 .yn-me-ledger .is-col-sized {
   box-sizing: border-box;
   overflow: hidden;

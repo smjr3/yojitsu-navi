@@ -32,6 +32,7 @@ import {
   restoreRow,
   revertRow,
   serializeMasterDoc,
+  nextContractId,
   stampChangedRows,
   STAMPED_FILES,
   STAMP_COLUMNS,
@@ -110,6 +111,11 @@ export const FILE_HELP = {
     effect: T.masters.outsideEffect,
     howto: T.masters.outsideHowto,
   },
+  contracts: {
+    what: T.masters.contractsWhat,
+    effect: T.masters.contractsEffect,
+    howto: T.masters.contractsHowto,
+  },
   targets: {
     what: T.masters.targetsWhat,
     effect: T.masters.targetsEffect,
@@ -124,16 +130,16 @@ export const FILE_HELP = {
  * 下書き・検証・変更内容・保存は 2 つの画面で共通（どちらで保存しても、両方の変更が 1 つのマージリクエストになる）
  */
 export const PLAN_VIEW_ID = "plan";
-export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "targets"]);
+export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "contracts", "targets"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
 /** 計画の明細（着地見込みの計画値）に効くファイル（§65） */
 const IMPACT_FILES = Object.freeze(["assignments", "members", "rates"]);
 /** 画面 → その画面で編集するファイル */
-const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], targets: ["targets"], plan: ["assignments", "outside"] };
+const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], contracts: ["contracts"], targets: ["targets"], plan: ["assignments", "outside"] };
 /** 人ごとの検証（案件の行ではなく人の行で見せる） */
 const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
-const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
+const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", contracts: "./masters?view=contracts", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
 /** 目標（§63）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
 const TARGET_FIELD = "__target";
 
@@ -246,10 +252,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
-  const contracts = parseCsvTable(data.context.contracts)
-    .rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name"), startMonth: r.get("start_month"), endMonth: r.get("end_month") }))
-    .filter((c) => c.id !== "");
-  const contractById = new Map(contracts.map((c) => [c.id, c]));
   // 契約外の種別（§50.1。task-types.csv の契約外の行。無ければ種別なしの 1 行だけ）
   const outsideTypeList = outsideTypes(
     parseCsvTable(data.context.taskTypes ?? "")
@@ -263,17 +265,33 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (!outsideActuals.has(memberId)) outsideActuals.set(memberId, []);
     outsideActuals.get(memberId).push([month, rest.join("|")]);
   }
-  // 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§31.3）
-  const projects = new Map();
-  for (const c of contracts) {
-    const key = projectKey(c.customer, c.project);
-    const p = projects.get(key);
-    if (p) p.contracts.push({ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth });
-    else projects.set(key, { key, customer: c.customer, project: c.project, contracts: [{ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth }] });
+  /**
+   * 案件（contracts.csv）の索引。マスタ編集の「案件」タブで編集できるので、編集中の内容から作り直す（文書が変わったときだけ）
+   * projects: 案件（顧客 × 案件名）→ その契約。アサインは案件で選び、保存時に契約へ割り当てる（§31.3）
+   */
+  let contractCache = { doc: null, list: [], byId: new Map(), projects: new Map(), text: "" };
+  function cIndex() {
+    if (contractCache.doc === docs.contracts) return contractCache;
+    const text = serializeMasterDoc(docs.contracts).text;
+    const list = parseCsvTable(text)
+      .rows.map((r) => ({ id: r.get("contract_id"), customer: r.get("customer_name"), project: r.get("project_name"), startMonth: r.get("start_month"), endMonth: r.get("end_month") }))
+      .filter((c) => c.id !== "");
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const projects = new Map();
+    for (const c of list) {
+      const key = projectKey(c.customer, c.project);
+      const p = projects.get(key);
+      if (p) p.contracts.push({ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth });
+      else projects.set(key, { key, customer: c.customer, project: c.project, contracts: [{ contractId: c.id, startMonth: c.startMonth, endMonth: c.endMonth }] });
+    }
+    contractCache = { doc: docs.contracts, list, byId, projects, text };
+    return contractCache;
   }
+  /** 編集中の contracts.csv のテキスト（リソース計画の担当組織の判定に使う） */
+  const contractsText = () => cIndex().text;
   /** 契約 → 「顧客 / 案件名」（ID は出さない。§31.1） */
   const contractText = (id) => {
-    const c = contractById.get(id);
+    const c = cIndex().byId.get(id);
     return c ? `${c.customer} / ${c.project}` : fmt(T.masters.unknownContractValue, { id });
   };
 
@@ -288,7 +306,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   // リソース計画タブの状態: 組織（null = すべて）・表示する月の範囲（§71）・強調するメンバー・開いているメンバー
   const initialRange = parsePlanRange(local.get(PLAN_RANGE_KEY), asOfMonth);
   const plan = {
-    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []).members, initialMember, asOfMonth) : null),
+    teamId: initialTeam ?? (initialMember ? memberTeamAt(planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []).members, initialMember, asOfMonth) : null),
     range: initialRange,
     months: monthRange(initialRange.from, initialRange.to),
     focusMember: initialMember,
@@ -398,7 +416,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       .sort((a, b) => Number(a.left) - Number(b.left));
   }
   function projectOptions() {
-    return [...projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
+    return [...cIndex().projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
   }
   /** ID の列を画面に出す文字（名前）にする。名前が無いものは ID のまま（§31.1） */
   function displayValue(fileId, column, value) {
@@ -407,7 +425,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (column === "parent_team_id") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
     if ((fileId === "assignments" && column === "member_id") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
     if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
-    if (column === "contract_id") return contractText(value);
+    if (column === "contract_id" && fileId !== "contracts") return contractText(value);
+    if (column === "total_amount") return Number.isFinite(Number(value)) && value.trim() !== "" ? money(Number(value), "yen") : value;
     if (column === "remaining_rate") return `${value}%`;
     if (column === "target_type") return T.targets.kinds[value] ?? value;
     // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
@@ -424,8 +443,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 目標の対象の候補（チーム → 顧客 → 案件） */
   function targetOptions() {
     const teams = [...teamNames().entries()].map(([id, name]) => ({ value: `team:${id}`, label: name || id, sub: T.targets.kinds.team, search: id }));
-    const customers = [...new Set(contracts.map((c) => c.customer).filter(Boolean))].map((name) => ({ value: `customer:${name}`, label: name, sub: T.targets.kinds.customer }));
-    const projectsList = contracts.map((c) => ({ value: `project:${c.id}`, label: c.project || c.customer, sub: `${T.targets.kinds.project} ・ ${c.customer} ・ ${c.startMonth}〜${c.endMonth}`, search: c.id }));
+    const customers = [...new Set(cIndex().list.map((c) => c.customer).filter(Boolean))].map((name) => ({ value: `customer:${name}`, label: name, sub: T.targets.kinds.customer }));
+    const projectsList = cIndex().list.map((c) => ({ value: `project:${c.id}`, label: c.project || c.customer, sub: `${T.targets.kinds.project} ・ ${c.customer} ・ ${c.startMonth}〜${c.endMonth}`, search: c.id }));
     return [...teams, ...customers, ...projectsList];
   }
   function memberNames() {
@@ -473,8 +492,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function cellHint(fileId, column, value) {
     if (value === "") return null;
     if (column === "allocation" && Number.isFinite(Number(value))) return fmt(T.plan.equalsHours, { hours: hoursFromAllocation(Number(value), std) });
-    if (column === "contract_id") {
-      const c = contractById.get(value);
+    if (column === "contract_id" && fileId !== "contracts") {
+      const c = cIndex().byId.get(value);
       return c ? `${c.startMonth}〜${c.endMonth}` : null;
     }
     if (fileId === "rates" && column === "key" && memberNames().has(value)) return T.masters.personalRateHint;
@@ -830,14 +849,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 1 行が 1 件（目標。§63）: 履歴の列は無く、行ごとに修正・削除する
     const isList = def.history === "list";
     // 台帳の 1 行: 先頭に対象（名前と ID）、続けて値の列。適用開始月は履歴の側に出す
-    const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : null;
+    // 目標は対象の名前（チーム・顧客・案件）を先頭に出す。案件（§80）は顧客名（補足に案件ID）
+    const isGoal = fileId === "targets";
+    const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : fileId === "contracts" && doc.header.includes("customer_name") ? "customer_name" : null;
     const columns = def.columns.filter((c) => doc.header.includes(c.name) && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
     const keyDef = def.columns.find((c) => c.name === keyColumn);
-    const leadLabel = isList ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
+    const leadLabel = isGoal ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
     const colCount = columns.length + (isList ? 3 : 4);
     const rowById = new Map(doc.rows.map((r) => [r.id, r]));
     // 列ごとの絞り込み・並べ替え（一覧表と同じ部品。§73.1）。対象は今の値（基準月の行）
-    const leadText = (g) => (isList && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || "";
+    const leadText = (g) => (isGoal && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || "";
     const isNum = (c) => c.input === "number" || c.input === "percent";
     const fcols = [
       { key: "__lead", label: leadLabel, type: "text", filterValue: (g) => leadText(g), sortValue: (g) => leadText(g) },
@@ -976,7 +997,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const nChanged = states.filter((x) => x === "changed").length;
       const nErrors = rows.reduce((n, r) => n + (issues[r.id] ?? []).filter((i) => i.severity === "error").length, 0);
       const open = ledgerOpen[fileId].has(g.key) || (nErrors > 0 && !ledgerClosed[fileId].has(g.key));
-      const keyText = (isList && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
+      const keyText = (isGoal && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || T.masters.emptyValue;
       const histId = `yn-me-hist-${fileId}-${g.shown.rowId}`;
       const toggle = () => {
         if (open) {
@@ -995,8 +1016,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       };
       const rawKey = g.shown.record[keyColumn] ?? "";
       const keyHint = cellHint(fileId, keyColumn, rawKey);
-      const lead = isList
+      const lead = isGoal
         ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span>${stampEl(doc, rowById.get(g.shown.rowId))}</th>`
+        : isList && nameColumn
+        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${stampEl(doc, rowById.get(g.shown.rowId))}</th>`
         : nameColumn
         ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${nextEl(nameColumn)}</th>`
         : html`<th scope="row">${valueEl(keyColumn, rawKey, "yn-me-val yn-me-lead-name")}${keyHint ? html`<span class="yn-me-hint">${keyHint}</span>` : null}</th>`;
@@ -1005,7 +1028,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ...columns.map((c) => {
           const raw = g.shown.record[c.name] ?? "";
           const hint = cellHint(fileId, c.name, raw);
-          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : ""}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
+          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : ""}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
         }),
       ];
       if (isList) {
@@ -1018,9 +1041,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           ${cells}
           <td class="yn-me-state">${stateChips(st === "changed" ? 1 : 0, st === "added" ? 1 : 0, invalid ? 1 : 0)}</td>
           <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${isGoal ? fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.end_month ?? "" }) : fmt(T.masters.contractEditAria, { key: [keyText, g.shown.record.project_name].filter(Boolean).join(" / "), id: rawKey })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
             ${st === "changed" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`revert:${r.id}`} disabled=${!editable} onclick=${() => commit(fileId, revertRow(docs[fileId], r.id), `edit:${r.id}`)}>${T.masters.revert}</button>` : null}
-            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>
+            <button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${isGoal ? fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" }) : fmt(T.masters.contractDeleteAria, { key: [keyText, g.shown.record.project_name].filter(Boolean).join(" / "), id: rawKey })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>
           </div></td>
         </tr>`;
         if (list.length === 0) return [tr];
@@ -1095,7 +1118,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <table class="yn-table yn-table-compact yn-me-table yn-me-ledger" onmouseover=${clippedTitle}>
           <caption class="visually-hidden">${fmt(T.ledger.caption, { file: def.label, path: meta.path })}</caption>
           <thead><tr>
-            <th scope="col" class=${`has-filter${f.cols.__lead ? " is-filtered" : ""}`} aria-sort=${ariaSort("__lead")}>${headCell("__lead", leadLabel, isList ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn)}${ledgerColResizer(fileId, "__lead", leadLabel)}</th>
+            <th scope="col" class=${`has-filter${f.cols.__lead ? " is-filtered" : ""}`} aria-sort=${ariaSort("__lead")}>${headCell("__lead", leadLabel, isGoal ? def.keyColumns.join(" / ") : nameColumn ? `${nameColumn} / ${keyColumn}` : keyColumn)}${ledgerColResizer(fileId, "__lead", leadLabel)}</th>
             ${columns.map((c) => html`<th scope="col" class=${`${isNum(c) ? "num " : ""}has-filter${f.cols[c.name] ? " is-filtered" : ""}`} aria-sort=${ariaSort(c.name)}>${headCell(c.name, c.label, c.name)}${ledgerColResizer(fileId, c.name, c.label)}</th>`)}
             ${isList ? null : html`<th scope="col"><span class="yn-me-th">${T.ledger.colHistory}</span><span class="yn-th-sub">effective_from</span>${ledgerColResizer(fileId, "__hist", T.ledger.colHistory)}</th>`}
             <th scope="col">${T.columns.status}</th>
@@ -1228,10 +1251,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   // ---- リソース計画（§23・§36） ----------------------------------------------------
   /** 契約 → 案件（顧客 × 案件名）。ファイルに無い契約は "c:<ID>" の案件として扱う */
   function projectOfContract(contractId) {
-    const c = contractById.get(contractId);
+    const c = cIndex().byId.get(contractId);
     if (!c) return { key: `c:${contractId}`, label: fmt(T.masters.unknownContractValue, { id: contractId }), sub: "", contracts: [{ contractId, startMonth: "0000-01", endMonth: "9999-12" }] };
     const key = projectKey(c.customer, c.project);
-    return { key, label: c.project || c.customer, sub: c.project ? c.customer : "", contracts: projects.get(key)?.contracts ?? [] };
+    return { key, label: c.project || c.customer, sub: c.project ? c.customer : "", contracts: cIndex().projects.get(key)?.contracts ?? [] };
   }
   /** メンバーの期間付きの行（アサイン or 契約外予定）。value は数値（数値でなければ NaN） */
   function memberPeriodRows(fileId, memberId) {
@@ -1281,14 +1304,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function targetSegments(target) {
     if (target.kind === "outside") return (from, to) => [{ contractId: "", startMonth: from, endMonth: to }];
     if (target.key.startsWith("c:")) return (from, to) => [{ contractId: target.key.slice(2), startMonth: from, endMonth: to }];
-    const p = projects.get(target.key);
+    const p = cIndex().projects.get(target.key);
     return (from, to) => (p ? contractSegments(p.contracts, from, to) : []);
   }
   /** 対象の名前（案件名、または「契約外予定」） */
   function targetLabel(target) {
     if (target.kind === "outside") return outsideLabel(target.type);
     if (target.key.startsWith("c:")) return fmt(T.masters.unknownContractValue, { id: target.key.slice(2) });
-    const p = projects.get(target.key);
+    const p = cIndex().projects.get(target.key);
     return p ? p.project || p.customer : target.key;
   }
 
@@ -1315,7 +1338,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       renderPlanCsv();
       return;
     }
-    const src = planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []);
+    const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
     const months = plan.months;
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
@@ -1668,7 +1691,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         overlap: T.planEdit.kindOverlap,
         invalid: T.planEdit.kindInvalid,
       }[e.kind];
-      const contract = fileId === "assignments" ? contractById.get(e.contractId) : null;
+      const contract = fileId === "assignments" ? cIndex().byId.get(e.contractId) : null;
       const period = `${e.startMonth || "?"}〜${e.endMonth || "?"}`;
       const li = html`<li class=${`yn-me-plan-entry is-${st} kind-${e.kind}`} data-key=${e.rowId}>
         <span class="yn-me-plan-period">${period}</span>
@@ -1718,7 +1741,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const ends = rows.filter((x) => x.endMonth >= from).map((x) => x.endMonth);
       if (ends.length) return ends.reduce((a, b) => (a > b ? a : b));
       if (target.kind === "project") {
-        const cs = projects.get(target.key)?.contracts ?? [];
+        const cs = cIndex().projects.get(target.key)?.contracts ?? [];
         const cend = cs.map((c) => c.endMonth).filter((m) => m >= from).reduce((a, b) => (a > b ? a : b), "");
         if (cend) return cend;
       }
@@ -1948,7 +1971,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </header>
       ${inputs.length
         ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
-            const c = contractById.get(a.contractId);
+            const c = cIndex().byId.get(a.contractId);
             return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`;
           })}</ul>`
         : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
@@ -2048,7 +2071,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         touched.add(a.contractId);
       }
       if (pKey && !newZero) {
-        const p = projects.get(pKey);
+        const p = cIndex().projects.get(pKey);
         const to = scope === "after" ? (fyLast >= month ? fyLast : month) : month;
         for (const sg of p ? contractSegments(p.contracts, month, to) : []) {
           doc = addRow(doc, { member_id: r.memberId, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth, allocation: newVal }).doc;
@@ -2123,7 +2146,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     if (col.input === "project") {
       // 案件で選ぶ（値は案件のキー）。ファイルに無い契約を指す既存の行は "c:<ID>" のまま持つ（§31.3）
-      const c = contractById.get(value);
+      const c = cIndex().byId.get(value);
       const v = value === "" ? "" : c ? projectKey(c.customer, c.project) : `c:${value}`;
       return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
@@ -2175,6 +2198,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const listId = `${id}-list`;
       return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${orgOptions(col.name).map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
     }
+    if (col.input === "customer") {
+      // 案件の顧客（§80）。顧客のマスタは持たないので、既存の顧客名から選ぶか新しい名前を書く
+      const listId = `${id}-list`;
+      const names = [...new Set(cIndex().list.map((c) => c.customer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+      return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${names.map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
+    }
     if (col.input === "level") {
       const listId = `${id}-list`;
       return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${levelOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
@@ -2205,6 +2234,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     return html`<p class="yn-me-impact" role="alert" data-cost-changes=${eff.costChanges ? "true" : "false"}><span aria-hidden="true">!</span> <strong>${T.masters.impact1} ${integer(impact.months.length)} ${T.masters.impact2}</strong><br>${describeImpactMonths(impact.months)} ${T.masters.particleNo}${eff.effects.join("、")}${T.masters.impact3}${eff.note ? html`<strong class="yn-me-impact-safe">${eff.note}</strong>` : null}${tail}</p>`;
   }
 
+  /** 案件（§80）の入力欄の補足（アサインの案件欄と同じ列名でも中身が違うもの） */
+  const CONTRACT_HINTS = {
+    contract_id: T.masters.hintContractKey,
+    customer_name: T.masters.hintCustomer,
+    total_amount: T.masters.hintTotalAmount,
+    end_month: T.masters.hintMonth,
+    team_id: "",
+  };
   const FIELD_HINTS = {
     effective_from: T.masters.hintEffectiveFrom,
     start_month: "YYYY-MM",
@@ -2233,7 +2270,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (fileId !== "assignments") return [values];
     const v = values.contract_id ?? "";
     if (v.startsWith("c:")) return [{ ...values, contract_id: v.slice(2) }];
-    const p = projects.get(v);
+    const p = cIndex().projects.get(v);
     if (!p) return [values];
     const segs = contractSegments(p.contracts, values.start_month, values.end_month);
     if (segs.length === 0) {
@@ -2265,6 +2302,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (def.history === "effective") initial = { ...initial, effective_from: /^\d{4}-\d{2}$/.test(tFrom) && tFrom >= next ? addMonths(tFrom, 1) : next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
+      // 新しい案件の ID は、今の ID の続き番号を入れておく（C104 → C105。書き換えてもよい。§80）
+      if (!template && fileId === "contracts") initial = { ...initial, contract_id: nextContractId(cIndex().list.map((c) => c.id)) };
       if (preset) initial = { ...initial, ...preset };
     }
     const lockImported = (name) => fileId === "members" && importMode && MEMBER_IMPORTED_COLUMNS.includes(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template);
@@ -2314,7 +2353,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
             ${fieldFor(fileId, c, value, disabled)}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : (FIELD_HINTS[c.name] ?? "")}</span>
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}</span>
           </div>`;
         })}
       </div>
@@ -2520,6 +2559,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const what = i.fileId === "outside" ? outsideLabel(issueRowCell(i, "type")) : contractId ? projectOfContract(contractId).label : "";
         return [who, what].filter(Boolean).join(" ・ ");
       }
+      case "contracts":
+        return [issueRowCell(i, "customer_name"), issueRowCell(i, "project_name")].filter(Boolean).join(" / ") || issueRowCell(i, "contract_id");
       case "targets":
         return goalTargetName(issueRowCell(i, "target_type"), issueRowCell(i, "target_id"));
       default:
@@ -2533,7 +2574,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     return issueText(i)
       .replace(/^メンバー(?:ID)? ([A-Za-z0-9_-]+) ?(?:の|は) ?/, (m, id) => (id === subjectId && names.get(id) ? "" : m))
       .replace(/メンバー(?:ID)? ([A-Za-z0-9_-]+)/g, (m, id) => names.get(id) || m)
-      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (contractById.has(id) ? `「${projectOfContract(id).label}」` : m))
+      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (cIndex().byId.has(id) ? `「${projectOfContract(id).label}」` : m))
       .replace(/（([A-Za-z0-9_, -]+)）/g, (m, ids) => {
         // 「（M025, M202）」のような ID の並びも名前に
         const list = ids.split(/,\s*/);
@@ -2561,7 +2602,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
       if (/^\d{4}-\d{2}$/.test(start)) applyPlanRange(planRangeIncluding(plan.range, start));
       plan.q = "";
-      const src = planSourcesFromDocs(docs, data.context.contracts, model?.worklogMonths ?? []);
+      const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
         const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];

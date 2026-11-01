@@ -175,7 +175,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 ## マスタ編集 `/masters`（2 回目リリース、SPEC §19）
 
-問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 台帳のタブ（メンバー・単価・組織）→ 表（1 対象 1 行・開くと変更の履歴）→ 検証 → 変更内容（差分）→ 保存。
+問い: 「マスタを直して、安全に保存するには」。構成: 説明（何を編集すると何が変わるか・履歴は行を追加・保存までの流れ）→ 下書きの復元（あれば）→ 台帳のタブ（メンバー・単価・組織・案件・目標）→ 表（1 対象 1 行・開くと変更の履歴）→ 検証 → 変更内容（差分）→ 保存。
 - 表の列幅（SPEC §73）: 列見出しの右端の境目をドラッグ／矢印キーで変える（状態・操作の列以外）。幅を決めた列は「…」で切り、全文は title。ファイルごとに localStorage へ覚える。
 アサイン・運用保守以外の予定はリソース計画 `/plan`（同じ `mastersEditor` を `views: PLAN_VIEWS` で開く）。台帳とリソース計画の持ち方は下の「台帳とリソース計画（SPEC §36）」。
 
@@ -184,7 +184,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 | `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
 | `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
 | `src/core/ledger.ts` | 台帳のまとめ（`ledgerGroups`・`nextChangeOf`）、期間の行の履歴（`periodHistory`）・期間の置き換え（`replaceRange`）・月の値（`valueAt`） |
-| `src/data/masters.json.ts`（`_masters.ts`） | 6 ファイル（任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
+| `src/data/masters.json.ts`（`_masters.ts`） | 7 ファイル（案件 contracts.csv を含む。任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
 | `src/components/masters.js` | 画面（状態を持ち、変わった部分を描き直して `data-fk` でフォーカスを戻す） |
 | `src/masters.md` | ページ（model.json は計算基準月・データ最小月・config のためだけに読む） |
 
