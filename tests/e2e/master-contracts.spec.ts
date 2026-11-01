@@ -1,7 +1,7 @@
 /**
  * マスタ編集「案件」タブ（SPEC §80）
  * - contracts.csv の全行を、顧客・案件名・開始月・終了月・金額・担当チームで一覧（担当チームは名前、金額は円）
- * - 変えられるのは期間と金額だけ（顧客名・案件名などは他システムから取り込む）。追加・削除・CSV で編集は無い
+ * - 変えられるのは期間・金額・担当チームだけ（顧客名・案件名などは他システムから取り込む）。追加・削除・CSV で編集は無い
  * - 期間の修正 → ダウンロードした CSV は期間だけ変わり変更日付き
  * - 金額の修正は、過去の月の予算が変わることを確認で知らせる
  * - 390px・ダークで横スクロールしない
@@ -45,7 +45,7 @@ test("一覧: 全案件を顧客・案件名・期間・金額・担当チーム
   await expect(rows.first()).toContainText(`${max.toLocaleString("ja-JP")}円`);
 });
 
-test("顧客名・案件名・担当チームは変えられない（他システムから取り込む）。行の追加・削除・CSV で編集も無い", async ({ page }) => {
+test("顧客名・案件名は変えられない（他システムから取り込む）。担当チームは変えられる。行の追加・削除・CSV で編集も無い", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   await expect(page.getByRole("button", { name: /新しい案件/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "CSV で編集" })).toHaveCount(0);
@@ -54,13 +54,22 @@ test("顧客名・案件名・担当チームは変えられない（他シス�
   await first.getByRole("button", { name: "修正" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   // 取り込む列は入力欄にせず、値だけ見せる
-  for (const name of ["contract_id", "customer_name", "project_name", "team_id", "note"]) await expect(d.locator(`#yn-me-f-${name}`)).toHaveCount(0);
+  for (const name of ["contract_id", "customer_name", "project_name", "note"]) await expect(d.locator(`#yn-me-f-${name}`)).toHaveCount(0);
   const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
   const rec = rowRecord(doc, doc.rows[0]!);
   await expect(d.locator(".yn-me-fixed")).toContainText(rec.customer_name!);
   await expect(d.locator(".yn-me-fixed")).toContainText(rec.project_name!);
   await expect(d).toContainText("他システムから取り込むため変更できません");
-  for (const name of ["start_month", "end_month", "total_amount"]) await expect(d.locator(`#yn-me-f-${name}`)).toBeEnabled();
+  for (const name of ["start_month", "end_month", "total_amount", "team_id"]) await expect(d.locator(`#yn-me-f-${name}`)).toBeEnabled();
+  // 担当チームを変えると、始まっている月のチーム別の集計が変わる確認 → 一覧に新しいチーム名
+  const other = rec.team_id === "T121" ? "T111" : "T121";
+  await d.locator("#yn-me-f-team_id").selectOption(other);
+  await d.locator('[data-role="submit"]').click();
+  await expect(d.locator(".yn-me-impact")).toContainText("担当チーム");
+  await d.locator('[data-role="submit"]').click();
+  await expect(first).toContainText("変更");
+  const teams = parseMasterDoc("teams", PAYLOAD.files.teams.text);
+  await expect(first).toContainText(teams.rows.map((r) => rowRecord(teams, r)).filter((t) => t.team_id === other).at(-1)!.name!);
 });
 
 test("期間の修正: 予算の月割りが変わるので過去の月にかかれば確認。ダウンロードした CSV は期間だけ変わり変更日付き", async ({ page }) => {

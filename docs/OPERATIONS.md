@@ -109,7 +109,7 @@ npm run fetch:members                           # members.csv を更新
 
 ## マスタ編集の設定（GitLab へのマージ方式）
 
-`/masters`（`data/masters/members.csv`・`rates.csv`・`teams.csv`、案件 `data/contracts.csv`（期間・金額だけ）、目標 `data/targets.csv`、祝日 `data/holidays.csv`）と `/plan`（`data/assignments.csv`・`data/outside-plans.csv`）は、CSV を画面で編集する画面です（SPEC §19・§24〜§26・§36）。保存は 2 つの画面で共通で、両方の変更が 1 つの MR に入ります。
+`/masters`（`data/masters/members.csv`・`rates.csv`・`teams.csv`、案件 `data/contracts.csv`（期間・金額・担当チームだけ）、目標 `data/targets.csv`、祝日 `data/holidays.csv`）と `/plan`（`data/assignments.csv`・`data/outside-plans.csv`）は、CSV を画面で編集する画面です（SPEC §19・§24〜§26・§36）。保存は 2 つの画面で共通で、両方の変更が 1 つの MR に入ります。
 表で 1 行ずつ直すほか、「CSV で編集」に切り替えてファイルの中身をまとめて書き換える・Excel から貼り付けることもできます。
 編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。
 
@@ -151,7 +151,7 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 コード・設定の変更は要らない（年度は計算基準日から求める。SPEC §49）。データだけ足す。
 
 - `data/holidays.csv` に新しい年の祝日・会社休日を足す。足していない年は国民の祝日だけで計算し、データ確認に「祝日表に無い年」が出る。
-- 新年度の契約を `data/contracts.csv` に別の行（新しい案件ID）として足し（顧客名・案件名は他システムから取り込む予定。それまでは GitLab の画面で編集。期間・金額はマスタ編集の「案件」で直せる）、リソース計画で新年度の配分を入れる（リソース計画の表示する月は、表の上の開始月〜終了月で選ぶ）。
+- 新年度の契約を `data/contracts.csv` に別の行（新しい案件ID）として足し（顧客名・案件名は他システムから取り込む予定。それまでは GitLab の画面で編集。期間・金額・担当チームはマスタ編集の「案件」で直せる）、リソース計画で新年度の配分を入れる（リソース計画の表示する月は、表の上の開始月〜終了月で選ぶ）。
 
 ## 実績の種類を追加する
 

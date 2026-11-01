@@ -112,7 +112,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "leader_member_id", label: T.masterFiles.colLeader, input: "member", required: false },
     ],
   },
-  // 案件（§80）。1 行 = 1 契約。顧客名・案件名などは他システムから取り込む予定なので、画面で変えられるのは期間と金額だけ
+  // 案件（§80）。1 行 = 1 契約。顧客名・案件名などは他システムから取り込む予定なので、画面で変えられるのは期間・金額・担当チームだけ
   contracts: {
     id: "contracts",
     path: "data/contracts.csv",
@@ -120,7 +120,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     label: T.masterFiles.contracts,
     history: "list",
     keyColumns: ["contract_id"],
-    editableColumns: ["start_month", "end_month", "total_amount"],
+    editableColumns: ["start_month", "end_month", "total_amount", "team_id"],
     columns: [
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
       { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
