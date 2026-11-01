@@ -90,6 +90,8 @@ describe("パッケージの中身", () => {
     const grep = (re: RegExp) => tpl.filter((f) => re.test(readFileSync(f, "utf-8")));
     const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (words.length) expect(grep(new RegExp(words.map(escape).join("|"), "i"))).toEqual([]);
+    // 環境変数がなくても見つかる形: 英字の名前＋「さん」（依頼者は「依頼者」と書く。CLAUDE.md）
+    expect(grep(/[A-Za-z]さん/)).toEqual([]);
     // GitHub のアカウントへのリンク（npm の依存の寄付先 = package-lock.json と、フォントの著作権表示 = src/fonts/OFL.txt は除く。
     // OFL はライセンス本文と著作権表示をそのまま添えることが条件で、書き換えられない。§46）・メールアドレス（例示用のドメインは除く）
     expect(grep(/github\.com\//).filter((f) => !f.endsWith("package-lock.json") && !f.endsWith(join("src", "fonts", "OFL.txt")))).toEqual([]);

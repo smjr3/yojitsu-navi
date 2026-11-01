@@ -1299,7 +1299,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 契約外の種別の表示名（空 = 「契約外予定」） */
   const outsideLabel = (type) => (type ? type : T.masterFiles.outside);
   /**
-   * その人の運用保守以外の種別: 表示中の期間に計画（月の不正な行も）か実績がある種別だけ（2026-10-31 shimaさん「全員が全部やるわけじゃない」）。
+   * その人の運用保守以外の種別: 表示中の期間に計画（月の不正な行も）か実績がある種別だけ（2026-10-31 依頼者「全員が全部やるわけじゃない」）。
    * 並びは分類表の順、分類表に無い種別はその後。ほかの種別はセルの「作業を追加」から足す
    */
   function memberOutsideTypes(oRows, memberId, months = plan.months) {
