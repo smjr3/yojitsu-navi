@@ -107,6 +107,12 @@ describe("ダミーデータのマスタで往復", () => {
       docs.members = addRow(docs.members, { ...Object.fromEntries(docs.members.header.map((h) => [h, cellOf(docs.members, anyMember, h)])), name: '山田, "テスト"', team_id: anyTeam, effective_from: "2026-11" }).doc;
       // チーム: 名前の変更（既存行の修正）
       docs.teams = updateRow(docs.teams, docs.teams.rows[0]!.id, { name: "改称した本部" });
+      // 案件（§80）: 金額の修正（既存行。メモにカンマを含める）
+      const contract = docs.contracts.rows[0]!;
+      const contractId = cellOf(docs.contracts, contract, "contract_id");
+      docs.contracts = updateRow(docs.contracts, contract.id, { total_amount: "12345000", note: "増額, 再見積" });
+      // 祝日（§80）: 会社の休日を 1 日追加（未来の日）
+      docs.holidays = addRow(docs.holidays, { date: "2027-08-13", name: "夏季休暇" }).doc;
       // アサイン: 1 行削除
       const removed = docs.assignments.rows[0]!;
       docs.assignments = deleteRow(docs.assignments, removed.id);
@@ -125,6 +131,8 @@ describe("ダミーデータのマスタで往復", () => {
       expect(dataset.rates.some((r) => r.key === anyTitle && r.hourlyRate === 99999 && r.effectiveFrom === "2026-11")).toBe(true);
       expect(dataset.members.some((m) => m.memberId === memberId && m.name === '山田, "テスト"' && m.teamId === anyTeam)).toBe(true);
       expect(dataset.teams[0]!.name).toBe("改称した本部");
+      expect(dataset.contracts.find((c) => c.contractId === contractId)).toMatchObject({ totalAmount: 12345000, note: "増額, 再見積" });
+      expect(dataset.holidays.some((h) => h.date === "2027-08-13" && h.name === "夏季休暇")).toBe(true);
       expect(dataset.assignments).toHaveLength(docs.assignments.rows.length);
       expect(dataset.outsidePlans?.some((o) => o.memberId === memberId && o.personMonths === 0.2 && o.note === "提案, 準備")).toBe(true);
       expect(dataset.targets?.some((t) => t.kind === "team" && t.targetId === anyTeam && t.endMonth === "2027-06" && Math.abs(t.remainingRate - 0.18) < 1e-9 && t.note === "通期, 目標")).toBe(true);

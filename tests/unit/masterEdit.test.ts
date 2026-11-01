@@ -300,6 +300,8 @@ describe("validateEdited", () => {
     members: parseMasterDoc("members", members),
     rates: parseMasterDoc("rates", RATES),
     teams: parseMasterDoc("teams", teams),
+    contracts: parseMasterDoc("contracts", context.contracts),
+    holidays: parseMasterDoc("holidays", context.holidays),
     assignments: parseMasterDoc("assignments", assignments),
     outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
     targets: parseMasterDoc("targets", TARGETS_EMPTY),
@@ -355,6 +357,8 @@ describe("下書き", () => {
     members: { text: "member_id,name,kind,title,department,section,team_id,effective_from\n", lastCommitId: "a" },
     rates: { text: RATES, lastCommitId: "b" },
     teams: { text: "team_id,name,parent_team_id,effective_from\n", lastCommitId: "c" },
+    contracts: { text: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount,note\n", lastCommitId: "d" },
+    holidays: { text: "date,name\n", lastCommitId: "e" },
     assignments: { text: "member_id,contract_id,start_month,end_month,allocation\n", lastCommitId: null },
     outside: { text: OUTSIDE_EMPTY, lastCommitId: null },
     targets: { text: TARGETS_EMPTY, lastCommitId: null },
@@ -363,6 +367,8 @@ describe("下書き", () => {
     members: parseMasterDoc("members", bases.members.text),
     rates: parseMasterDoc("rates", bases.rates.text),
     teams: parseMasterDoc("teams", bases.teams.text),
+    contracts: parseMasterDoc("contracts", bases.contracts.text),
+    holidays: parseMasterDoc("holidays", bases.holidays.text),
     assignments: parseMasterDoc("assignments", bases.assignments.text),
     outside: parseMasterDoc("outside", bases.outside.text),
     targets: parseMasterDoc("targets", bases.targets.text),
@@ -629,5 +635,88 @@ describe("stampChangedRows（変更者・変更日、§56）", () => {
     const stamped = stampChangedRows(doc, "", "2025-10-01");
     expect(JSON.stringify(doc)).toBe(before);
     expect(serializeMasterDoc(stamped).text).toBe("member_id,type,start_month,end_month,person_months,note,updated_by,updated_at\nM1,提案,2025-04,2025-04,0.2,,,2025-10-01\n");
+  });
+});
+
+describe("案件（contracts.csv。§80）", () => {
+  const CONTRACTS = "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount,note\nC1,A社,保守,T1,2025-04,2026-03,1200000,\nC2,B社,運用,T1,2025-10,2026-09,600000,\n";
+  const range = { fromMonth: "2025-04", toMonth: "2025-12" };
+
+  it("金額を変えると、表示期間のうち案件の期間の月すべてに影響（予算は均等割り）", () => {
+    const before = parseMasterDoc("contracts", CONTRACTS);
+    const after = updateRow(before, "o1", { total_amount: "900000" });
+    const impact = impactBetween(before, after, range);
+    expect(impact.months).toEqual(["2025-10", "2025-11", "2025-12"]);
+    expect(impact.keys).toEqual(["C2"]);
+    expect(impact.columns).toEqual(["total_amount"]);
+    const eff = describeImpactEffects("contracts", impact.columns);
+    expect(eff.costChanges).toBe(false);
+    expect(eff.effects.join("")).toContain("予算");
+  });
+
+  it("担当チームの変更は担当チームの集計、未来だけの新しい案件は影響なし", () => {
+    const before = parseMasterDoc("contracts", CONTRACTS);
+    const team = impactBetween(before, updateRow(before, "o0", { team_id: "T2" }), range);
+    expect(team.months).toHaveLength(9);
+    expect(describeImpactEffects("contracts", team.columns).effects.join("")).toContain("担当チーム");
+    const future = addRow(before, { contract_id: "C3", customer_name: "C社", project_name: "保守", team_id: "T1", start_month: "2026-04", end_month: "2027-03", total_amount: "100", note: "" }).doc;
+    expect(impactBetween(before, future, range).months).toEqual([]);
+    // メモだけの変更は数値に効かない
+    expect(impactBetween(before, updateRow(before, "o0", { note: "メモ" }), range).months).toEqual([]);
+  });
+
+  it("変更者・変更日を書く", () => {
+    const doc = updateRow(parseMasterDoc("contracts", CONTRACTS), "o0", { total_amount: "1300000" });
+    expect(serializeMasterDoc(stampChangedRows(doc, "taro", "2025-10-01")).text.split("\n")[1]).toBe("C1,A社,保守,T1,2025-04,2026-03,1300000,,taro,2025-10-01");
+  });
+
+  it("validateEdited は編集中の案件で検証する（重複 ID・存在しないチームを行に結び付ける）", () => {
+    const docs = {
+      members: parseMasterDoc("members", "member_id,name,kind,title,department,section,team_id,effective_from\n"),
+      rates: parseMasterDoc("rates", RATES),
+      teams: parseMasterDoc("teams", "team_id,name,parent_team_id,effective_from\nT1,本部,,2025-04\n"),
+      contracts: parseMasterDoc("contracts", CONTRACTS),
+      assignments: parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation\n"),
+      outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
+      targets: parseMasterDoc("targets", TARGETS_EMPTY),
+    };
+    const { doc, rowId } = addRow(docs.contracts, { contract_id: "C1", customer_name: "C社", project_name: "新規", team_id: "T9", start_month: "2026-04", end_month: "2027-03", total_amount: "100", note: "" });
+    const context = { contracts: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\n", mapping: "worklog_customer_name,worklog_project_name,contract_id\n", holidays: "date,name\n" };
+    const v = validateEdited({ ...docs, contracts: doc }, context, baseConfig);
+    expect(v.byRow.contracts[rowId]?.map((i) => i.code).sort()).toEqual(["CONTRACT_UNKNOWN_TEAM", "DUPLICATE_CONTRACT_ID"]);
+    expect(v.texts.contracts).toBe(serializeMasterDoc(doc).text);
+  });
+});
+
+describe("祝日（holidays.csv。§80）", () => {
+  const HOLIDAYS = "date,name\n2025-05-05,こどもの日\n2025-12-29,年末年始休暇\n";
+  const range = { fromMonth: "2025-04", toMonth: "2025-12" };
+
+  it("日付の追加・削除・変更は、その日の月だけ影響。名前だけの変更・範囲外の月は影響なし", () => {
+    const before = parseMasterDoc("holidays", HOLIDAYS);
+    const added = impactBetween(before, addRow(before, { date: "2025-08-13", name: "夏季休暇" }).doc, range);
+    expect(added.months).toEqual(["2025-08"]);
+    expect(describeImpactEffects("holidays", added.columns).effects.join("")).toContain("営業日");
+    expect(impactBetween(before, deleteRow(before, "o1"), range).months).toEqual(["2025-12"]);
+    expect(impactBetween(before, updateRow(before, "o0", { date: "2025-05-06" }), range).months).toEqual(["2025-05"]);
+    expect(impactBetween(before, updateRow(before, "o0", { name: "祝日" }), range).months).toEqual([]);
+    expect(impactBetween(before, addRow(before, { date: "2026-01-02", name: "年末年始休暇" }).doc, range).months).toEqual([]);
+  });
+
+  it("validateEdited は編集中の祝日で検証する（日付の誤りを行に結び付ける）", () => {
+    const docs = {
+      members: parseMasterDoc("members", "member_id,name,kind,title,department,section,team_id,effective_from\n"),
+      rates: parseMasterDoc("rates", RATES),
+      teams: parseMasterDoc("teams", "team_id,name,parent_team_id,effective_from\n"),
+      holidays: parseMasterDoc("holidays", HOLIDAYS),
+      assignments: parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation\n"),
+      outside: parseMasterDoc("outside", OUTSIDE_EMPTY),
+      targets: parseMasterDoc("targets", TARGETS_EMPTY),
+    };
+    const { doc, rowId } = addRow(docs.holidays, { date: "2025-02-30", name: "誤り" });
+    const context = { contracts: "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\n", mapping: "worklog_customer_name,worklog_project_name,contract_id\n", holidays: "date,name\n" };
+    const v = validateEdited({ ...docs, holidays: doc }, context, baseConfig);
+    expect(v.byRow.holidays[rowId]?.map((i) => i.code)).toEqual(["INVALID_DATE"]);
+    expect(v.texts.holidays).toBe(serializeMasterDoc(doc).text);
   });
 });

@@ -19,7 +19,7 @@ import { T, fmt } from "../i18n/index.js";
 // 対象ファイルの定義
 // ---------------------------------------------------------------------------
 
-export type MasterFileId = "members" | "rates" | "teams" | "assignments" | "outside" | "targets";
+export type MasterFileId = "members" | "rates" | "teams" | "contracts" | "holidays" | "assignments" | "outside" | "targets";
 
 export interface MasterColumnDef {
   /** CSV の列名 */
@@ -27,7 +27,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent";
+  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date";
   required: boolean;
 }
 
@@ -44,7 +44,7 @@ export interface MasterFileDef {
    * 履歴の種類
    *  - effective: effective_from 付きの履歴（§5）。キー列ごとに「月 m の有効レコード」を引く
    *  - period:    start_month〜end_month の期間（アサイン）
-   *  - list:      1 行が 1 件（目標。§63）。履歴を持たず、過去の月の数値にも影響しない
+   *  - list:      1 行が 1 件（案件 §80・目標 §63）。履歴を持たない。目標は過去の月の数値に影響しない（案件は期間の月の予算が変わる）
    */
   history: "effective" | "period" | "list";
   /** 影響範囲を判定するキー列 */
@@ -53,6 +53,11 @@ export interface MasterFileDef {
   valueColumn?: string;
   /** 省略可のファイル（無ければ見出しだけの空のファイルとして扱う。§36） */
   optional?: boolean;
+  /**
+   * 画面で変えられるのはこの列だけ（他システムから取り込む列は変えさせない。案件 §80）。
+   * 指定したファイルは行の追加・削除・CSV で編集もできない（行は取り込みで増減する）
+   */
+  editableColumns?: readonly string[];
 }
 
 export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
@@ -105,6 +110,39 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
       { name: "level", label: T.masterFiles.colLevel, input: "level", required: false },
       { name: "leader_member_id", label: T.masterFiles.colLeader, input: "member", required: false },
+    ],
+  },
+  // 案件（§80）。1 行 = 1 契約。顧客名・案件名などは他システムから取り込む予定なので、画面で変えられるのは期間・金額・担当チームだけ
+  contracts: {
+    id: "contracts",
+    path: "data/contracts.csv",
+    issueFile: "contracts.csv",
+    label: T.masterFiles.contracts,
+    history: "list",
+    keyColumns: ["contract_id"],
+    editableColumns: ["start_month", "end_month", "total_amount", "team_id"],
+    columns: [
+      { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
+      { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
+      { name: "project_name", label: T.masterFiles.colProjectName, input: "text", required: true },
+      { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
+      { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
+      { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },
+      { name: "team_id", label: T.masterFiles.colContractTeam, input: "team", required: false },
+      { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
+    ],
+  },
+  // 祝日・会社の休日（§80）。1 行 = 1 日。営業日（工数の確定日・今月の進捗の目安）の数え方に使う
+  holidays: {
+    id: "holidays",
+    path: "data/holidays.csv",
+    issueFile: "holidays.csv",
+    label: T.masterFiles.holidays,
+    history: "list",
+    keyColumns: ["date"],
+    columns: [
+      { name: "date", label: T.masterFiles.colHolidayDate, input: "date", required: true },
+      { name: "name", label: T.masterFiles.colHolidayName, input: "text", required: true },
     ],
   },
   assignments: {
@@ -162,7 +200,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
   },
 };
 
-export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "assignments", "outside", "targets"];
+export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "contracts", "holidays", "assignments", "outside", "targets"];
 
 /** 行の「いつ」の列（履歴 = 適用開始月、期間 = 開始月、一覧 = 終了月） */
 export function timeColumnOf(def: Pick<MasterFileDef, "history">): string {
@@ -376,7 +414,7 @@ export function serializeMasterDoc(doc: MasterDoc): SerializedDoc {
 /** 変更者・変更日の列（リソース計画の変更の履歴・目標の一覧に出す。§56）。保存するときに画面が書き込み、フォームでは編集しない */
 export const STAMP_COLUMNS = { by: "updated_by", at: "updated_at" } as const;
 /** 変更者・変更日を書き込むファイル */
-export const STAMPED_FILES: readonly MasterFileId[] = ["assignments", "outside", "targets"];
+export const STAMPED_FILES: readonly MasterFileId[] = ["contracts", "assignments", "outside", "targets"];
 
 /**
  * 追加・変更した行に変更者（GitLab のユーザー名。分からなければ空）と変更日（YYYY-MM-DD）を書き込む（§56）。
@@ -594,6 +632,56 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
   return hits.sort().join("\u0002");
 }
 
+/** 祝日（§80）の変更で営業日が変わる月: 休みの日の集合が変わった日の月（名前だけの変更は数えない） */
+function holidayImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
+  const di = header.indexOf("date");
+  const dates = (rows: readonly CellRow[]) => new Set(rows.map((r) => (r[di] ?? "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)));
+  const b = dates(before);
+  const a = dates(after);
+  const changed = [...new Set([...[...b].filter((d) => !a.has(d)), ...[...a].filter((d) => !b.has(d))])].sort();
+  const months = [...new Set(changed.map((d) => d.slice(0, 7)))].filter((m) => m >= range.fromMonth && m <= range.toMonth).sort();
+  return months.length ? { months, keys: changed, columns: ["date"] } : { months: [], keys: [], columns: [] };
+}
+
+/** 案件（§80）の月 m の中身: その月に期間が掛かる行の「予算の月割り・担当チーム・顧客・案件名」 */
+const CONTRACT_COLUMNS = ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"] as const;
+function contractMonthSignature(header: readonly string[], rows: readonly CellRow[], m: YearMonth): string {
+  const at = (r: CellRow, c: string) => (r[header.indexOf(c)] ?? "").trim();
+  return rows
+    .filter((r) => isValidYearMonth(at(r, "start_month")) && isValidYearMonth(at(r, "end_month")) && at(r, "start_month") <= m && m <= at(r, "end_month"))
+    .map((r) => [at(r, "contract_id"), at(r, "customer_name"), at(r, "project_name"), at(r, "team_id"), at(r, "start_month"), at(r, "end_month"), at(r, "total_amount")].join("\u0001"))
+    .sort()
+    .join("\u0002");
+}
+
+/**
+ * 案件の変更で値が変わる月（予算は期間の均等割りなので、金額・期間を変えると期間の月すべての予算が変わる）。
+ * 変わった列は、その月に掛かる行どうしで比べる（片方にしか無ければ contract_id）
+ */
+function contractImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
+  const sig = (r: CellRow) => r.map((c) => c.trim()).join("\u0001");
+  const bs = new Set(before.map(sig));
+  const as = new Set(after.map(sig));
+  const touchedB = before.filter((r) => !as.has(sig(r)));
+  const touchedA = after.filter((r) => !bs.has(sig(r)));
+  if (touchedB.length === 0 && touchedA.length === 0) return { months: [], keys: [], columns: [] };
+  const id = (r: CellRow) => (r[header.indexOf("contract_id")] ?? "").trim();
+  const keys = [...new Set([...touchedB, ...touchedA].map(id))].sort();
+  const months: YearMonth[] = [];
+  const columns = new Set<string>();
+  for (let m = range.fromMonth; m <= range.toMonth; m = addMonths(m, 1)) {
+    if (contractMonthSignature(header, touchedB, m) === contractMonthSignature(header, touchedA, m)) continue;
+    months.push(m);
+    for (const k of keys) {
+      const b = touchedB.find((r) => id(r) === k);
+      const a = touchedA.find((r) => id(r) === k);
+      if (!b || !a) columns.add("contract_id");
+      else for (const c of CONTRACT_COLUMNS) if ((b[header.indexOf(c)] ?? "").trim() !== (a[header.indexOf(c)] ?? "").trim()) columns.add(c);
+    }
+  }
+  return { months, keys, columns: header.filter((h) => columns.has(h)) };
+}
+
 /**
  * 編集前 → 編集後で、range（過去の月）の計算に使う値が変わる月を求める。
  * 履歴マスタはキーごとに「月 m の有効レコード」、アサインは「月 m に掛かる行の集合」を比べる。
@@ -602,8 +690,10 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
 export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
   const def = MASTER_FILES[fileId];
   // 目標（§63）は計算の値を変えない
-  if (def.history === "list") return { months: [], keys: [], columns: [] };
+  if (def.history === "list" && fileId !== "contracts" && fileId !== "holidays") return { months: [], keys: [], columns: [] };
   if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [], columns: [] };
+  if (fileId === "contracts") return contractImpact(header, before, after, range);
+  if (fileId === "holidays") return holidayImpact(header, before, after, range);
   // 触れたキー: 片方にしか無い行（値まで含めて比べる）のキー
   const count = (rows: readonly CellRow[]) => {
     const m = new Map<string, number>();
@@ -717,6 +807,18 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
     level: [3, T.masterFiles.effectLevel, false],
     leader_member_id: [4, T.masterFiles.effectLeader, false],
   },
+  holidays: {
+    date: [0, T.masterFiles.effectHolidays, false],
+  },
+  contracts: {
+    total_amount: [0, T.masterFiles.effectContractBudget, false],
+    start_month: [0, T.masterFiles.effectContractBudget, false],
+    end_month: [0, T.masterFiles.effectContractBudget, false],
+    contract_id: [0, T.masterFiles.effectContractBudget, false],
+    team_id: [1, T.masterFiles.effectContractTeam, false],
+    customer_name: [2, T.masterFiles.effectContractName, false],
+    project_name: [2, T.masterFiles.effectContractName, false],
+  },
   assignments: {
     allocation: [0, T.masterFiles.effectAllocation, false],
   },
@@ -753,6 +855,7 @@ export function describeImpactMonths(months: readonly YearMonth[]): string {
 
 /** 検証に使う、編集しないファイル（ビルド時の生テキスト） */
 export interface ContextFiles {
+  /** ビルド時の contracts.csv・holidays.csv（案件・祝日の文書を渡さないときだけ使う。§80） */
   contracts: string;
   mapping: string;
   holidays: string;
@@ -784,14 +887,16 @@ export interface EditValidation {
  * 編集後の 4 ファイル ＋ 編集しないファイルで parseDataset（validateDataset を含む）を実行し、
  * 問題を行に結び付ける。作業実績は読み込まない（作業実績に関する警告はビルド後の「データ確認」で見る）
  */
-export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: ContextFiles, config: Config): EditValidation {
+export function validateEdited(docs: Omit<Record<MasterFileId, MasterDoc>, "contracts" | "holidays"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "contracts" | "holidays">>, context: ContextFiles, config: Config): EditValidation {
   const ser = {} as Record<MasterFileId, SerializedDoc>;
-  for (const id of MASTER_FILE_IDS) ser[id] = serializeMasterDoc(docs[id]);
+  // 案件・祝日（§80）の文書が無い呼び出し（以前の形）は、ビルド時の contracts.csv・holidays.csv をそのまま使う
+  const ids = MASTER_FILE_IDS.filter((id) => docs[id] !== undefined);
+  for (const id of ids) ser[id] = serializeMasterDoc(docs[id] as MasterDoc);
   const files: DatasetFiles = {
     config,
-    contracts: context.contracts,
+    contracts: ser.contracts?.text ?? context.contracts,
     mapping: context.mapping,
-    holidays: context.holidays,
+    holidays: ser.holidays?.text ?? context.holidays,
     assignments: ser.assignments.text,
     teams: ser.teams.text,
     members: ser.members.text,
@@ -802,8 +907,8 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     worklogs: [],
   };
   const { issues, dataset } = parseDataset(files);
-  const byFile = new Map<string, MasterFileId>(MASTER_FILE_IDS.map((id) => [MASTER_FILES[id].issueFile, id]));
-  const byRow = { members: {}, rates: {}, teams: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
+  const byFile = new Map<string, MasterFileId>(ids.map((id) => [MASTER_FILES[id].issueFile, id]));
+  const byRow = { members: {}, rates: {}, teams: {}, contracts: {}, holidays: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
   const general: RowIssue[] = [];
   const seen = new Set<string>();
   const out: RowIssue[] = [];
@@ -821,7 +926,7 @@ export function validateEdited(docs: Record<MasterFileId, MasterDoc>, context: C
     else general.push(ri);
   }
   const texts = {} as Record<MasterFileId, string>;
-  for (const id of MASTER_FILE_IDS) texts[id] = ser[id].text;
+  for (const id of ids) texts[id] = ser[id].text;
   return {
     issues: out,
     errors: out.filter((i) => i.severity === "error").length,
