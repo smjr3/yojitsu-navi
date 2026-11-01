@@ -16,7 +16,7 @@ import {
   DRAFT_SESSION_KEY,
   MASTER_FILES,
   MASTER_FILE_IDS,
-  MEMBER_IMPORTED_COLUMNS,
+  MEMBER_FIXED_COLUMNS,
   addRow,
   cellOf,
   deleteRow,
@@ -256,6 +256,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
+  // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
+  const memberImported = importMode ? (data.memberImportedColumns ?? ["name"]) : [];
   // 契約外の種別（§50.1。task-types.csv の契約外の行。無ければ種別なしの 1 行だけ）
   const outsideTypeList = outsideTypes(
     parseCsvTable(data.context.taskTypes ?? "")
@@ -1121,9 +1123,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
     const removed = diffMasterDoc(doc).removed;
     const csv = csvEdit[fileId];
-    // 行が取り込みで決まるファイル（案件。§80）は、行の追加・削除と CSV での編集をさせない
+    // 行が取り込みで決まるファイル（案件。§80）は、行の追加・削除と CSV での編集をさせない。
+    // メンバーも社員番号・氏名を CSV で書き換えさせないため CSV での編集は無し（§81）
     const fixedRows = !!def.editableColumns;
-    const csvBlocked = (fileId === "members" && importMode) || fixedRows;
+    const csvBlocked = fileId === "members" || fixedRows;
     const tableBody = html`<div class="yn-me-toolbar">
         ${fixedRows ? null : html`<button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${!editable} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>`}
         ${search}
@@ -2318,7 +2321,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
     // 他システムから取り込む列（案件の顧客名・案件名など。§80）は変えさせない
     const lockedByDef = (name) => !!def.editableColumns && !def.editableColumns.includes(name);
-    const lockImported = (name) => lockedByDef(name) || (fileId === "members" && importMode && MEMBER_IMPORTED_COLUMNS.includes(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template));
+    // メンバーの社員番号・氏名（§81）と取り込みで入る列（§20.2）は、保存済みの行では変えさせない（新しいメンバーと未保存の行は入力できる）
+    const memberLocked = (name) => fileId === "members" && (MEMBER_FIXED_COLUMNS.includes(name) || memberImported.includes(name));
+    const lockImported = (name) => lockedByDef(name) || (memberLocked(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template));
     // 「＋ 変更」（同じ対象の履歴を足す）では対象の ID を変えさせない。変えると別の対象の行になってしまう
     const lockKey = (name) => mode === "add" && !!template && def.history === "effective" && name === def.keyColumns[0];
     // 対象は名前で呼ぶ（メンバー・組織。ID は前面に出さない）
@@ -2382,7 +2387,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       idInput?.addEventListener("change", () => {
         const latest = latestByKey(docs.members, "member_id").get(idInput.value.trim());
         if (!latest) return;
-        for (const name of MEMBER_IMPORTED_COLUMNS) {
+        for (const name of memberImported) {
           const el = form.querySelector(`[name="${name}"]`);
           if (el) el.value = cellOf(docs.members, latest.row, name);
         }

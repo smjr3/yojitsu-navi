@@ -320,7 +320,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - `team_id` は取り込まない（画面で手入力）。取り込み結果と現在の有効レコードを比べ、`name/kind/title/division/department/section` のどれかが変わった人だけ `effective_from = 取り込み実行月` の新しい行を追加する（`team_id` は直前の有効レコードを引き継ぐ）。変化が無ければ何もしない（冪等）。
 - 取り込み元の氏名が空の人は、既存の氏名を空で上書きしない（件数を警告）。実行月より前の行が無い人（未来日付の行だけ）は、最も早い行を土台に実行月の行を足す。実行月より後の行は残すが、旧値をそのまま引き継いでいる項目は新しい値に揃える。
 - 取り込みに無い既存メンバーは削除しない（不在の人の過去月を壊さない）。件数を表示する。
-- `memberSource.adapter = "none"`（既定）の間は従来どおり手入力。マスタ編集画面は `memberSource.adapter != "none"` のとき取り込み対象列を読み取り専用にする。
+- `memberSource.adapter = "none"`（既定）の間は従来どおり手入力。マスタ編集画面は `memberSource.adapter != "none"` のとき取り込み対象列（`columns` に書いた列）を読み取り専用にする。社員番号・氏名は adapter によらず保存済みの行では読み取り専用（§81）。所属は既定では取り込まない（§81）。
 
 ---
 
@@ -390,7 +390,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
   2. 対応しなかった行は、キー列（と適用開始月／開始月）が同じ元の行と順に対にする（=「変更」）
   3. 残りは「追加」、どの行とも対にならなかった元の行は「削除」
 - 反映後の件数（追加・変更・削除）を示す。取り込んだ結果は §19 の検証・差分・影響月の対象になる（保存できるかは表で編集したときと同じ）。
-- 取り込みで外部から入る所属（`memberSource` が `none` 以外）のときは、メンバーの CSV 編集はできない（表で編集する。取り込み列を書き換えさせないため）。
+- メンバーの CSV 編集はできない（表で編集する。社員番号・氏名と取り込み列を書き換えさせないため。§81）。
 
 ## 26. マージ待ちの変更（MR 一覧とマージ）
 マスタ編集画面の上部に「マージ待ちの変更」を出す（`gitlab`・`demo` で、トークンがあるとき）。
@@ -1145,3 +1145,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ### 80.3 実装
 - `src/core/masterEdit.ts`（`MASTER_FILES.contracts` / `holidays`、`editableColumns`、`contractImpact`・`holidayImpact`）、`src/components/masters.js`（`cIndex` で編集中の案件から索引を作り直す。取り込みの列は修正のダイアログで値だけ出す）。
 - 再発防止: `tests/e2e/master-contracts.spec.ts`・`tests/e2e/master-holidays.spec.ts`、`tests/unit/masterEdit.test.ts`。
+
+## 81. メンバーの社員番号・氏名は画面で変えない（2026-11-01 依頼者）
+社員番号と氏名は人事から取り込む（§20.2）ので、マスタ編集の「メンバー」で、保存済みの行の社員番号・氏名は変えられないようにする（§80 の案件と同じ考え方）。**所属（事業本部・部・課）は取り込みの対象にせず、画面で直す**（依頼者）。
+- 修正・「＋ 変更」のダイアログで社員番号・氏名の欄を読み取り専用にし、「人事データから取り込むため変更できません」と出す（「＋ 変更」の氏名は前の履歴の値のまま）。区分・役職・事業本部・部・課・所属チーム・適用開始月・在籍状態は今までどおり直せる。
+- 「＋ 新しいメンバー」と、保存前に足した行は社員番号・氏名を入力できる（取り込み前の人・ヘルプの人を登録するため）。削除は今までどおり。
+- メンバーは CSV で編集を出さない（CSV で社員番号・氏名を書き換えさせないため）。
+- 取り込み（`memberSource.adapter` が `none` 以外）のときは、`memberSource.columns` に書いた列も読み取り専用（氏名は必須なので常に）。既定の `config.json` は所属（`division`・`department`・`section`）を書かない＝取り込まず、画面で直した値を引き継ぐ。
+- 実装: `MEMBER_FIXED_COLUMNS`（`src/core/masterEdit.ts`）、取り込む列は `memberImportedColumns`（`src/data/_masters.ts`）。再発防止: `tests/e2e/masters.spec.ts`、`tests/integration/masters.test.ts`。

@@ -4,7 +4,7 @@
  * - download モード（既定の config.json）: 行の追加・修正・削除と確認、検証エラーで保存不可、差分、CSV の中身、下書き復元
  * - gitlab モード: masters.json を page.route で書き換えて有効にし、GitLab API を page.route でモック
  *   （mr / direct / 競合 / 403 / CORS 失敗 → download 切替）
- * - 取り込みモード（memberSource.adapter != "none"）で取り込み列が読み取り専用
+ * - 社員番号・氏名は保存済みの行では読み取り専用（§81）。取り込みモード（memberSource.adapter != "none"）では columns に書いた列も読み取り専用
  * - a11y（タブのキーボード操作・ダイアログ・表の見出し）、ダーク、390px
  */
 import { readFileSync } from "node:fs";
@@ -633,17 +633,44 @@ test.describe("gitlab モード", () => {
   });
 });
 
-test("取り込みモード（memberSource.adapter = csv）: メンバーの取り込み列は読み取り専用、チームと適用開始月は編集できる", async ({ page }) => {
-  await patchMasters(page, (p) => ({ ...p, memberSourceAdapter: "csv" }));
+test("取り込みモード（memberSource.adapter = csv）: columns に書いた列だけ読み取り専用。所属（書いていない列）・チーム・適用開始月は編集できる", async ({ page }) => {
+  await patchMasters(page, (p) => ({ ...p, memberSourceAdapter: "csv", memberImportedColumns: ["name", "kind", "title"] }));
   await open(page);
   await expect(page.locator("#yn-me-panel")).toContainText("人事データから自動で取り込みます");
   const row = await history(page, "M001");
   await expect(row.getByRole("button", { name: /履歴を削除/ })).toHaveCount(0);
   await row.first().getByRole("button", { name: /履歴を修正/ }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  for (const name of ["name", "kind", "title", "division", "department", "section"]) await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
-  await expect(d.locator('[name="team_id"]')).toBeEnabled();
-  await expect(d.locator('[name="effective_from"]')).toBeEnabled();
+  for (const name of ["member_id", "name", "kind", "title"]) await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
+  for (const name of ["division", "department", "section", "team_id", "effective_from"]) await expect(d.locator(`[name="${name}"]`)).toBeEnabled();
+  await page.keyboard.press("Escape");
+});
+
+test("社員番号・氏名は人事から取り込むため、保存済みのメンバーでは変えられない（所属・役職は変えられる）。新しいメンバーでは入力する。CSV で編集は無い", { tag: "@smoke" }, async ({ page }) => {
+  await open(page);
+  await expect(page.getByRole("button", { name: "CSV で編集" })).toHaveCount(0);
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  // 今の値の修正
+  await group(page, "M001").getByRole("button", { name: /の今の値/ }).click();
+  for (const name of ["member_id", "name"]) {
+    await expect(d.locator(`[name="${name}"]`)).toBeDisabled();
+    await expect(d.locator(`#yn-me-f-${name}-hint`)).toHaveText("人事データから取り込むため変更できません");
+  }
+  for (const name of ["kind", "title", "division", "department", "section", "team_id", "effective_from"]) await expect(d.locator(`[name="${name}"]`)).toBeEnabled();
+  await d.locator('[name="section"]').fill("第9課");
+  await d.locator('[data-role="submit"]').click();
+  if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(group(page, "M001")).toContainText("第9課");
+  await expect(group(page, "M001")).toContainText("佐藤 健一");
+  // 「＋ 変更」でも氏名は前の履歴のまま
+  await group(page, "M001").getByRole("button", { name: /の変更を追加/ }).click();
+  await expect(d.locator('[name="name"]')).toBeDisabled();
+  await expect(d.locator('[name="name"]')).toHaveValue("佐藤 健一");
+  await page.keyboard.press("Escape");
+  // 新しいメンバーは社員番号・氏名を入力する
+  await page.getByRole("button", { name: "＋ 新しいメンバー" }).click();
+  for (const name of ["member_id", "name"]) await expect(d.locator(`[name="${name}"]`)).toBeEnabled();
   await page.keyboard.press("Escape");
 });
 

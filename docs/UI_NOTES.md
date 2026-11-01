@@ -184,7 +184,7 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 | `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
 | `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
 | `src/core/ledger.ts` | 台帳のまとめ（`ledgerGroups`・`nextChangeOf`）、期間の行の履歴（`periodHistory`）・期間の置き換え（`replaceRange`）・月の値（`valueAt`） |
-| `src/data/masters.json.ts`（`_masters.ts`） | 8 ファイル（案件 contracts.csv・祝日 holidays.csv を含む。任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter` |
+| `src/data/masters.json.ts`（`_masters.ts`） | 8 ファイル（案件 contracts.csv・祝日 holidays.csv を含む。任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter`・`memberImportedColumns` |
 | `src/components/masters.js` | 画面（状態を持ち、変わった部分を描き直して `data-fk` でフォーカスを戻す） |
 | `src/masters.md` | ページ（model.json は計算基準月・データ最小月・config のためだけに読む） |
 
@@ -212,7 +212,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §19.2 下書き | 土台が変わったとき | 復元時に `rebaseDraftFile` で最新の土台（このビルドの元データ）へ当て直す。行の対応は「最新のヘッダの列名で並べ trim した内容」の LCS（前後の共通部分を除いた残りが 4,000,000 セルを超えるときは順序を保つ貪欲法）、対応しなかった行は前後の対応行に挟まれた区間で同じキー（適用開始月／開始月も同じものを優先）の行と対にする。衝突（both-changed / changed-vs-deleted / deleted-vs-changed）は行ごとにラジオで「自分の下書き／最新のデータ」を選ばせ、全部選ぶまで復元しない（押すと案内して最初の未選択へフォーカス）。「自分」を選んだ最新側で削除済みの行は、追加行の手前（末尾）に戻す。画面の `bases` は凍結し、古い土台で保存・ダウンロードする経路を無くした |
 | §19.2 download | 他人の更新の上書き | ダウンロードボタンの横に元データのコミット（先頭 8 桁）を出し、手順に「GitLab 上のファイルの最新コミットと違えばアップロードせず、ビルド後に再読み込み」を加えた（ブラウザからは GitLab の最新を確かめられないため、案内で止める） |
 | §19.1 影響の文 | 何が変わるか | `impactOfChange` が「変わる月に値が変わる列」（`Impact.columns`）も返し、`describeImpactEffects` で列ごとの文に直す（役職・単価 → 単価と実績・残予算・消化率・着地見込み、所属チーム → 組織別の集計、部署・課・氏名・区分 → 表示、チームの親 → 組織の木と上位の合計、アサイン → 着地見込みと計画）。メンバーで実績が変わらないときは「実績・残予算・消化率・着地見込みは変わりません」と明記。`effective_from` だけが違い値が同じ月は変わる月に数えない |
-| §20.2 | 取り込み列 | `memberSourceAdapter != "none"` のとき members の name / kind / title / division / department / section は読み取り専用。既存行は削除不可（取り込みで管理する行のため）。追加は社員番号を選ぶと取り込み列を最新行から写す |
+| §20.2・§81 | 取り込み列 | members の member_id / name は保存済みの行で常に読み取り専用（§81。CSV で編集も無し）。`memberSourceAdapter != "none"` のときは `memberImportedColumns`（config の columns に書いた列）も読み取り専用。既存行は削除不可（取り込みで管理する行のため）。追加は社員番号を選ぶと取り込み列を最新行から写す |
 | 色 | エラーの色 | 検証のエラー（保存を止める）は赤（`--yn-danger-*`）、警告（止めない）は黄（`--yn-warn-*`）。どちらも「!」「i」と「エラー」「警告」の文字を付ける（2026-10-29 に変更。§40） |
 | §40 検証の一覧 | 探しやすさ | 検証の欄にエラー・警告を名前つきで 1 件 1 行。押すと該当の行へ（他の画面は `?jump=ファイル:行番号`）。ファイル単位の「エラーのあるファイル」は廃止 |
 | §41 1.0 未満 | リソース計画の色 | 人の行の月合計が 0 より多く 1.0 未満のセルは青系（`--yn-under-*`）、1.0 超は黄。0 は色なし |

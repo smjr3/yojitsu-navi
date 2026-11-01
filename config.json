@@ -39,9 +39,7 @@
       "memberId": "member_id",
       "name": "name",
       "kind": "kind",
-      "title": "title",
-      "department": "department",
-      "section": "section"
+      "title": "title"
     }
   },
   "costTypes": [
