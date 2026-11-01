@@ -1365,6 +1365,10 @@ export default {
     colProjectName: "案件名",
     colTotalAmount: "金額（円・税抜）",
     colContractTeam: "担当チーム",
+    // 祝日・会社の休日（holidays.csv。§80）
+    holidays: "祝日",
+    colHolidayDate: "日付",
+    colHolidayName: "名前",
     targets: "目標",
     colTarget: "対象",
     colTargetType: "対象の種類",
@@ -1384,6 +1388,7 @@ export default {
     effectLeader: "組織のリーダーの表示",
     effectAllocation: "着地見込み（計画値）とメンバー別の計画（計画時間・計画額）",
     effectOutside: "リソース計画の「超過」の判定（計画額・着地見込みは変わりません）",
+    effectHolidays: "営業日の数え方（工数の確定日・今月の進捗の目安）",
     effectContractBudget: "期間の月の予算と、残予算・消化率・着地見込み",
     effectContractTeam: "担当チームによるチーム別の集計",
     effectContractName: "顧客・案件の名前と顧客別の集計",
@@ -1412,7 +1417,10 @@ export default {
     outsideHowto: "リソース計画で人の行を開き、種別の行の「＋ 変更」かセルから入れます。",
     contractsWhat: "保守案件の顧客・案件名・期間・金額・担当チーム。1 行 = 1 件（更新ごとに別の行）。",
     contractsEffect: "予算 = 金額を期間の月数で均等に割った額。金額・期間を変えると期間の月の予算・残予算・着地見込みが変わります。担当チームはチーム別の集計に使います。",
-    contractsHowto: "新しい案件は「＋ 新しい案件」。更新・金額変更は、同じ顧客・案件名で新しい案件ID の行を足します（前の行は終了月で終わらせる）。",
+    contractsHowto: "行の「修正」で期間と金額だけ変えられます。顧客名・案件名・担当チームは他システムから取り込むため、ここでは変えられません（行の追加・削除も取り込みで行います）。",
+    holidaysWhat: "国民の祝日と会社の休日（年末年始など）。1 行 = 1 日。",
+    holidaysEffect: "営業日の数え方が変わり、工数の確定日（翌月の何営業日目か）と、今月の進捗の目安（営業日割り）が変わります。行の無い年は国民の祝日だけで数えます。",
+    holidaysHowto: "「＋ 新しい祝日」で日付と名前を入れます。会社の休日も同じように足します。",
     targetsWhat: "チーム・顧客・案件ごとに「終了月までに残予算率 ◯% 以上」を目指す目標。",
     targetsEffect: "各一覧の「目標」列と、詳細画面の「目標」が変わります。予算・実績・着地見込みは変わりません。",
     targetsHowto: "「＋ 新しい目標」で対象・終了月・目標の残予算率を入れます。開始月を空にすると、終了月を含む年度の最初の月から数えます。",
@@ -1563,10 +1571,12 @@ export default {
     removedChip: "− 削除",
     undoDelete: "削除を取り消す",
     invalidValue: "（不正な値）",
-    contractEditAria: "{key} の案件（{id}）を修正",
-    contractDeleteAria: "{key} の案件（{id}）を削除",
-    hintContractKey: "重複しない ID（続き番号を入れてあります）。アサイン・名称の対応で使うので、保存後は変えないでください",
-    hintCustomer: "既存の顧客から選ぶか、新しい顧客名を入力",
+    contractEditAria: "{key} の案件（{id}）の期間・金額を修正",
+    holidayEditAria: "{key} の祝日を修正",
+    holidayDeleteAria: "{key} の祝日を削除",
+    importedReadonly: "他システムから取り込むため変更できません",
+    noRows: "行がありません",
+    weekdays: ["（日）", "（月）", "（火）", "（水）", "（木）", "（金）", "（土）"],
     hintTotalAmount: "期間全体の金額（円・税抜）。予算は月数で均等に割ります",
     targetEditAria: "{key} の終了月 {month} の目標を修正",
     targetDeleteAria: "{key} の終了月 {month} の目標を削除",
@@ -1755,8 +1765,8 @@ export default {
 
   // ── 台帳の見せ方（マスタ編集: 対象ごとに 1 行＋変更の履歴。§36） ──
   ledger: {
-    addNew: { members: "＋ 新しいメンバー", rates: "＋ 新しい単価", teams: "＋ 新しい組織", contracts: "＋ 新しい案件", targets: "＋ 新しい目標" },
-    unit: { members: "人", rates: "件", teams: "組織", contracts: "件", targets: "件" },
+    addNew: { members: "＋ 新しいメンバー", rates: "＋ 新しい単価", teams: "＋ 新しい組織", targets: "＋ 新しい目標", holidays: "＋ 新しい祝日" },
+    unit: { members: "人", rates: "件", teams: "組織", contracts: "件", targets: "件", holidays: "日" },
     count: "{n} / {total} {unit}",
     caption: "{file}（{path}）。1 行 = 1 つの対象（基準月の値）。開くと適用開始月ごとの変更の履歴",
     colHistory: "変更の履歴",
@@ -1871,7 +1881,7 @@ export default {
 
   // ── マスタ編集画面の説明（<strong>…</strong> は太字。タグはそのまま残してください） ──
   mastersPage: {
-    lead: "メンバーの所属・役職、時間単価、組織の台帳と、案件の一覧を直す画面です（1 行 = 1 人・1 役職・1 組織・1 案件。行を開くと、いつから何が変わったかの履歴）。表でも CSV でも編集できます。保存すると GitLab のマージリクエストになり、リーダーがこの画面の「マージ待ちの変更」でマージすると、数分で自動的に各画面の数値へ反映されます。途中で変わるときは、今の値は書き換えず行の「＋ 変更」で残します。編集中の内容はこのブラウザに下書きとして自動保存されます。",
+    lead: "メンバーの所属・役職、時間単価、組織の台帳と、案件の期間・金額、祝日を直す画面です（1 行 = 1 人・1 役職・1 組織・1 案件・1 日。行を開くと、いつから何が変わったかの履歴）。表でも CSV でも編集できます。保存すると GitLab のマージリクエストになり、リーダーがこの画面の「マージ待ちの変更」でマージすると、数分で自動的に各画面の数値へ反映されます。途中で変わるときは、今の値は書き換えず行の「＋ 変更」で残します。編集中の内容はこのブラウザに下書きとして自動保存されます。",
     loadFailed: "マスタのデータを読み込めませんでした",
   },
 

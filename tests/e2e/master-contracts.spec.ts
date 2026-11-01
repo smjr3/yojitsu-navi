@@ -1,17 +1,16 @@
 /**
  * マスタ編集「案件」タブ（SPEC §80）
  * - contracts.csv の全行を、顧客・案件名・開始月・終了月・金額・担当チームで一覧（担当チームは名前、金額は円）
- * - 追加（案件ID は続き番号を入れておく）→ ダウンロードした CSV は元 + 1 行（変更日付き）
+ * - 変えられるのは期間と金額だけ（顧客名・案件名などは他システムから取り込む）。追加・削除・CSV で編集は無い
+ * - 期間の修正 → ダウンロードした CSV は期間だけ変わり変更日付き
  * - 金額の修正は、過去の月の予算が変わることを確認で知らせる
- * - 追加した案件は、同じ画面の目標の対象の候補にすぐ出る（保存前でも）
- * - 重複 ID・存在しないチームは検証エラー
  * - 390px・ダークで横スクロールしない
  */
 import { readFileSync } from "node:fs";
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
 import { ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
-import { addRow, nextContractId, parseMasterDoc, rowRecord, serializeMasterDoc, stampChangedRows } from "../../src/core/masterEdit.js";
+import { parseMasterDoc, rowRecord, serializeMasterDoc, stampChangedRows, updateRow } from "../../src/core/masterEdit.js";
 
 const PAYLOAD = buildMastersPayload(ROOT_DIR);
 const CONTRACTS_TEXT = PAYLOAD.files.contracts.text;
@@ -46,45 +45,48 @@ test("一覧: 全案件を顧客・案件名・期間・金額・担当チーム
   await expect(rows.first()).toContainText(`${max.toLocaleString("ja-JP")}円`);
 });
 
-test("追加: 案件ID は続き番号。ダウンロードした CSV は元 + 1 行。目標の対象の候補にもすぐ出る", async ({ page }) => {
+test("顧客名・案件名・担当チームは変えられない（他システムから取り込む）。行の追加・削除・CSV で編集も無い", async ({ page }) => {
+  await gotoPage(page, "/masters?view=contracts");
+  await expect(page.getByRole("button", { name: /新しい案件/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "CSV で編集" })).toHaveCount(0);
+  const first = page.locator("table.yn-me-table tbody tr.yn-me-group").first();
+  await expect(first.getByRole("button", { name: "削除" })).toHaveCount(0);
+  await first.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  // 取り込む列は入力欄にせず、値だけ見せる
+  for (const name of ["contract_id", "customer_name", "project_name", "team_id", "note"]) await expect(d.locator(`#yn-me-f-${name}`)).toHaveCount(0);
+  const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
+  const rec = rowRecord(doc, doc.rows[0]!);
+  await expect(d.locator(".yn-me-fixed")).toContainText(rec.customer_name!);
+  await expect(d.locator(".yn-me-fixed")).toContainText(rec.project_name!);
+  await expect(d).toContainText("他システムから取り込むため変更できません");
+  for (const name of ["start_month", "end_month", "total_amount"]) await expect(d.locator(`#yn-me-f-${name}`)).toBeEnabled();
+});
+
+test("期間の修正: 予算の月割りが変わるので過去の月にかかれば確認。ダウンロードした CSV は期間だけ変わり変更日付き", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
-  const rows = page.locator("table.yn-me-table tbody tr.yn-me-group");
-  await page.getByRole("button", { name: "＋ 新しい案件" }).click();
+  // 計算基準月をまたぐ案件の終了月を 1 年延ばす（月割りが変わるので、始まっている月の予算も変わる）
+  const target = doc.rows.find((r) => (rowRecord(doc, r).start_month ?? "") < "2026-10" && (rowRecord(doc, r).end_month ?? "") > "2027-01")!;
+  const rec = rowRecord(doc, target);
+  const newEnd = `${Number(rec.end_month!.slice(0, 4)) + 1}${rec.end_month!.slice(4)}`;
+  const row = page.locator(`table.yn-me-table tbody tr[data-key="${target.id}"]`);
+  await row.getByRole("button", { name: "修正" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  const id = nextContractId(doc.rows.map((r) => rowRecord(doc, r).contract_id ?? ""));
-  await expect(d.locator("#yn-me-f-contract_id")).toHaveValue(id);
-  // 必須の未入力は止める
+  await d.locator("#yn-me-f-end_month").fill(newEnd);
   await d.locator('[data-role="submit"]').click();
-  await expect(d.locator(".yn-me-form-msg")).toContainText("顧客");
-  await d.locator("#yn-me-f-customer_name").fill("テスト商事");
-  await d.locator("#yn-me-f-project_name").fill("試験システム保守");
-  await d.locator("#yn-me-f-start_month").fill("2027-04");
-  await d.locator("#yn-me-f-end_month").fill("2028-03");
-  await d.locator("#yn-me-f-total_amount").fill("24000000");
-  await d.locator("#yn-me-f-team_id").selectOption("T111");
+  await expect(d.locator(".yn-me-impact")).toContainText("予算");
   await d.locator('[data-role="submit"]').click();
-  // 未来の案件なので過去の影響なし → 確認なしで反映
   await expect(d).toHaveCount(0);
-  await expect(rows).toHaveCount(doc.rows.length + 1);
-  const added = rows.last();
-  await expect(added).toContainText("テスト商事");
-  await expect(added).toContainText("24,000,000円");
-  await expect(added).toContainText("追加");
+  await expect(row).toContainText(newEnd);
+  await expect(row).toContainText("変更");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /contracts\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
   const today = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()));
-  const expected = stampChangedRows(addRow(doc, { contract_id: id, customer_name: "テスト商事", project_name: "試験システム保守", team_id: "T111", start_month: "2027-04", end_month: "2028-03", total_amount: "24000000", note: "" }).doc, "", today);
-  expect(text).toBe(serializeMasterDoc(expected).text);
-
-  // 同じ画面の「目標」タブ: 対象の候補に保存前の案件も出る
-  await page.getByRole("tab", { name: /目標/ }).click();
-  await page.getByRole("button", { name: "＋ 新しい目標" }).click();
-  await d.locator("#yn-me-f-target_id").fill("試験システム");
-  await expect(page.getByRole("option", { name: /試験システム保守/ })).toBeVisible();
+  expect(text).toBe(serializeMasterDoc(stampChangedRows(updateRow(doc, target.id, { end_month: newEnd }), "", today)).text);
 });
 
-test("金額の修正は過去の月の予算が変わることを知らせる。重複 ID は検証エラー", async ({ page }) => {
+test("金額の修正は過去の月の予算が変わることを知らせる。「48,000,000円」のような書き方も数値として並べる", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   const rows = page.locator("table.yn-me-table tbody tr.yn-me-group");
   const first = rows.first();
@@ -104,21 +106,12 @@ test("金額の修正は過去の月の予算が変わることを知らせる�
   await expect(first).toContainText("9,999,999,999円");
   await page.locator('[data-fk="sort:contracts:total_amount"]').click();
   await expect(rows.first()).toContainText("9,999,999,999円");
-
-  // 既にある案件ID で追加すると重複のエラー
-  const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
-  const firstId = rowRecord(doc, doc.rows[0]!).contract_id!;
-  await page.getByRole("button", { name: "＋ 新しい案件" }).click();
-  await d.locator("#yn-me-f-contract_id").fill(firstId);
-  await d.locator("#yn-me-f-customer_name").fill("重複商事");
-  await d.locator("#yn-me-f-project_name").fill("重複");
-  await d.locator("#yn-me-f-start_month").fill("2027-04");
-  await d.locator("#yn-me-f-end_month").fill("2028-03");
-  await d.locator("#yn-me-f-total_amount").fill("100");
+  // 終了月を開始月より前にすると検証エラー
+  await rows.first().getByRole("button", { name: "修正" }).click();
+  await d.locator("#yn-me-f-end_month").fill("2000-01");
   await d.locator('[data-role="submit"]').click();
-  await expect(d).toHaveCount(0);
+  await d.locator('[data-role="submit"]').click();
   await expect(page.locator(".yn-me-check")).toContainText("エラー");
-  await expect(page.locator("tr.yn-me-issue-row").first()).toContainText(firstId);
 });
 
 test("390px・ダーク / 768px: 案件タブで画面が横にはみ出さない", async ({ page }) => {

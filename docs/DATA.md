@@ -5,7 +5,7 @@
 
 | ファイル | 列 |
 |---|---|
-| `data/contracts.csv` | `contract_id, customer_name, project_name, team_id, start_month, end_month, total_amount, note[, updated_by, updated_at]` （updated_by・updated_at は assignments.csv と同じ（マスタ編集の「案件」で保存した人と保存日）。計算には使わない。SPEC §80） |
+| `data/contracts.csv` | `contract_id, customer_name, project_name, team_id, start_month, end_month, total_amount, note[, updated_by, updated_at]` （updated_by・updated_at は assignments.csv と同じ（マスタ編集の「案件」で保存した人と保存日）。計算には使わない。顧客名・案件名は他システムから取り込む予定で、マスタ編集で直せるのは start_month・end_month・total_amount だけ。SPEC §80） |
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude]` （案件名が空 = その顧客の全工数。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation[, updated_by, updated_at]` （人 × 契約 × 期間の配分人月。updated_by・updated_at は保存した人の GitLab ユーザー名と保存日（YYYY-MM-DD）。画面が保存時に追加・変更した行へ書く。列なし・空欄 = 記録なし。SPEC §56。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note[, updated_by, updated_at]` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。updated_by・updated_at は assignments.csv と同じ。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |

@@ -114,13 +114,13 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("初期表示: 「⋯」のメニューの先頭に「マスタ編集」（選択状態）、台帳の 4 タブ（リソース計画は別画面）、説明文（折りたたみ）、行数は対象の数、既定は CSV ダウンロード", async ({ page }) => {
+test("初期表示: 「⋯」のメニューの先頭に「マスタ編集」（選択状態）、台帳の 6 タブ（リソース計画は別画面）、説明文（折りたたみ）、行数は対象の数、既定は CSV ダウンロード", async ({ page }) => {
   await open(page);
   await expect(page.locator(".yn-more-btn")).toHaveClass(/is-current/);
   const first = page.locator("#yn-more-menu a.yn-more-item").first();
   await expect(first).toHaveText("マスタ編集");
   await expect(first).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /目標/]);
+  await expect(page.getByRole("tab")).toHaveText([/メンバー/, /単価/, /組織/, /案件/, /目標/, /祝日/]);
   // 説明は本文に出さない（見出し横の「?」だけ。§37）
   await expect(page.locator("details.yn-me-intro")).toHaveCount(0);
   for (const [label, id] of [["メンバー", "members"], ["単価", "rates"], ["組織", "teams"]] as const) {
@@ -655,7 +655,7 @@ test("a11y: タブは矢印キーで移動、ダイアログは role=dialog で 
   await expect(page.getByRole("tab", { name: /単価/ })).toBeFocused();
   await expect(page.getByRole("tab", { name: /単価/ })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: /目標/ })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /祝日/ })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(first).toBeFocused();
   await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "yn-me-tab-members");
