@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generate, writeDummy } from "../../scripts/generate-dummy.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 import { runValidation } from "../../scripts/validate-data.js";
-import { buildMastersPayload } from "../../src/data/_masters.js";
+import { buildMastersPayload, memberImportedColumns } from "../../src/data/_masters.js";
 import { aggregate, buildModel } from "../../src/core/index.js";
 import {
   MASTER_FILES,
@@ -68,8 +68,16 @@ describe("ローダ（src/data/masters.json.ts の中身）", () => {
     expect(p.gitAvailable).toBe(false);
     expect(p.masterEdit.mode).toBe("gitlab") // §24: 既定は gitlab（接続先が空なら画面で download に落とす）;
     expect(p.memberSourceAdapter).toBe("none");
+    expect(p.memberImportedColumns).toEqual([]);
     expect(p.context.contracts).toContain("contract_id");
     expect(p.context.holidays.charCodeAt(0)).not.toBe(0xfeff); // BOM は除いて渡す
+  });
+
+  it("取り込みで入る列は columns に書いた列だけ（氏名は必須なので常に。所属を書かなければ取り込まない。§20.2・§81）", () => {
+    expect(memberImportedColumns(undefined)).toEqual([]);
+    expect(memberImportedColumns({ adapter: "none", columns: { memberId: "id", name: "n", division: "d" } })).toEqual([]);
+    expect(memberImportedColumns({ adapter: "csv", columns: { memberId: "id", name: "n", kind: "k", title: "t" } })).toEqual(["name", "kind", "title"]);
+    expect(memberImportedColumns({ adapter: "http", columns: { memberId: "id", name: "n", department: "d", section: "s" } })).toEqual(["name", "department", "section"]);
   });
 
   it("リポジトリの data/ では最終コミット ID（40 桁）とリポジトリ内パスを返す", () => {

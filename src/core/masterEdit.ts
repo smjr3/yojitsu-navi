@@ -212,8 +212,11 @@ export function emptyMasterText(fileId: MasterFileId): string {
   return `${MASTER_FILES[fileId].columns.map((c) => c.name).join(",")}\n`;
 }
 
-/** memberSource で取り込む列（§20.2。team_id は取り込まない） */
+/** memberSource で取り込める列（§20.2。team_id は取り込まない。実際に取り込むのは config の columns に書いた列だけ） */
 export const MEMBER_IMPORTED_COLUMNS: readonly string[] = ["name", "kind", "title", "division", "department", "section"];
+
+/** メンバーで画面から変えさせない列（社員番号・氏名は人事から取り込む。§81）。新しいメンバーの追加では入力する */
+export const MEMBER_FIXED_COLUMNS: readonly string[] = ["member_id", "name"];
 
 // ---------------------------------------------------------------------------
 // CSV: 行テキストを保ったまま読む

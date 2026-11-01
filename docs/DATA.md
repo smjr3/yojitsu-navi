@@ -48,7 +48,7 @@
 | `adapter` | `none`（既定。members.csv は手入力）/ `csv`（人事の CSV を置く）/ `http` |
 | `csv.path`, `csv.encoding` | `adapter: "csv"` の CSV のパス（リポジトリ相対）と文字コード |
 | `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ） |
-| `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, division, department, section` は省略可（事業本部を取り込むときは `"division": "<元の列名>"` を足す）（省略した項目は取り込まず現在の値を引き継ぐ）。入れ子・複数候補は上と同じ |
+| `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, division, department, section` は省略可（省略した項目は取り込まず現在の値を引き継ぐ）。既定は所属（`division, department, section`）を書かない＝所属は画面で直す（SPEC §81）。書いた列はマスタ編集で読み取り専用になる。入れ子・複数候補は上と同じ |
 | `kindMap` | 区分値の読み替え。例 `{ "正社員": "employee", "委託": "partner" }` |
 | `filters` | 取り込まない行の条件（退職者の除外など）。csv・http 共通 |
 

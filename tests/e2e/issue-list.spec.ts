@@ -92,13 +92,16 @@ test("他の画面のファイルのエラーは、その画面を開いて行�
 });
 
 test("台帳のエラー: 名前で示し、押すと絞り込みを外して履歴を開き、その行の「修正」へ", async ({ page }) => {
+  // メンバーは CSV で編集できない（§81）ので、元のファイルに誤りがある状態で開く（取り込み・直接のコミットで入った誤り）
+  await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    const members = json.files.members;
+    const text = members.text.replace("M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,T111,2026-07,", "M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,NOPE,2026-07,");
+    await route.fulfill({ response: res, body: JSON.stringify({ ...json, files: { ...json.files, members: { ...members, text } } }), headers: { ...res.headers(), "content-type": "application/json" } });
+  });
   await gotoPage(page, "/masters");
   await page.getByRole("tab", { name: /メンバー/ }).click();
-  await page.getByRole("button", { name: "CSV で編集" }).click();
-  const area = page.getByRole("textbox", { name: /メンバー の CSV/ });
-  await area.fill((await area.inputValue()).replace("M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,T111,2026-07,", "M011,小林 玲奈,employee,主任,ソリューション事業本部,第1事業部,第1課,NOPE,2026-07,"));
-  await page.locator('[data-fk="csv:apply:members"]').click();
-  await page.getByRole("button", { name: "表で編集" }).click();
   await page.locator("#yn-me-q-members").fill("該当なし");
   await expect(page.locator(".yn-me-ledger tbody")).toContainText("条件に合う行がありません");
   await page.getByRole("tab", { name: /単価/ }).click();

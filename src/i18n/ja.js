@@ -1444,7 +1444,7 @@ export default {
     encodingNote: "元のファイルは {encoding} です。保存すると UTF-8（BOM なし）に変わるため、GitLab 上では全行が変更として表示されます。",
     crlfNote: "元のファイルの改行が CRLF です。保存すると LF に揃えるため、GitLab 上では全行が変更として表示されます。",
     rebasedNote: "このファイルは、古い元データで作った下書きを最新のデータに当て直して復元しました（そのまま当て直した変更 {n} 件{resolved}）。保存の前に「変更内容」で確認してください。",
-    hrImportNote: "氏名・区分・役職・部署・課は人事データから自動で取り込みます（memberSource: {adapter}）。ここで編集できるのは所属チームと適用開始月だけです。",
+    hrImportNote: "人事データから自動で取り込みます（memberSource: {adapter}）。取り込む列は変更できません。",
     rowEditAria: "{key} の行を修正",
     rowRevertAria: "{key} の変更を元に戻す",
     rowDeleteAria: "{key} の行を削除",

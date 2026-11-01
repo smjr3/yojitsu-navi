@@ -12,10 +12,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { decodeAuto, type DetectedEncoding } from "../../scripts/lib/encoding.js";
 import { DATA_FILES, loadConfig } from "../../scripts/lib/load.js";
-import { MASTER_FILES, MASTER_FILE_IDS, emptyMasterText, type MasterFileId } from "../core/masterEdit.js";
+import { MASTER_FILES, MASTER_FILE_IDS, MEMBER_IMPORTED_COLUMNS, emptyMasterText, type MasterFileId } from "../core/masterEdit.js";
 import { resolveMasterEdit } from "../core/gitlab.js";
 import { withGitLabEnv } from "../components/gitlab-env.js";
-import type { MasterEditConfig } from "../core/types.js";
+import type { MasterEditConfig, MemberSourceConfig } from "../core/types.js";
 
 export interface MasterFilePayload {
   /** プロジェクトルートからのパス（data/masters/members.csv） */
@@ -36,6 +36,8 @@ export interface MastersPayload {
   masterEdit: MasterEditConfig;
   /** memberSource.adapter（§20.2。config に無ければ "none"） */
   memberSourceAdapter: string;
+  /** 取り込みで入る列（adapter が none なら空。memberSource.columns に書いた列だけ。氏名は必須なので常に入る。§20.2） */
+  memberImportedColumns: string[];
   /** 最終コミット ID を取れたか（false なら競合の検出ができない） */
   gitAvailable: boolean;
 }
@@ -52,6 +54,13 @@ function readText(path: string): { text: string; encoding: DetectedEncoding | nu
   if (!existsSync(path)) return { text: "", encoding: null, exists: false, crlf: false };
   const d = decodeAuto(readFileSync(path));
   return { text: d.text, encoding: d.encoding, exists: true, crlf: d.text.includes("\r\n") };
+}
+
+/** 取り込みで入る列（members.csv の列名）。取得元の列を書いていない項目は取り込まない（今の値を引き継ぐ） */
+export function memberImportedColumns(source: MemberSourceConfig | undefined): string[] {
+  if (!source || source.adapter === "none") return [];
+  const cols = source.columns ?? {};
+  return MEMBER_IMPORTED_COLUMNS.filter((c) => c === "name" || cols[c as keyof typeof cols] !== undefined);
 }
 
 export function buildMastersPayload(rootDir: string): MastersPayload {
@@ -80,6 +89,7 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
     // 接続先が空なら GitLab CI の値（YOJITSU_GITLAB_*）で補う（§39.1）
     masterEdit: resolveMasterEdit(withGitLabEnv(config.masterEdit, process.env) as MasterEditConfig | undefined),
     memberSourceAdapter: adapter ?? "none",
+    memberImportedColumns: memberImportedColumns(config.memberSource),
     gitAvailable: inRepo && !shallow,
   };
 }
