@@ -10,7 +10,7 @@ import { bindColResizer } from "./col-resize.js";
 import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, memberStatus, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parseTaskCategory, planImpact } from "../core/index.js";
+import { addMonths, createMasterIndex, memberStatus, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -426,7 +426,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if ((fileId === "assignments" && column === "member_id") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
     if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
     if (column === "contract_id" && fileId !== "contracts") return contractText(value);
-    if (column === "total_amount") return Number.isFinite(Number(value)) && value.trim() !== "" ? money(Number(value), "yen") : value;
+    // 金額は CSV の読み込みと同じ読み方（「48,000,000」「４８００００００」「48000000円」も数値。§80）
+    if (column === "total_amount") return Number.isFinite(parseNumberCell(value)) ? money(parseNumberCell(value), "yen") : value;
     if (column === "remaining_rate") return `${value}%`;
     if (column === "target_type") return T.targets.kinds[value] ?? value;
     // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
@@ -871,7 +872,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         sortValue: (g) => {
           const raw = g.shown.record[c.name] ?? "";
           if (raw === "") return null;
-          if (isNum(c)) return Number.isFinite(Number(raw)) ? Number(raw) : null;
+          // 数値の列は CSV の読み込みと同じ読み方で並べる（カンマ区切り・全角・「円」付きも数値。率は ▲ のマイナスも）
+          if (isNum(c)) {
+            const n = c.input === "percent" ? parsePercentCell(raw) : parseNumberCell(raw);
+            return Number.isFinite(n) ? n : null;
+          }
           return String(displayValue(fileId, c.name, raw) ?? "");
         },
       })),

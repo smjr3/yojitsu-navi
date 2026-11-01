@@ -96,6 +96,14 @@ test("金額の修正は過去の月の予算が変わることを知らせる�
   await d.locator('[data-role="submit"]').click();
   await expect(first).toContainText("1円");
   await expect(first).toContainText("変更");
+  // CSV の読み込みと同じく、カンマ区切り・全角・「円」付きの金額も円で表示し、数値として並べる（Codex 指摘）
+  await first.getByRole("button", { name: "修正" }).click();
+  await d.locator("#yn-me-f-total_amount").fill("９,９９９,９９９,９９９円");
+  await d.locator('[data-role="submit"]').click();
+  await d.locator('[data-role="submit"]').click();
+  await expect(first).toContainText("9,999,999,999円");
+  await page.locator('[data-fk="sort:contracts:total_amount"]').click();
+  await expect(rows.first()).toContainText("9,999,999,999円");
 
   // 既にある案件ID で追加すると重複のエラー
   const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
