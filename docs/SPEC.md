@@ -1156,7 +1156,14 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ## 82. npm パッケージ公開の準備（2026-11-01 依頼者）
 「npm パッケージにするための準備」への対応。§43（`@yojitsu-navi/core`）・§44（`yojitsu-navi`）の公開前の抜けを埋める。画面は変えない。
-- **公開先は社内 GitLab の Package Registry だけ**。`npm publish` の直前（`prepublishOnly`）に `scripts/check-publish.mjs` が、配布物が組み立て済みか（`core:build`／`app:build` 忘れで `package.json` と README だけが公開されるのを防ぐ）、`yojitsu-navi` の版がルートと同じか、公開先が公開の npm（registry.npmjs.org）でないかを確かめ、だめなら止める。公開先は `.npmrc` か `--registry` で指定する（`publish-core` は CI が `.npmrc` を書く）。`packages/*/.npmrc` は git に入れない（トークンを含むため）。
+- **公開先は社内 GitLab の Package Registry だけ**（→ §83 で npmjs.com にも公開することに変更）。`npm publish` の直前（`prepublishOnly`）に `scripts/check-publish.mjs` が、配布物が組み立て済みか（`core:build`／`app:build` 忘れで `package.json` と README だけが公開されるのを防ぐ）、`yojitsu-navi` の版がルートと同じか、公開先が公開の npm（registry.npmjs.org）でないかを確かめ、だめなら止める。公開先は `.npmrc` か `--registry` で指定する（`publish-core` は CI が `.npmrc` を書く）。`packages/*/.npmrc` は git に入れない（トークンを含むため）。
 - `package.json` に `license: "UNLICENSED"`（社内専用。npm の警告を消し、再配布を認めない意味）と `keywords` を入れる。`repository`・`author`・`homepage` は個人・会社の情報になるので入れない。
 - template に個人名が入っていたので削除し、`tests/integration/app-package.test.ts` で「英字の名前＋さん」も検査する（`YOJITSU_PRIVATE_WORDS` を渡さなくても見つかる）。
 - GitHub Actions: `main` の E2E 全件が 1 本で 60 分を超えて打ち切られていたので、`e2e-full` ジョブで 3 分割（`--shard`）して並べて動かす。Pull Request は今までどおり縮小版だけ。
+
+## 83. npmjs.com に公開する（2026-11-02 依頼者）
+§82 の質問に「npmjs.com にも公開」、ライセンスは「MIT」と回答。社内 GitLab の Package Registry への公開（§43）も残す。
+- ライセンスは MIT（ルートの `LICENSE`。著作権者は「yojitsu-navi contributors」と書き、個人名・年を書かない）。`core:build`・`app:build` がパッケージにも写す。画面フォントは SIL OFL 1.1 のまま（§46）。
+- 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
+- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
+- `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。

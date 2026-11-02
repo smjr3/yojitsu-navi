@@ -15,7 +15,7 @@ PR を出す前に確認すること:
   - ダミーデータ → [docs/DUMMY_DATA.md](docs/DUMMY_DATA.md)（規模・警告の件数の表）
   - 画面の文言 → [docs/TEXTS.md](docs/TEXTS.md)
   - ビルド・ローダ → [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)
-  - 設定・運用・公開 → [docs/OPERATIONS.md](docs/OPERATIONS.md)、[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)
+  - 設定・運用・公開 → [docs/OPERATIONS.md](docs/OPERATIONS.md)、[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)、npmjs.com への公開 → [docs/RELEASE.md](docs/RELEASE.md)
   - テスト → [tests/e2e/README.md](tests/e2e/README.md)
 - [ ] README・docs に画像（スクリーンショット・バッジ）を載せていない・リポジトリに画像ファイルを置いていない（画面を変えるたびに古くなり、npm パッケージも大きくなるため。画面は `npm run dev` で確かめる）。どうしても必要な画像だけ `tests/unit/docs-links.test.ts` の `IMAGE_ALLOWLIST` に理由つきで足す（今は 0 件）
 - [ ] 文書の中のリンク・ファイル名・コマンドが今も存在する

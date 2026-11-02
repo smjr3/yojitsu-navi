@@ -85,6 +85,8 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 
 計算コア（`src/core/`）は、ほかの社内プロジェクトから使えるよう npm パッケージ `@yojitsu-navi/core` として同じ GitLab の Package Registry に公開できます（タグ `core-v<版>` で CI が公開。[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#計算コアの-npm-パッケージyojitsu-navicore)）。
 
+`@yojitsu-navi/core` と `yojitsu-navi` は npmjs.com にも公開します（MIT ライセンス、[LICENSE](LICENSE)。手順は [docs/RELEASE.md](docs/RELEASE.md)）。
+
 開発元の GitHub Actions（`.github/workflows/ci.yml`。社内へ持ち込むパッケージには入らない）は Pull Request と `main` への push（マージ）で動き、作業ブランチへの push だけでは動きません。E2E は Pull Request では縮小版（`npm run test:e2e:smoke`）、`main` では全件です。また `*.md`（`src/` の画面は除く）・`docs/`・`.gitlab-ci.yml` などテストに関係ないファイルだけの変更では起動しません。文書の変更では代わりに軽い検査（`docs.yml`: リンク切れ・画像を置いていないか）だけが動きます。画像はリポジトリ全体で置きません（拡張子と中身で検査。どうしても必要なものだけ `tests/unit/docs-links.test.ts` の許可リストに理由つきで足す）。
 
 ## ドキュメント
@@ -97,6 +99,7 @@ CI/CD 変数・作業実績 API への切り替え・人事データの取り込
 | [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md) | データローダとキャッシュの決まり（壊れた・古い出力を公開しない） |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | 運用と設定（CI/CD 変数・API・人事取り込み・マスタ編集・実績の種類の追加） |
 | [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) | 社内 GitLab の推奨構成・権限・展開手順・確認チェックリスト |
+| [docs/RELEASE.md](docs/RELEASE.md) | npmjs.com への公開（最初の設定・公開するたびの手順） |
 | [docs/UI_NOTES.md](docs/UI_NOTES.md) | 画面の構成・状態管理・ページの追加方法 |
 | [docs/CORE_NOTES.md](docs/CORE_NOTES.md) | 計算コアの実装メモ |
 | [docs/TEXTS.md](docs/TEXTS.md) | 画面の文言の書き換え方 |

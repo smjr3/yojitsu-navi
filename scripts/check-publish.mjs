@@ -3,8 +3,8 @@
 //   node ../../scripts/check-publish.mjs core|app
 //
 // 1. 配布物が組み立て済みか（core:build / app:build を忘れると package.json と README だけが公開される）
-// 2. 公開先が公開の npm（registry.npmjs.org）でないか。社内のコードと文書を外に出さないため、
-//    公開先は社内 GitLab の Package Registry（.npmrc か --registry で指定）に限る
+// 2. 公開の npm（registry.npmjs.org）へは、GitHub Actions の publish-npm（YOJITSU_PUBLIC_PUBLISH=1）からだけ出す。
+//    手元の PC からうっかり公開しないため。社内 GitLab の Package Registry へは .npmrc か --registry で指定する（SPEC §83）
 // Windows・Linux のどちらでも動く（npm は scripts/lib/npm.mjs で起動する）
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,8 +35,8 @@ const scope = name.startsWith("@") ? name.split("/")[0] : null;
 const get = (key) => String(npm(["config", "get", key], { cwd: PKG, encoding: "utf-8" })).trim();
 const scoped = scope ? get(`${scope}:registry`) : "";
 const registry = scoped && scoped !== "undefined" ? scoped : get("registry");
-if (/registry\.npmjs\.org/.test(registry)) {
-  errors.push(`公開先が公開の npm（${registry}）です。社内 GitLab の Package Registry を .npmrc か --registry で指定してください（docs/DEPLOY_GITLAB.md）`);
+if (/registry\.npmjs\.org/.test(registry) && process.env.YOJITSU_PUBLIC_PUBLISH !== "1") {
+  errors.push(`公開先が公開の npm（${registry}）です。npmjs.com へは GitHub Actions の publish-npm から公開します（docs/RELEASE.md）。社内 GitLab へは .npmrc か --registry で指定してください`);
 }
 
 if (errors.length) {

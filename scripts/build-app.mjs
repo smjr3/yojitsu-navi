@@ -59,6 +59,9 @@ const src = readFileSync(join(ROOT, "scripts/gitlab-setup.ts"), "utf-8");
 const js = ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 writeFileSync(join(DIST, "gitlab-setup.mjs"), `// scripts/gitlab-setup.ts から npm run app:build で作ったもの（直接編集しない）\n${js}`);
 
+// ライセンス（ルートの LICENSE。MIT、SPEC §83）をパッケージにも入れる
+cpSync(join(ROOT, "LICENSE"), join(PKG, "LICENSE"));
+
 // 3. deps/npm-cache: --with-deps のときだけ。package-lock.json の依存を npm のキャッシュの形で入れる
 rmSync(DEPS, { recursive: true, force: true });
 if (flag("with-deps")) {

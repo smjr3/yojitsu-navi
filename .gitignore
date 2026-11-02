@@ -16,3 +16,5 @@ packages/app/deps/
 packages/app/*.tgz
 vendor/npm-cache/_logs/
 packages/*/.npmrc
+packages/core/LICENSE
+packages/app/LICENSE

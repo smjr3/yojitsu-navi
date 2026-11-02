@@ -7,7 +7,13 @@
 
 ## 使い方
 
-社内 GitLab の Package Registry から入れます。使う側のプロジェクトの `.npmrc`:
+npmjs.com から入れます（ライセンスは MIT）。
+
+```sh
+npm install @yojitsu-navi/core
+```
+
+社内 GitLab の Package Registry に公開したもの（`docs/DEPLOY_GITLAB.md`）を使うときは、使う側のプロジェクトの `.npmrc`:
 
 ```ini
 @yojitsu-navi:registry=https://gitlab.example.local/api/v4/groups/<グループID>/-/packages/npm/

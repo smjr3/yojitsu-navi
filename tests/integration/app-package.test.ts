@@ -61,11 +61,11 @@ describe("パッケージの中身", () => {
     for (const k of ["author", "repository", "homepage", "bugs", "publishConfig"]) expect(pkgJson[k]).toBeUndefined();
   });
 
-  it("入るのは bin・lib・dist・template・README だけで、リポジトリ一式が揃っている", () => {
+  it("入るのは bin・lib・dist・template・README・LICENSE だけで、リポジトリ一式が揃っている", () => {
     const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
     const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
-    expect(files.filter((f) => !/^(bin|lib|dist|template)\//.test(f) && f !== "README.md" && f !== "package.json")).toEqual([]);
-    for (const f of ["bin/yojitsu-navi.mjs", "lib/project.mjs", "dist/gitlab-setup.mjs", "template/package.json", "template/package-lock.json", "template/.gitlab-ci.yml", "template/_gitignore", "template/config.json", "template/src/index.md", "template/data/contracts.csv", "template/docs/DEPLOY_GITLAB.md"]) {
+    expect(files.filter((f) => !/^(bin|lib|dist|template)\//.test(f) && !["README.md", "LICENSE", "package.json"].includes(f))).toEqual([]);
+    for (const f of ["LICENSE", "bin/yojitsu-navi.mjs", "lib/project.mjs", "dist/gitlab-setup.mjs", "template/package.json", "template/package-lock.json", "template/.gitlab-ci.yml", "template/_gitignore", "template/config.json", "template/src/index.md", "template/data/contracts.csv", "template/docs/DEPLOY_GITLAB.md"]) {
       expect(files).toContain(f);
     }
     expect(files.some((f) => f.startsWith("template/.github/") || f.includes("node_modules/") || f.startsWith("deps/"))).toBe(false);
