@@ -1,14 +1,18 @@
 /**
- * アプリ全体を社内へ持ち込む npm パッケージ yojitsu-navi（SPEC §44）
+ * npm パッケージ yojitsu-navi（SPEC §44・§84。パッケージはこれ 1 つ）
  * - npm run app:build が通り、パッケージに入るのは bin・lib・dist・template・README だけ（依存なし）
  * - template はリポジトリのファイル一式（.github/ を除く）。個人・会社の情報と接続先を含まない
  * - init: フォルダ・.gitignore・記録（.yojitsu-navi.json）・接続先（config.json と git remote）・最初のコミット
  * - update: data/ と config.json を変えない・消えたファイルを消す・手で変えたファイルを知らせる・ブランチにコミット
+ * - 計算コア（import して使う部分。SPEC §43・§84）: dist/core の公開 API が src/core と同じ・src/core が読むのは src/core と src/i18n だけ・
+ *   別プロジェクトから Node で読み込めて NodeNext で型が解決できる
+ * （同じパッケージを組み立てるので 1 ファイルにまとめる。ファイルを分けると並行で build-app が走り、template を消し合う）
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { npm } from "../../scripts/lib/npm.mjs";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import * as src from "../../src/core/index.js";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -19,6 +23,7 @@ const pkgJson = JSON.parse(readFileSync(join(PKG, "package.json"), "utf-8"));
 const rootJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
 let app: any;
 let work = "";
+let consumer = "";
 const logs: string[] = [];
 const log = (s: string) => logs.push(s);
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
@@ -29,6 +34,12 @@ beforeAll(async () => {
   work = mkdtempSync(join(tmpdir(), "yojitsu-app-"));
   // コミットする人の設定が無い環境（CI）でも動くように
   Object.assign(process.env, { GIT_AUTHOR_NAME: "test", GIT_AUTHOR_EMAIL: "test@example.local", GIT_COMMITTER_NAME: "test", GIT_COMMITTER_EMAIL: "test@example.local" });
+  // 計算コアを import する別プロジェクトを再現する（node_modules/yojitsu-navi → packages/app）
+  consumer = join(work, "consumer");
+  mkdirSync(join(consumer, "node_modules"), { recursive: true });
+  writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "consumer", private: true, type: "module" }));
+  // Windows は管理者権限なしでシンボリックリンクを作れないので、ジャンクションにする
+  symlinkSync(PKG, join(consumer, "node_modules", "yojitsu-navi"), process.platform === "win32" ? "junction" : "dir");
 }, 120_000);
 
 afterAll(() => {
@@ -265,4 +276,71 @@ describe("CI 定義", () => {
     expect(install).toContain('["ci", "--offline", "--cache", "vendor/npm-cache"');
     expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain("vendor/npm-cache/_logs/");
   });
+});
+
+describe("yojitsu-navi の計算コア", () => {
+  it("パッケージは 1 つ（yojitsu-navi）で、import の入口が計算コア", () => {
+    expect(pkgJson.name).toBe("yojitsu-navi");
+    expect(pkgJson.exports["."]).toEqual({ types: "./dist/core/index.d.ts", import: "./dist/core/index.js" });
+    expect(pkgJson.dependencies ?? {}).toEqual({});
+  });
+
+  it("src/core が読むのは src/core と src/i18n（パッケージに入るもの）だけ", () => {
+    const dir = join(ROOT, "src", "core");
+    const bad: string[] = [];
+    for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts"))) {
+      for (const m of readFileSync(join(dir, f), "utf-8").matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']/gm)) {
+        const spec = (m[1] ?? m[2] ?? m[3])!;
+        if (spec.startsWith("./") || spec === "../i18n/index.js") continue;
+        bad.push(`${f}: ${spec}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("dist の公開 API が src/core/index.ts と同じ", async () => {
+    const dist = await import(pathToFileURL(join(PKG, "dist", "core", "index.js")).href);
+    expect(Object.keys(dist).sort()).toEqual(Object.keys(src).sort());
+  });
+
+  it("パッケージに計算コア（dist/core・dist/i18n）が入り、.ts のソースは入らない", () => {
+    const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
+    const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
+    for (const f of ["dist/core/index.js", "dist/core/index.d.ts", "dist/i18n/ja.js"]) expect(files).toContain(f);
+    expect(files.filter((f) => f.startsWith("dist/") && f.endsWith(".ts") && !f.endsWith(".d.ts"))).toEqual([]);
+  });
+
+  it("別プロジェクトから Node で読み込める（ルートと個別のモジュール）", () => {
+    const script = [
+      'import { monthRange, formatYen, buildModel } from "yojitsu-navi";',
+      'import { effectiveSaveMode } from "yojitsu-navi/gitlab";',
+      'console.log(JSON.stringify([monthRange("2026-03", "2026-05"), formatYen(1234567, "millionYen"), typeof buildModel, typeof effectiveSaveMode]));',
+    ].join("\n");
+    writeFileSync(join(consumer, "run.mjs"), script);
+    const r = spawnSync(process.execPath, ["run.mjs"], { cwd: consumer, encoding: "utf-8" });
+    expect(r.stderr).toBe("");
+    expect(JSON.parse(r.stdout)).toEqual([["2026-03", "2026-04", "2026-05"], src.formatYen(1234567, "millionYen"), "function", "function"]);
+  });
+
+  it("別プロジェクトの TypeScript で型が解決できる（型の誤りは誤りとして出る）", () => {
+    const ok = [
+      'import { monthRange, type Contract, type MoneyUnit } from "yojitsu-navi";',
+      'import type { MasterEditConfig } from "yojitsu-navi/types";',
+      'const m: string[] = monthRange("2026-04", "2026-06");',
+      'const u: MoneyUnit = "thousandYen";',
+      "const c: Contract | undefined = undefined;",
+      "const e: MasterEditConfig | undefined = undefined;",
+      "export { m, u, c, e };",
+    ].join("\n");
+    writeFileSync(join(consumer, "ok.ts"), ok);
+    writeFileSync(join(consumer, "ng.ts"), 'import { monthRange } from "yojitsu-navi";\nexport const n: number = monthRange("2026-04", "2026-06");\n');
+    const tsc = (file: string) =>
+      spawnSync(process.execPath, [join(ROOT, "node_modules", "typescript", "bin", "tsc"), "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2022", file], { cwd: consumer, encoding: "utf-8" });
+    const good = tsc("ok.ts");
+    expect(good.stdout + good.stderr).toBe("");
+    expect(good.status).toBe(0);
+    const bad = tsc("ng.ts");
+    expect(bad.status).not.toBe(0);
+    expect(bad.stdout).toMatch(/TS2322/);
+  }, 60_000);
 });

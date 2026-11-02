@@ -674,10 +674,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 再発防止: `tests/e2e/qa-regressions.spec.ts`（上の各項目）、`tests/e2e/screen-text.spec.ts`（下書きの復元を聞く欄も文字数の上限内）、モンキーテストに工数・リソース計画・設定の画面を追加。
 
 ## 43. 計算コアの npm パッケージ（2026-10-29 要望）
+> §84 で別パッケージをやめ、`yojitsu-navi` 1 つに入れた。下は当時の決定（ソースの正・import の制約・検査は今も有効）。
 「npm にしたい」への対応。計算コアをほかの社内プロジェクト（工数・負荷分析のダッシュボードなど）から同じ計算・型で使えるようにする。画面は変えない。
 - パッケージ名 `@yojitsu-navi/core`（スコープは GitLab のグループ名 §39）。置き場は `packages/core/`（`package.json`・`README.md`・`tsconfig.json` だけ）。版はアプリと別に持つ（semver）。
 - **ソースの正は `src/core/`**（コピーを置かない）。画面は今までどおり `src/core/` を直接読む（Framework はルートの外を読めず、パッケージ経由にすると開発中に毎回ビルドが要るため）。
-- `npm run core:build` が `tsc` で `packages/core/dist/core/`（`.js`＋`.d.ts`）を作り、計算コアが使う文言 `src/i18n/index.js`・`index.d.ts`・`ja.js` を `dist/i18n/` に写す。外部の依存なし、ES Modules のみ、`exports` は `.`（`index`）と `./*`（`gitlab`・`types` など個別のモジュール）。`dist/` は git に入れない。
+- 当時の `core:build`（§84 で `npm run app:build` に統合）が `tsc` で `packages/core/dist/core/`（`.js`＋`.d.ts`）を作り、計算コアが使う文言 `src/i18n/index.js`・`index.d.ts`・`ja.js` を `dist/i18n/` に写す。外部の依存なし、ES Modules のみ、`exports` は `.`（`index`）と `./*`（`gitlab`・`types` など個別のモジュール）。`dist/` は git に入れない。
 - 公開先はこのプロジェクトの GitLab Package Registry。タグ `core-v<版>` の push で `.gitlab-ci.yml` の `publish-core` が、タグと版の一致・型チェック・テスト・ビルドのあと `CI_JOB_TOKEN` で `npm publish` する。`core-v*` は Maintainer だけが作れる保護タグにする。手順は `docs/DEPLOY_GITLAB.md`。
 - 再発防止: `tests/integration/core-package.test.ts`（ビルドが通る・`dist` の公開 API が `src/core/index.ts` と同じ・パッケージに入るのは `dist` と README だけ・別プロジェクトから Node で読み込めて NodeNext で型が解決できる）。
 
@@ -686,7 +687,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - パッケージ名 `yojitsu-navi`（コマンド `yojitsu-navi`）、置き場 `packages/app/`。**依存を持たない**（Node の標準モジュールだけ）ので、`npm install -g` や `npx` で入れるときに外部へ接続しない。版はルートの `package.json` と同じ値にする（違うと `npm run app:pack` が止まる）。
 - 中身: `template/` = git が管理するファイル一式（`.github/` を除く。`.gitignore` は `_gitignore` として入れ、`init` で戻す）、`bin/`・`lib/` = コマンド、`dist/gitlab-setup.mjs` = `scripts/gitlab-setup.ts` の型を外した JS（依存なしで §39.2 の確認・適用ができる）。`template`・`dist`・`deps` と `.tgz` は git に入れない。
 - **依存の扱い（決定）**: 2 種類を作る。社内に npm のミラーがあれば依存なし版（約 8 MB。うち画面フォント約 4 MB §46、CI は `NPM_CONFIG_REGISTRY` で取る）。無ければ依存込み版（`--with-deps`、約 64 MB）で、`package-lock.json` の依存を npm のキャッシュとして `deps/npm-cache/` に入れ、`init` が `vendor/npm-cache/` に写す。`.gitlab-ci.yml` はこのフォルダがあれば `npm ci --offline --cache vendor/npm-cache` する。キャッシュには Linux x64 と Windows x64 の両方の OS 別バイナリ（esbuild・rollup）を入れる（Runner・PC がどちらの OS でも `npm ci` できる。§79）。理由: 社内のミラーの有無が未確認で、どちらでも止まらないようにするため。node_modules をそのまま入れる案は OS ごとのバイナリが合わず採らない。
-- **計算コアとの関係（決定）**: `@yojitsu-navi/core`（§43）は別パッケージのまま残す（monorepo の 2 パッケージ）。core はほかのプロジェクトが `import` して使う部品、`yojitsu-navi` は予実ナビのプロジェクトを作る道具で、使う人と更新の仕方が違うため。`yojitsu-navi` の template には `packages/core/` も入るので、社内でも §43 の手順で core を公開できる。
+- **計算コアとの関係（→ §84 で変更。1 つのパッケージにまとめた）**: `@yojitsu-navi/core`（§43）は別パッケージのまま残す（monorepo の 2 パッケージ）。core はほかのプロジェクトが `import` して使う部品、`yojitsu-navi` は予実ナビのプロジェクトを作る道具で、使う人と更新の仕方が違うため。`yojitsu-navi` の template には `packages/core/` も入るので、社内でも §43 の手順で core を公開できる。
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
 - `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルを上書きしたら一覧で知らせる。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。
@@ -1167,3 +1168,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
 - `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
 - `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。
+
+## 84. パッケージを 1 つにする（2026-11-02 依頼者）
+「コアとかアプリとか分けたくない」への対応。§43 の `@yojitsu-navi/core` をやめ、npm パッケージは **`yojitsu-navi` 1 つ**にする（§44 の「計算コアは別パッケージのまま」を変更）。
+- 中身: アプリ一式を作るコマンド（`bin`・`lib`・`template`・`dist/gitlab-setup.mjs`、§44 のまま）と、計算コア（`dist/core`・`dist/i18n`）。`import { buildModel } from "yojitsu-navi"`、個別のモジュールは `"yojitsu-navi/gitlab"` など（`exports` の `.` と `./*`）。型定義同梱、ES Modules のみ、依存なし。
+- 組み立ては `npm run app:build`／`app:pack` だけ（`packages/app/tsconfig.core.json` で `src/core` を `dist/core` に出す）。`core:build`・`core:pack`・`packages/core/` は削除。
+- 版はルートの `package.json` と同じ 1 つ。npmjs.com への公開はタグ `v<版>`（§83 の `core-v`・`app-v` をやめる）。
+- 社内 GitLab の Package Registry へ計算コアを出す `publish-core` ジョブは削除（ほかのプロジェクトは npmjs.com か `.tgz` から入れる）。
+- 再発防止: `tests/integration/app-package.test.ts`（計算コアの公開 API が `src/core` と同じ・`src/core` の import の制約・別プロジェクトから Node と NodeNext の型で使える。パッケージを組み立てるテストは並行で template を消し合うので 1 ファイルにまとめる）。
