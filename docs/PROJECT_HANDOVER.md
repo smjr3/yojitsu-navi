@@ -77,7 +77,7 @@
 - **運用保守以外の稼働**も管理する（§50）。作業名のキーワード（含む／除く、`|` 区切り）で運用保守を抜き出す（#50、§62）。作業種類は data/task-types.csv の group 列から決める（デモ値は仮）。
 - **配色**: 表示モード（自動／ライト／ダーク）。テーマカラーは GitLab の theme_id に連動（src/components/appearance.js）。フォントは BIZ UDPゴシックを同梱（§46）。
 - **文言**: src/i18n/ja.js・rules.txt・guide.txt。使い方はアプリの中にある（§47）。
-- **npm**: `yojitsu-navi`（アプリ一式、§44）、`@yojitsu-navi/core`（計算コア、§43）。
+- **npm**: パッケージは `yojitsu-navi` 1 つ（アプリ一式を作るコマンド＋ import できる計算コア。§44・§84）。npmjs.com に公開（MIT、§83）。
 - **案件の一覧・祝日**（§80）: マスタ編集の「案件」タブ（data/contracts.csv。顧客・案件名・開始月・終了月・金額・担当チーム）と「祝日」タブ（data/holidays.csv）。保存は GitLab のマージ。**案件の顧客名・案件名は他システムから API で取り込む予定なので、直せるのは期間・金額・担当チームだけ**（行の追加・削除・CSV 編集なし）。金額・期間・祝日の変更で過去の月が変わるときは確認を出す。作業種別は作業名から抜き出す運用になるのでタブにしない（依頼者 2026-11-01）。
 - **メンバーの社員番号・氏名は画面で変えない**（§81）: 人事から取り込むため、保存済みの行では読み取り専用。メンバーの CSV 編集もなし。**所属は取り込まず画面で直す**（依頼者 2026-11-01。既定の config.json の memberSource.columns から所属を外した）。
 - **目標値**（§63、data/targets.csv）: 残予算率だけ、月単位、マイナス可。目標がある対象では、進捗の上限・推移線とも目標を優先。変更者・変更日を記録（#76）。
@@ -152,7 +152,7 @@
 ### 2.3 技術構成
 
 - Observable Framework 1.13 の静的サイト。データは data/ の CSV。データローダーとキャッシュの扱いは [DATA_LOADERS.md](DATA_LOADERS.md)。
-- 計算コアは純粋な TypeScript（src/core）。`@yojitsu-navi/core` として npm 化（[CORE_NOTES.md](CORE_NOTES.md)）。
+- 計算コアは純粋な TypeScript（src/core）。npm パッケージ `yojitsu-navi` から import できる（[CORE_NOTES.md](CORE_NOTES.md)）。
 - アプリ一式も npm 化（packages/app）。ひな形は `git ls-files` から .github を除いたもの。
 - テスト: Vitest（ユニット・結合）、Playwright（E2E）。
 - 文書: 仕様 [SPEC.md](SPEC.md)、データ [DATA.md](DATA.md)、ダミーデータ [DUMMY_DATA.md](DUMMY_DATA.md)、運用 [OPERATIONS.md](OPERATIONS.md)、文言 [TEXTS.md](TEXTS.md)、画面のメモ [UI_NOTES.md](UI_NOTES.md)、本番 GitLab [DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)、npmjs.com への公開 [RELEASE.md](RELEASE.md)。

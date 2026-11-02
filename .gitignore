@@ -8,13 +8,10 @@ playwright-report/
 src/.observablehq/cache/
 tests/e2e/report/
 tests/e2e/test-results/
-packages/core/dist/
-packages/core/*.tgz
 packages/app/template/
 packages/app/dist/
 packages/app/deps/
 packages/app/*.tgz
 vendor/npm-cache/_logs/
 packages/*/.npmrc
-packages/core/LICENSE
 packages/app/LICENSE

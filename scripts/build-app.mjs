@@ -1,6 +1,8 @@
-// アプリ全体を社内へ持ち込む npm パッケージ yojitsu-navi として packages/app/ に組み立てる（SPEC §44）
+// npm パッケージ yojitsu-navi を packages/app/ に組み立てる（SPEC §44・§84）。
+// 中身は 2 つ: アプリ一式を作るコマンド（bin・lib・template・dist/gitlab-setup.mjs）と、
+// import して使う計算コア（dist/core・dist/i18n。ソースの正は src/core）。パッケージは 1 つだけ。
 //
-//   npm run app:build                         … packages/app/template・dist を作り直す
+//   npm run app:build                         … packages/app/template・dist（計算コアを含む）を作り直す
 //   npm run app:pack                          … 上に加えて packages/app/yojitsu-navi-<版>.tgz を作る
 //   npm run app:pack -- --with-deps           … 依存（npm のキャッシュ）も入れた yojitsu-navi-<版>-with-deps.tgz を作る
 //                                               （社内に npm のミラーが無いとき。Linux x64 の CI と Windows x64 の PC で使える）
@@ -54,6 +56,10 @@ for (const f of templateFiles(ROOT)) {
 // 2. dist/gitlab-setup.mjs: 依存なしで動くように TypeScript の型だけを外す
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
+// 計算コア: tsc で dist/core（.js と .d.ts）。文言（src/i18n）は計算コアが使うのでそのまま dist/i18n に写す（rules.txt は画面専用なので入れない）
+execFileSync(process.execPath, [join(ROOT, "node_modules/typescript/bin/tsc"), "-p", join(PKG, "tsconfig.core.json")], { stdio: "inherit" });
+mkdirSync(join(DIST, "i18n"), { recursive: true });
+for (const f of ["index.js", "index.d.ts", "ja.js"]) cpSync(join(ROOT, "src/i18n", f), join(DIST, "i18n", f));
 const ts = createRequire(import.meta.url)(join(ROOT, "node_modules/typescript"));
 const src = readFileSync(join(ROOT, "scripts/gitlab-setup.ts"), "utf-8");
 const js = ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;

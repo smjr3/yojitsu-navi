@@ -1,6 +1,6 @@
 # npmjs.com への公開（SPEC §83、手順は docs/RELEASE.md）
 #
-# タグ core-v<版>（@yojitsu-navi/core）か app-v<版>（yojitsu-navi）の push で動く。
+# タグ v<版>（例 v0.1.0）の push で yojitsu-navi を公開する（パッケージは 1 つ。SPEC §84）。
 # 版とタグの一致 → 型チェック・テスト → ビルド → npm publish（scripts/ci/publish-npm.mjs）。
 # 認証は Settings > Secrets and variables > Actions の NPM_TOKEN。
 # provenance（--provenance）は付けない（npm のページにリポジトリのアカウント名が出るため）。
@@ -9,7 +9,7 @@ name: Publish npm
 
 on:
   push:
-    tags: ["core-v*", "app-v*"]
+    tags: ["v*"]
 
 permissions:
   contents: read
