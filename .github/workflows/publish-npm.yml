@@ -1,0 +1,36 @@
+# npmjs.com への公開（SPEC §83、手順は docs/RELEASE.md）
+#
+# タグ core-v<版>（@yojitsu-navi/core）か app-v<版>（yojitsu-navi）の push で動く。
+# 版とタグの一致 → 型チェック・テスト → ビルド → npm publish（scripts/ci/publish-npm.mjs）。
+# 認証は Settings > Secrets and variables > Actions の NPM_TOKEN。
+# provenance（--provenance）は付けない（npm のページにリポジトリのアカウント名が出るため）。
+
+name: Publish npm
+
+on:
+  push:
+    tags: ["core-v*", "app-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: 依存インストール
+        run: npm ci --no-audit --no-fund
+
+      - name: 公開
+        run: node scripts/ci/publish-npm.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

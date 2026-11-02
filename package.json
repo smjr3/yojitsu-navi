@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "保守契約の予実（予算と実績）管理ダッシュボード",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "predev": "node scripts/seed-npm-cache.mjs",

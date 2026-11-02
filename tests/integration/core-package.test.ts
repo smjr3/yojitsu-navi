@@ -58,14 +58,15 @@ describe("@yojitsu-navi/core", () => {
     expect(Object.keys(dist).sort()).toEqual(Object.keys(src).sort());
   });
 
-  it("パッケージに入るのは dist と README だけ", () => {
+  it("パッケージに入るのは dist・README・LICENSE だけ", () => {
     const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
     const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
     expect(files).toContain("dist/core/index.js");
     expect(files).toContain("dist/core/index.d.ts");
     expect(files).toContain("dist/i18n/ja.js");
     expect(files).toContain("README.md");
-    expect(files.filter((f) => !f.startsWith("dist/") && f !== "README.md" && f !== "package.json")).toEqual([]);
+    expect(files).toContain("LICENSE");
+    expect(files.filter((f) => !f.startsWith("dist/") && !["README.md", "LICENSE", "package.json"].includes(f))).toEqual([]);
     expect(files.some((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))).toBe(false);
   });
 

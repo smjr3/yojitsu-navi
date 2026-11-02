@@ -23,6 +23,9 @@ execFileSync(process.execPath, [join(ROOT, "node_modules/typescript/bin/tsc"), "
 mkdirSync(join(DIST, "i18n"), { recursive: true });
 for (const f of ["index.js", "index.d.ts", "ja.js"]) cpSync(join(ROOT, "src/i18n", f), join(DIST, "i18n", f));
 
+// ライセンス（ルートの LICENSE。MIT、SPEC §83）をパッケージにも入れる
+cpSync(join(ROOT, "LICENSE"), join(PKG, "LICENSE"));
+
 if (process.argv.includes("--pack")) {
   const packed = JSON.parse(npm(["pack", "--json", "--pack-destination", PKG], { cwd: PKG, encoding: "utf-8" }))[0];
   // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）

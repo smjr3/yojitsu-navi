@@ -45,7 +45,8 @@ async function describeHandle(h: ElementHandle): Promise<string> {
 for (const path of PAGES) {
   for (const seed of SEEDS) {
     test(`monkey ${path} seed=${seed}`, async ({ page, baseURL }, testInfo) => {
-      test.setTimeout(240_000);
+      // /plan は表示期間を最大（数年分）に広げると表のセルが数千になり、1 操作が重くなる（ローカル 3 分、CI 4 分超）。ほかは 240 秒
+      test.setTimeout(path === "/plan" ? 420_000 : 240_000);
       const origin = new URL(baseURL!).origin;
       const errors = watchErrors(page, { ignoreAborted: true });
       const random = rng(seed * 7919 + path.length);

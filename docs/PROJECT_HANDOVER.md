@@ -155,7 +155,7 @@
 - 計算コアは純粋な TypeScript（src/core）。`@yojitsu-navi/core` として npm 化（[CORE_NOTES.md](CORE_NOTES.md)）。
 - アプリ一式も npm 化（packages/app）。ひな形は `git ls-files` から .github を除いたもの。
 - テスト: Vitest（ユニット・結合）、Playwright（E2E）。
-- 文書: 仕様 [SPEC.md](SPEC.md)、データ [DATA.md](DATA.md)、ダミーデータ [DUMMY_DATA.md](DUMMY_DATA.md)、運用 [OPERATIONS.md](OPERATIONS.md)、文言 [TEXTS.md](TEXTS.md)、画面のメモ [UI_NOTES.md](UI_NOTES.md)、本番 GitLab [DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)。
+- 文書: 仕様 [SPEC.md](SPEC.md)、データ [DATA.md](DATA.md)、ダミーデータ [DUMMY_DATA.md](DUMMY_DATA.md)、運用 [OPERATIONS.md](OPERATIONS.md)、文言 [TEXTS.md](TEXTS.md)、画面のメモ [UI_NOTES.md](UI_NOTES.md)、本番 GitLab [DEPLOY_GITLAB.md](DEPLOY_GITLAB.md)、npmjs.com への公開 [RELEASE.md](RELEASE.md)。
 
 ### 2.4 開発方針（CONTRIBUTING とメモリ）
 
@@ -319,6 +319,7 @@ PR #1〜#80 はすべて main にマージ済み（#17 は #19 経由。#43・#6
 ### 6.1 現在の状況（2026-10-31 時点）
 
 - main は PR #80 まで。open PR なし。試用版は #80 まで反映済み。
+- npm パッケージは npmjs.com にも公開する（MIT。SPEC §83、手順 [RELEASE.md](RELEASE.md)）。npm のアカウント・Organization・`NPM_TOKEN` の設定は依頼者が画面で行う。
 - CI（GitHub Actions）は 11-01 に復活（PR のスモークが通った）。main の全 E2E は 1 本で 60 分を超えて打ち切られていたので 3 分割にした（SPEC §82）。
 - 試用版コメントの見張りは継続中。対応中の件はない（#79 まで反映済み）。
 
