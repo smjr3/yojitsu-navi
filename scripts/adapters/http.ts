@@ -15,6 +15,9 @@
  *   filters      （任意）取り込まない行の条件 [{ column, equals | notEquals | in }]
  *   encoding     （任意）CSV 応答の文字コード auto / utf-8 / shift_jis
  *   refetchMonths 直近何か月を取り直すか（fetch-worklogs.ts が使う）
+ *   members      （任意）取得対象の社員番号を渡す（§87）。{ param, style: join|repeat, separator, chunkSize }
+ *                社員番号はメンバーマスタから作る（設定には書かない）。chunkSize 人（既定 50）ずつ分けて取得し、
+ *                1 回でも失敗すれば全体を失敗にする（一部の人だけの結果で月ファイルを書き換えない）
  *
  * 環境変数:
  *   WORKLOG_API_TOKEN  認証トークン。ログ・例外メッセージには絶対に出さない
@@ -24,8 +27,10 @@
  * 実処理は ./http-source.ts（メンバー取り込みと共有）。
  */
 import type { ColumnSpec, DateFormat, Worklog, WorklogSourceConfig } from "../../src/core/types.js";
+import { chunk } from "../lib/fetch-targets.js";
 import {
   assertColumns,
+  checkMemberTarget,
   fetchRawRows,
   passesFilters,
   parseDate,
@@ -47,6 +52,9 @@ export interface MapRowOptions {
   dateFormat?: DateFormat | undefined;
   hoursUnit?: "hours" | "minutes" | "seconds" | undefined;
 }
+
+/** members.chunkSize の既定（1 リクエストにまとめる人数） */
+export const DEFAULT_CHUNK_SIZE = 50;
 
 const FIELDS: Array<keyof Worklog> = ["date", "memberId", "memberName", "customerName", "projectName", "task", "hours"];
 
@@ -80,14 +88,33 @@ export function mapRow(row: RawRow, columns: Record<keyof Worklog, ColumnSpec>, 
 export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
   return {
     name: "http",
-    async fetch({ from, to, config, env, log, report }: FetchOptions): Promise<Worklog[]> {
+    async fetch({ from, to, config, env, log, report, memberIds }: FetchOptions): Promise<Worklog[]> {
       const logFn = log ?? ((m: string) => console.error(m));
       const http = config.worklogSource.http;
       if (!http.url) throw new Error("config.worklogSource.http.url が設定されていません");
       const token = env.WORKLOG_API_TOKEN ?? "";
       if (token === "") throw new Error("環境変数 WORKLOG_API_TOKEN が設定されていません");
 
-      const raw = await fetchRawRows(http, { from, to, token, log: logFn, deps });
+      let raw: RawRow[];
+      if (http.members) {
+        // 取得対象の社員番号を chunkSize 人ずつ渡す（§87）。どれか 1 回でも失敗したら例外 = 何も書かない
+        checkMemberTarget(http, http.members);
+        const ids = memberIds ?? [];
+        if (ids.length === 0) throw new Error("取得対象の社員番号がありません（メンバーマスタに期間内に在籍している人がいません）");
+        const size = http.members.chunkSize ?? DEFAULT_CHUNK_SIZE;
+        const groups = chunk(ids, size);
+        logFn(`[http] 取得対象 ${ids.length} 人を ${size} 人ずつ ${groups.length} 回に分けて取得`);
+        raw = [];
+        for (const [i, g] of groups.entries()) {
+          try {
+            raw.push(...(await fetchRawRows(http, { from, to, token, log: logFn, deps, members: { config: http.members, ids: g } })));
+          } catch (e) {
+            throw new Error(`${i + 1}/${groups.length} 回目（${g[0]}〜${g[g.length - 1]}）で失敗: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+      } else {
+        raw = await fetchRawRows(http, { from, to, token, log: logFn, deps });
+      }
 
       const reqs: ColumnRequirement[] = FIELDS.map((field) => ({ field, spec: http.columns[field] }));
       assertColumns(raw[0], reqs, http.filters);

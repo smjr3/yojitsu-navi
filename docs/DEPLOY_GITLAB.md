@@ -226,3 +226,6 @@ git push -u origin update-<新しい版>
 
 取り込み結果は `data/<種類>-<日時>` ブランチの MR になり、パイプラインが成功すると自動でマージされます（`scripts/ci/fetch-data.mjs` → `push-data-mr.mjs`。`main` は直接プッシュ不可のため）。
 マージで `main` のパイプラインが走り、Pages まで更新されます。検証で失敗した MR は開いたまま残るので、ログの理由を直すか、MR を閉じてください（翌日の取り込みは最新の `main` から作り直します）。
+取得そのものが途中で失敗したときは CSV を書き換えず、失敗の記録（`data/worklogs/_meta.json` などの `lastFailure`）だけを MR にしてジョブを失敗で終えます。データ確認画面に警告で出て、次に成功すると消えます（SPEC §87）。
+
+過去の期間を取り直すとき（退職・異動した人の実績を含む）は、Build > Pipelines > Run pipeline で対象 `main`、変数 `FETCH_FROM`・`FETCH_TO`（`YYYY-MM`）を入れて実行します。特定の人だけなら `FETCH_MEMBERS`（社員番号をカンマ区切り）も入れます。手順は [OPERATIONS.md](OPERATIONS.md)「取得する人をメンバーマスタから決める」。

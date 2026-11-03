@@ -17,6 +17,7 @@
 #   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
 #   MEMBER_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-members（所属・役職の取り込み）も動く。既定は無効
 #   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
+#   FETCH_FROM / FETCH_TO / FETCH_MEMBERS（任意。Run pipeline で入れる。CI/CD 変数には登録しない）過去の作業実績の取り直し（§87）
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
@@ -171,10 +172,13 @@ fetch-worklogs:
   resource_group: data-writeback
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
+    # 過去の取り直し（§87）: Run pipeline で FETCH_FROM / FETCH_TO（YYYY-MM）、必要なら FETCH_MEMBERS（社員番号）を入れて実行
+    - if: $CI_PIPELINE_SOURCE == "web" && $FETCH_FROM
   variables:
     GIT_STRATEGY: clone
   script:
-    # 直近 refetchMonths か月を取り直して data/worklogs/ を更新 → 検証 →
+    # 直近 refetchMonths か月（手動実行なら FETCH_FROM〜FETCH_TO）を取り直して data/worklogs/ を更新 → 検証 →
+    # 取得に失敗したら CSV は書き換えず、失敗の記録（_meta.json）だけを MR にしてジョブを失敗にする（データ確認画面に出る）
     # main は直接プッシュ不可（保護ブランチ）なので、data/worklogs-<日時> の MR を作って自動マージする（scripts/ci/push-data-mr.mjs）
     - node scripts/ci/fetch-data.mjs worklogs
 

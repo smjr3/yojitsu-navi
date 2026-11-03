@@ -21,6 +21,11 @@ export interface FetchOptions {
   rootDir?: string;
   /** 進捗ログの出力先（既定: console.error）。トークン等の秘密は絶対に出さないこと */
   log?: (message: string) => void;
+  /**
+   * 取得対象の社員番号（§87）。fetch-worklogs.ts がメンバーマスタ（または --members）から作って渡す。
+   * http アダプタは worklogSource.http.members の設定があるときだけ使う（chunkSize 人ずつ取得）
+   */
+  memberIds?: readonly string[];
   /** 列の対応表などの診断情報の受け取り先（--dry-run 用。http アダプタだけが呼ぶ） */
   report?: (r: FetchReport) => void;
 }
