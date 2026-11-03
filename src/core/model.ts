@@ -10,6 +10,7 @@ import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
+import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
@@ -58,6 +59,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   warnings.push(...unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier));
   const outsideMapping = outsideLogs.length > 0 ? mapWorklogs(outsideLogs, dataset.mappings, contracts, excludedContracts).mappings : [];
   const worklogIndex = indexWorklogs(mapping.assigned);
+  // 作業コードの点検（§92）: 未登録・作業名の変更。見つけるだけで案件は決めない
+  const taskCodeFindings = findTaskCodeIssues(dataset.worklogs, dataset.mappings, config.taskCodeCheck);
+  warnings.push(...taskCodeWarnings(taskCodeFindings));
 
   // 原価プロバイダ（§7）
   const providers: CostProvider[] = [createLaborProvider(masters, worklogIndex, "labor"), ...(options.extraProviders?.(masters) ?? [])];
@@ -169,6 +173,8 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     warnings,
     unmapped: mapping.unmapped,
     keywordUnmatched: keywordUnmatchedGroups(outsideLogs, classifier),
+    unregisteredTaskCodes: taskCodeFindings.unregistered,
+    taskCodeChanges: taskCodeFindings.changes,
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {

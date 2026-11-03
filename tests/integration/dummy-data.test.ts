@@ -76,6 +76,11 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
       TASK_UNCLASSIFIED: 1,
       WORKLOG_AFTER_LEFT: 1,
       ASSIGNMENT_AFTER_LEFT: 1,
+      TASK_CODE_UNREGISTERED: 1,
+      TASK_CODE_RENAMED: 1,
+      TASK_CODE_MATCH_CHANGED: 1,
+      // 将来開始の C180 が同じ名前の C150 と 2026-12〜2027-03 で重なる（§92。実績が出る前に分かる）
+      MAPPING_PERIOD_OVERLAP: 1,
     });
     // 分類表に無い作業種別は「勉強会」だけ（わざと載せていない）
     expect(issues.find((i) => i.code === "TASK_UNCLASSIFIED")?.ref?.task).toBe("勉強会");
@@ -100,7 +105,7 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
   });
 
   it("Model の警告も同じ内訳。除外時間は顧客名が空の契約内の行の合計と一致（顧客名が空の契約外 = 会社業務は除外しない §50.2）", () => {
-    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 4, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 * 3, TASK_UNCLASSIFIED: 1 });
+    expect(countBy(model.warnings.map((w) => w.code))).toEqual({ EXCLUDED_NO_CUSTOMER: 1, UNMAPPED_WORKLOG: 4, UNKNOWN_MEMBER: 1, RATE_MISSING: 19 * 3, TASK_UNCLASSIFIED: 1, TASK_CODE_UNREGISTERED: 1, TASK_CODE_RENAMED: 1, TASK_CODE_MATCH_CHANGED: 1 });
     const noCustomer = ds.worklogs.filter((w) => w.customerName.trim() === "" && w.hours > 0 && isValidISODate(w.date));
     const expected = noCustomer.filter((w) => w.task !== "社内会議").reduce((a, w) => a + w.hours, 0);
     expect(expected).toBe(1.5); // 基本シナリオの固定行 1 件だけ
@@ -225,19 +230,35 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
   });
 });
 
-describe("C124: 作業名の識別子「【保守】」で運用保守を抜き出す（§62）", () => {
-  it("案件の実績は【保守】の付いた作業だけ。付かない作業は運用保守以外として一覧に出る", () => {
+describe("C124: 作業名の識別子「_保守対応」で運用保守を抜き出す（§62）", () => {
+  it("案件の実績は_保守対応の付いた作業と、作業コードで登録した作業だけ。付かない作業は運用保守以外として一覧に出る", () => {
     const ids = new Set(byId("C124").months.flatMap((m) => m.worklogs.map((w) => w.task)));
     expect(ids.size).toBeGreaterThan(0);
-    expect([...ids].every((t) => t.startsWith("【保守】"))).toBe(true);
+    // 作業コードで登録済みの作業は、作業名が変わってキーワードに合わなくなっても運用保守のまま（§92）
+    expect([...ids].filter((t) => !t.endsWith("_保守対応"))).toEqual(["調査（次期更改の検討）"]);
     const unmatched = model.keywordUnmatched;
     expect(unmatched.length).toBeGreaterThan(0);
     expect(unmatched.every((g) => g.projectName.includes("国際送金") || g.projectName.includes("外為"))).toBe(true);
-    expect(unmatched.some((g) => g.task.startsWith("【保守】"))).toBe(false);
+    expect(unmatched.some((g) => g.task.includes("_保守対応"))).toBe(false);
   });
-  it("作業種別の内訳は「含む」の行の表記にまとまる（【保守】付きの種別が別に出ない）", () => {
+  it("作業種別の内訳は「含む」の行の表記にまとまる（_保守対応付きの種別が別に出ない）", () => {
     const tasks = new Set(model.workRows.filter((r) => r.contractId === "C124" && r.category === "contract").map((r) => r.task));
-    expect([...tasks].some((t) => t.startsWith("【保守】"))).toBe(false);
+    expect([...tasks].some((t) => t.endsWith("_保守対応") && !t.startsWith("新規監視項目") && !t.includes("夜間含む"))).toBe(false);
+  });
+});
+
+describe("C124: 作業コードの点検（§92）", () => {
+  it("未登録の作業コード 1 件（SK-900）、作業名の変更 2 件（うち 1 件はキーワードに合わなくなった）", () => {
+    expect(model.unregisteredTaskCodes).toMatchObject([{ taskCode: "SK-900", task: "新規監視項目の設定_保守対応", status: "none", hours: 1.5, count: 1 }]);
+    expect(model.taskCodeChanges?.map((c) => [c.taskCode, c.after, c.matchBefore, c.matchAfter])).toEqual([
+      ["SK-004", "調査（次期更改の検討）", true, false],
+      ["SK-005", "監視・運用（夜間含む）_保守対応", true, true],
+    ]);
+  });
+  it("作業コードの行は契約の期間つき。名前の行と同じ契約に紐付く（金額は変わらない）", () => {
+    const codeRules = ds.mappings.filter((m) => m.taskCode);
+    expect(codeRules.length).toBe(11);
+    expect(codeRules.every((m) => m.contractId === "C124" && m.startMonth === byId("C124").contract.startMonth && m.endMonth === byId("C124").contract.endMonth)).toBe(true);
   });
 });
 

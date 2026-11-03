@@ -42,6 +42,12 @@
       "title": "title"
     }
   },
+  "taskCodeCheck": {
+    "include": ["_保守対応"],
+    "exclude": [],
+    "onUnregistered": "warn",
+    "onChange": "warn"
+  },
   "costTypes": [
     { "id": "labor", "label": "工数" }
   ],

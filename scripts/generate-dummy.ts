@@ -83,6 +83,11 @@ export interface MappingRow {
   contract_id: string;
   /** 作業名に含むキーワード（§62.1。| 区切り。省略可） */
   task_include?: string;
+  /** 作業コード（§92。省略可。指定した行は名前でなくコードで紐付ける） */
+  task_code?: string;
+  /** 行の期間（§92。省略可） */
+  start_month?: string;
+  end_month?: string;
 }
 
 export interface AssignmentRow {
@@ -460,7 +465,7 @@ const TASKS: ReadonlyArray<readonly [string, number]> = [
  * 作業種別の分類表（SPEC §30.1）。「勉強会」はわざと載せない（未分類の警告 TASK_UNCLASSIFIED の例）。
  * 契約外の行の group は計画の種別（§50.1）。「社内会議」（顧客名が空）は契約外の会社業務として数える（§50.2）。
  * 「構築」は作業実績の無い種別の例（計画だけ入れられる）。
- * match「含む」の行は作業名に含めば該当（§62.2。作業名に識別子の付いた「【保守】定例」なども「定例」にまとまる）。
+ * match「含む」の行は作業名に含めば該当（§62.2。作業名に識別子の付いた「定例_保守対応」なども「定例」にまとまる）。
  */
 const TASK_TYPES: Array<{ task: string; category: string; group?: string; match?: string; note: string }> = [
   { task: "定例", category: "契約内", match: "含む", note: "" },
@@ -792,7 +797,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   mkdirSync(join(out, "worklogs"), { recursive: true });
 
   writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
-  writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include"]));
+  writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include", "task_code", "start_month", "end_month"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
   writeFileSync(join(out, "targets.csv"), csv(withTargetStamps(g.targets, opts.asOf), ["target_type", "target_id", "end_month", "remaining_rate", "start_month", "note", "updated_by", "updated_at"]));

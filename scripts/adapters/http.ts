@@ -7,7 +7,7 @@
  *   authHeader   トークンを載せるヘッダ名（既定 Authorization）
  *   authScheme   （任意）ヘッダ値の接頭辞。既定は Authorization のとき "Bearer"、それ以外は無し
  *   dataPath     （任意）JSON 応答で配列が入っているキー。"data.items" のようにドット区切り
- *   columns      予実ナビの項目名 → 取得元の列名。"member.id" のように入れ子、["a","b"] で複数候補
+ *   columns      予実ナビの項目名 → 取得元の列名。"member.id" のように入れ子、["a","b"] で複数候補。taskCode（作業コード。§92）は省略可
  *   dateFormat   （任意）YYYY-MM-DD / YYYY/MM/DD / YYYYMMDD / ISO8601 / epochMillis。既定は自動判定
  *   hoursUnit    （任意）hours（既定）/ minutes / seconds
  *   pagination   （任意）none / page / offset / link / cursor（src/core/types.ts の PaginationConfig）。
@@ -27,7 +27,7 @@
  * 5xx とネットワークエラーは指数バックオフで最大 3 回再試行する。4xx は再試行しない。
  * 実処理は ./http-source.ts（メンバー取り込みと共有）。
  */
-import type { ColumnSpec, DateFormat, Worklog, WorklogSourceConfig } from "../../src/core/types.js";
+import type { DateFormat, Worklog, WorklogColumns, WorklogSourceConfig } from "../../src/core/types.js";
 import { chunk } from "../lib/fetch-targets.js";
 import {
   assertColumns,
@@ -57,10 +57,10 @@ export interface MapRowOptions {
 /** members.chunkSize の既定（1 リクエストにまとめる人数） */
 export const DEFAULT_CHUNK_SIZE = 50;
 
-const FIELDS: Array<keyof Worklog> = ["date", "memberId", "memberName", "customerName", "projectName", "task", "hours"];
+const FIELDS: Array<Exclude<keyof Worklog, "taskCode">> = ["date", "memberId", "memberName", "customerName", "projectName", "task", "hours"];
 
 /** 取得元の1行（列名 → 値）を Worklog にする */
-export function mapRow(row: RawRow, columns: Record<keyof Worklog, ColumnSpec>, opts: MapRowOptions = {}): Worklog {
+export function mapRow(row: RawRow, columns: WorklogColumns, opts: MapRowOptions = {}): Worklog {
   const str = (k: keyof Worklog): string => {
     const v = pickValue(row, columns[k]);
     return v === null || v === undefined ? "" : String(v);
@@ -75,6 +75,7 @@ export function mapRow(row: RawRow, columns: Record<keyof Worklog, ColumnSpec>, 
   // 時間が空のときは従来どおり 0 として扱う（validate や集計側で気づける）
   const hoursRaw = pickValue(row, columns.hours);
   const hours = hoursRaw === undefined ? 0 : toHours(hoursRaw, opts.hoursUnit);
+  const code = columns.taskCode !== undefined ? str("taskCode").trim() : "";
   return {
     date,
     memberId: str("memberId").trim(),
@@ -83,6 +84,8 @@ export function mapRow(row: RawRow, columns: Record<keyof Worklog, ColumnSpec>, 
     projectName: str("projectName"),
     task: str("task"),
     hours: Number.isFinite(hours) ? hours : NaN,
+    // 作業コード（§92）は columns.taskCode を設定したときだけ
+    ...(code !== "" ? { taskCode: code } : {}),
   };
 }
 
@@ -96,7 +99,7 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
       const token = env.WORKLOG_API_TOKEN ?? "";
       if (token === "") throw new Error("環境変数 WORKLOG_API_TOKEN が設定されていません");
 
-      const reqs: ColumnRequirement[] = FIELDS.map((field) => ({ field, spec: http.columns[field] }));
+      const reqs: ColumnRequirement[] = FIELDS.map((field): ColumnRequirement => ({ field, spec: http.columns[field] }));
       let raw: RawRow[];
       if (http.members) {
         // 取得対象の社員番号を chunkSize 人ずつ渡す（§87）。どれか 1 回でも失敗したら例外 = 何も書かない
@@ -122,6 +125,13 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
       }
 
       assertColumns(raw[0], reqs, http.filters);
+      // 作業コード（§92）は設定したときだけ。値の無い行は列ごと省かれることがあるので、どれか 1 行にあればよい（列名の打ち間違いだけ止める）
+      if (http.columns.taskCode !== undefined) {
+        const codeReq: ColumnRequirement = { field: "taskCode", spec: http.columns.taskCode };
+        const found = raw.find((r) => resolveMapping(r, [codeReq])[0]?.resolved != null);
+        if (raw.length > 0 && !found) assertColumns(raw[0], [codeReq]);
+        reqs.push(codeReq);
+      }
       const rows = raw.filter((r) => passesFilters(r, http.filters));
       if (report) {
         report({

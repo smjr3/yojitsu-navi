@@ -99,3 +99,9 @@ export function splitKeywords(cell: string | null | undefined): string[] {
 export function includesAnyKeyword(normalizedTask: string, keywords: readonly string[]): boolean {
   return keywords.some((k) => normalizedTask.includes(normalizeKeyword(k)));
 }
+
+/** 作業コードの照合用の正規化（§92）。NFKC・前後の空白を除く・英字は大文字。中の記号・空白は残す */
+export function normalizeCode(raw: string | null | undefined): string {
+  if (raw === null || raw === undefined) return "";
+  return String(raw).normalize("NFKC").trim().toUpperCase();
+}

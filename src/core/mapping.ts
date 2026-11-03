@@ -1,8 +1,8 @@
 /**
- * 作業実績と契約の紐付け（SPEC §4.2）・作業名のキーワードによる振り分け（§62）
+ * 作業実績と契約の紐付け（SPEC §4.2・§86）・作業名のキーワードによる振り分け（§62）・作業コードと行の期間（§92）
  */
 import { isValidISODate, monthOfDate } from "./calendar.js";
-import { includesAnyKeyword, normalizeKeyword, normalizeName } from "./normalize.js";
+import { includesAnyKeyword, normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import type { Contract, ISODate, MappingRule, UnmappedWorklogGroup, Warning, Worklog, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -29,15 +29,22 @@ export interface MappingResult {
   ignoredCount: number;
 }
 
+interface RuleEntry {
+  /** 存在する契約。存在しない・除外中の契約を指す行は null */
+  contract: Contract | null;
+  excluded: boolean;
+  cond: KeywordCond;
+  /** 行の期間（§92。省略 = 期限なし） */
+  startMonth?: YearMonth;
+  endMonth?: YearMonth;
+}
+
 interface RuleTarget {
-  /** 存在する契約（契約ID昇順） */
-  contracts: Contract[];
-  /** ルールのキーワード条件（ファイルの順）。存在しない・除外中の契約を指す行は contract が null */
-  entries: Array<{ contract: Contract | null; excluded: boolean; cond: KeywordCond }>;
-  /** 存在しない契約IDを指すルールがあった */
-  hasUnknownContract: boolean;
-  /** 不備で除外中の契約を指すルールがあった（「存在しない」と区別する） */
-  hasExcludedContract: boolean;
+  /** 探し方のキー（曖昧さの警告をまとめるため） */
+  key: string;
+  /** 作業コードの行か（§92。キーワードは使わない） */
+  byCode: boolean;
+  entries: RuleEntry[];
 }
 
 function ruleKey(customer: string, project: string): string {
@@ -63,24 +70,40 @@ function passes(c: KeywordCond, task: string): boolean {
   return c.include.length === 0 || includesAnyKeyword(task, c.include);
 }
 
+/** 作業コードの行か（§92） */
+export function isCodeRule(rule: Pick<MappingRule, "taskCode">): boolean {
+  return normalizeCode(rule.taskCode) !== "";
+}
+
+/** 行の期間が月を含むか（§92。空は期限なし） */
+export function ruleCoversMonth(rule: { startMonth?: YearMonth | undefined; endMonth?: YearMonth | undefined }, month: YearMonth): boolean {
+  return (!rule.startMonth || rule.startMonth <= month) && (!rule.endMonth || month <= rule.endMonth);
+}
+
 /**
  * 作業名のキーワードによる振り分け（§62.1）。
  * - hit: その (顧客, 案件) のルールにキーワードがあり、どれかの条件に合う → 運用保守
  * - miss: キーワードがあるが、どの条件にも合わない → 運用保守以外
  * - none: キーワードの無いルール（または顧客名なし・ルールなし）→ 作業種別の分類表で決める
  * ルールの探し方は mapWorklogs と同じ（(顧客, 案件) → 無ければ (顧客, "")）。
+ * 作業コードの行（§92）がある作業は、人が案件に割り当てたものなので常に hit
  */
 export type KeywordMatch = "hit" | "miss" | "none";
 
 export interface KeywordRouter {
   /** キーワードのあるルールが 1 行以上ある */
   readonly enabled: boolean;
-  match(w: Pick<Worklog, "customerName" | "projectName" | "task">): KeywordMatch;
+  match(w: Pick<Worklog, "customerName" | "projectName" | "task" | "taskCode">): KeywordMatch;
 }
 
 export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRouter {
   const index = new Map<string, KeywordCond[]>();
+  const codes = new Set<string>();
   for (const rule of rules) {
+    if (isCodeRule(rule)) {
+      codes.add(normalizeCode(rule.taskCode));
+      continue;
+    }
     const key = ruleKey(normalizeName(rule.worklogCustomerName), normalizeName(rule.worklogProjectName));
     const list = index.get(key);
     if (list) list.push(condOf(rule));
@@ -91,6 +114,7 @@ export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRoute
     enabled,
     match(w) {
       if (!enabled) return "none";
+      if (codes.size > 0 && codes.has(normalizeCode(w.taskCode))) return "hit";
       const customer = normalizeName(w.customerName);
       if (customer === "") return "none";
       const conds = index.get(ruleKey(customer, normalizeName(w.projectName))) ?? index.get(ruleKey(customer, ""));
@@ -101,65 +125,83 @@ export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRoute
   };
 }
 
-/** 正規化キー → ルールの指す契約一覧。存在しない契約IDには MAPPING_UNKNOWN_CONTRACT 警告 */
+interface RuleIndex {
+  byName: Map<string, RuleTarget>;
+  byCode: Map<string, RuleTarget>;
+}
+
+/** 名前のキー・作業コード → ルールの行。存在しない契約IDには MAPPING_UNKNOWN_CONTRACT 警告 */
 function buildRuleIndex(
   rules: readonly MappingRule[],
   contractsById: ReadonlyMap<string, Contract>,
   warnings: Warning[],
   excludedContracts: ReadonlyMap<string, string>,
-): Map<string, RuleTarget> {
-  const index = new Map<string, RuleTarget>();
+): RuleIndex {
+  const byName = new Map<string, RuleTarget>();
+  const byCode = new Map<string, RuleTarget>();
   rules.forEach((rule, i) => {
-    const key = ruleKey(normalizeName(rule.worklogCustomerName), normalizeName(rule.worklogProjectName));
-    let target = index.get(key);
+    const code = normalizeCode(rule.taskCode);
+    const map = code !== "" ? byCode : byName;
+    const key = code !== "" ? code : ruleKey(normalizeName(rule.worklogCustomerName), normalizeName(rule.worklogProjectName));
+    let target = map.get(key);
     if (!target) {
-      target = { contracts: [], entries: [], hasUnknownContract: false, hasExcludedContract: false };
-      index.set(key, target);
+      target = { key: code !== "" ? `code\u0000${key}` : `name\u0000${key}`, byCode: code !== "", entries: [] };
+      map.set(key, target);
     }
-    const contract = contractsById.get(rule.contractId);
+    const contract = contractsById.get(rule.contractId) ?? null;
     const excludedReason = excludedContracts.get(rule.contractId);
-    if (!contract) target.entries.push({ contract: null, excluded: excludedReason !== undefined, cond: condOf(rule) });
+    const entry: RuleEntry = { contract, excluded: !contract && excludedReason !== undefined, cond: condOf(rule) };
+    if (rule.startMonth) entry.startMonth = rule.startMonth;
+    if (rule.endMonth) entry.endMonth = rule.endMonth;
+    target.entries.push(entry);
+    const where = code !== "" ? { customer: rule.worklogCustomerName, project: fmt(T.calcWarnings.taskCodeLabel, { code: rule.taskCode ?? "" }) } : { customer: rule.worklogCustomerName, project: rule.worklogProjectName };
     if (!contract && excludedReason !== undefined) {
-      target.hasExcludedContract = true;
       warnings.push({
         code: "MAPPING_EXCLUDED_CONTRACT",
-        message: fmt(T.calcWarnings.mappingExcludedContract, { row: i + 2, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId, reason: excludedReason }),
+        message: fmt(T.calcWarnings.mappingExcludedContract, { row: i + 2, customer: where.customer, project: where.project, contractId: rule.contractId, reason: excludedReason }),
         ref: { row: i + 2, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
       });
-      return;
-    }
-    if (!contract) {
-      target.hasUnknownContract = true;
+    } else if (!contract) {
       warnings.push({
         code: "MAPPING_UNKNOWN_CONTRACT",
-        message: fmt(T.calcWarnings.mappingUnknownContract, { row: i + 2, customer: rule.worklogCustomerName, project: rule.worklogProjectName, contractId: rule.contractId }),
+        message: fmt(T.calcWarnings.mappingUnknownContract, { row: i + 2, customer: where.customer, project: where.project, contractId: rule.contractId }),
         ref: { row: i + 2, customerName: rule.worklogCustomerName, projectName: rule.worklogProjectName, contractId: rule.contractId },
       });
-      return;
     }
-    target.entries.push({ contract, excluded: false, cond: condOf(rule) });
-    if (!target.contracts.some((c) => c.contractId === contract.contractId)) target.contracts.push(contract);
   });
-  for (const target of index.values()) {
-    target.contracts.sort((a, b) => (a.contractId < b.contractId ? -1 : a.contractId > b.contractId ? 1 : 0));
-  }
-  return index;
+  return { byName, byCode };
+}
+
+/** 契約ID昇順の比較 */
+function byContractId(a: Contract, b: Contract): number {
+  return a.contractId < b.contractId ? -1 : a.contractId > b.contractId ? 1 : 0;
 }
 
 /**
- * キーワードの条件に合うルールの契約（契約ID昇順）。キーワードが無い・どれにも合わないときは全契約
- * （合わない作業は運用保守以外として関連契約を探すときだけここに来る。§62.1）。
+ * 行の候補から契約を選ぶ（§86.1 の 5.）。期間（§92）に合う行だけを見る。
+ * キーワードのある行があれば合った行、無い・どれにも合わないときは全行（合わない作業は運用保守以外として関連契約を探すときだけここに来る。§62.1）。
  * 合った行の契約がすべて存在しない・除外中なら契約は空で、その理由を返す（別の契約に回さない）
  */
-function candidatesFor(target: RuleTarget, taskName: string): { contracts: Contract[]; reason?: UnmappedReason } {
-  if (!target.entries.some((e) => hasKeywords(e.cond))) return { contracts: target.contracts };
-  const task = normalizeKeyword(taskName);
-  const hits = target.entries.filter((e) => passes(e.cond, task));
-  if (hits.length === 0) return { contracts: target.contracts };
-  const ids = new Set(hits.flatMap((e) => (e.contract ? [e.contract.contractId] : [])));
-  const contracts = target.contracts.filter((c) => ids.has(c.contractId));
+function candidatesFor(target: RuleTarget, month: YearMonth, taskName: string): { contracts: Contract[]; reason?: UnmappedReason } {
+  const inPeriod = target.entries.filter((e) => ruleCoversMonth(e, month));
+  if (inPeriod.length === 0) return { contracts: [], reason: "RULE_OUT_OF_PERIOD" };
+  let selected = inPeriod;
+  if (!target.byCode && inPeriod.some((e) => hasKeywords(e.cond))) {
+    const task = normalizeKeyword(taskName);
+    const hits = inPeriod.filter((e) => passes(e.cond, task));
+    if (hits.length > 0) selected = hits;
+  }
+  const seen = new Set<string>();
+  const contracts: Contract[] = [];
+  for (const e of selected) {
+    if (e.contract && !seen.has(e.contract.contractId)) {
+      seen.add(e.contract.contractId);
+      contracts.push(e.contract);
+    }
+  }
+  contracts.sort(byContractId);
   if (contracts.length > 0) return { contracts };
-  return { contracts, reason: hits.some((e) => e.excluded) ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT" };
+  return { contracts, reason: selected.some((e) => e.excluded) ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT" };
 }
 
 interface AmbiguousAcc {
@@ -186,17 +228,20 @@ export function mapWorklogs(
   const contractsById = new Map<string, Contract>();
   for (const c of contracts) contractsById.set(c.contractId, c);
   const ruleIndex = buildRuleIndex(rules, contractsById, warnings, excludedContracts);
+  const hasCodeRules = ruleIndex.byCode.size > 0;
 
   const mappings: WorklogMapping[] = [];
   const assigned: MappingResult["assigned"] = [];
   const unmappedGroups = new Map<string, UnmappedWorklogGroup>();
   const ambiguous = new Map<string, AmbiguousAcc>();
+  // 同じ (ルール, 月, 作業名) の候補は同じなので覚えておく（10 万行規模で行ごとに探さない）
+  const candidateCache = new Map<string, { contracts: Contract[]; reason?: UnmappedReason }>();
   let excludedHours = 0;
   let excludedCount = 0;
   let ignoredCount = 0;
 
-  const addUnmapped = (w: Worklog, reason: UnmappedReason): void => {
-    const key = `${w.customerName}\u0000${w.projectName}\u0000${reason}`;
+  const addUnmapped = (w: Worklog, reason: UnmappedReason, code: string | null): void => {
+    const key = code !== null ? `\u0001${code}\u0000${reason}` : `${w.customerName}\u0000${w.projectName}\u0000${reason}`;
     const g = unmappedGroups.get(key);
     if (g) {
       g.hours += w.hours;
@@ -204,7 +249,7 @@ export function mapWorklogs(
       if (w.date < g.firstDate) g.firstDate = w.date;
       if (w.date > g.lastDate) g.lastDate = w.date;
     } else {
-      unmappedGroups.set(key, {
+      const group: UnmappedWorklogGroup = {
         customerName: w.customerName,
         projectName: w.projectName,
         hours: w.hours,
@@ -212,7 +257,9 @@ export function mapWorklogs(
         firstDate: w.date as ISODate,
         lastDate: w.date as ISODate,
         reason,
-      });
+      };
+      if (code !== null) group.taskCode = (w.taskCode ?? "").trim();
+      unmappedGroups.set(key, group);
     }
   };
 
@@ -228,8 +275,11 @@ export function mapWorklogs(
       continue;
     }
     const month = monthOfDate(w.date);
+    // 作業コードの行（§92）があれば、顧客名・案件名より先にそれで探す
+    const code = hasCodeRules ? normalizeCode(w.taskCode) : "";
+    const codeTarget = code !== "" ? ruleIndex.byCode.get(code) : undefined;
     const customer = normalizeName(w.customerName);
-    if (customer === "") {
+    if (!codeTarget && customer === "") {
       mappings.push({ kind: "excluded", worklog: w, month, reason: "NO_CUSTOMER" });
       excludedHours += w.hours;
       excludedCount++;
@@ -237,34 +287,33 @@ export function mapWorklogs(
     }
     const project = normalizeName(w.projectName);
     // (顧客, 案件) の完全一致 → 無ければ (顧客, "")
-    const target = ruleIndex.get(ruleKey(customer, project)) ?? ruleIndex.get(ruleKey(customer, ""));
+    const target = codeTarget ?? ruleIndex.byName.get(ruleKey(customer, project)) ?? ruleIndex.byName.get(ruleKey(customer, ""));
+    const groupCode = codeTarget ? code : null;
     if (!target) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: "NO_RULE" });
-      addUnmapped(w, "NO_RULE");
+      addUnmapped(w, "NO_RULE", null);
       continue;
     }
-    if (target.contracts.length === 0) {
-      // ルールはあるが、指す契約がすべて存在しない（または不備で除外中）
-      const reason: UnmappedReason = target.hasExcludedContract ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT";
-      mappings.push({ kind: "unmapped", worklog: w, month, reason });
-      addUnmapped(w, reason);
-      continue;
+    const cacheKey = `${target.key}\u0000${month}\u0000${target.byCode ? "" : w.task}`;
+    let candidates = candidateCache.get(cacheKey);
+    if (!candidates) {
+      candidates = candidatesFor(target, month, w.task);
+      candidateCache.set(cacheKey, candidates);
     }
-    const candidates = candidatesFor(target, w.task);
     if (candidates.reason) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: candidates.reason });
-      addUnmapped(w, candidates.reason);
+      addUnmapped(w, candidates.reason, groupCode);
       continue;
     }
     const inPeriod = candidates.contracts.filter((c) => c.startMonth <= month && month <= c.endMonth);
     if (inPeriod.length === 0) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: "OUT_OF_PERIOD" });
-      addUnmapped(w, "OUT_OF_PERIOD");
+      addUnmapped(w, "OUT_OF_PERIOD", groupCode);
       continue;
     }
     const chosen = inPeriod[0] as Contract; // 契約ID昇順の先頭
     if (inPeriod.length > 1) {
-      const key = `${customer}\u0000${project}\u0000${chosen.contractId}`;
+      const key = `${target.key}\u0000${chosen.contractId}`;
       const acc = ambiguous.get(key);
       if (acc) {
         acc.hours += w.hours;
@@ -273,7 +322,7 @@ export function mapWorklogs(
       } else {
         ambiguous.set(key, {
           customerName: w.customerName,
-          projectName: w.projectName,
+          projectName: groupCode !== null ? fmt(T.calcWarnings.taskCodeLabel, { code: (w.taskCode ?? "").trim() }) : w.projectName,
           contractIds: new Set(inPeriod.map((c) => c.contractId)),
           chosen: chosen.contractId,
           hours: w.hours,
@@ -306,10 +355,11 @@ export function mapWorklogs(
   }
   const unmapped = [...unmappedGroups.values()];
   for (const g of unmapped) {
+    const project = g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName;
     warnings.push({
       code: "UNMAPPED_WORKLOG",
-      message: fmt(T.calcWarnings.unmappedWorklog, { customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: unmappedReasonLabel(g.reason) }),
-      ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason },
+      message: fmt(T.calcWarnings.unmappedWorklog, { customer: g.customerName, project, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: unmappedReasonLabel(g.reason) }),
+      ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, ...(g.taskCode !== undefined ? { taskCode: g.taskCode } : {}) },
       hours: g.hours,
       count: g.count,
     });
@@ -323,6 +373,8 @@ export function unmappedReasonLabel(reason: UnmappedReason): string {
   switch (reason) {
     case "NO_RULE":
       return T.calcWarnings.reasonNoRule;
+    case "RULE_OUT_OF_PERIOD":
+      return T.calcWarnings.reasonRuleOutOfPeriod;
     case "OUT_OF_PERIOD":
       return T.calcWarnings.reasonOutOfPeriod;
     case "UNKNOWN_CONTRACT":

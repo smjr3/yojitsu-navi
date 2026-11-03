@@ -46,14 +46,15 @@ Settings > CI/CD > Variables に登録します。
        "refetchMonths": 3,
        "columns": {
          "date": "work_date", "memberId": "emp_no", "memberName": "emp_name",
-         "customerName": "client", "projectName": "project", "task": "task", "hours": "hours"
+         "customerName": "client", "projectName": "project", "task": "task", "hours": "hours",
+         "taskCode": "task_code"
        }
      }
    }
    ```
 
    - `{from}` `{to}` は `YYYY-MM` に置換されます
-   - `columns` は「予実ナビの項目名 → 取得元の列名」
+   - `columns` は「予実ナビの項目名 → 取得元の列名」。`taskCode`（作業コード）は省略可（SPEC §92）
    - 任意項目: `dataPath`（JSON で配列が入っているキー。`"data.items"` のようにドット区切り）、
      `authScheme`（既定は `Authorization` ヘッダのとき `Bearer`、他のヘッダ名なら接頭辞なし）、`method`
    - 応答は `Content-Type` が JSON なら配列、`text/csv` なら CSV として読みます
@@ -115,6 +116,13 @@ Settings > CI/CD > Variables に登録します。
 | 特定の人の行だけ取り直す（ほかの人の行は残す。マスタに無い人も指定できる） | `npm run fetch -- --from 2025-04 --to 2025-09 --members M050,M051`（＋`FETCH_MEMBERS`） |
 
 年月は例です。GitLab では Build > Pipelines > Run pipeline で対象ブランチ `main`、変数に `FETCH_FROM` などを入れて実行すると、`fetch-worklogs` ジョブが取り直して MR にします。これらの変数は CI/CD 変数（Settings）には登録しないでください（毎日の取り込みが同じ期間になります）。
+
+**作業コードの点検（SPEC §92）**: `config.json` の `taskCodeCheck.include` に運用保守の作業名のキーワード（例 `_保守対応`）を書くと、キーワードに合うのに `mapping.csv` に無い作業コードと、作業名の変更をデータ確認画面に出します。`onUnregistered` / `onChange` を `stop` にすると、見つかったときに取り込みを失敗にします（月ファイルは書き換えない）。
+
+| 止まったとき | 直し方 |
+|---|---|
+| 未登録の作業コード | 案件を確かめ、`mapping.csv` に `task_code` の行を足す（契約の更新なら新しい契約IDの行を足し、`start_month`・`end_month` で分ける。旧契約の行は消さない） |
+| 作業名の変更 | 運用保守かどうかを確かめ、`npm run fetch -- --accept-task-changes`（GitLab では Run pipeline の変数 `FETCH_ACCEPT_TASK_CHANGES=1`）で 1 回取り込む。CI/CD 変数（Settings）には登録しない（毎回素通りになる） |
 
 **途中で失敗したとき**: どこか 1 回でも失敗すると、月ファイル（人事の取り込みなら members.csv）は 1 つも書き換えません。失敗の日時と理由はデータ確認画面の「データの検証」に警告で出ます（作業実績の取得日時は前回成功のまま）。次に成功すると消えます。
 

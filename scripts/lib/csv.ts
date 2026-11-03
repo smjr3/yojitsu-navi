@@ -20,8 +20,12 @@ export const WORKLOG_COLUMNS = [
   "hours",
 ] as const;
 
-/** Worklog[] → CSV 文字列（ヘッダ付き、UTF-8、改行 LF） */
+/**
+ * Worklog[] → CSV 文字列（ヘッダ付き、UTF-8、改行 LF）。
+ * 作業コード（§92）のある行が 1 行でもあれば、最後に task_code 列を付ける（無ければ従来どおりの列だけ）
+ */
 export function formatWorklogCsv(rows: Worklog[]): string {
+  const withCode = rows.some((w) => (w.taskCode ?? "").trim() !== "");
   const objs = rows.map((w) => ({
     date: w.date,
     member_id: w.memberId,
@@ -30,8 +34,9 @@ export function formatWorklogCsv(rows: Worklog[]): string {
     project_name: w.projectName,
     task: w.task,
     hours: formatHours(w.hours),
+    task_code: (w.taskCode ?? "").trim(),
   }));
-  return csvFormat(objs, [...WORKLOG_COLUMNS]) + "\n";
+  return csvFormat(objs, withCode ? [...WORKLOG_COLUMNS, "task_code"] : [...WORKLOG_COLUMNS]) + "\n";
 }
 
 /** CSV 文字列 → Worklog[]（列名は docs/DATA.md のもの。余分な列は無視） */
@@ -51,6 +56,7 @@ export function parseWorklogCsv(text: string): Worklog[] {
       projectName: r.project_name ?? "",
       task: r.task ?? "",
       hours: parseNumberCell(r.hours ?? ""),
+      ...((r.task_code ?? "").trim() !== "" ? { taskCode: (r.task_code ?? "").trim() } : {}),
     });
   }
   return out;
@@ -85,6 +91,7 @@ export function sortWorklogs(rows: readonly Worklog[]): Worklog[] {
       cmp(a.customerName, b.customerName) ||
       cmp(a.projectName, b.projectName) ||
       a.hours - b.hours ||
-      cmp(a.task, b.task),
+      cmp(a.task, b.task) ||
+      cmp(a.taskCode ?? "", b.taskCode ?? ""),
   );
 }

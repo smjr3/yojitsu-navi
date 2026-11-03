@@ -47,7 +47,7 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
         record: { id: 1, workedAt: Date.parse(`${w.date}T12:00:00+09:00`), minutes: Math.round(w.hours * 60), state: "ok" },
         worker: { code: w.memberId, displayName: w.memberName },
         client: { name: w.customerName },
-        job: { title: w.projectName, memo: w.task },
+        job: { title: w.projectName, memo: w.task, ...(w.taskCode ? { code: w.taskCode } : {}) },
       })),
       { record: { workedAt: Date.parse("2026-10-05T12:00:00+09:00"), minutes: 600, state: "cancelled" }, worker: { code: "M004", displayName: "x" }, client: { name: "x" }, job: { title: "x", memo: "x" } },
     ];
@@ -82,6 +82,8 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
           projectName: "job.title",
           task: "job.memo",
           hours: "record.minutes",
+          // 作業コード（§92）: 無い行もある（入れ子のキーごと無い）
+          taskCode: "job.code",
         },
       };
     });
@@ -100,9 +102,9 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
 
   it("Shift_JIS の CSV + ページ番号方式でも通る（auto 判定）", async () => {
     const all = MONTHS.flatMap((ym) => original(ym));
-    const header = "作業日,社員番号,氏名,顧客,案件,作業内容,時間(h)";
+    const header = "作業日,社員番号,氏名,顧客,案件,作業内容,時間(h),作業コード";
     const pageSize = 200;
-    const lines = all.map((w) => [w.date.replaceAll("-", "/"), w.memberId, w.memberName, w.customerName, w.projectName, w.task, w.hours].join(","));
+    const lines = all.map((w) => [w.date.replaceAll("-", "/"), w.memberId, w.memberName, w.customerName, w.projectName, w.task, w.hours, w.taskCode ?? ""].join(","));
     const fetchMock = vi.fn(async (url: string) => {
       const p = Number(new URL(url).searchParams.get("page"));
       const body = [header, ...lines.slice((p - 1) * pageSize, p * pageSize)].join("\r\n") + "\r\n";
@@ -117,7 +119,7 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
         refetchMonths: 3,
         encoding: "auto",
         pagination: { type: "page", pageParam: "page", sizeParam: "size", size: pageSize },
-        columns: { date: "作業日", memberId: "社員番号", memberName: "氏名", customerName: "顧客", projectName: "案件", task: "作業内容", hours: "時間(h)" },
+        columns: { date: "作業日", memberId: "社員番号", memberName: "氏名", customerName: "顧客", projectName: "案件", task: "作業内容", hours: "時間(h)", taskCode: "作業コード" },
       };
     });
     await fetchWorklogs({ rootDir: root, asOf: AS_OF }, { WORKLOG_API_TOKEN: TOKEN } as NodeJS.ProcessEnv);

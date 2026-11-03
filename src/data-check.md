@@ -76,6 +76,8 @@ if (model) {
         columns: [
           { key: "customerName", label: T.dataCheck.colWorklogCustomer, type: "text", empty: T.dataCheck.empty },
           { key: "projectName", label: T.dataCheck.colWorklogProject, type: "text", empty: T.dataCheck.empty },
+          // 作業コードの行（§92）で探した未紐付けがあるときだけ
+          ...(rows.some((r) => r.taskCode !== undefined) ? [{ key: "taskCode", label: T.dataCheck.colTaskCode, type: "text", empty: T.dataCheck.empty }] : []),
           { key: "reasonLabel", label: T.dataCheck.colReason, type: "text" },
           { key: "hours", label: T.columns.hours, type: "hours" },
           { key: "count", label: T.dataCheck.colCount, type: "int" },
@@ -110,6 +112,50 @@ if (model && (model.keywordUnmatched ?? []).length > 0) {
       caption: T.dataCheck.keywordTitle,
       exportName: "keyword_unmatched",
       sort: { key: "hours", dir: "desc" },
+    }),
+  );
+}
+```
+
+```js
+// 作業コードの点検（§92）。点検の設定が無い・見つからないときは出さない
+if (model && (model.unregisteredTaskCodes ?? []).length > 0) {
+  display(sectionTitle(T.dataCheck.taskCodeTitle, T.dataCheck.taskCodeHint));
+  display(
+    dataTable({
+      columns: [
+        { key: "taskCode", label: T.dataCheck.colTaskCode, type: "text" },
+        { key: "task", label: T.dataCheck.colTask, type: "text", empty: T.dataCheck.empty },
+        { key: "customerName", label: T.dataCheck.colWorklogCustomer, type: "text", empty: T.dataCheck.empty, hideOnPhone: true },
+        { key: "statusLabel", label: T.dataCheck.colStatus, type: "text" },
+        { key: "hours", label: T.columns.hours, type: "hours" },
+        { key: "count", label: T.dataCheck.colCount, type: "int", hideOnPhone: true },
+        { key: "firstDate", label: T.dataCheck.colFirstDate, type: "text", hideOnPhone: true },
+        { key: "lastDate", label: T.dataCheck.colLastDate, type: "text" },
+      ],
+      rows: model.unregisteredTaskCodes.map((g, i) => ({ key: i, ...g, statusLabel: g.status === "none" ? T.dataCheck.statusNone : T.dataCheck.statusPeriod })),
+      caption: T.dataCheck.taskCodeTitle,
+      exportName: "unregistered_task_codes",
+      sort: { key: "hours", dir: "desc" },
+    }),
+  );
+}
+if (model && (model.taskCodeChanges ?? []).length > 0) {
+  display(sectionTitle(T.dataCheck.taskCodeChangesTitle, T.dataCheck.taskCodeChangesHint));
+  const matchLabel = (c) => (c.matchBefore === null || c.matchAfter === null || c.matchBefore === c.matchAfter ? T.dataCheck.matchKept : c.matchAfter ? T.dataCheck.matchGained : T.dataCheck.matchLost);
+  display(
+    dataTable({
+      columns: [
+        { key: "taskCode", label: T.dataCheck.colTaskCode, type: "text" },
+        { key: "before", label: T.dataCheck.colBefore, type: "text", empty: T.dataCheck.empty },
+        { key: "after", label: T.dataCheck.colAfter, type: "text", empty: T.dataCheck.empty },
+        { key: "changedOn", label: T.dataCheck.colChangedOn, type: "text" },
+        ...(model.taskCodeChanges.some((c) => c.matchBefore !== null) ? [{ key: "matchLabel", label: T.dataCheck.colMatch, type: "text" }] : []),
+      ],
+      rows: model.taskCodeChanges.map((c, i) => ({ key: i, ...c, matchLabel: matchLabel(c) })),
+      caption: T.dataCheck.taskCodeChangesTitle,
+      exportName: "task_code_changes",
+      sort: { key: "changedOn", dir: "desc" },
     }),
   );
 }
