@@ -91,34 +91,54 @@ export function ruleCoversMonth(rule: { startMonth?: YearMonth | undefined; endM
 export type KeywordMatch = "hit" | "miss" | "none";
 
 export interface KeywordRouter {
-  /** キーワードのあるルールが 1 行以上ある */
+  /** キーワードのあるルール、または作業コードの行（§92）が 1 行以上ある */
   readonly enabled: boolean;
-  match(w: Pick<Worklog, "customerName" | "projectName" | "task" | "taskCode">): KeywordMatch;
+  /** 結果が作業コードや作業日の月で変わる（呼び出し側のキャッシュのキーに含める） */
+  readonly dependsOnCode: boolean;
+  readonly dependsOnMonth: boolean;
+  match(w: Pick<Worklog, "customerName" | "projectName" | "task" | "taskCode"> & { date?: string }): KeywordMatch;
+}
+
+interface PeriodCond extends KeywordCond {
+  startMonth?: YearMonth | undefined;
+  endMonth?: YearMonth | undefined;
 }
 
 export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRouter {
-  const index = new Map<string, KeywordCond[]>();
+  const index = new Map<string, PeriodCond[]>();
   const codes = new Set<string>();
+  let hasPeriod = false;
   for (const rule of rules) {
     if (isCodeRule(rule)) {
       codes.add(normalizeCode(rule.taskCode));
       continue;
     }
     const key = ruleKey(normalizeName(rule.worklogCustomerName), normalizeName(rule.worklogProjectName));
+    const cond: PeriodCond = { ...condOf(rule), startMonth: rule.startMonth, endMonth: rule.endMonth };
+    if (rule.startMonth || rule.endMonth) hasPeriod = true;
     const list = index.get(key);
-    if (list) list.push(condOf(rule));
-    else index.set(key, [condOf(rule)]);
+    if (list) list.push(cond);
+    else index.set(key, [cond]);
   }
-  const enabled = [...index.values()].some((list) => list.some(hasKeywords));
+  const hasKeywordRules = [...index.values()].some((list) => list.some(hasKeywords));
+  const enabled = hasKeywordRules || codes.size > 0;
   return {
     enabled,
+    dependsOnCode: codes.size > 0,
+    dependsOnMonth: hasKeywordRules && hasPeriod,
     match(w) {
       if (!enabled) return "none";
       if (codes.size > 0 && codes.has(normalizeCode(w.taskCode))) return "hit";
+      if (!hasKeywordRules) return "none";
       const customer = normalizeName(w.customerName);
       if (customer === "") return "none";
-      const conds = index.get(ruleKey(customer, normalizeName(w.projectName))) ?? index.get(ruleKey(customer, ""));
-      if (!conds || !conds.some(hasKeywords)) return "none";
+      const all = index.get(ruleKey(customer, normalizeName(w.projectName))) ?? index.get(ruleKey(customer, ""));
+      if (!all) return "none";
+      // 作業日の月に掛かる行だけで決める（§92。期間の違う行でキーワードを変えられる）。掛かる行が無ければ全行（紐付けで「対応表の期間外」になる）
+      const month = w.date !== undefined && isValidISODate(w.date) ? monthOfDate(w.date) : "";
+      const inPeriod = hasPeriod && month !== "" ? all.filter((c) => ruleCoversMonth(c, month)) : all;
+      const conds = inPeriod.length > 0 ? inPeriod : all;
+      if (!conds.some(hasKeywords)) return "none";
       const task = normalizeKeyword(w.task);
       return conds.some((c) => passes(c, task)) ? "hit" : "miss";
     },

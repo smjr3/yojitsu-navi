@@ -160,6 +160,11 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   const rows = only ? fetched.filter((w) => only.has(w.memberId.trim())) : fetched;
 
   // 作業コードの点検（§92）: 取り込んだ後のデータで調べる。stop の設定なら書く前に止める
+  // 人を指定したときは、既存の月ファイルのうち指定外の人の行を残す
+  const mergeMonth = (ym: YearMonth, fresh: Worklog[]): Worklog[] => {
+    const kept = only ? readMonthRows(join(dir, `${ym}.csv`)).filter((w) => !only.has(w.memberId.trim())) : [];
+    return sortWorklogs([...kept, ...fresh]);
+  };
   const gateFor = (fresh: ReadonlyMap<YearMonth, Worklog[]>) => {
     if (!taskCodeCheckEnabled(config.taskCodeCheck)) return null;
     const existing = listWorklogFiles(dir).map((f) => ({ month: f.month, rows: readMonthRows(f.path) }));
@@ -169,7 +174,8 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   };
 
   if (opts.dryRun) {
-    const dryGate = gateFor(new Map(months.map((ym) => [ym, rows.filter((w) => w.date.slice(0, 7) === ym)])));
+    // 書き込むときと同じ（指定外の人の既存行を残した）月の一覧で点検する
+    const dryGate = gateFor(new Map(months.map((ym) => [ym, mergeMonth(ym, rows.filter((w) => w.date.slice(0, 7) === ym))])));
     const sample = sortWorklogs(rows).slice(0, Math.max(0, opts.sample ?? 5));
     const dry: NonNullable<FetchResult["dryRun"]> = { total: rows.length, sample };
     if (report) dry.report = report;
@@ -198,10 +204,7 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   const outputs: Array<{ path: string; data: string }> = [];
   const lists = new Map<YearMonth, Worklog[]>();
   for (const ym of months) {
-    const fresh = byMonth.get(ym) ?? [];
-    // 人を指定したときは、既存の月ファイルのうち指定外の人の行を残す
-    const kept = only ? readMonthRows(join(dir, `${ym}.csv`)).filter((w) => !only.has(w.memberId.trim())) : [];
-    const list = sortWorklogs([...kept, ...fresh]);
+    const list = mergeMonth(ym, byMonth.get(ym) ?? []);
     lists.set(ym, list);
     outputs.push({ path: join(dir, `${ym}.csv`), data: formatWorklogCsv(list) });
     rowsByMonth[ym] = list.length;

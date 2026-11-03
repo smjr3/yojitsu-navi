@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildModel,
   createKeywordRouter,
+  createTaskClassifier,
   findTaskCodeIssues,
   mapWorklogs,
   parseDataset,
@@ -86,6 +87,35 @@ describe("キーワードの振り分けと作業コード", () => {
     expect(router.match(wl("2026-05-01", "調査", "W-01"))).toBe("hit");
     expect(router.match(wl("2026-05-01", "調査", "W-02"))).toBe("miss");
     expect(router.match(wl("2026-05-01", "調査_保守対応", undefined))).toBe("hit");
+  });
+
+  it("作業コードの行だけ（キーワードの行なし）でも、分類表で運用保守以外の作業を運用保守にする", () => {
+    const c = createTaskClassifier([{ task: "調査", category: "outside" }], [codeRule("W-01", "C2")]);
+    expect(c.classifyWorklog(wl("2026-05-01", "調査", "W-01")).category).toBe("contract");
+    expect(c.classifyWorklog(wl("2026-05-01", "調査", "W-02")).category).toBe("outside");
+  });
+
+  it("同じ顧客・案件・作業名でも作業コードで分類が変わる（処理の順に左右されない）", () => {
+    const rules = [{ ...rule("ABC", "基幹", "C2"), taskInclude: ["_保守対応"] }, codeRule("W-01", "C2")];
+    for (const order of [["W-02", "W-01"], ["W-01", "W-02"]]) {
+      const c = createTaskClassifier([], rules);
+      const got = Object.fromEntries(order.map((code) => [code, c.classifyWorklog(wl("2026-05-01", "調査", code)).category]));
+      expect(got).toEqual({ "W-01": "contract", "W-02": "outside" });
+    }
+  });
+
+  it("名前の行のキーワードは、作業日の月に掛かる行のものだけを使う", () => {
+    const rules = [
+      { ...rule("ABC", "基幹", "C1"), taskInclude: ["旧保守"], endMonth: "2026-03" },
+      { ...rule("ABC", "基幹", "C2"), taskInclude: ["_保守対応"], startMonth: "2026-04" },
+    ];
+    const router = createKeywordRouter(rules);
+    expect(router.match(wl("2026-03-10", "旧保守の作業", undefined))).toBe("hit");
+    expect(router.match(wl("2026-05-10", "旧保守の作業", undefined))).toBe("miss");
+    expect(router.match(wl("2026-05-10", "障害_保守対応", undefined))).toBe("hit");
+    const c = createTaskClassifier([], rules);
+    expect(c.classifyWorklog(wl("2026-03-10", "旧保守の作業", undefined)).category).toBe("contract");
+    expect(c.classifyWorklog(wl("2026-05-10", "旧保守の作業", undefined)).category).toBe("outside");
   });
 });
 

@@ -9,8 +9,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { csvParse } from "d3-dsv";
-import { isMatchChange, findTaskCodeIssues, taskCodeCheckEnabled, taskCodeWarnings, type TaskCodeFindings } from "../../src/core/taskCodes.js";
-import type { Config, MappingRule, TaskCodeChange, Worklog } from "../../src/core/types.js";
+import { isValidISODate } from "../../src/core/calendar.js";
+import { normalizeCode, normalizeName } from "../../src/core/normalize.js";
+import { isMatchChange, findTaskCodeIssues, matchesMaintenance, taskCodeCheckEnabled, taskCodeWarnings, type TaskCodeFindings } from "../../src/core/taskCodes.js";
+import type { Config, ISODate, MappingRule, TaskCodeCheckConfig, TaskCodeChange, Worklog } from "../../src/core/types.js";
 import { stripBom } from "./csv.js";
 import { readTextAuto } from "./encoding.js";
 
@@ -34,7 +36,7 @@ export function readCodeRules(rootDir: string): MappingRule[] {
   return out;
 }
 
-const changeKey = (c: TaskCodeChange): string => `${c.taskCode}\u0000${c.before}\u0000${c.after}`;
+const changeKey = (c: TaskCodeChange): string => `${normalizeCode(c.taskCode)}\u0000${normalizeName(c.before)}\u0000${normalizeName(c.after)}`;
 
 export interface TaskCodeGateResult {
   findings: TaskCodeFindings;
@@ -47,12 +49,63 @@ export interface TaskCodeGateResult {
 /** 点検する（止めない）。設定が無ければ null */
 export function inspectTaskCodes(config: Config, rules: readonly MappingRule[], before: readonly Worklog[], after: readonly Worklog[]): TaskCodeGateResult | null {
   const check = config.taskCodeCheck;
-  if (!taskCodeCheckEnabled(check)) return null;
+  if (!check || !taskCodeCheckEnabled(check)) return null;
   const findings = findTaskCodeIssues(after, rules, check);
   const known = new Set(findTaskCodeIssues(before, rules, check).changes.map(changeKey));
-  const newChanges = findings.changes.filter((c) => !known.has(changeKey(c)));
+  const seen = new Set<string>();
+  const newChanges: TaskCodeChange[] = [];
+  for (const c of [...findings.changes, ...replacedNames(before, after, check)]) {
+    const k = changeKey(c);
+    if (known.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    newChanges.push(c);
+  }
   const lines = taskCodeWarnings({ unregistered: findings.unregistered, changes: newChanges }).map((w) => w.message);
   return { findings, newChanges, lines };
+}
+
+interface NameUse {
+  task: string;
+  firstDate: ISODate;
+  lastDate: ISODate;
+}
+
+/** 作業コード → 正規化した作業名 → 使った期間（作業コード・日付・時間が正しい行だけ） */
+function namesByCode(rows: readonly Worklog[]): Map<string, Map<string, NameUse>> {
+  const out = new Map<string, Map<string, NameUse>>();
+  for (const w of rows) {
+    const code = normalizeCode(w.taskCode);
+    if (code === "" || !isValidISODate(w.date) || !Number.isFinite(w.hours) || w.hours <= 0) continue;
+    let names = out.get(code);
+    if (!names) out.set(code, (names = new Map()));
+    const key = normalizeName(w.task);
+    const u = names.get(key);
+    if (!u) names.set(key, { task: w.task.trim(), firstDate: w.date, lastDate: w.date });
+    else {
+      if (w.date < u.firstDate) u.firstDate = w.date;
+      if (w.date > u.lastDate) u.lastDate = w.date;
+    }
+  }
+  return out;
+}
+
+/**
+ * 取り直しで古い作業名の行がすべて置き換わった変更（取り込んだ後のデータだけでは名前が 1 つに見える）。
+ * 取り込む前に無かった作業名を、取り込む前に最後に使っていた作業名からの変更とする
+ */
+function replacedNames(before: readonly Worklog[], after: readonly Worklog[], check: TaskCodeCheckConfig): TaskCodeChange[] {
+  const prev = namesByCode(before);
+  const out: TaskCodeChange[] = [];
+  for (const [code, names] of namesByCode(after)) {
+    const old = prev.get(code);
+    if (!old || old.size === 0) continue;
+    const latest = [...old.values()].reduce((a, b) => (b.lastDate > a.lastDate ? b : a));
+    for (const [key, u] of names) {
+      if (old.has(key)) continue;
+      out.push({ taskCode: code, before: latest.task, after: u.task, changedOn: u.firstDate, matchBefore: matchesMaintenance(check, latest.task), matchAfter: matchesMaintenance(check, u.task) });
+    }
+  }
+  return out;
 }
 
 const LIST_MAX = 10;

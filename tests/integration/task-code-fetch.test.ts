@@ -116,6 +116,24 @@ describe("取り込み時の点検（taskCodeCheck）", () => {
     expect(again.taskCodeWarnings).toBeUndefined();
   });
 
+  it("onChange=stop: 取り直しで古い作業名の行がすべて置き換わっても、作業名の変更として止める", async () => {
+    quiet();
+    setConfig((c) => {
+      c.taskCodeCheck.onChange = "stop";
+      c.worklogSource.http.refetchMonths = 2;
+    });
+    api([row("2026-09-01", "障害対応（夜間含む）", "W-01")]);
+    await expect(fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV)).rejects.toThrow(/作業名が変わった作業コードが 1 件/);
+  });
+
+  it("--members と --dry-run: 書き込むときと同じく指定外の人の既存行を残して点検する", async () => {
+    quiet();
+    // 2026-09 の M1 の行（障害対応_保守対応）は残るので、M2 の新しい作業名は変更として出る
+    api([{ ...row("2026-09-02", "障害対応（夜間含む）", "W-01"), member_id: "M2", member_name: "b" }]);
+    const r = await fetchWorklogs({ rootDir: root, asOf: AS_OF, from: "2026-09", to: "2026-09", members: ["M2"], dryRun: true }, ENV);
+    expect(r.taskCodeWarnings).toEqual(["作業コード W-01 の作業名が 2026-09-02 から「障害対応_保守対応」→「障害対応（夜間含む）」に変わり、運用保守のキーワードに合わなくなりました"]);
+  });
+
   it("--dry-run は止めずに点検の結果を表示する", async () => {
     quiet();
     setConfig((c) => (c.taskCodeCheck.onUnregistered = "stop"));
