@@ -235,7 +235,7 @@ export interface HttpAdapterDeps {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export const DEFAULT_MAX_PAGES = 1000;
+export const DEFAULT_MAX_PAGES = 5000;
 const MAX_REDIRECTS = 5;
 
 /** 文字列からトークンを隠す */
