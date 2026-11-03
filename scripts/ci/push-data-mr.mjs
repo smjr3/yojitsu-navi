@@ -3,7 +3,7 @@
  *
  *   node scripts/ci/push-data-mr.mjs <種類> <コミットメッセージ> <パス>...
  *
- * - <パス> に変更が無ければ何もしない
+ * - <パス> に変更が無ければ何もしない（まだ無いパスは飛ばす）
  * - あれば data/<種類>-<日時> ブランチに 1 コミットして push し、push オプションで
  *   MR の作成・パイプライン成功後の自動マージ・ソースブランチの削除を指定する
  *   （反映先のブランチは保護ブランチで「直接プッシュ = No one」なので、データも MR を通す）
@@ -13,6 +13,8 @@
  *   DATA_PUSH_REMOTE を入れるとその remote に push する（テスト用）
  */
 import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** data/<種類>-YYYYMMDD-HHMMSS（UTC） */
@@ -39,7 +41,11 @@ export function pushDataMr({ kind, message, paths, env = process.env, cwd = proc
   const remote = remoteUrl(env);
   const git = (args) => execFileSync("git", args, { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "inherit"] });
 
-  git(["add", "--", ...paths]);
+  // まだ無いファイル（失敗の記録など）を git add に渡すとエラーになるので、ある・追跡中のものだけ渡す
+  const tracked = (p) => spawnSync("git", ["ls-files", "--error-unmatch", "--", p], { cwd, stdio: "ignore" }).status === 0;
+  const present = paths.filter((p) => existsSync(join(cwd, p)) || tracked(p));
+  if (present.length === 0) return `変更はありません（${kind}）`;
+  git(["add", "--", ...present]);
   if (spawnSync("git", ["diff", "--cached", "--quiet"], { cwd }).status === 0) return `変更はありません（${kind}）`;
 
   const branch = dataBranch(kind, now);

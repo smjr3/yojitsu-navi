@@ -95,6 +95,7 @@ git push -u origin main
 - `npm install -g` ができない PC では、`npx --yes ./yojitsu-navi-<版>.tgz init …` でも同じです（以下の `yojitsu-navi …` も `npx --yes ./yojitsu-navi-<版>.tgz …` に読み替え）。
 - サンプルデータ（`data/`）が入っています。まず Pages に出ることを確かめ、そのあと本番のデータに差し替えてください（[DATA.md](DATA.md)）。
 - git の履歴は新しく始まるので、開発元のアカウント名などは入りません。
+- 最後に、CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかを確かめます。足りないと一覧が出て止まります（SPEC §85）。
 
 ### 2. プロジェクトの設定を確認・適用する
 
@@ -157,6 +158,7 @@ git push -u origin update-<新しい版>
 - 新しい版で増えた設定（`config.json` に無い項目）や、サンプルにだけある新しいデータのファイルも一覧で出ます。無くても既定値で動きます。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
 - コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける）。
+- 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
 
 ## 社内で確認すること（チェックリスト）
 
@@ -201,6 +203,7 @@ git push -u origin update-<新しい版>
 | `npm ci` が `ETIMEDOUT` / `ENOTFOUND registry.npmjs.org` | 外部に出られない。`NPM_CONFIG_REGISTRY` に社内ミラーを設定するか、依存込みのパッケージで作り直す |
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
+| CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
@@ -227,3 +230,6 @@ git push -u origin update-<新しい版>
 
 取り込み結果は `data/<種類>-<日時>` ブランチの MR になり、パイプラインが成功すると自動でマージされます（`scripts/ci/fetch-data.mjs` → `push-data-mr.mjs`。`main` は直接プッシュ不可のため）。
 マージで `main` のパイプラインが走り、Pages まで更新されます。検証で失敗した MR は開いたまま残るので、ログの理由を直すか、MR を閉じてください（翌日の取り込みは最新の `main` から作り直します）。
+取得そのものが途中で失敗したときは CSV を書き換えず、失敗の記録（`data/worklogs/_meta.json` などの `lastFailure`）だけを MR にしてジョブを失敗で終えます。データ確認画面に警告で出て、次に成功すると消えます（SPEC §87）。
+
+過去の期間を取り直すとき（退職・異動した人の実績を含む）は、Build > Pipelines > Run pipeline で対象 `main`、変数 `FETCH_FROM`・`FETCH_TO`（`YYYY-MM`）を入れて実行します。特定の人だけなら `FETCH_MEMBERS`（社員番号をカンマ区切り）も入れます。手順は [OPERATIONS.md](OPERATIONS.md)「取得する人をメンバーマスタから決める」。

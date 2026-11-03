@@ -310,6 +310,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 | `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | 無し |
 | `filters` | 取り込まない行の条件 `[{ column, equals | notEquals | in }]` | 無し |
 | `encoding` | CSV 応答の文字コード（`auto` / `utf-8` / `shift_jis`） | `auto` |
+| `members` | 取得対象の社員番号を API に渡す（§87）。`{ param, style: join / repeat, separator, chunkSize }`。社員番号はメンバーマスタから作る | 無し（渡さない） |
 - 列が見つからないときはエラーで止め、**応答の最初の1行の列名一覧** を出す（設定ミスを見つけやすくする。値は出さない）。
 - `npm run fetch -- --dry-run --sample=5` で、取得→変換結果の先頭 N 行と列の対応表を表示し、ファイルを書かない（本番での初回設定用）。
 - 設定は `config.json`（コミットする）、トークンは環境変数のみ。
@@ -693,6 +694,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
 - `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルを上書きしたら一覧で知らせる。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。
+- `init`・`update` の最後に、CI 定義が使うファイルがそろいコミットされているかを確かめる（§85。`yojitsu-navi check` でも確かめられる）。
 - `yojitsu-navi gitlab-setup [--apply]`: §39.2 と同じ。接続先は `config.json`、空なら `git remote` の `origin`（https）から読む。トークンは `GITLAB_TOKEN`、無ければ画面に出さずにその場で聞く（Windows のコマンドプロンプトでも使えるように。引数では受け取らない）。
 - 手順は `docs/DEPLOY_GITLAB.md`（手順 0〜2、「新しい版にする」）。
 - **画像を入れない**（2026-10-31 要望「画像はリポジトリにどうしても必要な場合を除いて不要。npm 化で無駄に大きくなる」）: リポジトリに画像を置かない（favicon・アイコンも置かない。ファビコンは SVG の文字列を埋め込む §89。フォントは画像ではないので対象外）ので template にも入らない。`npm run app:pack`・`core:pack` は中身に画像があると止まる（依存込み版の `deps/` は外部の npm パッケージなので見ない）。リポジトリ全体の検査は `tests/unit/docs-links.test.ts`（拡張子と先頭のバイト。どうしても必要なものだけ `IMAGE_ALLOWLIST` に理由つきで足す）。
@@ -1187,6 +1189,14 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 社内 GitLab の Package Registry へ計算コアを出す `publish-core` ジョブは削除（ほかのプロジェクトは npmjs.com か `.tgz` から入れる）。
 - 再発防止: `tests/integration/app-package.test.ts`（計算コアの公開 API が `src/core` と同じ・`src/core` の import の制約・別プロジェクトから Node と NodeNext の型で使える。パッケージを組み立てるテストは並行で template を消し合うので 1 ファイルにまとめる）。
 
+## 85. 初期化・更新で CI のファイルを欠かさない（2026-11-03 依頼者）
+社内で `init` したプロジェクトの CI が「`scripts/ci/install.mjs` が無い」で失敗した、への対応。CI 定義（`.gitlab-ci.yml`）が使うファイルを、組み立て・`init`・`update` のたびに確かめる。
+- 洗い出し（`packages/app/lib/ci-files.mjs`）: `script`・`before_script`・`after_script` のコマンドに書いたファイル、`npm run X` の `package.json` の中身（`preX`・`postX` も）、`scripts/ci/` のスクリプトが中で `npm run` するもの、それらが相対パスで import する先（`.js` と書いた `.ts` も）を辿ったすべてと、`npm ci` が読む `package.json`・`package-lock.json`。
+- 確かめること: フォルダにある・git にコミットされている（push しても CI から見えないものを出さない）・`npm run` する名前が `package.json` にある。
+- `npm run app:build` は template で足りなければ止まる（壊れたパッケージを作らない）。`init`・`update` は最後に確かめ、足りなければ一覧を出して止まる（終了コード 2）。`yojitsu-navi check [フォルダ]` で今あるプロジェクトも確かめられる。
+- PC 全体の git の除外設定（`core.excludesFile` で `*.mjs`・`lib/` などを除外）に当たっても入るよう、`init`・`update` はパッケージのファイルを `git add -f` する。前の版で入らなかったファイルも `update` で入る。
+- 再発防止: `tests/integration/app-package.test.ts` の「CI 定義とファイルの整合」（本物のパッケージで init 直後・update 後に全参照が揃いコミットされている、除外設定に当たる PC、欠けたパッケージで止まる）。
+
 ## 86. 作業実績が案件の実績に入るかの判定（まとめ。2026-11-03 依頼者）
 導入先のレビュー「未登録の作業・契約期間の判定など、集計の正確さに関わる仕様を明確に」への対応。§4・§30・§62 に分かれていた判定を 1 か所にまとめる（挙動は変えない）。
 
@@ -1223,6 +1233,20 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **期間の重なりの事前検証**: 無い。実績が出てから `MAPPING_AMBIGUOUS` で分かる。`npm run validate` には出ない。
 - **取り込みを止める設定**: 無い。未紐付けがあっても取り込み・ビルドは進む。
 
+## 87. 作業実績 API の取得対象をメンバーマスタから作る（2026-11-03 依頼者）
+本番導入先の社内レビューの指摘への対応。取得する人は 100 人を超える見込みで、社員番号をメンバーマスタと API 設定の両方で持たない。
+- **対象者はメンバーマスタ（`data/masters/members.csv`）から作る**。`worklogSource.http.members` を設定したときだけ、取得する期間（既定は直近 `refetchMonths` か月）に **1 か月でも在籍している人** を対象にする。期間の最初の月に不在になった人（前月は在籍）も入れる（不在した月の実績を拾うため。§35）。区分（社員・パートナー）・チームの有無（ヘルプ、§72）は問わない。入社前・不在後の期間には入れない。社員番号を API の設定に書く項目は作らない。
+- **複数人をまとめて 1 リクエストで取る**: `param=A,B,…`（`style: join`、区切りは `separator`、既定 `,`）か `param=A&param=B`（`style: repeat`）。`url`・`query` に `{members}` と書けばその位置に入る。`chunkSize` 人（既定 50）ずつに分けて順に取る。ページング（§20.1・§90）は 1 回ごとに効く。
+- **過去の実績の取り直し（退職者・異動者を含む）**: 期間を指定すると、その期間の在籍者が自動で対象になる（今は退職・異動していても、その期間にマスタで在籍なら入る。異動は所属が変わるだけで社員番号は同じなので対象のまま）。
+  - `npm run fetch -- --from YYYY-MM --to YYYY-MM`: その期間の月ファイルを全員分で書き直す。
+  - `--members 社員番号,…` を足すと、その人の行だけを差し替え、ほかの人の行は残す（マスタに無い人・不在の期間の人も指定できる）。この取り直しでは `_meta.json` の取得日時を変えない（全員分の取得ではないため）。
+  - GitLab では Build > Pipelines > Run pipeline で変数 `FETCH_FROM`・`FETCH_TO`（必要なら `FETCH_MEMBERS`）を入れて実行する（`fetch-worklogs` ジョブが動く）。CI/CD 変数には登録しない（毎日の取り込みが同じ期間になるため）。
+- **途中で失敗したら既存の CSV を書き換えない**: どの回のリクエストが失敗しても（再試行後の 4xx・5xx・ページ上限・列の欠落など）全体を失敗にし、月ファイルを 1 つも書かない（全部取れたときだけまとめて差し替える。従来の `writeFilesAtomic`）。人事の取り込み（§20.2）も同じ（members.csv を書かない）。
+  - 失敗は記録して **データ確認画面の「データの検証」に警告で出す**: 作業実績は `data/worklogs/_meta.json`、人事は `data/masters/_members-meta.json` の `lastFailure`（日時と理由。トークンは伏せ、300 文字まで）。作業実績の取得日時（`fetchedAt`）は前回成功のまま。次に成功すると消える。
+  - CI（`scripts/ci/fetch-data.mjs`）は失敗の記録だけを MR にしてからジョブを失敗で終える（GitLab の通知も出る）。`--dry-run` の失敗は記録しない。
+- `members` を設定しない API はこれまでどおり（社員番号を渡さず全件を取る）。
+- 実装: `scripts/lib/fetch-targets.ts`（対象者・分割）、`scripts/lib/fetch-status.ts`（失敗の記録）、`scripts/adapters/http.ts`、`buildRequestUrl`（`scripts/adapters/http-source.ts`）。再発防止: `tests/integration/member-targets.test.ts`。
+
 ## 88. 広い画面では横幅を使い切る（2026-11-03 依頼者）
 
 「横幅が使えるならもっと広げてほしい。マスタ編集の一覧が横に切れてスクロールしないと見られない」への対応。
@@ -1245,6 +1269,6 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `page` の `sizeParam`、`offset` の `limitParam` は省略可。省略（または空文字）なら件数のパラメータを付けない。
 - 終了条件 `stopWhen`（`page` / `offset`）: `short` = `size` / `limit` 未満の行数で終了（既定。従来どおり）、`empty` = 0 行のページで終了。`short` のとき、および件数のパラメータを付けるときは `size` / `limit`（1 以上の整数）が必須。件数を付けずに `short` にするなら API 側の 1 ページの件数を書く。`offset` は返った行数だけ進める。
 - 連携先の設定例: `{ "type": "page", "pageParam": "page", "stopWhen": "empty" }`（接続先の値は `config.json` に書き、リポジトリの既定値は変えない）。
-- 無限取得の防止: `maxPages`（既定 5000〈2026-11-03 依頼者、当初 1000〉、1 以上の整数）を超えたらエラーで止め、月ファイル・members.csv を書き換えない（途中までのデータで実績が少なく見えるのを防ぐため、警告で続行はしない）。取得日時が更新されないので、データ確認画面の「作業実績の取得」が前日より前の警告色になる（§75）。従来の「2 行以上のページが以前と同じ内容」の検出は `empty` でも効く（空配列を返さず最後のページを繰り返す API で止まる）。
+- 無限取得の防止: `maxPages`（既定 5000〈2026-11-03 依頼者、当初 1000〉、1 以上の整数）を超えたらエラーで止め、月ファイル・members.csv を書き換えない（途中までのデータで実績が少なく見えるのを防ぐため、警告で続行はしない）。失敗はデータ確認画面の「データの検証」に警告で出る（§87）。従来の「2 行以上のページが以前と同じ内容」の検出は `empty` でも効く（空配列を返さず最後のページを繰り返す API で止まる）。
 - 設定の誤り（`size` 不足・`stopWhen` の値違い・`maxPages` が 0 以下）は通信の前にエラー。
 - 既存設定（`stopWhen` 無し・件数パラメータあり）の送るパラメータ・終了位置・結果は変えない（`tests/unit/api-adapter.test.ts`「既存のページング設定は従来どおり」、property テストで新旧の結果一致）。

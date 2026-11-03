@@ -16,7 +16,8 @@
 | `data/holidays.csv` | `date, name` （祝日・会社休日。行の無い年は国民の祝日を計算で補い、データ確認に `HOLIDAYS_AUTO` を出す。全体が空なら祝日なし。SPEC §49） |
 | `data/task-types.csv` | `task, category, group[, match], note` （match = 空なら完全一致、`含む` なら作業名に task を含めば該当（完全一致が先、次にファイルの順）。作業種別の分類表。category = 運用保守 / 運用保守以外（旧表記の 契約内 / 契約外 も可）。group = 運用保守以外の種別（計画の単位。省略可、空なら task と同じ）。ファイルが無ければすべて運用保守。運用保守以外は顧客名が空でも数える。SPEC §30・§50） |
 | `data/worklogs/*.csv` | `date, member_id, member_name, customer_name, project_name, task, hours` （月ごとに `YYYY-MM.csv`。アダプタが生成） |
-| `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }` |
+| `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }`。取得に失敗したときだけ `lastFailure: { at, message }`（SPEC §87） |
+| `data/masters/_members-meta.json` | 人事の取り込みに失敗したときだけできる `{ "lastFailure": { at, message } }`。次に成功すると消える（SPEC §87） |
 
 `config.json` の項目は `src/core/types.ts` の `Config` を参照。
 
@@ -40,6 +41,7 @@
 | `filters` | 取り込まない行の条件 `[{ "column": "state", "notEquals": "cancelled" }]`（`equals` / `notEquals` / `in`。すべてに合う行だけ取り込む） | なし |
 | `encoding` | CSV 応答の文字コード `auto` / `utf-8` / `shift_jis` | `auto` |
 | `refetchMonths` | 直近何か月を取り直すか | 3 |
+| `members` | 取得対象の社員番号を API に渡す（SPEC §87）。`param`（パラメータ名）、`style`（`join` = `param=A,B` / `repeat` = `param=A&param=B`）、`separator`（既定 `,`）、`chunkSize`（1 回の人数、既定 50）。`url`・`query` に `{members}` と書けばそこに入る。社員番号はメンバーマスタの在籍者から作るので設定には書かない | なし（渡さない） |
 
 ### `memberSource`（所属・役職の取り込み）
 
@@ -51,5 +53,7 @@
 | `columns` | 取り込み項目の取得元の列名。`memberId`, `name` は必須。`kind, title, division, department, section` は省略可（省略した項目は取り込まず現在の値を引き継ぐ）。既定は所属（`division, department, section`）を書かない＝所属は画面で直す（SPEC §81）。書いた列はマスタ編集で読み取り専用になる。入れ子・複数候補は上と同じ |
 | `kindMap` | 区分値の読み替え。例 `{ "正社員": "employee", "委託": "partner" }` |
 | `filters` | 取り込まない行の条件（退職者の除外など）。csv・http 共通 |
+
+取り込みに失敗したときは CSV を書き換えず、失敗だけを `data/worklogs/_meta.json`（作業実績）・`data/masters/_members-meta.json`（人事）の `lastFailure` に書く。データ確認画面に警告で出て、次に成功すると消える（SPEC §87）。
 
 `npm run fetch:members` で `data/masters/members.csv` を更新する。`team_id` は取り込まない。運用保守の案件をスポットで手伝う他部署（導入・設計・構築など）の人も取り込み対象に含める（`filters` で外さない）と、役職単価で実績に入り、`team_id` 空のまま「ヘルプ」として区別される（SPEC §72）。マスタに無い人の作業は単価 0 円で、データ確認に `UNKNOWN_MEMBER` が出る。変化した人だけ `effective_from = 実行月` の行を追加（`team_id` は引き継ぎ）、取り込み元に無い人は削除しない。何度流しても同じ結果。

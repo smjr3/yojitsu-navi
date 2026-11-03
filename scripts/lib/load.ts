@@ -4,12 +4,14 @@
  * - 文字コードは自動判定（UTF-8 / UTF-8 BOM / Shift_JIS）
  * - data/worklogs/ が無い・空でも落とさず、作業実績 0 件として扱う
  * - data/worklogs/_meta.json の fetchedAt を worklogFetchedAt に入れる
+ * - 取り込みの失敗の記録（_meta.json・_members-meta.json の lastFailure。§87）を fetchFailures に入れる
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDataset, type DatasetFiles, type ParsedDataset } from "../../src/core/csv.js";
 import type { Config } from "../../src/core/types.js";
 import { readTextAuto } from "./encoding.js";
+import { readFetchFailures } from "./fetch-status.js";
 
 /** data/ 配下のファイル配置（docs/DATA.md） */
 export const DATA_FILES = {
@@ -102,6 +104,9 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     skippedWorklogFiles: skippedWorklogFiles(dir),
   };
   if (typeof meta.fetchedAt === "string" && meta.fetchedAt !== "") files.worklogFetchedAt = meta.fetchedAt;
+  // 前回の取り込みの失敗（§87）。データ確認画面の検証結果に警告として出す
+  const failures = readFetchFailures(rootDir, join(dir, "_meta.json"));
+  if (failures.length > 0) files.fetchFailures = failures;
   return files;
 }
 

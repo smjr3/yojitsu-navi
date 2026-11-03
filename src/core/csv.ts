@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName, splitKeywords } from "./normalize.js";
-import type { Assignment, OutsidePlan, Target, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, FetchFailure, OutsidePlan, Target, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -162,6 +162,8 @@ export interface DatasetFiles {
   /** 作業実績フォルダにあったが、ファイル名が YYYY-MM.csv でないため読まなかったファイル */
   skippedWorklogFiles?: string[];
   worklogFetchedAt?: string;
+  /** 前回の取り込みの失敗（§87。_meta.json の lastFailure） */
+  fetchFailures?: FetchFailure[];
 }
 
 export interface ParsedDataset {
@@ -170,7 +172,7 @@ export interface ParsedDataset {
   issues: ValidationIssue[];
 }
 
-const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
+const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs" | "worklogFetchedAt" | "fetchFailures" | "worklogNames" | "skippedWorklogFiles"> | "worklogs", readonly string[]> = {
   taskTypes: ["task", "category"],
   outsidePlans: ["member_id", "start_month", "end_month", "person_months"],
   targets: ["target_type", "target_id", "end_month", "remaining_rate"],
@@ -229,6 +231,13 @@ export function memberStatus(raw: string): { status?: string } {
   const v = raw.normalize("NFKC").trim();
   if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
   return { status: "left" };
+}
+
+/** ISO 8601 → 日本時間の「YYYY-MM-DD HH:mm」（読めなければそのまま） */
+function jstMinute(iso: string): string {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return iso;
+  return new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ");
 }
 
 /** 各 CSV テキストから Dataset を組み立てる。検証結果（§14）も issues に含める */
@@ -333,6 +342,10 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
   });
   for (const f of files.skippedWorklogFiles ?? []) {
     issues.push({ severity: "warning", code: "WORKLOG_FILE_SKIPPED", message: fmt(T.checks.worklogFileSkipped, { file: f }), file: f });
+  }
+  // 前回の取り込みの失敗（§87）。既存の CSV は書き換えていないので、前回までのデータのまま表示していることを知らせる
+  for (const f of files.fetchFailures ?? []) {
+    issues.push({ severity: "warning", code: f.source === "members" ? "MEMBER_FETCH_FAILED" : "WORKLOG_FETCH_FAILED", message: fmt(f.source === "members" ? T.checks.memberFetchFailed : T.checks.worklogFetchFailed, { at: jstMinute(f.at), message: f.message }) });
   }
 
   const taskTypes = parseTaskTypes(files.taskTypes, issues);
