@@ -143,6 +143,37 @@ describe("ページ分割", () => {
   });
 });
 
+describe("ページ分割（件数パラメータなし・空配列で終了）", () => {
+  it("page / offset: 件数を付けず空配列まで取っても、どんなサイズでも同じ結果。従来の設定と同じ行・同じ順序", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(worklogArb, { minLength: 0, maxLength: 25 }),
+        fc.integer({ min: 1, max: 30 }),
+        fc.constantFrom("page", "offset"),
+        async (logs, size, type) => {
+          const data = logs.map((w, i) => ({ ...w, task: `${w.task}#${i}` }));
+          const base = columnsFor();
+          const slice = (start: number) => data.slice(start, start + size);
+          // 件数のパラメータが付いたら 400（連携先と同じ）。1 ページの件数は API 側で固定
+          const strict = (u: URL, start: () => number) => (u.searchParams.has("s") || u.searchParams.has("l") ? new Response("bad", { status: 400 }) : json(slice(start())));
+          let out: Worklog[];
+          let legacy: Worklog[];
+          if (type === "page") {
+            out = await fetchWith({ ...base, pagination: { type: "page", pageParam: "p", stopWhen: "empty" } }, (u) => strict(u, () => (Number(u.searchParams.get("p")) - 1) * size));
+            legacy = await fetchWith({ ...base, pagination: { type: "page", pageParam: "p", sizeParam: "s", size } }, (u) => json(slice((Number(u.searchParams.get("p")) - 1) * size)));
+          } else {
+            out = await fetchWith({ ...base, pagination: { type: "offset", offsetParam: "o", stopWhen: "empty" } }, (u) => strict(u, () => Number(u.searchParams.get("o"))));
+            legacy = await fetchWith({ ...base, pagination: { type: "offset", offsetParam: "o", limitParam: "l", limit: size } }, (u) => json(slice(Number(u.searchParams.get("o")))));
+          }
+          expect(out).toEqual(data);
+          expect(legacy).toEqual(data);
+        },
+      ),
+      { numRuns: 80 },
+    );
+  });
+});
+
 function columnsFor() {
   return { columns: Object.fromEntries(FIELDS.map((f) => [f, f])) };
 }

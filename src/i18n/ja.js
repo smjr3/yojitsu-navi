@@ -261,6 +261,8 @@ export default {
     taskMatchInvalid: "{file} {row} 行目: 作業種別「{task}」の照合（match）は空・「完全一致」・「含む」のどれかで指定してください: {value}",
     duplicateTaskType: "{file} {row} 行目: 作業種別「{task}」は {first} 行目と重複しています。{first} 行目を使います",
     missingColumn: "{file}: 列 {column} がありません",
+    worklogFetchFailed: "作業実績の取得に失敗しました（{at}）。前回取得したデータのままです: {message}",
+    memberFetchFailed: "所属・役職の取り込みに失敗しました（{at}）。メンバーマスタは前回のままです: {message}",
     contractIdEmpty: "{file} {row} 行目: 契約IDが空です",
     duplicateContractId: "{file} {row} 行目: 契約ID {contractId} が重複しています",
     contractStartMonthInvalid: "{file} {row} 行目: start_month の形式が不正です: {value}",

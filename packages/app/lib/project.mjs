@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, sep } from "node:path";
 import { cwd } from "node:process";
+import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
 
 /** 持ち込み先のプロジェクトに置く、どの版のどのファイルを入れたかの記録 */
 export const MANIFEST = ".yojitsu-navi.json";
@@ -20,7 +21,7 @@ export function isUserOwned(path) {
 }
 
 /**
- * update でのファイルの扱い（SPEC §86。docs/DEPLOY_GITLAB.md「新しい版にする」の表と同じ）。
+ * update でのファイルの扱い（SPEC §91。docs/DEPLOY_GITLAB.md「新しい版にする」の表と同じ）。
  * - keep: 社内のもの。触らない（config.json・data/ 以下すべて）
  * - vendor: 依存込みのとき、パッケージのもので丸ごと入れ替える（vendor/npm-cache/）
  * - tool: コマンドが書く・使う（.yojitsu-navi.json・.yojitsu-navi-backup/）
@@ -117,9 +118,36 @@ export function missingConfigKeys(a, b, prefix = "") {
   return out;
 }
 
-function git(cwd, args) {
-  const r = spawnSync("git", args, { cwd, encoding: "utf-8" });
+function git(cwd, args, input) {
+  const r = spawnSync("git", args, { cwd, encoding: "utf-8", input });
   return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() || String(r.error ?? "") };
+}
+
+/**
+ * パッケージのファイルを git に入れる。git add -A に加えて、git の除外設定（PC 全体の core.excludesFile など）に
+ * 当たるファイルも -f で入れる（入らないと push しても CI から見えず、「ファイルが無い」で落ちる）
+ */
+function gitAddPackageFiles(dir, files, pathspec = []) {
+  git(dir, ["add", "-A", ...pathspec]);
+  if (files.length) git(dir, ["add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], `${files.join("\0")}\0`);
+}
+
+/** CI 定義（.gitlab-ci.yml）が使うファイルが揃っていなければ止める（SPEC §85）。CI 定義の無いパッケージ（テスト用）では見ない */
+function assertCiFiles(dir, template, useGit) {
+  if (!template.has(CI_FILE)) return;
+  const problems = describeCiProblems(checkCiFiles(dir, { git: useGit }));
+  if (problems) throw new CliError(`${problems}\nこのままでは GitLab の CI が失敗します。直してから push してください（確かめ直すには yojitsu-navi check）`);
+}
+
+/** 今あるプロジェクトで、CI 定義が使うファイルが揃っているか確かめる（yojitsu-navi check） */
+export function check(o) {
+  const { dir, log } = o;
+  if (!existsSync(join(dir, CI_FILE))) throw new CliError(`${dir} に ${CI_FILE} がありません。予実ナビのプロジェクトのフォルダで実行してください`);
+  const r = checkCiFiles(dir, { git: isGitRepo(dir) });
+  const problems = describeCiProblems(r);
+  if (problems) throw new CliError(problems);
+  log(`CI（.gitlab-ci.yml）が使う ${r.required.length} ファイルは揃っています`);
+  return r;
 }
 
 const isGitRepo = (dir) => git(dir, ["rev-parse", "--is-inside-work-tree"]).out === "true";
@@ -184,12 +212,13 @@ export function init(o) {
       }
       repo = true;
       if (gitlab) git(dir, ["remote", "add", "origin", gitlab.remoteUrl]);
-      git(dir, ["add", "-A"]);
+      gitAddPackageFiles(dir, [...template.keys(), MANIFEST]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビ ${version}`]);
       committed = c.ok;
       if (!c.ok) log(`git commit できませんでした（${c.err.split("\n")[0]}）。git config --global user.name と user.email を設定してから下の手順を続けてください`);
     }
   }
+  assertCiFiles(dir, template, committed);
   const remote = gitlab ? gitlab.remoteUrl : "https://<社内GitLab>/<グループ>/<プロジェクト>.git";
   log("");
   log("次に行うこと（詳しくは docs/DEPLOY_GITLAB.md）:");
@@ -222,12 +251,12 @@ function unifiedDiff(a, b, label, tmp) {
     .trimEnd();
 }
 
-const CONFLICT_LABEL = { modified: "社内で変更", deleted: "社内で削除", created: "社内で作成", removedModified: "新しい版で削除（社内で変更）" };
+const CONFLICT_LABEL = { modified: "社内で変更", created: "社内で作成", removedModified: "新しい版で削除（社内で変更）" };
 
 /**
- * 今あるプロジェクトを、このパッケージの版に入れ替える（SPEC §44・§86）。
+ * 今あるプロジェクトを、このパッケージの版に入れ替える（SPEC §44・§91）。
  * - data/ と config.json は変えない。それ以外は新しい版にし、前の版の記録にあって新しい版に無いファイルは消す
- * - 上書き・削除するファイルに社内の変更（前の版の記録と中身が違う・消した・同じ名前で作った）があれば、何も変えずに止まる。
+ * - 上書き・削除するファイルに社内の変更（前の版の記録と中身が違う・同じ名前で作った）があれば、何も変えずに止まる。
  *   overwrite で新しい版にする、keepLocal で社内の版を残す（次の update でも残す）
  * - 上書き・削除する前のファイルは .yojitsu-navi-backup/<日時>/ に写す
  * - dryRun は何も変えず、変わるファイルの一覧と、社内の変更があるファイルの差分（社内の今 → 新しい版）を出す
@@ -275,7 +304,8 @@ export function update(o) {
       continue;
     }
     const base = old[f];
-    let type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : base ? "deleted" : null;
+    // 無くなっていたファイルは入れ直す（git の除外設定でコミットされなかったもの §85 と、社内で消したものは見分けられないので止めない）
+    let type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : null;
     // 前に社内の版を残すと決めたファイルは、記録と中身が同じでも（新しい版と同じだった版を挟んだとき）社内の版として扱う
     if (!type && cur && keptBefore.has(f)) type = "modified";
     if (type) conflicts.push({ f, type, next, cur });
@@ -295,7 +325,7 @@ export function update(o) {
   const take = conflicts.filter((c) => !keep(c) && o.overwrite);
   for (const c of take) {
     if (c.type === "removedModified") deletes.push(c.f);
-    else writes.push({ f: c.f, next: c.next, kind: c.type === "deleted" ? "added" : "changed" });
+    else writes.push({ f: c.f, next: c.next, kind: "changed" });
   }
   // 社内の版を残すファイルは「新しい版の中身を入れた」と記録し、次の update でも社内の変更として見分ける（新しい版で消えたものは記録から外し、社内のファイルにする）
   for (const c of keptNow) {
@@ -405,16 +435,19 @@ export function update(o) {
   if (missing.length) log(`config.json に無い新しい設定（無くても既定値で動きます。変えるときは docs/DATA.md）:\n${missing.map((k) => `  ${k}`).join("\n")}`);
 
   let branch = "";
+  let committed = false;
   if (useGit) {
-    branch = `update-${version}`;
-    if (git(dir, ["status", "--porcelain", ...outsideBackup]).out === "") {
+    // git の除外設定に当たるパッケージのファイルも入れる（前の版で入らなかったものもここで入る）
+    gitAddPackageFiles(dir, [...[...template.keys()].filter((f) => !isUserOwned(f) && existsSync(join(dir, f))), MANIFEST], outsideBackup);
+    if (git(dir, ["diff", "--cached", "--quiet"]).ok) {
       log("変更はありませんでした");
-      branch = "";
+      committed = true;
     } else {
+      branch = `update-${version}`;
       const sw = git(dir, ["switch", "-c", branch]);
       if (!sw.ok) git(dir, ["checkout", "-b", branch]);
-      git(dir, ["add", "-A", ...outsideBackup]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビを ${version} に更新`]);
+      committed = c.ok;
       if (!c.ok) {
         log(`git commit できませんでした（${c.err.split("\n")[0]}）。変更はフォルダに入っています`);
         branch = "";
@@ -426,5 +459,6 @@ export function update(o) {
       }
     }
   }
+  assertCiFiles(dir, template, committed);
   return { ...base, dryRun: false, backup, branch, vendorUpdated };
 }

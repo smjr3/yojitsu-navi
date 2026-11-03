@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
+import { CliError, check, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
 
 const PKG_DIR = fileURLToPath(new URL("..", import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
@@ -22,6 +22,8 @@ const HELP = `予実ナビ ${VERSION}
         --overwrite   社内で変えたファイルも新しい版にする
         --keep-local  社内で変えたファイルは社内の版のまま残す（次の update でも残す）
         --force       コミットしていない変更・古い版・依存込みの確認を飛ばす
+  yojitsu-navi check [フォルダ]
+      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか確かめる（init・update の最後にも確かめる）
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -108,6 +110,10 @@ async function main(argv) {
     const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
     if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
     update({ pkgDir: PKG_DIR, version: VERSION, dir, force: rest.includes("--force"), dryRun: rest.includes("--dry-run"), overwrite: rest.includes("--overwrite"), keepLocal: rest.includes("--keep-local"), log });
+    return 0;
+  }
+  if (cmd === "check") {
+    check({ dir: resolve(positional(rest, [])[0] ?? "."), log });
     return 0;
   }
   if (cmd === "gitlab-setup") {

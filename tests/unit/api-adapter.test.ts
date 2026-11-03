@@ -276,6 +276,178 @@ describe("ページング", () => {
     expect(f).toHaveBeenCalledTimes(5);
   });
 
+  describe("件数パラメータなし・終了条件（stopWhen）", () => {
+    // ページ番号だけを受け付け、件数のパラメータが付くと 400 を返す API（1 ページ 3 件固定、範囲外は空配列）
+    const pageOnly = (data: typeof ALL, perPage = 3) =>
+      vi.fn(async (u: string) => {
+        const url = new URL(u);
+        if (url.searchParams.has("size") || url.searchParams.has("per_page")) return new Response("bad", { status: 400 });
+        const p = Number(url.searchParams.get("page"));
+        return json(data.slice((p - 1) * perPage, p * perPage));
+      });
+
+    it("page: sizeParam 省略＋stopWhen empty で、件数を付けずに空配列まで取る", async () => {
+      const f = pageOnly(ALL);
+      const out = await run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty" } }, f as never);
+      expect(ids(out)).toEqual(ALL.map((r) => r.m));
+      expect(f).toHaveBeenCalledTimes(4); // 3 + 3 + 1 + 空
+      for (const [u] of f.mock.calls) expect(new URL(u as string).searchParams.has("size")).toBe(false);
+    });
+
+    it("page: sizeParam を空文字にしても付けない", async () => {
+      const f = pageOnly(ALL);
+      const out = await run({ pagination: { type: "page", pageParam: "page", sizeParam: "", stopWhen: "empty" } }, f as never);
+      expect(out).toHaveLength(7);
+    });
+
+    it("page: 件数を付けずに short（API 側の 1 ページの件数を size に書く）", async () => {
+      const f = pageOnly(ALL);
+      const out = await run({ pagination: { type: "page", pageParam: "page", size: 3 } }, f as never);
+      expect(out).toHaveLength(7);
+      expect(f).toHaveBeenCalledTimes(3);
+    });
+
+    it("page: stopWhen empty は件数未満のページの後も続ける（API の件数が途中で変わっても取りこぼさない）", async () => {
+      const sizes = [3, 1, 3, 0];
+      let start = 0;
+      const f = vi.fn(async (u: string) => {
+        const p = Number(new URL(u).searchParams.get("page"));
+        const n = sizes[p - 1] ?? 0;
+        const chunk = ALL.slice(start, start + n);
+        start += n;
+        return json(chunk);
+      });
+      const out = await run({ pagination: { type: "page", pageParam: "page", sizeParam: "size", size: 3, stopWhen: "empty" } }, f as never);
+      expect(out).toHaveLength(7);
+      expect(f).toHaveBeenCalledTimes(4);
+    });
+
+    it("page: 件数パラメータあり＋stopWhen empty は件数を付けたまま空まで取る", async () => {
+      const f = vi.fn(async (u: string) => {
+        const url = new URL(u);
+        const p = Number(url.searchParams.get("page"));
+        const s = Number(url.searchParams.get("size"));
+        return json(ALL.slice((p - 1) * s, p * s));
+      });
+      const out = await run({ pagination: { type: "page", pageParam: "page", sizeParam: "size", size: 3, stopWhen: "empty" } }, f as never);
+      expect(out).toHaveLength(7);
+      expect(f).toHaveBeenCalledTimes(4);
+      expect(new URL(f.mock.calls[0]![0] as string).searchParams.get("size")).toBe("3");
+    });
+
+    it("offset: limitParam 省略＋stopWhen empty は返った行数だけ offset を進める", async () => {
+      const urls: string[] = [];
+      const f = vi.fn(async (u: string) => {
+        urls.push(u);
+        const url = new URL(u);
+        if (url.searchParams.has("limit")) return new Response("bad", { status: 400 });
+        const o = Number(url.searchParams.get("offset"));
+        return json(ALL.slice(o, o + 2));
+      });
+      const out = await run({ pagination: { type: "offset", offsetParam: "offset", stopWhen: "empty" } }, f as never);
+      expect(out).toHaveLength(7);
+      expect(urls.map((u) => new URL(u).searchParams.get("offset"))).toEqual(["0", "2", "4", "6", "7"]);
+    });
+
+    it("empty: 空配列を返さず最後のページを繰り返す API は「同じ内容」で止まる", async () => {
+      const f = vi.fn(async (u: string) => {
+        const p = Math.min(Number(new URL(u).searchParams.get("page")), 3);
+        return json(ALL.slice((p - 1) * 3, p * 3).concat(p === 3 ? [row(9)] : []));
+      });
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty" } }, f as never)).rejects.toThrow(/同じ内容/);
+      expect(f.mock.calls.length).toBeLessThanOrEqual(4);
+    });
+
+    it("empty: 空配列が返らず毎回違う内容なら maxPages で止まる（既定 1000）", async () => {
+      let n = 0;
+      const f = vi.fn(async () => json([{ ...row(1), m: `M${n++}` }]));
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty", maxPages: 4 } }, f as never)).rejects.toThrow(/上限（4）/);
+      expect(f).toHaveBeenCalledTimes(4);
+      n = 0;
+      f.mockClear();
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty" } }, f as never)).rejects.toThrow(/上限（1000）/);
+      expect(f).toHaveBeenCalledTimes(1000);
+    });
+
+    it("設定の誤りは取得前に止める", async () => {
+      const f = vi.fn(async () => json([]));
+      // short（既定）なのに size が無い
+      await expect(run({ pagination: { type: "page", pageParam: "page" } }, f as never)).rejects.toThrow(/pagination\.size/);
+      // 件数を付けるのに size が無い
+      await expect(run({ pagination: { type: "page", pageParam: "page", sizeParam: "size", stopWhen: "empty" } }, f as never)).rejects.toThrow(/pagination\.size/);
+      await expect(run({ pagination: { type: "offset", offsetParam: "o", limitParam: "l", limit: 0 } }, f as never)).rejects.toThrow(/pagination\.limit/);
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "last" } } as never, f as never)).rejects.toThrow(/stopWhen/);
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty", maxPages: 0 } }, f as never)).rejects.toThrow(/maxPages/);
+      expect(f).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("既存のページング設定は従来どおり（stopWhen 省略＝設定件数未満で終了）", () => {
+    it("page: 件数のパラメータを毎回付け、件数未満のページで止まり、その次は取りに行かない", async () => {
+      const urls: string[] = [];
+      const f = vi.fn(async (u: string) => {
+        urls.push(u);
+        const url = new URL(u);
+        const p = Number(url.searchParams.get("page"));
+        const s = Number(url.searchParams.get("size"));
+        return json(ALL.slice((p - 1) * s, p * s));
+      });
+      const out = await run({ pagination: { type: "page", pageParam: "page", sizeParam: "size", size: 3 } }, f as never);
+      expect(out).toHaveLength(7);
+      expect(urls.map((u) => [new URL(u).searchParams.get("page"), new URL(u).searchParams.get("size")])).toEqual([
+        ["1", "3"],
+        ["2", "3"],
+        ["3", "3"],
+      ]);
+    });
+
+    it("page: 件数未満のページが途中にあればそこで終わる（従来の終了条件）", async () => {
+      const sizes = [3, 1, 3];
+      let start = 0;
+      const f = vi.fn(async (u: string) => {
+        const p = Number(new URL(u).searchParams.get("page"));
+        const n = sizes[p - 1] ?? 0;
+        const chunk = ALL.slice(start, start + n);
+        start += n;
+        return json(chunk);
+      });
+      const out = await run({ pagination: { type: "page", pageParam: "page", sizeParam: "size", size: 3 } }, f as never);
+      expect(out).toHaveLength(4);
+      expect(f).toHaveBeenCalledTimes(2);
+    });
+
+    it("offset: limit を毎回付け、limit 未満で止まる", async () => {
+      const urls: string[] = [];
+      const f = vi.fn(async (u: string) => {
+        urls.push(u);
+        const url = new URL(u);
+        const o = Number(url.searchParams.get("offset"));
+        const l = Number(url.searchParams.get("limit"));
+        return json(ALL.slice(o, o + l));
+      });
+      await run({ pagination: { type: "offset", offsetParam: "offset", limitParam: "limit", limit: 3 } }, f as never);
+      expect(urls.map((u) => [new URL(u).searchParams.get("offset"), new URL(u).searchParams.get("limit")])).toEqual([
+        ["0", "3"],
+        ["3", "3"],
+        ["6", "3"],
+      ]);
+    });
+
+    it("stopWhen: short を明示しても省略と同じ", async () => {
+      const make = () =>
+        vi.fn(async (u: string) => {
+          const url = new URL(u);
+          const p = Number(url.searchParams.get("page"));
+          return json(ALL.slice((p - 1) * 3, p * 3));
+        });
+      const a = make();
+      const b = make();
+      const base = { type: "page", pageParam: "page", sizeParam: "size", size: 3 } as const;
+      expect(await run({ pagination: base }, a as never)).toEqual(await run({ pagination: { ...base, stopWhen: "short" } }, b as never));
+      expect(a.mock.calls).toEqual(b.mock.calls);
+    });
+  });
+
   it("各ページでも 5xx は再試行する", async () => {
     let calls = 0;
     const f = vi.fn(async (u: string) => {

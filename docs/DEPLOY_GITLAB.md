@@ -96,6 +96,7 @@ git push -u origin main
 - `npm install -g` ができない PC では、`npx --yes ./yojitsu-navi-<版>.tgz init …` でも同じです（以下の `yojitsu-navi …` も `npx --yes ./yojitsu-navi-<版>.tgz …` に読み替え）。
 - サンプルデータ（`data/`）が入っています。まず Pages に出ることを確かめ、そのあと本番のデータに差し替えてください（[DATA.md](DATA.md)）。
 - git の履歴は新しく始まるので、開発元のアカウント名などは入りません。
+- 最後に、CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかを確かめます。足りないと一覧が出て止まります（SPEC §85）。
 
 ### 2. プロジェクトの設定を確認・適用する
 
@@ -124,6 +125,7 @@ yojitsu-navi gitlab-setup --apply
 Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gitlab-ci.yml` の各ジョブは `node scripts/ci/*.mjs` と `npm run` だけで、シェルの違いに左右されません）。
 - **shell executor**（Windows の Runner に多い）: Runner のマシンに Node.js 22（20 以上）と Git を入れておきます。`image:` は使われません。
 - **Docker（または Kubernetes）executor**: `image:` の `node:22` を使います。Windows コンテナの Runner では、Windows 用の Node のイメージを `NODE_IMAGE` で指定します。
+- テストが遅くてタイムアウトする・性能テストが時間を超えるときの設定（`VITEST_MAX_FORKS` など）は [OPERATIONS.md](OPERATIONS.md#テストを-windows-で動かすrunnerpc)。
 - Runner にタグが付いていてタグなしのジョブを受けない設定なら、管理者に「タグなしのジョブも実行する」を有効にしてもらうか、各ジョブに `tags:` を足します。
 
 **CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
@@ -167,7 +169,7 @@ git push -u origin update-<新しい版>
 
 ### 社内で変えたファイルがあるとき
 
-上書き・削除するファイルを社内で変えていると（前の版の記録と中身が違う・消した・同じ名前で作った）、**何も変えずに止まり**、そのファイルの一覧が出ます。改行が CRLF になっただけのものは変えたことにしません。
+上書き・削除するファイルを社内で変えていると（前の版の記録と中身が違う・記録に無いのに同じ名前のファイルがある）、**何も変えずに止まり**、そのファイルの一覧が出ます。改行が CRLF になっただけのものは変えたことにしません。無くなっていたファイル（git の除外設定でコミットされなかったものなど）は止まらずに入れ直します。
 
 ```sh
 yojitsu-navi update --dry-run      # 何も変えずに、変わるファイルの一覧と、社内で変えたファイルの差分（- が社内の今、+ が新しい版）を出す
@@ -179,6 +181,7 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 - 上書き・削除する前のファイルは、毎回 `.yojitsu-navi-backup/<日時>/`（`年月日-時分秒`）に写します。前の版の記録（`.yojitsu-navi.json`）も入ります。git には入りません（`.gitignore`）。要らなくなったら消してください。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
 - コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける。社内で変えたファイルの確認は `--force` でも飛ばしません）。
+- 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
 
 ## 社内で確認すること（チェックリスト）
 
@@ -224,6 +227,7 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
 | `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
+| CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
@@ -250,3 +254,6 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 
 取り込み結果は `data/<種類>-<日時>` ブランチの MR になり、パイプラインが成功すると自動でマージされます（`scripts/ci/fetch-data.mjs` → `push-data-mr.mjs`。`main` は直接プッシュ不可のため）。
 マージで `main` のパイプラインが走り、Pages まで更新されます。検証で失敗した MR は開いたまま残るので、ログの理由を直すか、MR を閉じてください（翌日の取り込みは最新の `main` から作り直します）。
+取得そのものが途中で失敗したときは CSV を書き換えず、失敗の記録（`data/worklogs/_meta.json` などの `lastFailure`）だけを MR にしてジョブを失敗で終えます。データ確認画面に警告で出て、次に成功すると消えます（SPEC §87）。
+
+過去の期間を取り直すとき（退職・異動した人の実績を含む）は、Build > Pipelines > Run pipeline で対象 `main`、変数 `FETCH_FROM`・`FETCH_TO`（`YYYY-MM`）を入れて実行します。特定の人だけなら `FETCH_MEMBERS`（社員番号をカンマ区切り）も入れます。手順は [OPERATIONS.md](OPERATIONS.md)「取得する人をメンバーマスタから決める」。
