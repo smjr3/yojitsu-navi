@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("列の区切りをドラッグして狭くでき、表が枠に収まる。再読み込みでも保たれ、ダブルクリックで戻る", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1080, height: 900 });
   await gotoPage(page, "/masters");
   const team = handle(page, "team_id");
   await expect(team).toHaveAttribute("role", "separator");
