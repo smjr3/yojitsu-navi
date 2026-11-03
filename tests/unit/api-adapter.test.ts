@@ -358,15 +358,15 @@ describe("ページング", () => {
       expect(f.mock.calls.length).toBeLessThanOrEqual(4);
     });
 
-    it("empty: 空配列が返らず毎回違う内容なら maxPages で止まる（既定 1000）", async () => {
+    it("empty: 空配列が返らず毎回違う内容なら maxPages で止まる（既定 5000）", async () => {
       let n = 0;
       const f = vi.fn(async () => json([{ ...row(1), m: `M${n++}` }]));
       await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty", maxPages: 4 } }, f as never)).rejects.toThrow(/上限（4）/);
       expect(f).toHaveBeenCalledTimes(4);
       n = 0;
       f.mockClear();
-      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty" } }, f as never)).rejects.toThrow(/上限（1000）/);
-      expect(f).toHaveBeenCalledTimes(1000);
+      await expect(run({ pagination: { type: "page", pageParam: "page", stopWhen: "empty" } }, f as never)).rejects.toThrow(/上限（5000）/);
+      expect(f).toHaveBeenCalledTimes(5000);
     });
 
     it("設定の誤りは取得前に止める", async () => {

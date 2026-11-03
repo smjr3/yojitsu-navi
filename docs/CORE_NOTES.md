@@ -59,7 +59,7 @@
 | dateFormat 指定 | 読めない値は `N 行目: 日付を … として読めません` で止める（値は出さない）。`ISO8601` はタイムゾーン無しを JST とみなし、あれば JST に換算した日付。`epochMillis` も JST の日付 |
 | hoursUnit | `minutes` は ÷60、`seconds` は ÷3600（丸めは CSV 書き出し時の小数 2 桁） |
 | ページング | `page` / `offset` は既定（`stopWhen: "short"`）で返った行数が size / limit 未満（0 含む）で終了、`stopWhen: "empty"` なら 0 行で終了。`sizeParam` / `limitParam` を省くと件数のパラメータを付けない（SPEC §90。設定の検査は `pagingPlan`）。`link` は `Link: rel="next"`（相対 URL 可）。`cursor` は JSON 応答の `cursorPath` が null・空で終了（CSV 応答では使えない）。`link` は **別オリジンの next には従わない**（トークン漏えい防止） |
-| 無限ループ防止 | 上限ページ数 `maxPages`（既定 1000、1 以上の整数、超えたらエラーでファイルを書かない）。同じカーソル・同じ Link URL の繰り返し、2 行以上のページが以前のページと完全に同じ内容（ページ指定が効いていない）でエラー |
+| 無限ループ防止 | 上限ページ数 `maxPages`（既定 5000、1 以上の整数、超えたらエラーでファイルを書かない）。同じカーソル・同じ Link URL の繰り返し、2 行以上のページが以前のページと完全に同じ内容（ページ指定が効いていない）でエラー |
 | トークン | ヘッダにだけ載せる。ログは URL のオリジン+パスだけ。例外メッセージ・ログ・4xx 本文の先頭 200 文字のすべてに `redact`（トークンとその URL エンコード形を `***` に置換）を通す |
 | 文字コード | `encoding` は CSV 応答だけ。`auto` は UTF-8 として厳密に読めなければ Shift_JIS（既存の `decodeAuto`）。JSON は常に UTF-8 |
 | `--dry-run` | 取得とマッピングは実際に行い、ファイル（月 CSV・`_meta.json`・members.csv）を一切書かない。列の対応表（使う列・見つからない列）、応答行数、filters 除外数、先頭 N 行（`--sample=N`、既定 5）を表示 |

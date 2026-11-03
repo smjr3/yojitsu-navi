@@ -84,7 +84,7 @@ export type PaginationStopWhen = "short" | "empty";
 /**
  * ページング設定。sizeParam / limitParam を省略（または空）にすると件数のパラメータを付けない
  * （ページ番号だけを受け付ける API 向け）。stopWhen が short のときは size / limit が必要（API 側の 1 ページの件数）。
- * maxPages（既定 1000）を超えたらエラーで止め、月ファイルは書き換えない。
+ * maxPages（既定 5000）を超えたらエラーで止め、月ファイルは書き換えない。
  */
 export type PaginationConfig =
   | { type: "none" }
