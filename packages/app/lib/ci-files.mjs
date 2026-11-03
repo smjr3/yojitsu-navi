@@ -130,13 +130,13 @@ export function ciRequiredFiles(projectDir) {
   return { files: [...files].sort(), missingScripts: [...missingScripts].sort() };
 }
 
-/** git が管理しているファイル（/ 区切り）。git のリポジトリでなければ null */
-function gitTracked(projectDir) {
-  const r = spawnSync("git", ["ls-files", "-z"], { cwd: projectDir, encoding: "utf-8" });
+/** 今のコミット（HEAD）に入っているファイル（プロジェクトからの相対パス、/ 区切り）。git のリポジトリでない・コミットが無いなら null。
+ * 追加しただけ（git add のみ）のファイルは push しても CI から見えないので、index ではなくコミットを見る */
+function gitCommitted(projectDir) {
+  // ls-tree はプロジェクトがリポジトリのサブフォルダでも、そのフォルダからの相対パスで返す
+  const r = spawnSync("git", ["ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "."], { cwd: projectDir, encoding: "utf-8" });
   if (r.status !== 0) return null;
-  // プロジェクトがリポジトリの一部（サブフォルダ）でも、プロジェクトからの相対パスにする
-  const top = spawnSync("git", ["rev-parse", "--show-prefix"], { cwd: projectDir, encoding: "utf-8" }).stdout?.trim() ?? "";
-  return new Set(r.stdout.split("\0").filter(Boolean).map((f) => (top && f.startsWith(top) ? f.slice(top.length) : f)));
+  return new Set(r.stdout.split("\0").filter(Boolean));
 }
 
 /**
@@ -149,8 +149,8 @@ export function checkCiFiles(projectDir, o = {}) {
   const missing = files.filter((f) => !isFile(join(projectDir, f)));
   let untracked = [];
   if (o.git !== false) {
-    const tracked = gitTracked(projectDir);
-    if (tracked) untracked = files.filter((f) => !missing.includes(f) && !tracked.has(f));
+    const committed = gitCommitted(projectDir);
+    if (committed) untracked = files.filter((f) => !missing.includes(f) && !committed.has(f));
   }
   return { required: files, missing, untracked, missingScripts };
 }

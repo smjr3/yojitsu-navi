@@ -329,6 +329,22 @@ describe("CI 定義とファイルの整合（SPEC §85）", () => {
     expect(ci.describeCiProblems(r)).toMatch(/scripts\/ci\/c\.mjs[\s\S]*nope/);
   });
 
+  it("git: 追加しただけ（未コミット）のファイルは未コミットと出す。リポジトリのサブフォルダにあるプロジェクトも正しく見る", () => {
+    const repo = mkdtempSync(join(work, "nested-"));
+    const dir = join(repo, "src");
+    mkdirSync(dir);
+    writeFileSync(join(dir, ".gitlab-ci.yml"), "job:\n  script:\n    - node src/run.mjs\n    - node staged.mjs\n");
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "run.mjs"), "");
+    git(repo, "init", "-q");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "1");
+    writeFileSync(join(dir, "staged.mjs"), "");
+    git(repo, "add", "-A");
+    const r = ci.checkCiFiles(dir);
+    expect([r.missing, r.untracked]).toEqual([[], ["staged.mjs"]]);
+  });
+
   it("init 直後のプロジェクト: CI が使うファイルがすべてあり、最初のコミットに入っている（PC 全体の git 除外設定に当たっても）", () => {
     const dir = join(work, "ci-init");
     withGlobalIgnore("*.mjs\nscripts/ci/\nlib/\n", () => app.init({ pkgDir: PKG, version: pkgJson.version, dir, log }));
