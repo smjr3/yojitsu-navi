@@ -1,6 +1,6 @@
 // yojitsu-navi コマンドの中身（init・update・接続先の設定）。Node の標準モジュールだけを使う（SPEC §44）
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, sep } from "node:path";
@@ -259,6 +259,8 @@ export function update(o) {
   const notAdded = [];
   /** 記録に書くもの（パス → コマンドが入れた中身のハッシュ） */
   const record = new Map();
+  /** 社内の版を残すファイル（--keep-local。前に残すと決めたものは、新しい版と中身が同じになっても次の版のために覚えておく） */
+  const kept = [];
   for (const [f, abs] of template) {
     const to = join(dir, f);
     if (fileKind(f) !== "package") {
@@ -269,10 +271,13 @@ export function update(o) {
     const cur = existsSync(to) ? readFileSync(to) : null;
     if (cur && sameContent(cur, next)) {
       record.set(f, sha(next));
+      if (keptBefore.has(f) && !o.overwrite) kept.push(f);
       continue;
     }
     const base = old[f];
-    const type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : base ? "deleted" : null;
+    let type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : base ? "deleted" : null;
+    // 前に社内の版を残すと決めたファイルは、記録と中身が同じでも（新しい版と同じだった版を挟んだとき）社内の版として扱う
+    if (!type && cur && keptBefore.has(f)) type = "modified";
     if (type) conflicts.push({ f, type, next, cur });
     else writes.push({ f, next, kind: cur ? "changed" : "added" });
   }
@@ -293,7 +298,6 @@ export function update(o) {
     else writes.push({ f: c.f, next: c.next, kind: c.type === "deleted" ? "added" : "changed" });
   }
   // 社内の版を残すファイルは「新しい版の中身を入れた」と記録し、次の update でも社内の変更として見分ける（新しい版で消えたものは記録から外し、社内のファイルにする）
-  const kept = [];
   for (const c of keptNow) {
     if (c.type === "removedModified") continue;
     record.set(c.f, sha(c.next));
@@ -375,15 +379,19 @@ export function update(o) {
     for (let n = 2; existsSync(join(dir, backup)); n++) backup = `${BACKUP_DIR}/${stamp}-${n}`;
     for (const f of toBackup) {
       mkdirSync(dirname(join(dir, backup, f)), { recursive: true });
-      cpSync(join(dir, f), join(dir, backup, f));
+      // シンボリックリンクは指す先の中身を写す（下で上書きするのはリンクではなく中身なので）
+      copyFileSync(join(dir, f), join(dir, backup, f));
     }
     writeFileSync(join(dir, backup, MANIFEST), readFileSync(manifestPath));
   }
 
   // 4. 入れ替える
   for (const w of writes) {
-    mkdirSync(dirname(join(dir, w.f)), { recursive: true });
-    writeFileSync(join(dir, w.f), w.next);
+    const to = join(dir, w.f);
+    mkdirSync(dirname(to), { recursive: true });
+    // シンボリックリンクは指す先（プロジェクトの外のこともある）を書き換えず、リンクを普通のファイルに置き換える
+    if (lstatSync(to, { throwIfNoEntry: false })?.isSymbolicLink()) rmSync(to);
+    writeFileSync(to, w.next);
   }
   for (const f of deletes) rmSync(join(dir, f));
   const vendorUpdated = pkgHasDeps ? copyCache(pkgDir, dir) : false;

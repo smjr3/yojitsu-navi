@@ -347,6 +347,33 @@ describe("update", () => {
     expect(() => app.update({ pkgDir: join(work, "upd-keep-v3"), version: "1.2.0", dir, log, overwrite: true, keepLocal: true })).toThrow(/どちらか/);
   }, 60_000);
 
+  it("--keep-local で残したファイルは、新しい版と中身が同じになった版を挟んでも、その次の版で上書きしない", () => {
+    const dir = project("upd-keep-same");
+    writeFileSync(join(dir, "src", "keep.js"), "社内版");
+    git(dir, "commit", "-qam", "社内の変更");
+    app.update({ pkgDir: fakePackage("upd-keep-same-v2", "1.1.0", { ...v2, "src/keep.js": "k2" }), version: "1.1.0", dir, log, keepLocal: true, git: false });
+    const r2 = app.update({ pkgDir: fakePackage("upd-keep-same-v3", "1.2.0", { ...v2, "src/keep.js": "社内版" }), version: "1.2.0", dir, log, git: false });
+    expect(r2.kept).toEqual(["src/keep.js"]);
+    const r3 = app.update({ pkgDir: fakePackage("upd-keep-same-v4", "1.3.0", { ...v2, "src/keep.js": "k4" }), version: "1.3.0", dir, log, git: false });
+    expect(r3.kept).toEqual(["src/keep.js"]);
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("社内版");
+  }, 60_000);
+
+  it.skipIf(process.platform === "win32")("シンボリックリンクは指す先の中身をバックアップし、指す先を書き換えない", () => {
+    const dir = project("upd-link");
+    const outside = join(work, "upd-link-outside.js");
+    writeFileSync(outside, "社内の中身");
+    rmSync(join(dir, "src", "keep.js"));
+    symlinkSync(outside, join(dir, "src", "keep.js"));
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
+    const r = app.update({ pkgDir: fakePackage("upd-link-v2", "1.1.0", v2), version: "1.1.0", dir, log, overwrite: true });
+    expect(r.overwritten).toEqual(["src/keep.js"]);
+    expect(readFileSync(outside, "utf-8")).toBe("社内の中身");
+    expect(readFileSync(join(dir, r.backup, "src", "keep.js"), "utf-8")).toBe("社内の中身");
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("k");
+  }, 60_000);
+
   it("改行が CRLF になっただけ（Windows の autocrlf）は社内の変更にしない", () => {
     const dir = project("upd-crlf");
     writeFileSync(join(dir, ".gitignore"), "node_modules/\r\n");
