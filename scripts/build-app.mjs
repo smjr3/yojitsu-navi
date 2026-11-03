@@ -19,6 +19,7 @@ import { npm } from "./lib/npm.mjs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { isImage } from "./lib/image-detect.mjs";
+import { checkCiFiles, describeCiProblems } from "../packages/app/lib/ci-files.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PKG = join(ROOT, "packages/app");
@@ -51,6 +52,13 @@ for (const f of templateFiles(ROOT)) {
   const to = join(TEMPLATE, f.replace(/(^|\/)\.gitignore$/, "$1_gitignore"));
   mkdirSync(dirname(to), { recursive: true });
   cpSync(join(ROOT, f), to);
+}
+
+// CI 定義（.gitlab-ci.yml）が使うファイル（npm run の中身・読み込み先まで）が template に揃っていなければ止める（SPEC §85）
+const ciProblems = describeCiProblems(checkCiFiles(TEMPLATE, { git: false }));
+if (ciProblems) {
+  console.error(`${ciProblems}\n（packages/app/template。init で作るプロジェクトの CI が失敗します）`);
+  process.exit(1);
 }
 
 // 2. dist/gitlab-setup.mjs: 依存なしで動くように TypeScript の型だけを外す

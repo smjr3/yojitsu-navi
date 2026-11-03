@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, sep } from "node:path";
 import { cwd } from "node:process";
+import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
 
 /** 持ち込み先のプロジェクトに置く、どの版のどのファイルを入れたかの記録 */
 export const MANIFEST = ".yojitsu-navi.json";
@@ -94,9 +95,36 @@ export function missingConfigKeys(a, b, prefix = "") {
   return out;
 }
 
-function git(cwd, args) {
-  const r = spawnSync("git", args, { cwd, encoding: "utf-8" });
+function git(cwd, args, input) {
+  const r = spawnSync("git", args, { cwd, encoding: "utf-8", input });
   return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() || String(r.error ?? "") };
+}
+
+/**
+ * パッケージのファイルを git に入れる。git add -A に加えて、git の除外設定（PC 全体の core.excludesFile など）に
+ * 当たるファイルも -f で入れる（入らないと push しても CI から見えず、「ファイルが無い」で落ちる）
+ */
+function gitAddPackageFiles(dir, files) {
+  git(dir, ["add", "-A"]);
+  if (files.length) git(dir, ["add", "-f", "--pathspec-from-file=-", "--pathspec-file-nul"], `${files.join("\0")}\0`);
+}
+
+/** CI 定義（.gitlab-ci.yml）が使うファイルが揃っていなければ止める（SPEC §85）。CI 定義の無いパッケージ（テスト用）では見ない */
+function assertCiFiles(dir, template, useGit) {
+  if (!template.has(CI_FILE)) return;
+  const problems = describeCiProblems(checkCiFiles(dir, { git: useGit }));
+  if (problems) throw new CliError(`${problems}\nこのままでは GitLab の CI が失敗します。直してから push してください（確かめ直すには yojitsu-navi check）`);
+}
+
+/** 今あるプロジェクトで、CI 定義が使うファイルが揃っているか確かめる（yojitsu-navi check） */
+export function check(o) {
+  const { dir, log } = o;
+  if (!existsSync(join(dir, CI_FILE))) throw new CliError(`${dir} に ${CI_FILE} がありません。予実ナビのプロジェクトのフォルダで実行してください`);
+  const r = checkCiFiles(dir, { git: isGitRepo(dir) });
+  const problems = describeCiProblems(r);
+  if (problems) throw new CliError(problems);
+  log(`CI（.gitlab-ci.yml）が使う ${r.required.length} ファイルは揃っています`);
+  return r;
 }
 
 const isGitRepo = (dir) => git(dir, ["rev-parse", "--is-inside-work-tree"]).out === "true";
@@ -155,12 +183,13 @@ export function init(o) {
       }
       repo = true;
       if (gitlab) git(dir, ["remote", "add", "origin", gitlab.remoteUrl]);
-      git(dir, ["add", "-A"]);
+      gitAddPackageFiles(dir, [...template.keys(), MANIFEST]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビ ${version}`]);
       committed = c.ok;
       if (!c.ok) log(`git commit できませんでした（${c.err.split("\n")[0]}）。git config --global user.name と user.email を設定してから下の手順を続けてください`);
     }
   }
+  assertCiFiles(dir, template, committed);
   const remote = gitlab ? gitlab.remoteUrl : "https://<社内GitLab>/<グループ>/<プロジェクト>.git";
   log("");
   log("次に行うこと（詳しくは docs/DEPLOY_GITLAB.md）:");
@@ -235,16 +264,19 @@ export function update(o) {
   if (missing.length) log(`config.json に無い新しい設定（無くても既定値で動きます。変えるときは docs/DATA.md）:\n${missing.map((k) => `  ${k}`).join("\n")}`);
 
   let branch = "";
+  let committed = false;
   if (useGit) {
-    branch = `update-${version}`;
-    if (git(dir, ["status", "--porcelain"]).out === "") {
+    // git の除外設定に当たるパッケージのファイルも入れる（前の版で入らなかったものもここで入る）
+    gitAddPackageFiles(dir, [...[...template.keys()].filter((f) => !isUserOwned(f) && existsSync(join(dir, f))), MANIFEST]);
+    if (git(dir, ["diff", "--cached", "--quiet"]).ok) {
       log("変更はありませんでした");
-      branch = "";
+      committed = true;
     } else {
+      branch = `update-${version}`;
       const sw = git(dir, ["switch", "-c", branch]);
       if (!sw.ok) git(dir, ["checkout", "-b", branch]);
-      git(dir, ["add", "-A"]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビを ${version} に更新`]);
+      committed = c.ok;
       if (!c.ok) {
         log(`git commit できませんでした（${c.err.split("\n")[0]}）。変更はフォルダに入っています`);
         branch = "";
@@ -256,5 +288,6 @@ export function update(o) {
       }
     }
   }
+  assertCiFiles(dir, template, committed);
   return { changed, added, removed, overwritten, missing, newData, branch, vendorUpdated };
 }

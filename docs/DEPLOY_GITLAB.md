@@ -95,6 +95,7 @@ git push -u origin main
 - `npm install -g` ができない PC では、`npx --yes ./yojitsu-navi-<版>.tgz init …` でも同じです（以下の `yojitsu-navi …` も `npx --yes ./yojitsu-navi-<版>.tgz …` に読み替え）。
 - サンプルデータ（`data/`）が入っています。まず Pages に出ることを確かめ、そのあと本番のデータに差し替えてください（[DATA.md](DATA.md)）。
 - git の履歴は新しく始まるので、開発元のアカウント名などは入りません。
+- 最後に、CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかを確かめます。足りないと一覧が出て止まります（SPEC §85）。
 
 ### 2. プロジェクトの設定を確認・適用する
 
@@ -157,6 +158,7 @@ git push -u origin update-<新しい版>
 - 新しい版で増えた設定（`config.json` に無い項目）や、サンプルにだけある新しいデータのファイルも一覧で出ます。無くても既定値で動きます。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
 - コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける）。
+- 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
 
 ## 社内で確認すること（チェックリスト）
 
@@ -201,6 +203,7 @@ git push -u origin update-<新しい版>
 | `npm ci` が `ETIMEDOUT` / `ENOTFOUND registry.npmjs.org` | 外部に出られない。`NPM_CONFIG_REGISTRY` に社内ミラーを設定するか、依存込みのパッケージで作り直す |
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
+| CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
