@@ -10,7 +10,7 @@
  */
 import { createHash } from "node:crypto";
 import { csvParse } from "d3-dsv";
-import type { ColumnSpec, DateFormat, HttpSourceOptions, PaginationConfig, PaginationStopWhen, SourceFilter } from "../../src/core/types.js";
+import type { ColumnSpec, DateFormat, HttpSourceOptions, MemberTargetConfig, PaginationConfig, PaginationStopWhen, SourceFilter } from "../../src/core/types.js";
 import { stripBom } from "../lib/csv.js";
 import { decodeAuto } from "../lib/encoding.js";
 
@@ -295,11 +295,40 @@ export function expandPlaceholders(template: string, from: string, to: string): 
     .replaceAll("{to}", encodeURIComponent(to));
 }
 
-/** url に query を足した最初のリクエスト URL */
-export function buildRequestUrl(http: Pick<HttpSourceOptions, "url" | "query">, from: string, to: string): string {
-  let url = expandPlaceholders(http.url, from, to);
+/** 社員番号を渡す設定（§87）と、1 リクエスト分の社員番号 */
+export interface MemberParam {
+  config: MemberTargetConfig;
+  ids: readonly string[];
+}
+
+const MEMBERS_PLACEHOLDER = "{members}";
+
+/** {members} を使うか param を足すかを確かめる（設定の誤りは取得前に止める） */
+export function checkMemberTarget(http: Pick<HttpSourceOptions, "url" | "query">, cfg: MemberTargetConfig): void {
+  const placeholder = http.url.includes(MEMBERS_PLACEHOLDER) || (http.query ?? "").includes(MEMBERS_PLACEHOLDER);
+  const param = (cfg.param ?? "").trim();
+  if (!placeholder && param === "") throw new Error("members.param（社員番号を渡すパラメータ名）を設定するか、url / query に {members} を書いてください");
+  if (placeholder && (cfg.style ?? "join") === "repeat") throw new Error("members.style が repeat のときは {members} ではなく members.param を使ってください");
+  if (cfg.chunkSize !== undefined && !(Number.isInteger(cfg.chunkSize) && cfg.chunkSize >= 1)) throw new Error("members.chunkSize は 1 以上の整数にしてください");
+}
+
+/** url に query を足した最初のリクエスト URL。members があれば {members} を置換するか、param を末尾に足す */
+export function buildRequestUrl(http: Pick<HttpSourceOptions, "url" | "query">, from: string, to: string, members?: MemberParam): string {
+  const joined = members ? members.ids.join(members.config.separator ?? ",") : "";
+  const expand = (t: string) => {
+    const e = expandPlaceholders(t, from, to);
+    return members ? e.replaceAll(MEMBERS_PLACEHOLDER, encodeURIComponent(joined)) : e;
+  };
+  let url = expand(http.url);
   const q = (http.query ?? "").trim().replace(/^[?&]+/, "");
-  if (q !== "") url += (url.includes("?") ? "&" : "?") + expandPlaceholders(q, from, to);
+  if (q !== "") url += (url.includes("?") ? "&" : "?") + expand(q);
+  const placeholder = http.url.includes(MEMBERS_PLACEHOLDER) || (http.query ?? "").includes(MEMBERS_PLACEHOLDER);
+  const param = (members?.config.param ?? "").trim();
+  if (members && !placeholder && param !== "") {
+    const key = encodeURIComponent(param);
+    const kv = (members.config.style ?? "join") === "repeat" ? members.ids.map((id) => `${key}=${encodeURIComponent(id)}`) : [`${key}=${encodeURIComponent(joined)}`];
+    url += (url.includes("?") ? "&" : "?") + kv.join("&");
+  }
   return url;
 }
 
@@ -330,6 +359,8 @@ export function parseCsvRows(text: string): RawRow[] {
 export interface FetchRowsContext {
   from: string;
   to: string;
+  /** 取得対象の社員番号（§87。作業実績で members を設定したときだけ） */
+  members?: MemberParam;
   token: string;
   log: (m: string) => void;
   deps?: HttpAdapterDeps;
@@ -480,7 +511,7 @@ async function fetchRawRowsInner(http: HttpSourceOptions, ctx: FetchRowsContext)
     throw new Error(`対応していない Content-Type: ${contentType}`);
   }
 
-  const baseUrl = buildRequestUrl(http, from, to);
+  const baseUrl = buildRequestUrl(http, from, to, ctx.members);
   try {
     new URL(baseUrl);
   } catch {
@@ -499,7 +530,7 @@ async function fetchRawRowsInner(http: HttpSourceOptions, ctx: FetchRowsContext)
     return u.toString();
   };
 
-  log(`[http] ${from}〜${to} を取得: ${safeUrl(baseUrl)}${pagination.type !== "none" ? `（ページング: ${pagination.type}）` : ""}`);
+  log(`[http] ${from}〜${to} を取得: ${safeUrl(baseUrl)}${ctx.members ? `（${ctx.members.ids.length} 人分）` : ""}${pagination.type !== "none" ? `（ページング: ${pagination.type}）` : ""}`);
 
   const all: RawRow[] = [];
   const seenSignatures = new Set<string>();

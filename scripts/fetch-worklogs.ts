@@ -4,14 +4,20 @@
  *   npm run fetch                       # config.worklogSource.adapter で取得
  *   npm run fetch -- --dry-run --sample=5   # ファイルを書かず、列の対応表と変換結果の先頭 N 行を表示（本番での初回設定用）
  *   npx tsx scripts/fetch-worklogs.ts --months 3 --asOf 2026-10-27 --adapter http
+ *   npm run fetch -- --from 2025-04 --to 2025-09                  # 過去の期間を取り直す（対象者はその期間の在籍者。§87）
+ *   npm run fetch -- --from 2025-04 --to 2025-09 --members M050,M051   # 指定した人の行だけ取り直す（他の人の行は残す）
  *
  * - 取り直す月数は config.worklogSource.http.refetchMonths（既定 3）。
  *   前月分の修正入力（締め後の訂正）を拾うため、毎回「今月を含む直近 N か月」を上書きする。
  * - 対象月のファイルだけを書き換え、それ以外の月は触らない。
  * - 同じ入力なら同じ出力（行は日付→メンバー→顧客順に並べる）。冪等。
  * - _meta.json に fetchedAt（ISO 8601）と adapter を書く。
+ * - worklogSource.http.members を設定すると、取得対象の社員番号をメンバーマスタから作って API に渡す（§87）。
+ * - 取得に失敗したら月ファイルは 1 つも書き換えず、_meta.json の lastFailure に記録する（データ確認画面に出る）。
+ *   次に成功すると lastFailure は消える。
  *
  * 環境変数: WORKLOG_API_TOKEN（http アダプタ）、WORKLOG_ADAPTER（アダプタ名の上書き）
+ *           FETCH_FROM / FETCH_TO / FETCH_MEMBERS（CI の手動実行で --from / --to / --members の代わり。scripts/ci/fetch-data.mjs が渡す）
  */
 import { mkdirSync } from "node:fs";
 import { writeFilesAtomic } from "./lib/atomic.js";
@@ -21,13 +27,22 @@ import type { Worklog, YearMonth } from "../src/core/types.js";
 import { selectAdapter } from "./adapters/index.js";
 import type { FetchReport } from "./adapters/http-source.js";
 import { formatMappingTable } from "./lib/dry-run.js";
-import { formatWorklogCsv, sortWorklogs } from "./lib/csv.js";
+import { formatWorklogCsv, parseWorklogCsv, sortWorklogs } from "./lib/csv.js";
+import { readTextAuto } from "./lib/encoding.js";
+import { clearFailure, safeMessage, writeFailure } from "./lib/fetch-status.js";
+import { parseMemberList, readMemberRecords, targetMemberIds } from "./lib/fetch-targets.js";
 import { loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
+import { existsSync } from "node:fs";
 
 interface CliOptions {
   rootDir: string;
   /** 取り直す月数（省略時は config の refetchMonths） */
   months?: number;
+  /** 取り直す期間（YYYY-MM。指定すると months より優先。過去の再取得用。§87） */
+  from?: YearMonth;
+  to?: YearMonth;
+  /** 取り直す人を明示する（指定した人の行だけ差し替え、他の人の行は残す。§87） */
+  members?: string[];
   /** 基準日（省略時は今日）。テストや再現用 */
   asOf?: string;
   /** アダプタ名の上書き */
@@ -64,26 +79,77 @@ function todayJst(): string {
 
 export interface FetchResult {
   months: YearMonth[];
+  /** 取得対象の人数（メンバーマスタから作った・--members で指定した。対象を絞らないときは undefined） */
+  targetCount?: number;
+  /** --members で人を指定したか（その人の行だけ差し替え） */
+  partial?: boolean;
   rowsByMonth: Record<YearMonth, number>;
   adapter: string;
   fetchedAt: string;
   dryRun?: { total: number; sample: Worklog[]; report?: FetchReport };
 }
 
+/** from〜to の月（昇順） */
+function monthsBetween(from: YearMonth, to: YearMonth): YearMonth[] {
+  const out: YearMonth[] = [];
+  for (let m = from; m <= to; m = addMonths(m, 1)) out.push(m);
+  return out;
+}
+
+/** 取り直す期間: --from/--to があればそれ、無ければ基準日を含む直近 N か月 */
+export function targetMonths(opts: Pick<CliOptions, "from" | "to" | "months">, asOf: string, refetchMonths: number | undefined): YearMonth[] {
+  if (opts.from !== undefined || opts.to !== undefined) {
+    const from = opts.from ?? opts.to ?? "";
+    const to = opts.to ?? asOf.slice(0, 7);
+    if (from > to) throw new Error(`--from（${from}）が --to（${to}）より後です`);
+    return monthsBetween(from, to);
+  }
+  return recentMonths(asOf, Math.max(1, opts.months ?? refetchMonths ?? 3));
+}
+
 export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = process.env, now: () => Date = () => new Date()): Promise<FetchResult> {
   const config = loadConfig(opts.rootDir);
+  const dir = worklogDir(opts.rootDir, config);
+  try {
+    return await fetchWorklogsInner(opts, config, dir, env, now);
+  } catch (e) {
+    // 失敗: 月ファイルは書き換えていない。データ確認画面に出すため _meta.json に記録だけ残す（§87）
+    const message = safeMessage(e instanceof Error ? e.message : String(e), [env.WORKLOG_API_TOKEN]);
+    if (!opts.dryRun) {
+      try {
+        mkdirSync(dir, { recursive: true });
+        writeFailure(join(dir, "_meta.json"), now().toISOString(), message);
+      } catch {
+        // 記録に失敗しても、元のエラーを優先して返す
+      }
+    }
+    throw new Error(message);
+  }
+}
+
+async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof loadConfig>, dir: string, env: NodeJS.ProcessEnv, now: () => Date): Promise<FetchResult> {
   const adapter = selectAdapter(config, opts.adapter ? { ...env, WORKLOG_ADAPTER: opts.adapter } : env);
-  const n = Math.max(1, opts.months ?? config.worklogSource.http?.refetchMonths ?? 3);
   const asOf = opts.asOf ?? todayJst();
-  const months = recentMonths(asOf, n);
+  const months = targetMonths(opts, asOf, config.worklogSource.http?.refetchMonths);
   const from = months[0];
   const to = months[months.length - 1];
   if (!from || !to) throw new Error("対象月がありません");
 
   const log = (m: string) => console.error(m);
-  log(`[fetch] アダプタ=${adapter.name} 対象月=${from}〜${to}`);
+  // 取得対象の人（§87）: --members で指定した人、無ければ http.members を設定したときだけメンバーマスタの在籍者
+  // 人の指定が空（区切りだけ・空の変数）を「指定なし」と扱うと、全員分の書き直しに広がってしまうので止める
+  if (opts.members !== undefined && opts.members.length === 0) throw new Error("--members（FETCH_MEMBERS）に社員番号がありません");
+  const explicit = opts.members;
+  let memberIds: string[] | undefined = explicit;
+  if (!memberIds && adapter.name === "http" && config.worklogSource.http?.members) {
+    memberIds = targetMemberIds(readMemberRecords(opts.rootDir, config), from, to);
+  }
+  log(`[fetch] アダプタ=${adapter.name} 対象月=${from}〜${to}${memberIds ? ` 対象者=${memberIds.length} 人${explicit ? "（指定。その人の行だけ差し替え）" : "（メンバーマスタから）"}` : ""}`);
   let report: FetchReport | undefined;
-  const rows = await adapter.fetch({ from, to, asOf, config, env, rootDir: opts.rootDir, log, report: (r) => (report = r) });
+  const fetched = await adapter.fetch({ from, to, asOf, config, env, rootDir: opts.rootDir, log, report: (r) => (report = r), ...(memberIds ? { memberIds } : {}) });
+  // 人を指定したときは、その人の行だけを使う（API が全員分を返す場合や csv・dummy アダプタでも同じ結果にする）
+  const only = explicit ? new Set(explicit) : null;
+  const rows = only ? fetched.filter((w) => only.has(w.memberId.trim())) : fetched;
 
   if (opts.dryRun) {
     const sample = sortWorklogs(rows).slice(0, Math.max(0, opts.sample ?? 5));
@@ -91,7 +157,7 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
     if (report) dry.report = report;
     const rowsByMonth: Record<YearMonth, number> = {};
     for (const ym of months) rowsByMonth[ym] = rows.filter((w) => w.date.slice(0, 7) === ym).length;
-    return { months, rowsByMonth, adapter: adapter.name, fetchedAt: now().toISOString(), dryRun: dry };
+    return { months, rowsByMonth, adapter: adapter.name, fetchedAt: now().toISOString(), dryRun: dry, ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
   }
 
   // 月ごとに振り分け（期間外は捨てる。対象月でデータが 0 件でも空ファイルを書く＝取り消しを反映）
@@ -109,39 +175,54 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
     throw new Error(`取得した ${rows.length} 行がすべて対象月（${from}〜${to}）の外でした。日付の形式を確認してください。月ファイルは書き換えていません`);
   }
 
-  const dir = worklogDir(opts.rootDir, config);
   mkdirSync(dir, { recursive: true });
   const rowsByMonth: Record<YearMonth, number> = {};
   const outputs: Array<{ path: string; data: string }> = [];
   for (const ym of months) {
-    const list = sortWorklogs(byMonth.get(ym) ?? []);
+    const fresh = byMonth.get(ym) ?? [];
+    // 人を指定したときは、既存の月ファイルのうち指定外の人の行を残す
+    const kept = only ? readMonthRows(join(dir, `${ym}.csv`)).filter((w) => !only.has(w.memberId.trim())) : [];
+    const list = sortWorklogs([...kept, ...fresh]);
     outputs.push({ path: join(dir, `${ym}.csv`), data: formatWorklogCsv(list) });
     rowsByMonth[ym] = list.length;
   }
 
   const fetchedAt = now().toISOString();
   const prev = readWorklogMeta(dir);
-  const meta = { ...prev, fetchedAt, adapter: adapter.name, refetchedMonths: months };
+  // 成功したので前回の失敗の記録は消す。人を指定した取り直しは「全員分の取得日時」ではないので fetchedAt を変えない
+  const { lastFailure: _lastFailure, ...rest } = prev;
+  const meta = explicit ? { ...rest } : { ...rest, fetchedAt, adapter: adapter.name, refetchedMonths: months };
   outputs.push({ path: join(dir, "_meta.json"), data: JSON.stringify(meta, null, 2) + "\n" });
   // 全月を書けたときだけまとめて差し替える（途中で失敗しても、一部の月だけ新しい・空のファイルが残る状態にしない）
   writeFilesAtomic(outputs);
   for (const ym of months) log(`[fetch] ${ym}.csv を書き込み (${rowsByMonth[ym]} 行)`);
-  return { months, rowsByMonth, adapter: adapter.name, fetchedAt };
+  return { months, rowsByMonth, adapter: adapter.name, fetchedAt, ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
+}
+
+/** 既存の月ファイルの行（無ければ空） */
+function readMonthRows(path: string): Worklog[] {
+  return existsSync(path) ? parseWorklogCsv(readTextAuto(path)) : [];
 }
 
 /** --dry-run の表示 */
 export function formatDryRun(r: FetchResult): string[] {
   const d = r.dryRun;
   if (!d) return [];
-  const out = [`[dry-run] ファイルは書き込みません（adapter=${r.adapter}、対象月 ${r.months.join(", ")}）`, ""];
+  const out = [`[dry-run] ファイルは書き込みません（adapter=${r.adapter}、対象月 ${r.months.join(", ")}${r.targetCount !== undefined ? `、対象 ${r.targetCount} 人` : ""}）`, ""];
   if (d.report) out.push(...formatMappingTable(d.report), "");
   out.push(`変換後 ${d.total} 行（月別: ${r.months.map((m) => `${m}=${r.rowsByMonth[m] ?? 0}`).join(", ")}）。先頭 ${d.sample.length} 行:`);
   for (const w of d.sample) out.push(`  ${w.date}\t${w.memberId}\t${w.memberName}\t${w.customerName}\t${w.projectName}\t${w.task}\t${w.hours}`);
   return out;
 }
 
-export function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptions {
   const opts: CliOptions = { rootDir: process.cwd() };
+  // CI の手動実行（Run pipeline の変数）。コマンドラインの指定があればそちらを優先する
+  const fromEnv: string[] = [];
+  if (env.FETCH_FROM?.trim()) fromEnv.push("--from", env.FETCH_FROM.trim());
+  if (env.FETCH_TO?.trim()) fromEnv.push("--to", env.FETCH_TO.trim());
+  if (env.FETCH_MEMBERS !== undefined && env.FETCH_MEMBERS !== "") fromEnv.push("--members", env.FETCH_MEMBERS);
+  argv = [...fromEnv, ...argv];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
     const v = argv[i + 1];
@@ -151,6 +232,14 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (a === "--asOf" && v !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error(`--asOf は YYYY-MM-DD 形式で指定してください: ${v}`);
       opts.asOf = v;
+      i++;
+    } else if ((a === "--from" || a === "--to") && v !== undefined) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) throw new Error(`${a} は YYYY-MM 形式で指定してください: ${v}`);
+      opts[a === "--from" ? "from" : "to"] = v;
+      i++;
+    } else if (a === "--members" && v !== undefined) {
+      opts.members = parseMemberList(v);
+      if (opts.members.length === 0) throw new Error(`--members に社員番号がありません: ${JSON.stringify(v)}`);
       i++;
     } else if (a === "--adapter" && v !== undefined) {
       opts.adapter = v;
@@ -171,13 +260,14 @@ export function parseArgs(argv: string[]): CliOptions {
 
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
-  fetchWorklogs(parseArgs(process.argv.slice(2)))
+  Promise.resolve()
+    .then(() => fetchWorklogs(parseArgs(process.argv.slice(2), process.env)))
     .then((r) => {
       if (r.dryRun) {
         console.log(formatDryRun(r).join("\n"));
         return;
       }
-      console.log(`作業実績を更新しました: ${r.months.join(", ")} (adapter=${r.adapter}, fetchedAt=${r.fetchedAt})`);
+      console.log(`作業実績を更新しました: ${r.months.join(", ")}${r.targetCount !== undefined ? `（対象 ${r.targetCount} 人${r.partial ? "。指定した人の行だけ差し替え" : ""}）` : ""} (adapter=${r.adapter}, fetchedAt=${r.fetchedAt})`);
     })
     .catch((e: unknown) => {
       console.error(`取得に失敗しました: ${e instanceof Error ? e.message : String(e)}`);
