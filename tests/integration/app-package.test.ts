@@ -10,7 +10,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { npm } from "../../scripts/lib/npm.mjs";
+import { npmCommand } from "../../scripts/lib/npm.mjs";
+import { runAsync, runOk, scaled } from "../test-env.js";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import * as src from "../../src/core/index.js";
 import { tmpdir } from "node:os";
@@ -27,24 +28,40 @@ let consumer = "";
 const logs: string[] = [];
 const log = (s: string) => logs.push(s);
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+/** npm pack --dry-run の中身（重いので beforeAll で 1 回だけ作り、2 つのテストで使う） */
+let packed: string[] = [];
 
 beforeAll(async () => {
-  execFileSync(process.execPath, [join(ROOT, "scripts", "build-app.mjs")], { cwd: ROOT, stdio: "pipe" });
+  // 組み立てと npm pack は重い（Windows では 1 分を超えることがある）ので、待つ間も Vitest のワーカーを止めない形で動かす（tests/test-env.ts）
+  await runOk(process.execPath, [join(ROOT, "scripts", "build-app.mjs")], { cwd: ROOT });
+  const [npmCmd, npmArgs] = npmCommand(["pack", "--dry-run", "--json", "--ignore-scripts"]);
+  packed = JSON.parse(await runOk(npmCmd, npmArgs, { cwd: PKG }))[0].files.map((f: { path: string }) => f.path);
   app = await import(pathToFileURL(join(PKG, "lib", "project.mjs")).href);
   work = mkdtempSync(join(tmpdir(), "yojitsu-app-"));
   // コミットする人の設定が無い環境（CI）でも動くように
   Object.assign(process.env, { GIT_AUTHOR_NAME: "test", GIT_AUTHOR_EMAIL: "test@example.local", GIT_COMMITTER_NAME: "test", GIT_COMMITTER_EMAIL: "test@example.local" });
+  // 動かす PC の git の設定に左右されないように（Git for Windows の既定 core.autocrlf=true・長いパス・コミットの署名）
+  Object.assign(process.env, {
+    GIT_CONFIG_COUNT: "3",
+    GIT_CONFIG_KEY_0: "core.autocrlf",
+    GIT_CONFIG_VALUE_0: "false",
+    GIT_CONFIG_KEY_1: "core.longpaths",
+    GIT_CONFIG_VALUE_1: "true",
+    GIT_CONFIG_KEY_2: "commit.gpgsign",
+    GIT_CONFIG_VALUE_2: "false",
+  });
   // 計算コアを import する別プロジェクトを再現する（node_modules/yojitsu-navi → packages/app）
   consumer = join(work, "consumer");
   mkdirSync(join(consumer, "node_modules"), { recursive: true });
   writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "consumer", private: true, type: "module" }));
   // Windows は管理者権限なしでシンボリックリンクを作れないので、ジャンクションにする
   symlinkSync(PKG, join(consumer, "node_modules", "yojitsu-navi"), process.platform === "win32" ? "junction" : "dir");
-}, 120_000);
+}, scaled(180_000));
 
 afterAll(() => {
-  if (work) rmSync(work, { recursive: true, force: true });
-});
+  // Windows はウイルス対策の検査などでファイルが一時的に使用中になり、消せないことがあるので待って何度か試す
+  if (work) rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}, scaled(60_000));
 
 /** 小さな偽のパッケージ（update の確認用）。files は template に置くファイル */
 function fakePackage(name: string, version: string, files: Record<string, string>, withDeps = false): string {
@@ -73,8 +90,7 @@ describe("パッケージの中身", () => {
   });
 
   it("入るのは bin・lib・dist・template・README・LICENSE だけで、リポジトリ一式が揃っている", () => {
-    const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
-    const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
+    const files = packed;
     expect(files.filter((f) => !/^(bin|lib|dist|template)\//.test(f) && !["README.md", "LICENSE", "package.json"].includes(f))).toEqual([]);
     for (const f of ["LICENSE", "bin/yojitsu-navi.mjs", "lib/project.mjs", "dist/gitlab-setup.mjs", "template/package.json", "template/package-lock.json", "template/.gitlab-ci.yml", "template/_gitignore", "template/config.json", "template/src/index.md", "template/data/contracts.csv", "template/docs/DEPLOY_GITLAB.md"]) {
       expect(files).toContain(f);
@@ -160,12 +176,13 @@ describe("接続先", () => {
 });
 
 describe("init", () => {
-  it("一式を写し、接続先・記録・最初のコミットを作る", () => {
+  it("一式を写し、接続先・記録・最初のコミットを作る（コマンドで）", async () => {
     const dir = join(work, "proj");
-    logs.length = 0;
-    const r = app.init({ pkgDir: PKG, version: pkgJson.version, dir, gitlab: app.normalizeGitlab("https://gl.example.local", "yojitsu-navi/yojitsu-navi"), log });
-    expect(r.committed).toBe(true);
-    expect(r.withDeps).toBe(false);
+    // 一式（リポジトリ全体）の写しとコミットは重いので、別プロセスのコマンドで動かして待つ（ワーカーを止めない。tests/test-env.ts）
+    const r = await runAsync(process.execPath, [join(PKG, "bin", "yojitsu-navi.mjs"), "init", dir, "--gitlab", "https://gl.example.local", "--project", "yojitsu-navi/yojitsu-navi"], { cwd: work });
+    expect(r.status, r.stderr).toBe(0);
+    expect(git(dir, "rev-list", "--count", "HEAD")).toBe("1");
+    expect(existsSync(join(dir, app.VENDOR_CACHE))).toBe(false);
     expect(existsSync(join(dir, ".gitignore"))).toBe(true);
     expect(existsSync(join(dir, "_gitignore"))).toBe(false);
     expect(readFileSync(join(dir, "src", "core", "index.ts"), "utf-8")).toBe(readFileSync(join(ROOT, "src", "core", "index.ts"), "utf-8"));
@@ -177,8 +194,8 @@ describe("init", () => {
     const manifest = JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8"));
     expect(manifest.version).toBe(pkgJson.version);
     expect(Object.keys(manifest.files)).toContain(".gitignore");
-    expect(logs.join("\n")).toContain("git push -u origin main");
-  }, 60_000);
+    expect(r.stdout).toContain("git push -u origin main");
+  }, scaled(60_000));
 
   it("空でないフォルダには作らない", () => {
     const dir = join(work, "busy");
@@ -238,7 +255,7 @@ describe("update", () => {
     logs.length = 0;
     const again = app.update({ pkgDir: join(work, "upd-v2"), version: "1.1.0", dir, log });
     expect([again.changed, again.added, again.removed, again.branch]).toEqual([[], [], [], ""]);
-  }, 60_000);
+  }, scaled(60_000));
 
   it("コミットしていない変更・古い版・記録の無いフォルダでは止まる", () => {
     const dir = project("upd-stop");
@@ -249,7 +266,7 @@ describe("update", () => {
     expect(() => app.update({ pkgDir: pkg, version: "0.9.0", dir, log })).toThrow(/古い版/);
     expect(() => app.update({ pkgDir: pkg, version: "1.1.0", dir: join(work, "nogit"), log })).not.toThrow();
     expect(() => app.update({ pkgDir: pkg, version: "1.1.0", dir: work, log })).toThrow(/\.yojitsu-navi\.json/);
-  }, 60_000);
+  }, scaled(60_000));
 
   it("依存込みのプロジェクトは依存込みのパッケージでだけ更新し、キャッシュを入れ替える", () => {
     const dir = project("upd-deps", true);
@@ -258,7 +275,7 @@ describe("update", () => {
     const r = app.update({ pkgDir: fakePackage("upd-deps-v2d", "1.1.0", v2, true), version: "1.1.0", dir, log });
     expect(r.vendorUpdated).toBe(true);
     expect(readFileSync(join(dir, app.VENDOR_CACHE, "index"), "utf-8")).toBe("1.1.0");
-  }, 60_000);
+  }, scaled(60_000));
 
   it("版の比較", () => {
     expect(app.compareVersion("1.10.0", "1.9.9")).toBeGreaterThan(0);
@@ -304,8 +321,7 @@ describe("yojitsu-navi の計算コア", () => {
   });
 
   it("パッケージに計算コア（dist/core・dist/i18n）が入り、.ts のソースは入らない", () => {
-    const out = String(npm(["pack", "--dry-run", "--json"], { cwd: PKG, encoding: "utf-8" }));
-    const files: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path);
+    const files = packed;
     for (const f of ["dist/core/index.js", "dist/core/index.d.ts", "dist/i18n/ja.js"]) expect(files).toContain(f);
     expect(files.filter((f) => f.startsWith("dist/") && f.endsWith(".ts") && !f.endsWith(".d.ts"))).toEqual([]);
   });
@@ -322,7 +338,7 @@ describe("yojitsu-navi の計算コア", () => {
     expect(JSON.parse(r.stdout)).toEqual([["2026-03", "2026-04", "2026-05"], src.formatYen(1234567, "millionYen"), "function", "function"]);
   });
 
-  it("別プロジェクトの TypeScript で型が解決できる（型の誤りは誤りとして出る）", () => {
+  it("別プロジェクトの TypeScript で型が解決できる（型の誤りは誤りとして出る）", async () => {
     const ok = [
       'import { monthRange, type Contract, type MoneyUnit } from "yojitsu-navi";',
       'import type { MasterEditConfig } from "yojitsu-navi/types";',
@@ -335,12 +351,11 @@ describe("yojitsu-navi の計算コア", () => {
     writeFileSync(join(consumer, "ok.ts"), ok);
     writeFileSync(join(consumer, "ng.ts"), 'import { monthRange } from "yojitsu-navi";\nexport const n: number = monthRange("2026-04", "2026-06");\n');
     const tsc = (file: string) =>
-      spawnSync(process.execPath, [join(ROOT, "node_modules", "typescript", "bin", "tsc"), "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2022", file], { cwd: consumer, encoding: "utf-8" });
-    const good = tsc("ok.ts");
+      runAsync(process.execPath, [join(ROOT, "node_modules", "typescript", "bin", "tsc"), "--noEmit", "--strict", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2022", file], { cwd: consumer });
+    const [good, bad] = await Promise.all([tsc("ok.ts"), tsc("ng.ts")]);
     expect(good.stdout + good.stderr).toBe("");
     expect(good.status).toBe(0);
-    const bad = tsc("ng.ts");
     expect(bad.status).not.toBe(0);
     expect(bad.stdout).toMatch(/TS2322/);
-  }, 60_000);
+  }, scaled(60_000));
 });

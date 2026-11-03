@@ -22,6 +22,9 @@
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
+#   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
+#   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
 #
 # 外部ネットワーク:
 #   - 画面は外部 CDN を一切使わない（ライブラリは dist/ に同梱）
@@ -103,6 +106,10 @@ validate:
 test:
   stage: test
   <<: *normal-rules
+  variables:
+    # 性能テストは時間を表示するだけにする（Runner の性能がばらつくため）。判定したいときは CI/CD 変数 YOJITSU_PERF に loose か strict。
+    # Windows の Runner でワーカーのタイムアウトが出るときは CI/CD 変数 VITEST_MAX_FORKS を 2（それでも出るなら 1）にする（docs/OPERATIONS.md、SPEC §79.1）
+    YOJITSU_PERF: "report"
   script:
     - npm run typecheck
     # JUnit 形式のレポートも出して GitLab のテスト結果タブに表示する
