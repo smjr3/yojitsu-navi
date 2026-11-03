@@ -10,7 +10,7 @@ import { isValidISODate, monthOfDate, monthRange } from "./calendar.js";
 import { customerKey } from "./customers.js";
 import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { createKeywordRouter } from "./mapping.js";
-import { normalizeKeyword, normalizeName } from "./normalize.js";
+import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import { monthStatusFromMeta } from "./status.js";
 import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
@@ -46,7 +46,7 @@ export interface TaskClassifier {
   /** 作業種別（作業名）だけで分類する（分類表のみ） */
   classify(task: string): TaskClassification;
   /** 作業ログを分類する。紐付けルールのキーワード（§62.1）があればそれを優先する */
-  classifyWorklog(w: Pick<Worklog, "customerName" | "projectName" | "task">): TaskClassification;
+  classifyWorklog(w: Pick<Worklog, "customerName" | "projectName" | "task" | "taskCode"> & { date?: string }): TaskClassification;
 }
 
 /**
@@ -85,7 +85,10 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined,
     classify,
     classifyWorklog(w) {
       if (!router.enabled) return classify(w.task);
-      const key = `${w.customerName}${SEP}${w.projectName}${SEP}${w.task}`;
+      // 作業コードの行・行の期間（§92）があれば、結果がコード・月で変わるのでキーに含める
+      let key = `${w.customerName}${SEP}${w.projectName}${SEP}${w.task}`;
+      if (router.dependsOnCode) key += `${SEP}${normalizeCode(w.taskCode)}`;
+      if (router.dependsOnMonth) key += `${SEP}${(w.date ?? "").slice(0, 7)}`;
       let c = byWorklog.get(key);
       if (c) return c;
       const base = classify(w.task);

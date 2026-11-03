@@ -256,4 +256,6 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 マージで `main` のパイプラインが走り、Pages まで更新されます。検証で失敗した MR は開いたまま残るので、ログの理由を直すか、MR を閉じてください（翌日の取り込みは最新の `main` から作り直します）。
 取得そのものが途中で失敗したときは CSV を書き換えず、失敗の記録（`data/worklogs/_meta.json` などの `lastFailure`）だけを MR にしてジョブを失敗で終えます。データ確認画面に警告で出て、次に成功すると消えます（SPEC §87）。
 
+`config.json` の `taskCodeCheck` を `stop` にしていると、未登録の作業コード・作業名の変更が見つかった日は取り込みを失敗で終え、データ確認画面に理由が出ます。直し方は [OPERATIONS.md](OPERATIONS.md)「作業コードの点検」（作業名の変更は Run pipeline の変数 `FETCH_ACCEPT_TASK_CHANGES=1` で取り込む。SPEC §92）。
+
 過去の期間を取り直すとき（退職・異動した人の実績を含む）は、Build > Pipelines > Run pipeline で対象 `main`、変数 `FETCH_FROM`・`FETCH_TO`（`YYYY-MM`）を入れて実行します。特定の人だけなら `FETCH_MEMBERS`（社員番号をカンマ区切り）も入れます。手順は [OPERATIONS.md](OPERATIONS.md)「取得する人をメンバーマスタから決める」。

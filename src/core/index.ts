@@ -2,7 +2,7 @@
  * 予実ナビ 計算コア — 公開 API
  */
 export * from "./types.js";
-export { normalizeKeyword, normalizeName, splitKeywords } from "./normalize.js";
+export { normalizeCode, normalizeKeyword, normalizeName, splitKeywords } from "./normalize.js";
 export { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey, groupByCustomer, type CustomerGroup } from "./customers.js";
 export {
   addMonths,
@@ -45,7 +45,8 @@ export {
   type RateResolution,
   type TeamTreeResult,
 } from "./masters.js";
-export { createKeywordRouter, mapWorklogs, unmappedReasonLabel, type KeywordMatch, type KeywordRouter, type MappingResult, type UnmappedReason, type WorklogMapping } from "./mapping.js";
+export { createKeywordRouter, isCodeRule, mapWorklogs, ruleCoversMonth, unmappedReasonLabel, type KeywordMatch, type KeywordRouter, type MappingResult, type UnmappedReason, type WorklogMapping } from "./mapping.js";
+export { findTaskCodeIssues, isMatchChange, matchesMaintenance, taskCodeCheckEnabled, taskCodeWarnings, validateMappingPeriods, type MappingRowIssue, type TaskCodeFindings } from "./taskCodes.js";
 export {
   budgetSchedule,
   contractInvalidReason,

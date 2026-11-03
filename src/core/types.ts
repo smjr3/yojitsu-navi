@@ -47,6 +47,20 @@ export interface Config {
   costTypes: CostTypeDef[];
   /** マスタ編集画面の保存方式（SPEC §19.2）。省略時は download */
   masterEdit?: MasterEditConfig;
+  /** 作業コードの点検（§92）。省略 = 点検しない */
+  taskCodeCheck?: TaskCodeCheckConfig;
+}
+
+/** 作業コードの点検の設定（§92） */
+export interface TaskCodeCheckConfig {
+  /** 運用保守の作業名に含むキーワード（どれか 1 つ。空 = 点検しない） */
+  include: string[];
+  /** 含むと対象外にするキーワード（含むより優先） */
+  exclude?: string[];
+  /** 未登録の作業コードを見つけたとき。warn = 警告だけ（既定）、stop = 取り込みを失敗にする */
+  onUnregistered?: "warn" | "stop";
+  /** 作業名の変更・キーワードの一致状況の変化を見つけたとき。warn（既定）/ stop */
+  onChange?: "warn" | "stop";
 }
 
 /** マスタ編集の保存方式（SPEC §19.2） */
@@ -145,13 +159,16 @@ export interface HttpSourceOptions {
   encoding?: "auto" | "utf-8" | "shift_jis";
 }
 
+/** 作業実績の列の対応。作業コード（§92）は省略可 */
+export type WorklogColumns = Record<Exclude<keyof Worklog, "taskCode">, ColumnSpec> & { taskCode?: ColumnSpec };
+
 export interface WorklogSourceConfig {
   adapter: "csv" | "http" | "dummy";
   csv: { path: string };
   http: HttpSourceOptions & {
     refetchMonths: number;
     /** 取得元の列名 → 予実ナビの項目名（配列は複数候補） */
-    columns: Record<keyof Worklog, ColumnSpec>;
+    columns: WorklogColumns;
     /** 任意: 日付の形式（既定: 自動判定） */
     dateFormat?: DateFormat;
     /** 任意: 作業時間の単位（既定 hours） */
@@ -205,6 +222,11 @@ export interface MappingRule {
   taskInclude?: string[];
   /** 作業名に含むと対象外にするキーワード（§62。含むより優先） */
   taskExclude?: string[];
+  /** 作業コード（§92）。指定した行は顧客名・案件名でなく作業コードで紐付ける（作業名のキーワードは使わない） */
+  taskCode?: string;
+  /** この行を使う期間（§92。省略 = 期限なし）。作業実績の日付の月で判定する */
+  startMonth?: YearMonth;
+  endMonth?: YearMonth;
 }
 
 export interface Assignment {
@@ -283,6 +305,8 @@ export interface Worklog {
   projectName: string;
   task: string;
   hours: number;
+  /** 作業コード（§92。省略可の列 task_code）。同じ作業の名前が変わっても変わらない識別子 */
+  taskCode?: string;
 }
 
 /** 作業種別の区分（SPEC §30）。contract = 契約内（運用保守）、outside = 契約外（提案・運用設計など） */
@@ -482,6 +506,9 @@ export type WarningCode =
   | "MAPPING_UNKNOWN_CONTRACT"
   | "MAPPING_EXCLUDED_CONTRACT"
   | "MAPPING_AMBIGUOUS"
+  | "TASK_CODE_UNREGISTERED"
+  | "TASK_CODE_RENAMED"
+  | "TASK_CODE_MATCH_CHANGED"
   | "EXCLUDED_NO_CUSTOMER"
   | "TASK_UNCLASSIFIED"
   | "HOLIDAYS_AUTO";
@@ -503,7 +530,9 @@ export interface UnmappedWorklogGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
-  reason: "NO_RULE" | "OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT";
+  reason: "NO_RULE" | "OUT_OF_PERIOD" | "RULE_OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT";
+  /** 作業コードの行（§92）で探した未紐付け。顧客名・案件名ではなくこのコードでまとめる */
+  taskCode?: string;
 }
 
 /** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3）。(顧客名, 案件名, 作業名) を正規化してまとめる（表記は最初の行） */
@@ -517,6 +546,33 @@ export interface KeywordUnmatchedGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
+}
+
+/** 運用保守のキーワードに合う作業コードのうち、mapping.csv で紐付けていないもの（§92） */
+export interface UnregisteredTaskCode {
+  taskCode: string;
+  /** 最後の日付の作業名 */
+  task: string;
+  customerName: string;
+  projectName: string;
+  hours: number;
+  count: number;
+  firstDate: ISODate;
+  lastDate: ISODate;
+  /** none = mapping.csv に無い、period = 行はあるが期間外の実績がある */
+  status: "none" | "period";
+}
+
+/** 同じ作業コードの作業名の変更（§92）。名前が変わった回ごとに 1 件 */
+export interface TaskCodeChange {
+  taskCode: string;
+  before: string;
+  after: string;
+  /** 新しい名前の最初の日付 */
+  changedOn: ISODate;
+  /** 運用保守キーワードの一致（点検の設定が無ければ null） */
+  matchBefore: boolean | null;
+  matchAfter: boolean | null;
 }
 
 export interface ModelMeta {
@@ -563,6 +619,10 @@ export interface Model {
   unmapped: UnmappedWorklogGroup[];
   /** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3） */
   keywordUnmatched: KeywordUnmatchedGroup[];
+  /** 未登録の作業コード（§92。点検の設定が無ければ空） */
+  unregisteredTaskCodes?: UnregisteredTaskCode[];
+  /** 作業コードの作業名の変更（§92） */
+  taskCodeChanges?: TaskCodeChange[];
   /** 顧客なし等で除外した工数の合計 */
   excludedHours: number;
   /**

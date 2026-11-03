@@ -263,12 +263,19 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     // 作業名のキーワード（§62.1）は省略可の列。無ければ条件なし
     const include = splitKeywords(r.get("task_include"));
     const exclude = splitKeywords(r.get("task_exclude"));
+    const taskCode = r.get("task_code").trim();
+    const startMonth = r.get("start_month").trim();
+    const endMonth = r.get("end_month").trim();
     return {
       worklogCustomerName: r.get("worklog_customer_name"),
       worklogProjectName: r.get("worklog_project_name"),
       contractId: r.get("contract_id"),
       ...(include.length > 0 ? { taskInclude: include } : {}),
       ...(exclude.length > 0 ? { taskExclude: exclude } : {}),
+      // 作業コードと行の期間（§92）も省略可の列
+      ...(taskCode !== "" ? { taskCode } : {}),
+      ...(startMonth !== "" ? { startMonth } : {}),
+      ...(endMonth !== "" ? { endMonth } : {}),
     };
   });
 
@@ -334,6 +341,9 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
         task: r.get("task"),
         hours: parseNumberCell(r.get("hours")),
       };
+      // 作業コード（§92）は省略可の列
+      const code = r.get("task_code").trim();
+      if (code !== "") w.taskCode = code;
       const where = fmt(T.checks.worklogRowAt, { file, row: j + 2 });
       if (!isValidISODate(w.date) && badDates.length < WORKLOG_EXAMPLES) badDates.push(fmt(T.checks.worklogRowValue, { where, value: r.get("date") }));
       if ((!Number.isFinite(w.hours) || w.hours <= 0) && badHours.length < WORKLOG_EXAMPLES) badHours.push(fmt(T.checks.worklogRowValue, { where, value: r.get("hours") }));

@@ -7,6 +7,7 @@
 import { contractInvalidReason } from "./budget.js";
 import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
+import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
 import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
 import { createTaskClassifier, isOutsideWorklog, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
@@ -76,13 +77,25 @@ function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push:
 }
 
 function validateMappings(dataset: Dataset, contractIds: ReadonlySet<string>, push: IssueSink): void {
+  const file = "mapping.csv";
   dataset.mappings.forEach((m, i) => {
-    const file = "mapping.csv";
     const row = rowOf(i);
     if (!contractIds.has(m.contractId)) {
       push({ severity: "error", code: "MAPPING_UNKNOWN_CONTRACT", message: fmt(T.checks.mappingUnknownContract, { file, row, contractId: m.contractId }), file, row, ref: { contractId: m.contractId } });
     }
   });
+  // 行の期間（§92）: 形式・逆転・重なり（一意に決まらない）・契約期間の外
+  for (const issue of validateMappingPeriods(dataset.mappings, dataset.contracts)) {
+    push({ severity: issue.severity, code: issue.code, message: issue.message, file, row: issue.row, ref: issue.ref });
+  }
+}
+
+/** 作業コードの点検（§92）。警告だけ（取り込みを止めるかは fetch-worklogs の設定） */
+function validateTaskCodes(dataset: Dataset, push: IssueSink): void {
+  const file = "worklogs";
+  for (const w of taskCodeWarnings(findTaskCodeIssues(dataset.worklogs, dataset.mappings, dataset.config.taskCodeCheck))) {
+    push({ severity: "warning", code: w.code, message: w.message, file, ref: { ...(w.ref ?? {}), ...(w.hours !== undefined ? { hours: w.hours } : {}), ...(w.count !== undefined ? { count: w.count } : {}) } });
+  }
 }
 
 function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
@@ -394,7 +407,7 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     push({ severity: "warning", code: w.code, message: w.message, file: "task-types.csv", ref: { task: String(w.ref?.task ?? ""), hours: w.hours ?? 0, count: w.count ?? 0 } });
   }
   for (const g of mapping.unmapped) {
-    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
+    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
   }
   if (mapping.excludedHours > 0) {
     push({ severity: "warning", code: "EXCLUDED_NO_CUSTOMER", message: fmt(T.checks.excludedNoCustomer, { file, hours: mapping.excludedHours }), file, ref: { hours: mapping.excludedHours } });
@@ -445,6 +458,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateTitleRates(dataset, push);
   validateHolidays(dataset, push);
   validateWorklogs(dataset, push);
+  validateTaskCodes(dataset, push);
   validateWorkAfterLeft(dataset, push);
   validateAssignmentsAfterLeft(dataset, push);
   return issues;

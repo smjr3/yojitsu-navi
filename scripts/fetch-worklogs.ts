@@ -18,6 +18,8 @@
  *
  * 環境変数: WORKLOG_API_TOKEN（http アダプタ）、WORKLOG_ADAPTER（アダプタ名の上書き）
  *           FETCH_FROM / FETCH_TO / FETCH_MEMBERS（CI の手動実行で --from / --to / --members の代わり。scripts/ci/fetch-data.mjs が渡す）
+ *           FETCH_ACCEPT_TASK_CHANGES=1（--accept-task-changes。作業名の変更を確かめたので取り込む。§92）
+ * - config.taskCodeCheck（§92）で作業コードを点検する。stop の設定なら、未登録の作業コード・新しい作業名の変更があるとき月ファイルを書かずに止める
  */
 import { mkdirSync } from "node:fs";
 import { writeFilesAtomic } from "./lib/atomic.js";
@@ -31,7 +33,9 @@ import { formatWorklogCsv, parseWorklogCsv, sortWorklogs } from "./lib/csv.js";
 import { readTextAuto } from "./lib/encoding.js";
 import { clearFailure, safeMessage, writeFailure } from "./lib/fetch-status.js";
 import { parseMemberList, readMemberRecords, targetMemberIds } from "./lib/fetch-targets.js";
-import { loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
+import { listWorklogFiles, loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
+import { enforceTaskCodeGate, inspectTaskCodes, readCodeRules } from "./lib/task-code-gate.js";
+import { taskCodeCheckEnabled } from "../src/core/taskCodes.js";
 import { existsSync } from "node:fs";
 
 interface CliOptions {
@@ -51,6 +55,8 @@ interface CliOptions {
   dryRun?: boolean;
   /** dry-run で表示する行数（既定 5） */
   sample?: number;
+  /** 作業名の変更（§92）を確かめたので、onChange=stop でも取り込む */
+  acceptTaskChanges?: boolean;
 }
 
 function pad2(n: number): string {
@@ -87,6 +93,8 @@ export interface FetchResult {
   adapter: string;
   fetchedAt: string;
   dryRun?: { total: number; sample: Worklog[]; report?: FetchReport };
+  /** 作業コードの点検（§92）の警告（止めなかったもの） */
+  taskCodeWarnings?: string[];
 }
 
 /** from〜to の月（昇順） */
@@ -151,13 +159,29 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   const only = explicit ? new Set(explicit) : null;
   const rows = only ? fetched.filter((w) => only.has(w.memberId.trim())) : fetched;
 
+  // 作業コードの点検（§92）: 取り込んだ後のデータで調べる。stop の設定なら書く前に止める
+  // 人を指定したときは、既存の月ファイルのうち指定外の人の行を残す
+  const mergeMonth = (ym: YearMonth, fresh: Worklog[]): Worklog[] => {
+    const kept = only ? readMonthRows(join(dir, `${ym}.csv`)).filter((w) => !only.has(w.memberId.trim())) : [];
+    return sortWorklogs([...kept, ...fresh]);
+  };
+  const gateFor = (fresh: ReadonlyMap<YearMonth, Worklog[]>) => {
+    if (!taskCodeCheckEnabled(config.taskCodeCheck)) return null;
+    const existing = listWorklogFiles(dir).map((f) => ({ month: f.month, rows: readMonthRows(f.path) }));
+    const before = existing.flatMap((f) => f.rows);
+    const after = [...existing.filter((f) => !fresh.has(f.month)).flatMap((f) => f.rows), ...[...fresh.values()].flat()];
+    return inspectTaskCodes(config, readCodeRules(opts.rootDir), before, after);
+  };
+
   if (opts.dryRun) {
+    // 書き込むときと同じ（指定外の人の既存行を残した）月の一覧で点検する
+    const dryGate = gateFor(new Map(months.map((ym) => [ym, mergeMonth(ym, rows.filter((w) => w.date.slice(0, 7) === ym))])));
     const sample = sortWorklogs(rows).slice(0, Math.max(0, opts.sample ?? 5));
     const dry: NonNullable<FetchResult["dryRun"]> = { total: rows.length, sample };
     if (report) dry.report = report;
     const rowsByMonth: Record<YearMonth, number> = {};
     for (const ym of months) rowsByMonth[ym] = rows.filter((w) => w.date.slice(0, 7) === ym).length;
-    return { months, rowsByMonth, adapter: adapter.name, fetchedAt: now().toISOString(), dryRun: dry, ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
+    return { months, rowsByMonth, adapter: adapter.name, fetchedAt: now().toISOString(), dryRun: dry, ...(dryGate ? { taskCodeWarnings: dryGate.lines } : {}), ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
   }
 
   // 月ごとに振り分け（期間外は捨てる。対象月でデータが 0 件でも空ファイルを書く＝取り消しを反映）
@@ -178,14 +202,15 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   mkdirSync(dir, { recursive: true });
   const rowsByMonth: Record<YearMonth, number> = {};
   const outputs: Array<{ path: string; data: string }> = [];
+  const lists = new Map<YearMonth, Worklog[]>();
   for (const ym of months) {
-    const fresh = byMonth.get(ym) ?? [];
-    // 人を指定したときは、既存の月ファイルのうち指定外の人の行を残す
-    const kept = only ? readMonthRows(join(dir, `${ym}.csv`)).filter((w) => !only.has(w.memberId.trim())) : [];
-    const list = sortWorklogs([...kept, ...fresh]);
+    const list = mergeMonth(ym, byMonth.get(ym) ?? []);
+    lists.set(ym, list);
     outputs.push({ path: join(dir, `${ym}.csv`), data: formatWorklogCsv(list) });
     rowsByMonth[ym] = list.length;
   }
+  const taskCodeLines = enforceTaskCodeGate(config, gateFor(lists), opts.acceptTaskChanges === true);
+  for (const line of taskCodeLines) log(`[fetch] 警告: ${line}`);
 
   const fetchedAt = now().toISOString();
   const prev = readWorklogMeta(dir);
@@ -196,7 +221,7 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   // 全月を書けたときだけまとめて差し替える（途中で失敗しても、一部の月だけ新しい・空のファイルが残る状態にしない）
   writeFilesAtomic(outputs);
   for (const ym of months) log(`[fetch] ${ym}.csv を書き込み (${rowsByMonth[ym]} 行)`);
-  return { months, rowsByMonth, adapter: adapter.name, fetchedAt, ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
+  return { months, rowsByMonth, adapter: adapter.name, fetchedAt, ...(taskCodeLines.length > 0 ? { taskCodeWarnings: taskCodeLines } : {}), ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
 }
 
 /** 既存の月ファイルの行（無ければ空） */
@@ -211,7 +236,8 @@ export function formatDryRun(r: FetchResult): string[] {
   const out = [`[dry-run] ファイルは書き込みません（adapter=${r.adapter}、対象月 ${r.months.join(", ")}${r.targetCount !== undefined ? `、対象 ${r.targetCount} 人` : ""}）`, ""];
   if (d.report) out.push(...formatMappingTable(d.report), "");
   out.push(`変換後 ${d.total} 行（月別: ${r.months.map((m) => `${m}=${r.rowsByMonth[m] ?? 0}`).join(", ")}）。先頭 ${d.sample.length} 行:`);
-  for (const w of d.sample) out.push(`  ${w.date}\t${w.memberId}\t${w.memberName}\t${w.customerName}\t${w.projectName}\t${w.task}\t${w.hours}`);
+  for (const w of d.sample) out.push(`  ${w.date}\t${w.memberId}\t${w.memberName}\t${w.customerName}\t${w.projectName}\t${w.task}\t${w.hours}${w.taskCode ? `\t${w.taskCode}` : ""}`);
+  if (r.taskCodeWarnings && r.taskCodeWarnings.length > 0) out.push("", `作業コードの点検（${r.taskCodeWarnings.length} 件）:`, ...r.taskCodeWarnings.map((l) => `  ${l}`));
   return out;
 }
 
@@ -222,6 +248,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
   if (env.FETCH_FROM?.trim()) fromEnv.push("--from", env.FETCH_FROM.trim());
   if (env.FETCH_TO?.trim()) fromEnv.push("--to", env.FETCH_TO.trim());
   if (env.FETCH_MEMBERS !== undefined && env.FETCH_MEMBERS !== "") fromEnv.push("--members", env.FETCH_MEMBERS);
+  if (env.FETCH_ACCEPT_TASK_CHANGES === "1" || env.FETCH_ACCEPT_TASK_CHANGES === "true") fromEnv.push("--accept-task-changes");
   argv = [...fromEnv, ...argv];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
@@ -244,6 +271,8 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
     } else if (a === "--adapter" && v !== undefined) {
       opts.adapter = v;
       i++;
+    } else if (a === "--accept-task-changes") {
+      opts.acceptTaskChanges = true;
     } else if (a === "--dry-run") {
       opts.dryRun = true;
     } else if (a.startsWith("--sample=")) {

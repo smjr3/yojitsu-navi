@@ -62,7 +62,7 @@ function memberApi(rows: Worklog[], opts: { failOnCall?: number; seen?: string[]
     const ids = (new URL(url).searchParams.get("member_ids") ?? "").split(",").filter((s) => s !== "");
     opts.seen?.push(ids);
     const set = new Set(ids);
-    const body = rows.filter((w) => set.has(w.memberId)).map((w) => ({ date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours }));
+    const body = rows.filter((w) => set.has(w.memberId)).map((w) => ({ date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours, task_code: w.taskCode ?? "" }));
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   });
 }
@@ -72,6 +72,7 @@ function useMemberApi(chunkSize: number) {
     c.worklogSource.adapter = "http";
     c.worklogSource.http.url = "https://worklog.example.local/api?from={from}&to={to}";
     c.worklogSource.http.members = { param: "member_ids", chunkSize };
+    c.worklogSource.http.columns.taskCode = "task_code";
   });
 }
 
@@ -206,7 +207,7 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
       calls++;
       const set = new Set((new URL(url).searchParams.get("member_ids") ?? "").split(","));
       const body = all.filter((w) => set.has(w.memberId)).map((w) => {
-        const row: Record<string, unknown> = { date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours };
+        const row: Record<string, unknown> = { date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours, task_code: w.taskCode ?? "" };
         if (calls >= 2) delete row.hours;
         return row;
       });
@@ -227,7 +228,7 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
       const set = new Set((u.searchParams.get("member_ids") ?? "").split(","));
       const mine = all.filter((w) => set.has(w.memberId));
       const p = Number(u.searchParams.get("page"));
-      const body = mine.slice((p - 1) * pageSize, p * pageSize).map((w) => ({ date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours }));
+      const body = mine.slice((p - 1) * pageSize, p * pageSize).map((w) => ({ date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours, task_code: w.taskCode ?? "" }));
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }));
     useMemberApi(40);

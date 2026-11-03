@@ -238,8 +238,8 @@ const TASKS_IN: ReadonlyArray<readonly [string, number]> = [
   ["テスト", 2],
 ];
 
-/** 作業名の運用保守の識別子（§62。mapping.csv の task_include） */
-const MAINTENANCE_MARK = "【保守】";
+/** 作業名の運用保守の識別子（§62。mapping.csv の task_include・config.json の taskCodeCheck。作業名の末尾に付く） */
+const MAINTENANCE_MARK = "_保守対応";
 
 const TASKS_OUT: ReadonlyArray<readonly [string, number]> = [
   ["次期システム更改に向けた現行調査および提案資料作成", 2],
@@ -247,6 +247,9 @@ const TASKS_OUT: ReadonlyArray<readonly [string, number]> = [
   ["提案", 2],
   ["見積", 1],
 ];
+
+/** 作業コードを振る作業（§92。超大型の案件だけ。並び順がコードの番号） */
+const TASK_CODES: readonly string[] = [...TASKS_IN.map(([t]) => t), ...TASKS_OUT.map(([t]) => t)];
 
 const TASK_TYPES = [
   { task: "定期メンテナンス作業（月次パッチ適用およびセキュリティ脆弱性対応の事前検証を含む）", category: "契約内", match: "含む", note: "" },
@@ -497,9 +500,14 @@ export function generateScale(input: ScaleInput): ScaleOutput {
   const huge = drafts.find((d) => d.project_name.startsWith("国際送金") && d.start_month >= c.m(0, 4)) ?? drafts.find((d) => d.project_name.startsWith("国際送金"));
 
   // 契約の工数側の名前: 同じ顧客・案件名の契約は期間で振り分く（mapping は契約ごとに 1 行）
-  // 超大型の案件は、作業名の識別子「【保守】」の付いた作業だけを運用保守として数える（§62。提案などは識別子なしで同じ案件名に付く）
+  // 超大型の案件は、作業名の識別子「_保守対応」の付いた作業だけを運用保守として数える（§62。提案などは識別子なしで同じ案件名に付く）
   const keywordAccount = huge?.account;
   const mappings: MappingRow[] = drafts.map((d) => ({ worklog_customer_name: d.customer_name, worklog_project_name: d.project_name, contract_id: d.contract_id, ...(d.account === keywordAccount ? { task_include: MAINTENANCE_MARK } : {}) }));
+  // 超大型の案件の作業には作業コードがあり、運用保守の作業コードは契約ごとに期間つきで登録する（§92。更新後も同じコードを使い続ける）
+  const codeOf = (task: string): string => `SK-${String(TASK_CODES.indexOf(task) + 1).padStart(3, "0")}`;
+  for (const d of drafts.filter((x) => x.account === keywordAccount)) {
+    for (const [task] of TASKS_IN) mappings.push({ worklog_customer_name: "", worklog_project_name: "", contract_id: d.contract_id, task_code: codeOf(task), start_month: d.start_month, end_month: d.end_month });
+  }
 
   // ---- 作業実績 ----
   const worklogs: Worklog[] = [];
@@ -512,8 +520,9 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const m = ymOf(date);
     const nm = names ?? { customer: rng.pick(d!.account.customerVariants), project: rng.pick(d!.account.projectVariants) };
     const inContract = d !== null && TASKS_IN.some(([t]) => t === task);
-    const name = inContract && d.account === keywordAccount ? `${MAINTENANCE_MARK}${task}` : task;
-    worklogs.push({ date, memberId: p.id, memberName: rowAt(p, m)?.name ?? p.name, customerName: nm.customer, projectName: nm.project, task: name, hours });
+    const keyword = d !== null && d.account === keywordAccount;
+    const name = inContract && keyword ? `${task}${MAINTENANCE_MARK}` : task;
+    worklogs.push({ date, memberId: p.id, memberName: rowAt(p, m)?.name ?? p.name, customerName: nm.customer, projectName: nm.project, task: name, hours, ...(keyword && TASK_CODES.includes(task) ? { taskCode: codeOf(task) } : {}) });
     if (d && inContract) costBy.set(d.contract_id, (costBy.get(d.contract_id) ?? 0) + hours * costRate(p, m));
   };
 
@@ -562,6 +571,20 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const team = midMonthLeaver.rows[0]!.team_id;
     const d = drafts.find((x) => x.team_id === team && x.start_month <= leftAt && leftAt <= x.end_month);
     if (d) for (const date of input.days.filter((x) => ymOf(x) === leftAt).slice(0, 5)) pushLog(midMonthLeaver, date, d, "引き継ぎ", 7, { customer: d.account.customerVariants[0]!, project: d.account.projectVariants[0]! });
+  }
+
+  // 作業コードの点検の例（§92。乱数を使わない。ほかのデータを変えないため）: 今月、超大型の案件に
+  // 未登録の作業コード・作業名の変更・キーワードに合わなくなった作業名変更を 1 件ずつ
+  if (huge && keywordAccount) {
+    const date = input.days.find((x) => ymOf(x) === asOfMonth);
+    const p = people.find((x) => rowAt(x, asOfMonth)?.team_id === huge.team_id && rowAt(x, asOfMonth)?.status === "");
+    if (date && p) {
+      const names = { customer: keywordAccount.customerVariants[0]!, project: keywordAccount.projectVariants[0]! };
+      const log = (task: string, taskCode: string, hours: number) => worklogs.push({ date, memberId: p.id, memberName: rowAt(p, asOfMonth)?.name ?? p.name, customerName: names.customer, projectName: names.project, task, hours, taskCode });
+      log(`新規監視項目の設定${MAINTENANCE_MARK}`, "SK-900", 1.5);
+      log(`監視・運用（夜間含む）${MAINTENANCE_MARK}`, codeOf("監視・運用"), 1);
+      log("調査（次期更改の検討）", codeOf("調査"), 1);
+    }
   }
 
   // ---- 金額: 着地見込み（実績の月平均 × 契約月数）÷ 目標の消化率。1 万円単位 ----
