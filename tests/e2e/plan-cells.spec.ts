@@ -400,7 +400,7 @@ test("開いた内訳は人の行の配下と分かる: 左端の帯、控えめ
   expect(subCell.color).not.toBe(mainCell.color);
 });
 
-test("広い画面（1920px）では本文も横いっぱい。ヘッダーの帯と下線はブラウザの端まで（横スクロールなし。§85）", async ({ page }) => {
+test("広い画面（1920px）では本文も横いっぱい。ヘッダーの帯と下線はブラウザの端まで（横スクロールなし。§88）", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 600 });
   await gotoPage(page, "/contracts");
   // 帯の外（左右の余白）でもヘッダーの面の色になっている

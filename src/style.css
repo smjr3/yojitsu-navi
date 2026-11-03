@@ -21,7 +21,7 @@
   --yn-space: 8px;
   --yn-radius: 8px;
   --yn-radius-sm: 6px;
-  /* 本文の最大幅。広い画面では表・グラフを横いっぱいに使う（§85） */
+  /* 本文の最大幅。広い画面では表・グラフを横いっぱいに使う（§88） */
   --yn-max-width: none;
 
   /* ライト */
@@ -1540,7 +1540,7 @@ h3 {
     max-width: min(20vw, 320px);
   }
 }
-/* 本文の最大幅を外したので（§85）、さらに広い画面では名前列の上限も広げて省略を減らす */
+/* 本文の最大幅を外したので（§88）、さらに広い画面では名前列の上限も広げて省略を減らす */
 @media (min-width: 1600px) {
   .yn-cell-2line {
     max-width: min(24vw, 560px);
@@ -2954,7 +2954,7 @@ html:has(dialog.yn-dialog[open]) {
   max-width: 22em;
   overflow-wrap: anywhere;
 }
-/* 選ぶ値の列（チーム・事業本部・役職など）と先頭の名前の列も、長い値は折り返す（表を表示幅に収め、横スクロールを減らす。§85） */
+/* 選ぶ値の列（チーム・事業本部・役職など）と先頭の名前の列も、長い値は折り返す（表を表示幅に収め、横スクロールを減らす。§88） */
 .yn-me-ledger td.is-val:not(.is-col-sized) {
   white-space: normal;
   min-width: 4em;
