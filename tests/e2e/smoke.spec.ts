@@ -41,6 +41,10 @@ for (const p of PAGES) {
     await page.waitForLoadState("networkidle");
     // タイトルにサイト名
     await expect(page).toHaveTitle(/予実ナビ/);
+    // ファビコンは埋め込みの SVG（§85。画像ファイルを読まない）
+    const icons = page.locator('link[rel="icon"]');
+    await expect(icons).toHaveCount(1);
+    expect(await icons.getAttribute("href")).toMatch(/^data:image\/svg\+xml,%3Csvg/);
   });
 }
 
