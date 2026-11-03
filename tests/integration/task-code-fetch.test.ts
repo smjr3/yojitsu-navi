@@ -90,6 +90,14 @@ describe("取り込み時の点検（taskCodeCheck）", () => {
     expect(meta.lastFailure.message).toContain("W-09");
   });
 
+  it("onUnregistered=stop: mapping.csv のヘッダの前後に空白があっても画面と同じく読む（期間外は止める）", async () => {
+    quiet();
+    setConfig((c) => (c.taskCodeCheck.onUnregistered = "stop"));
+    writeFileSync(join(root, "data", "mapping.csv"), "worklog_customer_name, worklog_project_name, contract_id, task_code , start_month ,end_month\n,,C1,W-01,,\n,,C1, W-09 ,2026-11,\n");
+    api([row("2026-10-01", "新しい監視_保守対応", "W-09")]);
+    await expect(fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV)).rejects.toThrow(/未登録の作業コードが 1 件.*W-09/);
+  });
+
   it("onUnregistered=stop: mapping.csv に足せば通る", async () => {
     quiet();
     setConfig((c) => (c.taskCodeCheck.onUnregistered = "stop"));

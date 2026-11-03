@@ -8,8 +8,8 @@
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { csvParse } from "d3-dsv";
 import { isValidISODate } from "../../src/core/calendar.js";
+import { parseCsvTable } from "../../src/core/csv.js";
 import { normalizeCode, normalizeName } from "../../src/core/normalize.js";
 import { isMatchChange, findTaskCodeIssues, matchesMaintenance, taskCodeCheckEnabled, taskCodeWarnings, type TaskCodeFindings } from "../../src/core/taskCodes.js";
 import type { Config, ISODate, MappingRule, TaskCodeCheckConfig, TaskCodeChange, Worklog } from "../../src/core/types.js";
@@ -22,13 +22,14 @@ export function readCodeRules(rootDir: string): MappingRule[] {
   if (!existsSync(path)) return [];
   const body = stripBom(readTextAuto(path));
   if (body.trim() === "") return [];
+  // 画面・検証と同じ読み方（ヘッダ・セルの前後の空白を除く）
   const out: MappingRule[] = [];
-  for (const r of csvParse(body)) {
-    const code = (r.task_code ?? "").trim();
+  for (const r of parseCsvTable(body).rows) {
+    const code = r.get("task_code");
     if (code === "") continue;
-    const rule: MappingRule = { worklogCustomerName: r.worklog_customer_name ?? "", worklogProjectName: r.worklog_project_name ?? "", contractId: (r.contract_id ?? "").trim(), taskCode: code };
-    const from = (r.start_month ?? "").trim();
-    const to = (r.end_month ?? "").trim();
+    const rule: MappingRule = { worklogCustomerName: r.get("worklog_customer_name"), worklogProjectName: r.get("worklog_project_name"), contractId: r.get("contract_id"), taskCode: code };
+    const from = r.get("start_month");
+    const to = r.get("end_month");
     if (from !== "") rule.startMonth = from;
     if (to !== "") rule.endMonth = to;
     out.push(rule);
