@@ -15,8 +15,13 @@ const HELP = `予実ナビ ${VERSION}
 使い方:
   yojitsu-navi init [フォルダ] [--gitlab <社内GitLabのURL> --project <グループ/プロジェクト>] [--no-git]
       新しいプロジェクトのフォルダを作る（既定 yojitsu-navi）。接続先を config.json と git remote に入れる
-  yojitsu-navi update [フォルダ] [--force]
+  yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--force]
       今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> にコミットする
+      上書き・削除するファイルを社内で変えていたら、何も変えずに止まる。前のファイルは .yojitsu-navi-backup/<日時>/ に写す
+        --dry-run     何も変えずに、変わるファイルと社内で変えたファイルの差分を出す
+        --overwrite   社内で変えたファイルも新しい版にする
+        --keep-local  社内で変えたファイルは社内の版のまま残す（次の update でも残す）
+        --force       コミットしていない変更・古い版・依存込みの確認を飛ばす
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -99,7 +104,10 @@ async function main(argv) {
   }
   if (cmd === "update") {
     const dir = resolve(positional(rest, [])[0] ?? ".");
-    update({ pkgDir: PKG_DIR, version: VERSION, dir, force: rest.includes("--force"), log });
+    const known = ["--force", "--dry-run", "--overwrite", "--keep-local"];
+    const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
+    if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
+    update({ pkgDir: PKG_DIR, version: VERSION, dir, force: rest.includes("--force"), dryRun: rest.includes("--dry-run"), overwrite: rest.includes("--overwrite"), keepLocal: rest.includes("--keep-local"), log });
     return 0;
   }
   if (cmd === "gitlab-setup") {
