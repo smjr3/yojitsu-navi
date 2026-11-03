@@ -30,6 +30,7 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 | `config.json` | 計算の設定・取り込み元・マスタ編集の接続先 | 管理者 | MR |
 | `.gitlab-ci.yml`・`src/`・`scripts/` など | 画面・CI | 管理者 | 新しい版のパッケージで `yojitsu-navi update`（下の「新しい版にする」） |
 | `.yojitsu-navi.json` | 入れた版とファイルの記録 | （コマンドが書く） | 手で編集しない |
+| `.yojitsu-navi-backup/` | `update` が上書き・削除する前のファイル | （コマンドが書く） | git に入れない。要らなければ消す |
 
 マスタ編集の接続先（`config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId`）は空のままで構いません。CI の build ジョブが、このプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）を自動で入れます。
 
@@ -153,11 +154,33 @@ yojitsu-navi update
 git push -u origin update-<新しい版>
 ```
 
-- `data/` と `config.json` は変えません（社内で書き換えるもの）。それ以外は新しい版に入れ替え、新しい版で無くなったファイルは消します。結果はブランチ `update-<版>` にコミットされるので、MR を作り、パイプラインが緑になったらリーダーがマージします。
-- 社内で手を入れていたファイルを上書きしたときは、その一覧が出ます。MR の差分で確かめ、要るものは入れ直してください。
-- 新しい版で増えた設定（`config.json` に無い項目）や、サンプルにだけある新しいデータのファイルも一覧で出ます。無くても既定値で動きます。
+結果はブランチ `update-<版>` にコミットされるので、MR を作り、パイプラインが緑になったらリーダーがマージします。
+
+### 上書きするファイルと残すファイル
+
+| 区分 | ファイル | `update` での扱い |
+|---|---|---|
+| 残す（社内のもの） | `config.json`・`data/` 以下すべて（`mapping.csv`・`task-types.csv`・`masters/`・`worklogs/` など） | 足しも消しもしない。新しい版で増えた設定の項目・サンプルにだけある新しいデータのファイルは一覧で知らせる（無くても既定値で動く） |
+| 残す（社内で足したもの） | パッケージに無く、前の版の記録（`.yojitsu-navi.json`）にも無いファイル | 触らない |
+| 上書き | 上以外でパッケージに入っているもの（`.gitlab-ci.yml`・`.gitlab/`・`.gitignore`・`.gitattributes`・`package.json`・`package-lock.json`・`observablehq.config.js`・`src/`・`scripts/`・`tests/`・`docs/`・`README.md` など） | 新しい版にする。**社内で変えていたら止まる**（下） |
+| 削除 | 前の版の記録にあって新しい版に無いもの | 消す。社内で変えていたら止まる |
+| 入れ替え | `vendor/npm-cache/` | 依存込みのパッケージのとき丸ごと入れ替える |
+| コマンドのもの | `.yojitsu-navi.json`・`.yojitsu-navi-backup/` | コマンドが書く |
+
+### 社内で変えたファイルがあるとき
+
+上書き・削除するファイルを社内で変えていると（前の版の記録と中身が違う・記録に無いのに同じ名前のファイルがある）、**何も変えずに止まり**、そのファイルの一覧が出ます。改行が CRLF になっただけのものは変えたことにしません。無くなっていたファイル（git の除外設定でコミットされなかったものなど）は止まらずに入れ直します。
+
+```sh
+yojitsu-navi update --dry-run      # 何も変えずに、変わるファイルの一覧と、社内で変えたファイルの差分（- が社内の今、+ が新しい版）を出す
+yojitsu-navi update --overwrite    # 社内の変更も新しい版にする（前のものはバックアップに残る）
+yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の版のまま残す（次の update でも残す。--overwrite で新しい版に戻せる）
+```
+
+- `--keep-local` で残したファイルには新しい版の直しが入りません。`.gitlab-ci.yml` や `package.json` を残すと CI が動かなくなることがあるので、`--dry-run` の差分で確かめ、社内の変更を新しい版に入れ直す（`--overwrite` のあと MR で手直し）ほうが安全です。
+- 上書き・削除する前のファイルは、毎回 `.yojitsu-navi-backup/<日時>/`（`年月日-時分秒`）に写します。前の版の記録（`.yojitsu-navi.json`）も入ります。git には入りません（`.gitignore`）。要らなくなったら消してください。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
-- コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける）。
+- コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける。社内で変えたファイルの確認は `--force` でも飛ばしません）。
 - 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
 
 ## 社内で確認すること（チェックリスト）
@@ -203,6 +226,7 @@ git push -u origin update-<新しい版>
 | `npm ci` が `ETIMEDOUT` / `ENOTFOUND registry.npmjs.org` | 外部に出られない。`NPM_CONFIG_REGISTRY` に社内ミラーを設定するか、依存込みのパッケージで作り直す |
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
+| `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
 | CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |

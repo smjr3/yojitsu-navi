@@ -3,7 +3,8 @@
  * - npm run app:build が通り、パッケージに入るのは bin・lib・dist・template・README だけ（依存なし）
  * - template はリポジトリのファイル一式（.github/ を除く）。個人・会社の情報と接続先を含まない
  * - init: フォルダ・.gitignore・記録（.yojitsu-navi.json）・接続先（config.json と git remote）・最初のコミット
- * - update: data/ と config.json を変えない・消えたファイルを消す・手で変えたファイルを知らせる・ブランチにコミット
+ * - update: data/ と config.json を変えない・消えたファイルを消す・社内で変えたファイルがあれば止まる（--dry-run・--overwrite・--keep-local）・
+ *   上書き前のファイルをバックアップ・ブランチにコミット
  * - 計算コア（import して使う部分。SPEC §43・§84）: dist/core の公開 API が src/core と同じ・src/core が読むのは src/core と src/i18n だけ・
  *   別プロジェクトから Node で読み込めて NodeNext で型が解決できる
  * （同じパッケージを組み立てるので 1 ファイルにまとめる。ファイルを分けると並行で build-app が走り、template を消し合う）
@@ -228,34 +229,213 @@ describe("update", () => {
     const dir = project("upd");
     writeFileSync(join(dir, "data", "contracts.csv"), "real data");
     writeFileSync(join(dir, "config.json"), CONFIG().replace('"a": 1', '"a": 9'));
-    writeFileSync(join(dir, "src", "keep.js"), "local edit");
-    git(dir, "commit", "-qam", "社内の変更");
+    writeFileSync(join(dir, "src", "local.js"), "社内で足したファイル");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
     logs.length = 0;
-    const r = app.update({ pkgDir: fakePackage("upd-v2", "1.1.0", v2), version: "1.1.0", dir, log });
+    const r = app.update({ pkgDir: fakePackage("upd-v2", "1.1.0", v2), version: "1.1.0", dir, log, now: new Date(2030, 0, 2, 3, 4, 5) });
     expect(readFileSync(join(dir, "data", "contracts.csv"), "utf-8")).toBe("real data");
     expect(readFileSync(join(dir, "config.json"), "utf-8")).toContain('"a": 9');
     expect(readFileSync(join(dir, "src", "a.js"), "utf-8")).toBe("a2");
-    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("k");
+    expect(readFileSync(join(dir, "src", "local.js"), "utf-8")).toBe("社内で足したファイル");
     expect(existsSync(join(dir, "src", "old.js"))).toBe(false);
     expect(existsSync(join(dir, "data", "new.csv"))).toBe(false);
     expect(existsSync(join(dir, "data", "worklogs", "2027-01.csv"))).toBe(false);
-    expect(r.overwritten).toEqual(["src/keep.js"]);
+    expect(r.conflicts).toEqual([]);
+    expect(r.changed).toEqual(["src/a.js"]);
     expect(r.removed).toEqual(["src/old.js"]);
     expect(r.added).toEqual(["src/new.js"]);
     expect(r.missing).toEqual(["b"]);
     expect(r.newData).toEqual(["data/new.csv"]);
+    // 上書き・削除する前のファイルを日時のフォルダに写し、git には入れない
+    expect(r.backup).toBe(".yojitsu-navi-backup/20300102-030405");
+    expect(readFileSync(join(dir, r.backup, "src", "a.js"), "utf-8")).toBe("a1");
+    expect(readFileSync(join(dir, r.backup, "src", "old.js"), "utf-8")).toBe("old");
+    expect(JSON.parse(readFileSync(join(dir, r.backup, app.MANIFEST), "utf-8")).version).toBe("1.0.0");
+    expect(existsSync(join(dir, r.backup, "src", "keep.js"))).toBe(false);
+    expect(git(dir, "ls-files", ".yojitsu-navi-backup")).toBe("");
     expect(r.branch).toBe("update-1.1.0");
     expect(git(dir, "branch", "--show-current")).toBe("update-1.1.0");
-    expect(git(dir, "status", "--porcelain")).toBe("");
+    expect(git(dir, "status", "--porcelain", "--", ".", ":(exclude).yojitsu-navi-backup")).toBe("");
     expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).version).toBe("1.1.0");
     expect(logs.join("\n")).toContain("git push -u origin update-1.1.0");
-    // もう一度実行しても何も変わらない
+    // もう一度実行しても何も変わらない（バックアップのフォルダがあっても「コミットしていない変更」にしない）
     git(dir, "switch", "-q", "main");
     git(dir, "merge", "-q", "update-1.1.0");
     logs.length = 0;
     const again = app.update({ pkgDir: join(work, "upd-v2"), version: "1.1.0", dir, log });
-    expect([again.changed, again.added, again.removed, again.branch]).toEqual([[], [], [], ""]);
+    expect([again.changed, again.added, again.removed, again.branch, again.backup]).toEqual([[], [], [], "", ""]);
   }, scaled(60_000));
+
+  it("上書き・削除するファイルを社内で変えていたら、何も変えずに止まる", () => {
+    const dir = project("upd-conflict");
+    writeFileSync(join(dir, "src", "keep.js"), "local edit");
+    writeFileSync(join(dir, "src", "old.js"), "local old");
+    rmSync(join(dir, "src", "a.js"));
+    writeFileSync(join(dir, "src", "new.js"), "local new");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
+    const head = git(dir, "rev-parse", "HEAD");
+    const manifest = readFileSync(join(dir, app.MANIFEST), "utf-8");
+    let err: any;
+    try {
+      app.update({ pkgDir: fakePackage("upd-conflict-v2", "1.1.0", { ...v2, "src/keep.js": "k2" }), version: "1.1.0", dir, log });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(app.CliError);
+    expect(err.message).toMatch(/社内で変えたファイル/);
+    expect(err.message).toContain("--dry-run");
+    expect(err.conflicts).toEqual([
+      { path: "src/keep.js", type: "modified" },
+      { path: "src/new.js", type: "created" },
+      { path: "src/old.js", type: "removedModified" },
+    ]);
+    // 何も変えていない
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("local edit");
+    expect(readFileSync(join(dir, app.MANIFEST), "utf-8")).toBe(manifest);
+    expect(existsSync(join(dir, ".yojitsu-navi-backup"))).toBe(false);
+    expect(git(dir, "rev-parse", "HEAD")).toBe(head);
+    expect(git(dir, "branch", "--show-current")).toBe("main");
+    expect(existsSync(join(dir, "src", "a.js"))).toBe(false);
+  }, scaled(60_000));
+
+  it("無くなっていたファイル（git の除外設定でコミットされなかったものなど）は止まらずに入れ直す", () => {
+    const dir = project("upd-missing");
+    rmSync(join(dir, "src", "keep.js"));
+    git(dir, "commit", "-qam", "無くなった");
+    const r = app.update({ pkgDir: fakePackage("upd-missing-v2", "1.1.0", v2), version: "1.1.0", dir, log });
+    expect(r.conflicts).toEqual([]);
+    expect(r.added).toContain("src/keep.js");
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("k");
+  }, scaled(60_000));
+
+  it("--dry-run は何も変えずに一覧と差分（社内の今 → 新しい版）を出す", () => {
+    const dir = project("upd-dry");
+    writeFileSync(join(dir, "src", "keep.js"), "local edit\n");
+    git(dir, "commit", "-qam", "社内の変更");
+    writeFileSync(join(dir, "src", "dirty.txt"), "コミットしていない変更があっても確かめられる");
+    logs.length = 0;
+    const r = app.update({ pkgDir: fakePackage("upd-dry-v2", "1.1.0", { ...v2, "src/keep.js": "k2\n" }), version: "1.1.0", dir, log, dryRun: true });
+    expect(r.dryRun).toBe(true);
+    expect(r.conflicts).toEqual([{ path: "src/keep.js", type: "modified" }]);
+    expect(r.changed).toEqual(["src/a.js"]);
+    const out = logs.join("\n");
+    expect(out).toContain("何も変えていません");
+    expect(out).toContain("src/keep.js（社内で変更）");
+    expect(out).toContain("--- a/src/keep.js");
+    expect(out).toContain("+++ b/src/keep.js");
+    expect(out).toContain("-local edit");
+    expect(out).toContain("+k2");
+    expect(out).not.toContain(tmpdir());
+    expect(readFileSync(join(dir, "src", "a.js"), "utf-8")).toBe("a1");
+    expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).version).toBe("1.0.0");
+    expect(existsSync(join(dir, ".yojitsu-navi-backup"))).toBe(false);
+    expect(git(dir, "branch", "--show-current")).toBe("main");
+  }, scaled(60_000));
+
+  it("--overwrite は社内の変更も新しい版にし、前のものをバックアップに残す", () => {
+    const dir = project("upd-over");
+    writeFileSync(join(dir, "src", "keep.js"), "local edit");
+    writeFileSync(join(dir, "src", "old.js"), "local old");
+    git(dir, "commit", "-qam", "社内の変更");
+    const r = app.update({ pkgDir: fakePackage("upd-over-v2", "1.1.0", v2), version: "1.1.0", dir, log, overwrite: true });
+    expect(r.overwritten).toEqual(["src/keep.js", "src/old.js"]);
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("k");
+    expect(existsSync(join(dir, "src", "old.js"))).toBe(false);
+    expect(readFileSync(join(dir, r.backup, "src", "keep.js"), "utf-8")).toBe("local edit");
+    expect(readFileSync(join(dir, r.backup, "src", "old.js"), "utf-8")).toBe("local old");
+    expect(r.branch).toBe("update-1.1.0");
+  }, scaled(60_000));
+
+  it("--keep-local は社内の版を残し、次の update でも止まらずに残す（--overwrite で新しい版に戻せる）", () => {
+    const dir = project("upd-keep");
+    writeFileSync(join(dir, ".gitlab-ci.yml"), "社内の CI");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
+    // 記録に無いファイルを同じ名前で作っていた → 社内で作成
+    const r = app.update({ pkgDir: fakePackage("upd-keep-v2", "1.1.0", { ...v2, ".gitlab-ci.yml": "ci2" }), version: "1.1.0", dir, log, keepLocal: true });
+    expect(r.kept).toEqual([".gitlab-ci.yml"]);
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内の CI");
+    expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).kept).toEqual([".gitlab-ci.yml"]);
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.1.0");
+    logs.length = 0;
+    const r2 = app.update({ pkgDir: fakePackage("upd-keep-v3", "1.2.0", { ...v2, ".gitlab-ci.yml": "ci3" }), version: "1.2.0", dir, log });
+    expect(r2.kept).toEqual([".gitlab-ci.yml"]);
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内の CI");
+    expect(logs.join("\n")).toContain("社内の版のまま残したファイル");
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.2.0");
+    const r3 = app.update({ pkgDir: join(work, "upd-keep-v3"), version: "1.2.0", dir, log, overwrite: true });
+    expect(r3.overwritten).toEqual([".gitlab-ci.yml"]);
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("ci3");
+    expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).kept).toBeUndefined();
+    expect(() => app.update({ pkgDir: join(work, "upd-keep-v3"), version: "1.2.0", dir, log, overwrite: true, keepLocal: true })).toThrow(/どちらか/);
+  }, scaled(60_000));
+
+  it("--keep-local で残したファイルは、新しい版と中身が同じになった版を挟んでも、その次の版で上書きしない", () => {
+    const dir = project("upd-keep-same");
+    writeFileSync(join(dir, "src", "keep.js"), "社内版");
+    git(dir, "commit", "-qam", "社内の変更");
+    app.update({ pkgDir: fakePackage("upd-keep-same-v2", "1.1.0", { ...v2, "src/keep.js": "k2" }), version: "1.1.0", dir, log, keepLocal: true, git: false });
+    const r2 = app.update({ pkgDir: fakePackage("upd-keep-same-v3", "1.2.0", { ...v2, "src/keep.js": "社内版" }), version: "1.2.0", dir, log, git: false });
+    expect(r2.kept).toEqual(["src/keep.js"]);
+    const r3 = app.update({ pkgDir: fakePackage("upd-keep-same-v4", "1.3.0", { ...v2, "src/keep.js": "k4" }), version: "1.3.0", dir, log, git: false });
+    expect(r3.kept).toEqual(["src/keep.js"]);
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("社内版");
+  }, scaled(60_000));
+
+  it.skipIf(process.platform === "win32")("シンボリックリンクは指す先の中身をバックアップし、指す先を書き換えない", () => {
+    const dir = project("upd-link");
+    const outside = join(work, "upd-link-outside.js");
+    writeFileSync(outside, "社内の中身");
+    rmSync(join(dir, "src", "keep.js"));
+    symlinkSync(outside, join(dir, "src", "keep.js"));
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
+    const r = app.update({ pkgDir: fakePackage("upd-link-v2", "1.1.0", v2), version: "1.1.0", dir, log, overwrite: true });
+    expect(r.overwritten).toEqual(["src/keep.js"]);
+    expect(readFileSync(outside, "utf-8")).toBe("社内の中身");
+    expect(readFileSync(join(dir, r.backup, "src", "keep.js"), "utf-8")).toBe("社内の中身");
+    expect(readFileSync(join(dir, "src", "keep.js"), "utf-8")).toBe("k");
+  }, scaled(60_000));
+
+  it("改行が CRLF になっただけ（Windows の autocrlf）は社内の変更にしない", () => {
+    const dir = project("upd-crlf");
+    writeFileSync(join(dir, ".gitignore"), "node_modules/\r\n");
+    const r = app.update({ pkgDir: fakePackage("upd-crlf-v2", "1.1.0", v2), version: "1.1.0", dir, log, git: false });
+    expect(r.conflicts).toEqual([]);
+    expect(r.changed).not.toContain(".gitignore");
+  }, scaled(60_000));
+
+  it("コマンド: 社内の変更で止まると終了コード 2、知らないオプションも止まる", () => {
+    // 本物のパッケージで作ったプロジェクトの CI 定義を社内で変えた
+    const dir = join(work, "upd-cli");
+    app.init({ pkgDir: PKG, version: pkgJson.version, dir, log });
+    writeFileSync(join(dir, ".gitlab-ci.yml"), "社内で変えた");
+    git(dir, "commit", "-qam", "社内の変更");
+    const bin = join(PKG, "bin", "yojitsu-navi.mjs");
+    const r = spawnSync(process.execPath, [bin, "update", dir], { encoding: "utf-8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain(".gitlab-ci.yml（社内で変更）");
+    const d = spawnSync(process.execPath, [bin, "update", dir, "--dry-run"], { encoding: "utf-8" });
+    expect(d.status).toBe(0);
+    expect(d.stdout).toContain("何も変えていません");
+    const u = spawnSync(process.execPath, [bin, "update", dir, "--dryrun"], { encoding: "utf-8" });
+    expect(u.status).toBe(2);
+    expect(u.stderr).toContain("知らないオプション");
+    expect(d.stdout).toContain("-社内で変えた");
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内で変えた");
+  }, scaled(60_000));
+
+  it("ファイルの扱いの区分", () => {
+    expect(["config.json", "data/mapping.csv", "data/masters/members.csv", "data/worklogs/x.csv"].map(app.fileKind)).toEqual(["keep", "keep", "keep", "keep"]);
+    expect(["vendor/npm-cache/index", ".yojitsu-navi.json", ".yojitsu-navi-backup/1/a"].map(app.fileKind)).toEqual(["vendor", "tool", "tool"]);
+    expect([".gitlab-ci.yml", "package.json", "src/index.md", "scripts/ci/install.mjs", ".gitignore"].map(app.fileKind)).toEqual(["package", "package", "package", "package", "package"]);
+    expect(app.backupStamp(new Date(2031, 11, 31, 23, 59, 8))).toBe("20311231-235908");
+    expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain(".yojitsu-navi-backup/");
+  });
 
   it("コミットしていない変更・古い版・記録の無いフォルダでは止まる", () => {
     const dir = project("upd-stop");
@@ -404,7 +584,7 @@ describe("CI 定義とファイルの整合（SPEC §85）", () => {
     const dir = join(work, "ci-ok-proj");
     app.init({ pkgDir: ok, version: "1.0.0", dir, log });
     expect(() => app.update({ pkgDir: fakePackage("ci-broken2", "1.1.0", files), version: "1.1.0", dir, log })).toThrow(/scripts\/lib\/gone\.mjs/);
-  }, 60_000);
+  }, scaled(60_000));
 });
 
 describe("yojitsu-navi の計算コア", () => {

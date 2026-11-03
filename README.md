@@ -73,7 +73,7 @@ npm run dev                                           # http://localhost:3000（
 
 ## 公開（GitLab Pages）
 
-社内へは npm パッケージ（`.tgz` 1 つ）で持ち込みます。`npm run app:pack` で作り、社内で `yojitsu-navi init` するとプロジェクトのフォルダができ、push すれば Pages まで流れます。新しい版は `yojitsu-navi update` で `data/` と `config.json` を残したまま入れ替えます。社内 GitLab の URL はパッケージに入れず、社内で `init` するときに入れます（[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）。
+社内へは npm パッケージ（`.tgz` 1 つ）で持ち込みます。`npm run app:pack` で作り、社内で `yojitsu-navi init` するとプロジェクトのフォルダができ、push すれば Pages まで流れます。新しい版は `yojitsu-navi update` で `data/` と `config.json` を残したまま入れ替えます（社内で変えたファイルがあれば上書きの前に止まり、`--dry-run` で差分を確かめられます。前のファイルは `.yojitsu-navi-backup/` に残ります）。社内 GitLab の URL はパッケージに入れず、社内で `init` するときに入れます（[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）。
 
 `.gitlab-ci.yml` のパイプラインは `validate → test → build → pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。
 GitLab 側の推奨構成（グループ・プロジェクト・保護ブランチ・権限・トークン）、展開の手順、社内で確認することのチェックリストは [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) にあります。
