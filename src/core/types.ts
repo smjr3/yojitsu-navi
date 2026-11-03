@@ -74,10 +74,22 @@ export type ColumnSpec = string | string[];
 
 export type DateFormat = "YYYY-MM-DD" | "YYYY/MM/DD" | "YYYYMMDD" | "ISO8601" | "epochMillis";
 
+/**
+ * ページの終わりの判定（page / offset）
+ * - short: 設定件数（size / limit）より少ない行が返ったら終わり（既定。従来どおり）
+ * - empty: 0 行のページが返ったら終わり（件数を指定できない API 向け）
+ */
+export type PaginationStopWhen = "short" | "empty";
+
+/**
+ * ページング設定。sizeParam / limitParam を省略（または空）にすると件数のパラメータを付けない
+ * （ページ番号だけを受け付ける API 向け）。stopWhen が short のときは size / limit が必要（API 側の 1 ページの件数）。
+ * maxPages（既定 1000）を超えたらエラーで止め、月ファイルは書き換えない。
+ */
 export type PaginationConfig =
   | { type: "none" }
-  | { type: "page"; pageParam: string; sizeParam: string; size: number; startPage?: number; maxPages?: number }
-  | { type: "offset"; offsetParam: string; limitParam: string; limit: number; maxPages?: number }
+  | { type: "page"; pageParam: string; sizeParam?: string; size?: number; startPage?: number; stopWhen?: PaginationStopWhen; maxPages?: number }
+  | { type: "offset"; offsetParam: string; limitParam?: string; limit?: number; stopWhen?: PaginationStopWhen; maxPages?: number }
   | { type: "link"; maxPages?: number }
   | { type: "cursor"; cursorPath: string; cursorParam: string; maxPages?: number };
 

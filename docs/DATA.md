@@ -6,7 +6,7 @@
 | ファイル | 列 |
 |---|---|
 | `data/contracts.csv` | `contract_id, customer_name, project_name, team_id, start_month, end_month, total_amount, note[, updated_by, updated_at]` （updated_by・updated_at は assignments.csv と同じ（マスタ編集の「案件」で保存した人と保存日）。計算には使わない。顧客名・案件名は他システムから取り込む予定で、マスタ編集で直せるのは start_month・end_month・total_amount・team_id だけ。SPEC §80） |
-| `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude]` （案件名が空 = その顧客の全工数。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62） |
+| `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude]` （案件名が空 = その顧客の全工数。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62。紐付けの判定の順序と契約の更新のときの書き方は SPEC §86） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation[, updated_by, updated_at]` （人 × 契約 × 期間の配分人月。updated_by・updated_at は保存した人の GitLab ユーザー名と保存日（YYYY-MM-DD）。画面が保存時に追加・変更した行へ書く。列なし・空欄 = 記録なし。SPEC §56。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note[, updated_by, updated_at]` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。updated_by・updated_at は assignments.csv と同じ。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |
 | `data/targets.csv` | `target_type, target_id, end_month, remaining_rate, start_month, note[, updated_by, updated_at]` （目標。省略可。target_type = `team` / `customer` / `project`、target_id = チームID / 顧客名 / 契約ID、end_month = 終了月、remaining_rate = 目標の残予算率（%。`20` = 20%、100 以下。超過を減らす目標はマイナス `-50`（`▲50` も可））、start_month = 開始月（空 = 終了月を含む年度の最初の月）、note 省略可。updated_by・updated_at は assignments.csv と同じ（保存した人と保存日。一覧の対象名の下に出す）。同じ対象・同じ終了月の重複はエラー、見つからない対象は警告。数値の計算には使わない。画面はマスタ編集の「目標」。SPEC §63） |
@@ -35,7 +35,7 @@
 | `columns.<項目>` | 取得元の列名。`member.id` で入れ子、`["a","b"]` で複数候補（最初に値があるもの）。項目: `date, memberId, memberName, customerName, projectName, task, hours` | 必須 |
 | `dateFormat` | `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601`（JST に変換） / `epochMillis` | 自動判定 |
 | `hoursUnit` | `hours` / `minutes` / `seconds` | `hours` |
-| `pagination` | `{type:"none"}` / `{type:"page", pageParam, sizeParam, size, startPage}` / `{type:"offset", offsetParam, limitParam, limit}` / `{type:"link"}` / `{type:"cursor", cursorPath, cursorParam}`。どれも `maxPages`（既定 1000）を付けられる | `none` |
+| `pagination` | `{type:"none"}` / `{type:"page", pageParam, sizeParam, size, startPage, stopWhen}` / `{type:"offset", offsetParam, limitParam, limit, stopWhen}` / `{type:"link"}` / `{type:"cursor", cursorPath, cursorParam}`。どれも `maxPages`（既定 1000）を付けられる。`page` / `offset` は `sizeParam` / `limitParam` を省くと件数のパラメータを付けない。`stopWhen` は `short`（既定。`size` / `limit` 未満の行数で終了）か `empty`（0 行で終了。`size` / `limit` は件数を付けるときだけ必要）。例: ページ番号だけの API は `{type:"page", pageParam:"page", stopWhen:"empty"}` | `none` |
 | `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | なし |
 | `filters` | 取り込まない行の条件 `[{ "column": "state", "notEquals": "cancelled" }]`（`equals` / `notEquals` / `in`。すべてに合う行だけ取り込む） | なし |
 | `encoding` | CSV 応答の文字コード `auto` / `utf-8` / `shift_jis` | `auto` |
