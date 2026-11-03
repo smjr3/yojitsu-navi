@@ -306,7 +306,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 | `columns.<field>` | 取得元の列名。ドット区切りで入れ子（`member.id`）。配列で複数候補（最初に値があるもの） | 現行どおり |
 | `dateFormat` | `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601`（時刻付き。JST に変換して日付） / `epochMillis` | 自動判定（左から順に試す） |
 | `hoursUnit` | `hours` / `minutes` / `seconds` | `hours` |
-| `pagination` | `{ type: "none" }` / `{ type: "page", pageParam, sizeParam, size, startPage }` / `{ type: "offset", offsetParam, limitParam, limit }` / `{ type: "link" }`（`Link: rel="next"`）/ `{ type: "cursor", cursorPath, cursorParam }` | `none` |
+| `pagination` | `{ type: "none" }` / `{ type: "page", pageParam, sizeParam, size, startPage, stopWhen }` / `{ type: "offset", offsetParam, limitParam, limit, stopWhen }` / `{ type: "link" }`（`Link: rel="next"`）/ `{ type: "cursor", cursorPath, cursorParam }`。件数パラメータの省略・終了条件・上限は §90 | `none` |
 | `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | 無し |
 | `filters` | 取り込まない行の条件 `[{ column, equals | notEquals | in }]` | 無し |
 | `encoding` | CSV 応答の文字コード（`auto` / `utf-8` / `shift_jis`） | `auto` |
@@ -1231,3 +1231,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 画像ファイルを置かない（§44）ので、`src/components/favicon.js` の SVG を data URI にして `observablehq.config.js` の `head` から全ページに入れる。外部への読み込みは増えない。
 - iPhone のホーム画面アイコン（`apple-touch-icon`）は PNG しか使えないので入れない（画像ファイルが要る）。
 - 再発防止: `tests/unit/favicon.test.ts`（data URI が SVG に戻る・色が `style.css` の既定と同じ）、`tests/e2e/smoke.spec.ts`（全ページにファビコンが 1 つ）。
+
+## 90. ページングを連携先 API に合わせる（2026-11-03 依頼者）
+連携先 API の実測: ページ番号だけを受け付け、件数のパラメータを付けると HTTP 400。終わりは空配列が返るまで。§20.1 の `page` は件数を必ず付け、設定件数未満で終わるため取得できなかった。作業実績・人事（`memberSource.http`）の両方に効く（同じ取得処理）。
+- `page` の `sizeParam`、`offset` の `limitParam` は省略可。省略（または空文字）なら件数のパラメータを付けない。
+- 終了条件 `stopWhen`（`page` / `offset`）: `short` = `size` / `limit` 未満の行数で終了（既定。従来どおり）、`empty` = 0 行のページで終了。`short` のとき、および件数のパラメータを付けるときは `size` / `limit`（1 以上の整数）が必須。件数を付けずに `short` にするなら API 側の 1 ページの件数を書く。`offset` は返った行数だけ進める。
+- 連携先の設定例: `{ "type": "page", "pageParam": "page", "stopWhen": "empty" }`（接続先の値は `config.json` に書き、リポジトリの既定値は変えない）。
+- 無限取得の防止: `maxPages`（既定 1000、1 以上の整数）を超えたらエラーで止め、月ファイル・members.csv を書き換えない（途中までのデータで実績が少なく見えるのを防ぐため、警告で続行はしない）。取得日時が更新されないので、データ確認画面の「作業実績の取得」が前日より前の警告色になる（§75）。従来の「2 行以上のページが以前と同じ内容」の検出は `empty` でも効く（空配列を返さず最後のページを繰り返す API で止まる）。
+- 設定の誤り（`size` 不足・`stopWhen` の値違い・`maxPages` が 0 以下）は通信の前にエラー。
+- 既存設定（`stopWhen` 無し・件数パラメータあり）の送るパラメータ・終了位置・結果は変えない（`tests/unit/api-adapter.test.ts`「既存のページング設定は従来どおり」、property テストで新旧の結果一致）。
