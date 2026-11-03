@@ -1124,6 +1124,14 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - テストも同じ: `bash`・`grep` を使わない、シンボリックリンクは Windows ではジャンクション、`tsx` は `node --import tsx`。
 - 確認済みは Linux だけ。Windows では 2026-10-31 の外部の実行結果（改行・ロケール・`npm`/`tsx`/`grep`/`bash` の起動・シンボリックリンク・パス区切り）で落ちた箇所を直した。社内の Runner での確認は持ち込み後。
 
+### 79.1 テストの実行環境の差（2026-11-03 依頼者）
+社内の Windows（Git Bash）で、結合テストの失敗・Vitest のワーカーのタイムアウト・性能テストの時間超過が出た（導入先は並列数とタイムアウトを変え、`tests/integration/app-package.test.ts` を一時的に外していた）。テストを外さずに通すため、次のようにする。手順と推奨値は `docs/OPERATIONS.md`「テストを Windows で動かす」。
+- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は Vitest の `VITEST_MAX_FORKS` で減らせる。
+- 別プロセスを長く待つテストは `runAsync`（`tests/test-env.ts`）で待つ。`spawnSync`・`execFileSync` で数十秒止めると、その間ワーカーが Vitest の本体と通信できず「`[vitest-worker]: Timeout calling …`」で落ちるため。結合テストのパッケージの組み立て・`npm pack`（1 回だけ作って使い回す）・一式の `init`（コマンドで実行）・`tsc`・データローダが対象。
+- 結合テストが作る一時の git は、PC の設定に左右されないよう `core.autocrlf=false`・`core.longpaths=true`・`commit.gpgsign=false` を環境変数で渡す。一時フォルダは消せるまで何度か試す（Windows でファイルが一時的に使用中になるため）。
+- 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。社内の `.gitlab-ci.yml` の `test` は `report`（CI/CD 変数で変えられる）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
+- 確認は Linux（1 コアに絞った負荷の高い状態を含む）。Windows の実機での確認は導入先で行う。
+
 ## 80. マスタ編集の「案件」「祝日」（2026-11-01 依頼者）
 保守案件（`data/contracts.csv`）と祝日（`data/holidays.csv`）を、マスタ編集のタブに出す（それまでは GitLab の Web IDE で CSV を直していた）。保存は他のマスタと同じ GitLab のマージ。作業種別（`task-types.csv`）はタブにしない（作業名から抜き出す運用になる予定。依頼者）。名称の対応（`mapping.csv`）もタブにしない。
 - タブの順: メンバー・単価・組織・**案件**・目標・**祝日**。URL は `/masters?view=contracts` / `?view=holidays`。

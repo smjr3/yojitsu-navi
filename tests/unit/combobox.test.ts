@@ -1,6 +1,7 @@
 /** 候補の絞り込み（SPEC §31.2） */
 import { describe, expect, it } from "vitest";
 import { filterOptions, normalizeQuery } from "../../src/components/combobox.js";
+import { measure } from "../test-env.js";
 
 const opts = [
   { value: "M010", label: "中村 拓也", sub: "インフラ保守チーム ・ 主任", search: "M010" },
@@ -44,8 +45,8 @@ describe("filterOptions", () => {
   });
   it("数百件でも速い", () => {
     const many = Array.from({ length: 2000 }, (_, i) => ({ value: String(i), label: `案件${i}`, sub: `顧客${i % 50}`, search: `C${i}` }));
-    const t = performance.now();
-    for (let i = 0; i < 50; i++) filterOptions(many, `顧客${i}`);
-    expect(performance.now() - t).toBeLessThan(1000);
+    measure("候補の絞り込み 50 回", 1000, () => {
+      for (let i = 0; i < 50; i++) filterOptions(many, `顧客${i}`);
+    });
   });
 });

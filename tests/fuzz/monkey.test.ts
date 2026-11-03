@@ -10,6 +10,7 @@ import { monthStatusFromMeta } from "../../src/core/status.js";
 import type { Assignment, Config, Contract, Dataset, ForecastMethod, Holiday, MappingRule, MemberRecord, Model, RateRecord, TeamRecord, Worklog } from "../../src/core/types.js";
 import { validateDataset } from "../../src/core/validate.js";
 import { baseConfig } from "../unit/fixtures.js";
+import { scaled } from "../test-env.js";
 
 const SEEDS = 300;
 const METHODS: ForecastMethod[] = ["recent3", "all", "assignment"];
@@ -408,5 +409,5 @@ describe(`モンキーテスト（${SEEDS} seeds）`, () => {
         expect(strip(m2), `seed=${seed} マスタの行順に依存しない`).toBe(strip(model));
       }
     }
-  }, 60_000);
+  }, scaled(60_000));
 });

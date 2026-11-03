@@ -8,6 +8,7 @@ import { createMasterIndex } from "../../src/core/masters.js";
 import { aggregateMembers, buildMemberMonths, memberMonthlySeries } from "../../src/core/members.js";
 import type { Assignment, Contract, MappingRule, MemberRecord, Worklog } from "../../src/core/types.js";
 import { dataset, rate, team } from "./fixtures.js";
+import { measure } from "../test-env.js";
 
 function lcg(seed: number): () => number {
   let s = seed >>> 0;
@@ -56,25 +57,21 @@ function bigDataset(contractCount: number, worklogCount: number, assignmentCount
 describe("性能（メンバー別）", () => {
   it("作業ログ 5 万件 × 契約 100 件 × アサイン 400 行の Model 構築（メンバー月を含む）が 2 秒以内、メンバー月の構築だけなら 300ms 以内", () => {
     const ds = bigDataset(100, 50_000, 400);
-    const start = performance.now();
-    const model = buildModel(ds, { asOf: "2026-10-27" });
-    const elapsed = performance.now() - start;
+    // 時間の判定は実行環境に合わせる（tests/test-env.ts の measure）
+    const model = measure("Model 構築（メンバー月を含む）", 2000, () => buildModel(ds, { asOf: "2026-10-27" }));
     expect(model.memberMonths.length).toBeGreaterThan(4000);
-    expect(elapsed).toBeLessThan(2000);
 
     const masters = createMasterIndex(ds);
-    const t0 = performance.now();
-    const again = buildMemberMonths(model.contracts, ds.assignments, masters, ds.config.standardHoursPerMonth);
-    expect(performance.now() - t0).toBeLessThan(300);
+    const again = measure("メンバー月の構築", 300, () => buildMemberMonths(model.contracts, ds.assignments, masters, ds.config.standardHoursPerMonth));
     expect(again).toEqual(model.memberMonths);
   });
 
   it("集計は Model に対して高速（aggregateMembers 200 回 ＋ 月次推移 200 人分で 2 秒以内）", () => {
     const model = buildModel(bigDataset(100, 20_000, 400), { asOf: "2026-10-27" });
     const period = { from: "2026-04", to: "2027-03" };
-    const start = performance.now();
-    for (let i = 0; i < 200; i++) aggregateMembers(model, i % 2 ? { period, teamIds: ["T1", "T2"] } : { period });
-    for (let i = 0; i < 200; i++) memberMonthlySeries(model, `M${i}`, period);
-    expect(performance.now() - start).toBeLessThan(2000);
+    measure("メンバー別の集計", 2000, () => {
+      for (let i = 0; i < 200; i++) aggregateMembers(model, i % 2 ? { period, teamIds: ["T1", "T2"] } : { period });
+      for (let i = 0; i < 200; i++) memberMonthlySeries(model, `M${i}`, period);
+    });
   });
 });
