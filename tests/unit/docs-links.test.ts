@@ -52,7 +52,7 @@ const repoFiles = () =>
 
 /**
  * リポジトリに置いてよい画像（パス → 理由）。どうしても必要なときだけ理由つきで足す。
- * favicon・アイコンも置かない（ファビコンは src/components/favicon.js の SVG を埋め込む。SPEC §85。フォントは画像ではない）
+ * favicon・アイコンも置かない（ファビコンは src/components/favicon.js の SVG を埋め込む。SPEC §89。フォントは画像ではない）
  */
 const IMAGE_ALLOWLIST: Record<string, string> = {};
 

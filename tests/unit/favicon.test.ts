@@ -1,5 +1,5 @@
 /**
- * ファビコン（SPEC §85）: 画像ファイルを置かず、SVG を data URI で埋め込む。色はテーマカラーの既定（style.css）と同じ
+ * ファビコン（SPEC §89）: 画像ファイルを置かず、SVG を data URI で埋め込む。色はテーマカラーの既定（style.css）と同じ
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
