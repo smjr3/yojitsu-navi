@@ -691,6 +691,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
 - `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルを上書きしたら一覧で知らせる。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。
+- `init`・`update` の最後に、CI 定義が使うファイルがそろいコミットされているかを確かめる（§85。`yojitsu-navi check` でも確かめられる）。
 - `yojitsu-navi gitlab-setup [--apply]`: §39.2 と同じ。接続先は `config.json`、空なら `git remote` の `origin`（https）から読む。トークンは `GITLAB_TOKEN`、無ければ画面に出さずにその場で聞く（Windows のコマンドプロンプトでも使えるように。引数では受け取らない）。
 - 手順は `docs/DEPLOY_GITLAB.md`（手順 0〜2、「新しい版にする」）。
 - **画像を入れない**（2026-10-31 要望「画像はリポジトリにどうしても必要な場合を除いて不要。npm 化で無駄に大きくなる」）: リポジトリに画像を置かない（favicon・アイコンも置かない。フォントは画像ではないので対象外）ので template にも入らない。`npm run app:pack`・`core:pack` は中身に画像があると止まる（依存込み版の `deps/` は外部の npm パッケージなので見ない）。リポジトリ全体の検査は `tests/unit/docs-links.test.ts`（拡張子と先頭のバイト。どうしても必要なものだけ `IMAGE_ALLOWLIST` に理由つきで足す）。
@@ -1176,3 +1177,11 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 版はルートの `package.json` と同じ 1 つ。npmjs.com への公開はタグ `v<版>`（§83 の `core-v`・`app-v` をやめる）。
 - 社内 GitLab の Package Registry へ計算コアを出す `publish-core` ジョブは削除（ほかのプロジェクトは npmjs.com か `.tgz` から入れる）。
 - 再発防止: `tests/integration/app-package.test.ts`（計算コアの公開 API が `src/core` と同じ・`src/core` の import の制約・別プロジェクトから Node と NodeNext の型で使える。パッケージを組み立てるテストは並行で template を消し合うので 1 ファイルにまとめる）。
+
+## 85. 初期化・更新で CI のファイルを欠かさない（2026-11-03 依頼者）
+社内で `init` したプロジェクトの CI が「`scripts/ci/install.mjs` が無い」で失敗した、への対応。CI 定義（`.gitlab-ci.yml`）が使うファイルを、組み立て・`init`・`update` のたびに確かめる。
+- 洗い出し（`packages/app/lib/ci-files.mjs`）: `script`・`before_script`・`after_script` のコマンドに書いたファイル、`npm run X` の `package.json` の中身（`preX`・`postX` も）、`scripts/ci/` のスクリプトが中で `npm run` するもの、それらが相対パスで import する先（`.js` と書いた `.ts` も）を辿ったすべてと、`npm ci` が読む `package.json`・`package-lock.json`。
+- 確かめること: フォルダにある・git にコミットされている（push しても CI から見えないものを出さない）・`npm run` する名前が `package.json` にある。
+- `npm run app:build` は template で足りなければ止まる（壊れたパッケージを作らない）。`init`・`update` は最後に確かめ、足りなければ一覧を出して止まる（終了コード 2）。`yojitsu-navi check [フォルダ]` で今あるプロジェクトも確かめられる。
+- PC 全体の git の除外設定（`core.excludesFile` で `*.mjs`・`lib/` などを除外）に当たっても入るよう、`init`・`update` はパッケージのファイルを `git add -f` する。前の版で入らなかったファイルも `update` で入る。
+- 再発防止: `tests/integration/app-package.test.ts` の「CI 定義とファイルの整合」（本物のパッケージで init 直後・update 後に全参照が揃いコミットされている、除外設定に当たる PC、欠けたパッケージで止まる）。

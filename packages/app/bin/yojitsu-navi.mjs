@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
+import { CliError, check, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
 
 const PKG_DIR = fileURLToPath(new URL("..", import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
@@ -17,6 +17,8 @@ const HELP = `予実ナビ ${VERSION}
       新しいプロジェクトのフォルダを作る（既定 yojitsu-navi）。接続先を config.json と git remote に入れる
   yojitsu-navi update [フォルダ] [--force]
       今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> にコミットする
+  yojitsu-navi check [フォルダ]
+      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか確かめる（init・update の最後にも確かめる）
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -100,6 +102,10 @@ async function main(argv) {
   if (cmd === "update") {
     const dir = resolve(positional(rest, [])[0] ?? ".");
     update({ pkgDir: PKG_DIR, version: VERSION, dir, force: rest.includes("--force"), log });
+    return 0;
+  }
+  if (cmd === "check") {
+    check({ dir: resolve(positional(rest, [])[0] ?? "."), log });
     return 0;
   }
   if (cmd === "gitlab-setup") {

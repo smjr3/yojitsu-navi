@@ -278,6 +278,102 @@ describe("CI 定義", () => {
   });
 });
 
+describe("CI 定義とファイルの整合（SPEC §85）", () => {
+  let ci: any;
+  beforeAll(async () => {
+    ci = await import(pathToFileURL(join(PKG, "lib", "ci-files.mjs")).href);
+  });
+
+  /** 一時的に PC 全体の git 設定（core.excludesFile）を差し替える。社内の PC で *.mjs などを除外していても CI のファイルが入ることの確認用 */
+  function withGlobalIgnore<T>(patterns: string, fn: () => T): T {
+    const dir = mkdtempSync(join(work, "gitglobal-"));
+    writeFileSync(join(dir, "ignore"), patterns);
+    writeFileSync(join(dir, "config"), `[core]\n\texcludesFile = ${join(dir, "ignore").split(sep).join("/")}\n`);
+    const prev = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = join(dir, "config");
+    try {
+      return fn();
+    } finally {
+      if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = prev;
+    }
+  }
+
+  it("CI 定義のコマンド・npm run の中身・読み込み先を辿って、要るファイルを洗い出す", () => {
+    const r = ci.checkCiFiles(ROOT, { git: false });
+    for (const f of [".gitlab-ci.yml", "package.json", "package-lock.json", "scripts/ci/install.mjs", "scripts/lib/npm.mjs", "scripts/ci/fetch-data.mjs", "scripts/ci/push-data-mr.mjs", "scripts/ci/pages.mjs", "scripts/ci/e2e.mjs", "scripts/validate-data.ts", "scripts/build.ts", "scripts/seed-npm-cache.mjs", "scripts/fetch-worklogs.ts", "scripts/fetch-members.ts", "tests/e2e/playwright.config.ts", "tsconfig.json", "vitest.config.ts", "src/core/index.ts"].filter((f) => f !== "src/core/index.ts" || r.required.includes(f))) {
+      expect(r.required).toContain(f);
+    }
+    expect([r.missing, r.missingScripts]).toEqual([[], []]);
+  });
+
+  it("参照の取り出し: script の 1 行・配列の形・npm run の pre/post・無いスクリプト・CI 用スクリプトの中の npm run", () => {
+    const dir = mkdtempSync(join(work, "refs-"));
+    const put = (f: string, body: string) => {
+      mkdirSync(join(dir, f, ".."), { recursive: true });
+      writeFileSync(join(dir, f), body);
+    };
+    put(".gitlab-ci.yml", ["default:", "  before_script:", "    - node scripts/ci/a.mjs", "job:", "  script:", "    # node scripts/ci/comment.mjs", '    - "npm run build"', "    - npm run nope", "other:", '  script: ["node ./scripts/ci/b.mjs x"]', "  artifacts:", "    paths:", "      - dist/", ""].join("\n"));
+    put("package.json", JSON.stringify({ scripts: { prebuild: "node scripts/pre.mjs", build: "tsx scripts/build.ts --out dist", inner: "node scripts/inner.mjs" } }));
+    put("package-lock.json", "{}");
+    put("scripts/ci/a.mjs", 'import { x } from "../lib/x.mjs";\nnpm(["run", "inner"]);\n');
+    put("scripts/lib/x.mjs", 'export * from "./y.js";\n');
+    put("scripts/lib/y.ts", "export const y = 1;\n");
+    put("scripts/ci/b.mjs", 'await import("./c.mjs");\n');
+    put("scripts/pre.mjs", "");
+    put("scripts/build.ts", 'import "../src/z.js";\n');
+    const r = ci.checkCiFiles(dir, { git: false });
+    expect(r.required).toEqual([".gitlab-ci.yml", "package-lock.json", "package.json", "scripts/build.ts", "scripts/ci/a.mjs", "scripts/ci/b.mjs", "scripts/ci/c.mjs", "scripts/inner.mjs", "scripts/lib/x.mjs", "scripts/lib/y.ts", "scripts/pre.mjs", "src/z.js"]);
+    expect(r.missing).toEqual(["scripts/ci/c.mjs", "scripts/inner.mjs", "src/z.js"]);
+    expect(r.missingScripts).toEqual(["nope"]);
+    expect(ci.describeCiProblems(r)).toMatch(/scripts\/ci\/c\.mjs[\s\S]*nope/);
+  });
+
+  it("init 直後のプロジェクト: CI が使うファイルがすべてあり、最初のコミットに入っている（PC 全体の git 除外設定に当たっても）", () => {
+    const dir = join(work, "ci-init");
+    withGlobalIgnore("*.mjs\nscripts/ci/\nlib/\n", () => app.init({ pkgDir: PKG, version: pkgJson.version, dir, log }));
+    const r = ci.checkCiFiles(dir);
+    expect(r.required).toContain("scripts/ci/install.mjs");
+    expect(r.required).toContain("scripts/lib/npm.mjs");
+    expect([r.missing, r.untracked, r.missingScripts]).toEqual([[], [], []]);
+    // パッケージのファイルは全部コミットされている
+    const tracked = new Set(git(dir, "ls-files").split("\n"));
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).files).filter((f) => !tracked.has(f))).toEqual([]);
+    const cli = spawnSync(process.execPath, [join(PKG, "bin", "yojitsu-navi.mjs"), "check", dir], { encoding: "utf-8" });
+    expect(cli.status).toBe(0);
+    expect(cli.stdout).toContain("揃っています");
+  }, 120_000);
+
+  it("update: 前の版で欠けていた・コミットされていなかった CI のファイルを入れ直してコミットする", () => {
+    const dir = join(work, "ci-update");
+    app.init({ pkgDir: PKG, version: pkgJson.version, dir, log });
+    // 前の版を再現: CI が使うファイルが無い／フォルダにはあるがコミットされていない（git の除外設定に当たった）
+    git(dir, "rm", "-q", "scripts/ci/install.mjs");
+    git(dir, "rm", "-q", "--cached", "scripts/lib/npm.mjs");
+    const manifest = JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8"));
+    writeFileSync(join(dir, app.MANIFEST), JSON.stringify({ ...manifest, version: "0.0.1" }));
+    git(dir, "add", app.MANIFEST);
+    git(dir, "commit", "-qm", "前の版");
+    expect(spawnSync(process.execPath, [join(PKG, "bin", "yojitsu-navi.mjs"), "check", dir], { encoding: "utf-8" }).status).toBe(2);
+    const r = withGlobalIgnore("scripts/lib/npm.mjs\n", () => app.update({ pkgDir: PKG, version: pkgJson.version, dir, log }));
+    expect(r.added).toContain("scripts/ci/install.mjs");
+    expect(r.branch).toBe(`update-${pkgJson.version}`);
+    expect(git(dir, "status", "--porcelain")).toBe("");
+    const c = ci.checkCiFiles(dir);
+    expect([c.missing, c.untracked, c.missingScripts]).toEqual([[], [], []]);
+  }, 120_000);
+
+  it("CI が使うファイルが揃わないパッケージでは init・update が止まる（知らせて CI の失敗を防ぐ）", () => {
+    const files = { ".gitlab-ci.yml": "job:\n  script:\n    - node scripts/ci/run.mjs\n", "package.json": "{}", "package-lock.json": "{}", "config.json": CONFIG(), "scripts/ci/run.mjs": 'import "../lib/gone.mjs";\n' };
+    const pkg = fakePackage("ci-broken", "1.0.0", files);
+    expect(() => app.init({ pkgDir: pkg, version: "1.0.0", dir: join(work, "ci-broken-proj"), log })).toThrow(/scripts\/lib\/gone\.mjs/);
+    const ok = fakePackage("ci-ok", "1.0.0", { ...files, "scripts/lib/gone.mjs": "" });
+    const dir = join(work, "ci-ok-proj");
+    app.init({ pkgDir: ok, version: "1.0.0", dir, log });
+    expect(() => app.update({ pkgDir: fakePackage("ci-broken2", "1.1.0", files), version: "1.1.0", dir, log })).toThrow(/scripts\/lib\/gone\.mjs/);
+  }, 60_000);
+});
+
 describe("yojitsu-navi の計算コア", () => {
   it("パッケージは 1 つ（yojitsu-navi）で、import の入口が計算コア", () => {
     expect(pkgJson.name).toBe("yojitsu-navi");
