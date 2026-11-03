@@ -17,11 +17,15 @@
 #   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
 #   MEMBER_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-members（所属・役職の取り込み）も動く。既定は無効
 #   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
+#   FETCH_FROM / FETCH_TO / FETCH_MEMBERS（任意。Run pipeline で入れる。CI/CD 変数には登録しない）過去の作業実績の取り直し（§87）
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
+#   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
+#   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
 #
 # 外部ネットワーク:
 #   - 画面は外部 CDN を一切使わない（ライブラリは dist/ に同梱）
@@ -103,6 +107,10 @@ validate:
 test:
   stage: test
   <<: *normal-rules
+  variables:
+    # 性能テストは時間を表示するだけにする（Runner の性能がばらつくため）。判定したいときは CI/CD 変数 YOJITSU_PERF に loose か strict。
+    # Windows の Runner でワーカーのタイムアウトが出るときは CI/CD 変数 VITEST_MAX_FORKS を 2（それでも出るなら 1）にする（docs/OPERATIONS.md、SPEC §79.1）
+    YOJITSU_PERF: "report"
   script:
     - npm run typecheck
     # JUnit 形式のレポートも出して GitLab のテスト結果タブに表示する
@@ -171,10 +179,13 @@ fetch-worklogs:
   resource_group: data-writeback
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
+    # 過去の取り直し（§87）: Run pipeline で FETCH_FROM / FETCH_TO（YYYY-MM）、必要なら FETCH_MEMBERS（社員番号）を入れて実行
+    - if: $CI_PIPELINE_SOURCE == "web" && $FETCH_FROM
   variables:
     GIT_STRATEGY: clone
   script:
-    # 直近 refetchMonths か月を取り直して data/worklogs/ を更新 → 検証 →
+    # 直近 refetchMonths か月（手動実行なら FETCH_FROM〜FETCH_TO）を取り直して data/worklogs/ を更新 → 検証 →
+    # 取得に失敗したら CSV は書き換えず、失敗の記録（_meta.json）だけを MR にしてジョブを失敗にする（データ確認画面に出る）
     # main は直接プッシュ不可（保護ブランチ）なので、data/worklogs-<日時> の MR を作って自動マージする（scripts/ci/push-data-mr.mjs）
     - node scripts/ci/fetch-data.mjs worklogs
 

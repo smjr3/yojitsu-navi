@@ -310,6 +310,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 | `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | 無し |
 | `filters` | 取り込まない行の条件 `[{ column, equals | notEquals | in }]` | 無し |
 | `encoding` | CSV 応答の文字コード（`auto` / `utf-8` / `shift_jis`） | `auto` |
+| `members` | 取得対象の社員番号を API に渡す（§87）。`{ param, style: join / repeat, separator, chunkSize }`。社員番号はメンバーマスタから作る | 無し（渡さない） |
 - 列が見つからないときはエラーで止め、**応答の最初の1行の列名一覧** を出す（設定ミスを見つけやすくする。値は出さない）。
 - `npm run fetch -- --dry-run --sample=5` で、取得→変換結果の先頭 N 行と列の対応表を表示し、ファイルを書かない（本番での初回設定用）。
 - 設定は `config.json`（コミットする）、トークンは環境変数のみ。
@@ -1127,6 +1128,14 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - テストも同じ: `bash`・`grep` を使わない、シンボリックリンクは Windows ではジャンクション、`tsx` は `node --import tsx`。
 - 確認済みは Linux だけ。Windows では 2026-10-31 の外部の実行結果（改行・ロケール・`npm`/`tsx`/`grep`/`bash` の起動・シンボリックリンク・パス区切り）で落ちた箇所を直した。社内の Runner での確認は持ち込み後。
 
+### 79.1 テストの実行環境の差（2026-11-03 依頼者）
+社内の Windows（Git Bash）で、結合テストの失敗・Vitest のワーカーのタイムアウト・性能テストの時間超過が出た（導入先は並列数とタイムアウトを変え、`tests/integration/app-package.test.ts` を一時的に外していた）。テストを外さずに通すため、次のようにする。手順と推奨値は `docs/OPERATIONS.md`「テストを Windows で動かす」。
+- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は Vitest の `VITEST_MAX_FORKS` で減らせる。
+- 別プロセスを長く待つテストは `runAsync`（`tests/test-env.ts`）で待つ。`spawnSync`・`execFileSync` で数十秒止めると、その間ワーカーが Vitest の本体と通信できず「`[vitest-worker]: Timeout calling …`」で落ちるため。結合テストのパッケージの組み立て・`npm pack`（1 回だけ作って使い回す）・一式の `init`（コマンドで実行）・`tsc`・データローダが対象。
+- 結合テストが作る一時の git は、PC の設定に左右されないよう `core.autocrlf=false`・`core.longpaths=true`・`commit.gpgsign=false` を環境変数で渡す。一時フォルダは消せるまで何度か試す（Windows でファイルが一時的に使用中になるため）。
+- 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。社内の `.gitlab-ci.yml` の `test` は `report`（CI/CD 変数で変えられる）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
+- 確認は Linux（1 コアに絞った負荷の高い状態を含む）。Windows の実機での確認は導入先で行う。
+
 ## 80. マスタ編集の「案件」「祝日」（2026-11-01 依頼者）
 保守案件（`data/contracts.csv`）と祝日（`data/holidays.csv`）を、マスタ編集のタブに出す（それまでは GitLab の Web IDE で CSV を直していた）。保存は他のマスタと同じ GitLab のマージ。作業種別（`task-types.csv`）はタブにしない（作業名から抜き出す運用になる予定。依頼者）。名称の対応（`mapping.csv`）もタブにしない。
 - タブの順: メンバー・単価・組織・**案件**・目標・**祝日**。URL は `/masters?view=contracts` / `?view=holidays`。
@@ -1223,6 +1232,20 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **mapping.csv の行ごとの期間**: 無い。いつの作業をどの契約にするかは契約の期間だけで決まる。
 - **期間の重なりの事前検証**: 無い。実績が出てから `MAPPING_AMBIGUOUS` で分かる。`npm run validate` には出ない。
 - **取り込みを止める設定**: 無い。未紐付けがあっても取り込み・ビルドは進む。
+
+## 87. 作業実績 API の取得対象をメンバーマスタから作る（2026-11-03 依頼者）
+本番導入先の社内レビューの指摘への対応。取得する人は 100 人を超える見込みで、社員番号をメンバーマスタと API 設定の両方で持たない。
+- **対象者はメンバーマスタ（`data/masters/members.csv`）から作る**。`worklogSource.http.members` を設定したときだけ、取得する期間（既定は直近 `refetchMonths` か月）に **1 か月でも在籍している人** を対象にする。期間の最初の月に不在になった人（前月は在籍）も入れる（不在した月の実績を拾うため。§35）。区分（社員・パートナー）・チームの有無（ヘルプ、§72）は問わない。入社前・不在後の期間には入れない。社員番号を API の設定に書く項目は作らない。
+- **複数人をまとめて 1 リクエストで取る**: `param=A,B,…`（`style: join`、区切りは `separator`、既定 `,`）か `param=A&param=B`（`style: repeat`）。`url`・`query` に `{members}` と書けばその位置に入る。`chunkSize` 人（既定 50）ずつに分けて順に取る。ページング（§20.1・§90）は 1 回ごとに効く。
+- **過去の実績の取り直し（退職者・異動者を含む）**: 期間を指定すると、その期間の在籍者が自動で対象になる（今は退職・異動していても、その期間にマスタで在籍なら入る。異動は所属が変わるだけで社員番号は同じなので対象のまま）。
+  - `npm run fetch -- --from YYYY-MM --to YYYY-MM`: その期間の月ファイルを全員分で書き直す。
+  - `--members 社員番号,…` を足すと、その人の行だけを差し替え、ほかの人の行は残す（マスタに無い人・不在の期間の人も指定できる）。この取り直しでは `_meta.json` の取得日時を変えない（全員分の取得ではないため）。
+  - GitLab では Build > Pipelines > Run pipeline で変数 `FETCH_FROM`・`FETCH_TO`（必要なら `FETCH_MEMBERS`）を入れて実行する（`fetch-worklogs` ジョブが動く）。CI/CD 変数には登録しない（毎日の取り込みが同じ期間になるため）。
+- **途中で失敗したら既存の CSV を書き換えない**: どの回のリクエストが失敗しても（再試行後の 4xx・5xx・ページ上限・列の欠落など）全体を失敗にし、月ファイルを 1 つも書かない（全部取れたときだけまとめて差し替える。従来の `writeFilesAtomic`）。人事の取り込み（§20.2）も同じ（members.csv を書かない）。
+  - 失敗は記録して **データ確認画面の「データの検証」に警告で出す**: 作業実績は `data/worklogs/_meta.json`、人事は `data/masters/_members-meta.json` の `lastFailure`（日時と理由。トークンは伏せ、300 文字まで）。作業実績の取得日時（`fetchedAt`）は前回成功のまま。次に成功すると消える。
+  - CI（`scripts/ci/fetch-data.mjs`）は失敗の記録だけを MR にしてからジョブを失敗で終える（GitLab の通知も出る）。`--dry-run` の失敗は記録しない。
+- `members` を設定しない API はこれまでどおり（社員番号を渡さず全件を取る）。
+- 実装: `scripts/lib/fetch-targets.ts`（対象者・分割）、`scripts/lib/fetch-status.ts`（失敗の記録）、`scripts/adapters/http.ts`、`buildRequestUrl`（`scripts/adapters/http-source.ts`）。再発防止: `tests/integration/member-targets.test.ts`。
 
 ## 88. 広い画面では横幅を使い切る（2026-11-03 依頼者）
 

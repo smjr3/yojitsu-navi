@@ -31,6 +31,6 @@ PR を出す前に確認すること:
 ## そのほか
 
 - 画面の文言は `src/i18n/ja.js`・`src/i18n/rules.txt`・`src/i18n/guide.txt` に集める（[docs/TEXTS.md](docs/TEXTS.md)）。画面を変えたら「使い方」（`guide.txt`）も同じ PR で直す
-- Windows・Linux のどちらでも動かす（本番の Runner は Windows。SPEC §79）: `.gitlab-ci.yml` の `script` にシェルの構文を書かず `scripts/ci/*.mjs` に入れる。`bash`・`grep` などに頼らない、パスは `path` で扱う、文字列の並べ替えは言語を指定する、npm は `scripts/lib/npm.mjs` で起動する
+- Windows・Linux のどちらでも動かす（本番の Runner は Windows。SPEC §79）: `.gitlab-ci.yml` の `script` にシェルの構文を書かず `scripts/ci/*.mjs` に入れる。`bash`・`grep` などに頼らない、パスは `path` で扱う、文字列の並べ替えは言語を指定する、npm は `scripts/lib/npm.mjs` で起動する。テストのタイムアウトは `scaled()`、性能の判定は `measure()`、長く待つ別プロセスは `runAsync()`（`tests/test-env.ts`。SPEC §79.1）
 - ビルドは必ず `npm run build`（`npx observable build` を直接使わない。[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)）
 - 文書・コメント・設定に個人のアカウント名や外部サービスのアカウント情報を書かない

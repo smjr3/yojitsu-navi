@@ -8,6 +8,8 @@
  * - config.memberSource.adapter が none（既定）のときは何もしない（手入力運用）。
  * - 変化した人だけ effective_from = 実行月の行を追加する。team_id は直前の有効レコードを引き継ぐ。
  *   変化が無ければファイルを書かない（冪等）。取り込み元に無い既存メンバーは削除しない。
+ * - 取り込みに失敗したら members.csv は書き換えず、data/masters/_members-meta.json の lastFailure に記録する
+ *   （データ確認画面に出る。§87）。次に成功すると消える。
  *
  * 環境変数: MEMBER_API_TOKEN（http アダプタ）、MEMBER_ADAPTER（アダプタ名の上書き）
  */
@@ -23,6 +25,7 @@ import { readTextAuto } from "./lib/encoding.js";
 import { DATA_FILES, loadConfig } from "./lib/load.js";
 import { MEMBER_CSV_COLUMNS, formatMembersCsv, mergeMembers, type MemberCsvRow, type MergeResult } from "./lib/members-merge.js";
 import { formatMappingTable } from "./lib/dry-run.js";
+import { MEMBERS_META, clearFailure, safeMessage, writeFailure } from "./lib/fetch-status.js";
 
 export interface FetchMembersOptions {
   rootDir: string;
@@ -60,7 +63,28 @@ function readMembersCsv(path: string): { rows: MemberCsvRow[]; headers: string[]
   return { rows: rows.map((r) => ({ ...r })), headers: parsed.columns };
 }
 
-export async function fetchMembers(opts: FetchMembersOptions, env: NodeJS.ProcessEnv = process.env): Promise<FetchMembersResult> {
+export async function fetchMembers(opts: FetchMembersOptions, env: NodeJS.ProcessEnv = process.env, now: () => Date = () => new Date()): Promise<FetchMembersResult> {
+  const metaPath = join(opts.rootDir, MEMBERS_META);
+  let result: FetchMembersResult;
+  try {
+    result = await fetchMembersInner(opts, env);
+  } catch (e) {
+    // 失敗: members.csv は書き換えていない。データ確認画面に出すため記録だけ残す（§87）
+    const message = safeMessage(e instanceof Error ? e.message : String(e), [env.MEMBER_API_TOKEN]);
+    if (!opts.dryRun) {
+      try {
+        writeFailure(metaPath, now().toISOString(), message);
+      } catch {
+        // 記録に失敗しても、元のエラーを優先して返す
+      }
+    }
+    throw new Error(message);
+  }
+  if (!result.dryRun && !result.skipped) clearFailure(metaPath);
+  return result;
+}
+
+async function fetchMembersInner(opts: FetchMembersOptions, env: NodeJS.ProcessEnv): Promise<FetchMembersResult> {
   const config = loadConfig(opts.rootDir);
   const month = (opts.asOf ?? todayJst()).slice(0, 7);
   const adapter = opts.adapter ?? selectMemberAdapter(config, env);

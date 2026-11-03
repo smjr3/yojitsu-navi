@@ -16,6 +16,9 @@ Settings > CI/CD > Variables に登録します。
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL（依存込みのパッケージで作ったプロジェクトは不要。[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md) 手順 0） |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
+| `VITEST_MAX_FORKS` | 任意。テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき `2`（または `1`）。[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc) |
+| `YOJITSU_PERF` | 任意。性能テストの判定（既定は `.gitlab-ci.yml` の `report`＝表示だけ。`loose`・`strict` で判定する） |
+| `YOJITSU_TEST_TIMEOUT_SCALE` | 任意。テストのタイムアウトの倍率（既定 Windows 3・Linux 1） |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
 直近 N か月の作業実績を取り直して MR（`data/worklogs-<日時>`）を作り、パイプラインの成功後に自動でマージされて公開まで進みます。
@@ -88,8 +91,32 @@ Settings > CI/CD > Variables に登録します。
      - 空配列が返るまで取る API: `stopWhen: "empty"`（既定の `short` は `size` 未満の行数で終わる）
      - 例: ページ番号だけで空配列まで取る `{ "type": "page", "pageParam": "page", "stopWhen": "empty" }`
    - 取り消し行などを除く: `filters`、固定の絞り込み: `query`、Shift_JIS の CSV: `encoding`
+   - 社員番号を指定しないと返さない API: `members`（下の「取得する人をメンバーマスタから決める」）
 3. **もう一度 dry-run で確認する**: 「列の対応表」の各項目が `[使う列: …]` になり、先頭 N 行の日付・時間・名前が想定どおりなら完了。
    問題なければ `npm run fetch && npm run validate` で実際に書き込む。
+
+### 取得する人をメンバーマスタから決める（SPEC §87）
+
+社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
+
+```json
+"members": { "param": "member_ids", "chunkSize": 50 }
+```
+
+- 対象: 取得する期間に 1 か月でも在籍している人（期間の最初の月に不在になった人も含む）。社員・パートナー、所属チームなし（ヘルプ）も含む
+- `chunkSize` 人ずつまとめて 1 回で取り、全員分を順に取ります（`member_ids=M001,M002,…`）。1 人ずつ渡す API は `"style": "repeat"`（`member_ids=M001&member_ids=M002`）。URL の途中に入れるなら `url`・`query` に `{members}`
+- 新しい人は、メンバーマスタに登録すれば次の取り込みから対象になります
+
+**過去の実績を取り直す（退職・異動した人を含む）**
+
+| やりたいこと | コマンド（GitLab では Run pipeline の変数） |
+|---|---|
+| 期間を全員分で取り直す（その期間の在籍者が自動で対象。今は退職・異動した人も入る） | `npm run fetch -- --from 2025-04 --to 2025-09`（`FETCH_FROM`・`FETCH_TO`） |
+| 特定の人の行だけ取り直す（ほかの人の行は残す。マスタに無い人も指定できる） | `npm run fetch -- --from 2025-04 --to 2025-09 --members M050,M051`（＋`FETCH_MEMBERS`） |
+
+年月は例です。GitLab では Build > Pipelines > Run pipeline で対象ブランチ `main`、変数に `FETCH_FROM` などを入れて実行すると、`fetch-worklogs` ジョブが取り直して MR にします。これらの変数は CI/CD 変数（Settings）には登録しないでください（毎日の取り込みが同じ期間になります）。
+
+**途中で失敗したとき**: どこか 1 回でも失敗すると、月ファイル（人事の取り込みなら members.csv）は 1 つも書き換えません。失敗の日時と理由はデータ確認画面の「データの検証」に警告で出ます（作業実績の取得日時は前回成功のまま）。次に成功すると消えます。
 
 ページングは、上限ページ数（`maxPages`、既定 1000）と、同じカーソル・同じページの繰り返しの検出で無限ループしません。上限を超えたらエラーで止め、ファイルは書き換えません（データ確認画面の取得日時が警告色になります）。
 トークンはログにも例外メッセージにも出ません（環境変数のみ）。
@@ -148,6 +175,36 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 **デモ（`mode: "demo"`）**: GitLab に接続せず、ブラウザ内の模擬で保存 → マージ待ち → マージの流れを試せる（試用版用。設定画面で「リーダーとして操作」を切り替えられる）。本番では使わない。
 
 メンバーの社員番号・氏名は人事から取り込むため、登録済みの人では読み取り専用（CSV で編集も無し。SPEC §81）。`memberSource.adapter` が `"none"` 以外のときは、`memberSource.columns` に書いた列（既定は区分・役職）も読み取り専用。所属（事業本部・部・課）は既定では取り込まないので画面で直す。
+
+## テストを Windows で動かす（Runner・PC）
+
+Windows は Linux よりプロセスの起動とファイルの読み書きが遅く（ウイルス対策の検査も入る）、同じテストでも時間がかかります。テストは除外せず、次の設定で全部動かします（SPEC §79.1）。
+
+| 設定 | 推奨 | 内容 |
+|---|---|---|
+| `VITEST_MAX_FORKS` | `2`（4 コアの Runner）。「`[vitest-worker]: Timeout calling …`」が出るなら `1` | 同時に動かすテストファイルの数（Vitest の機能。既定は CPU の数 - 1） |
+| `YOJITSU_TEST_TIMEOUT_SCALE` | 未設定（Windows は自動で `3`）。それでもタイムアウトするなら `5` | テストのタイムアウトの倍率（`vitest.config.ts` と結合テストの個別の値に掛かる） |
+| `YOJITSU_PERF` | CI は `report`（`.gitlab-ci.yml` の既定） | 性能テストの判定（下の表） |
+
+- GitLab では Settings > CI/CD > Variables に登録します（`.gitlab-ci.yml` の値より優先）。PC の Git Bash では `VITEST_MAX_FORKS=2 npm run test` のように前に付けます（`npm run test -- --maxWorkers=2` でも同じ）。
+- ワーカーの方式は `forks` に固定しています（`vitest.config.ts`）。`threads` に変えないでください。
+- 結合テスト（`tests/integration/app-package.test.ts` など）は、パッケージの組み立て・`npm pack`・一式のコピーとコミットを別プロセスで動かして待つので、遅くてもワーカーの通信が切れません。作る一時フォルダの git の設定（`core.autocrlf`・`core.longpaths`・コミットの署名）はテストが固定するので、PC の git の設定は変えなくて構いません。一時的に CI の対象から外していたら戻してください。
+
+Git Bash の注意:
+
+- 先頭が `/` の引数は Windows のパスに書き換えられます（例 `--project /grp/proj`）。`grp/proj` のように `/` で始めないか、`MSYS_NO_PATHCONV=1` を前に付けます。
+- 改行は `.gitattributes` で LF に固定しているので、`core.autocrlf` は既定のままで構いません。
+- 社内のルールで許されるなら、作業フォルダと一時フォルダ（`%TEMP%`）をウイルス対策のリアルタイム検査から外すと大きく速くなります（任意）。
+
+性能テスト（`tests/unit/perf.test.ts`・`members.perf.test.ts` など）は、作業実績 5 万件の計算などに目安の時間（例 2 秒）があり、実行する環境で判定を変えます。
+
+| `YOJITSU_PERF` | 判定 | 使う場面 |
+|---|---|---|
+| 未設定（`loose`） | 目安の 3 倍（`YOJITSU_PERF_FACTOR` で変更）を超えたら失敗。超えたら 3 回まで測り直し、最も速い値で判定 | 開発の PC・GitHub Actions |
+| `report` | 失敗にしない。かかった時間を表示するだけ | 性能がばらつく CI の Runner（社内の `.gitlab-ci.yml` の既定） |
+| `strict` | 目安どおりで判定 | 性能の劣化を確かめるとき（いつも同じ PC で動かして比べる） |
+
+性能の劣化は、`report` の表示（`[性能] …ms`）を前回と比べるか、同じ PC で `YOJITSU_PERF=strict npm run test -- tests/unit/perf.test.ts` を動かして確かめます。
 
 ## 年度が替わるとき
 

@@ -93,6 +93,30 @@ export type PaginationConfig =
   | { type: "link"; maxPages?: number }
   | { type: "cursor"; cursorPath: string; cursorParam: string; maxPages?: number };
 
+/**
+ * 作業実績 API に渡す取得対象の社員番号（§87）。設定すると、メンバーマスタから対象者を作り chunkSize 人ずつ取得する。
+ * 社員番号は API 設定に書かない（メンバーマスタだけで管理する）
+ */
+export interface MemberTargetConfig {
+  /** 社員番号を渡すクエリパラメータ名。url / query に {members} を書いた場合は省略可 */
+  param?: string;
+  /** join = param=A,B（既定）、repeat = param=A&param=B */
+  style?: "join" | "repeat";
+  /** join のときの区切り（既定 ","） */
+  separator?: string;
+  /** 1 リクエストにまとめる人数（既定 50） */
+  chunkSize?: number;
+}
+
+/** 取り込みの失敗の記録（§87。_meta.json の lastFailure。データ確認画面に出す） */
+export interface FetchFailure {
+  /** worklogs = 作業実績、members = 人事（所属・役職） */
+  source: "worklogs" | "members";
+  /** 失敗した日時（ISO 8601） */
+  at: string;
+  message: string;
+}
+
 /** 取り込まない行の条件。equals / notEquals / in のどれか1つを書く */
 export interface SourceFilter {
   column: string;
@@ -132,6 +156,8 @@ export interface WorklogSourceConfig {
     dateFormat?: DateFormat;
     /** 任意: 作業時間の単位（既定 hours） */
     hoursUnit?: "hours" | "minutes" | "seconds";
+    /** 任意: 取得対象の社員番号をメンバーマスタから作って渡す（§87） */
+    members?: MemberTargetConfig;
   };
 }
 
