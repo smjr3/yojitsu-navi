@@ -21,7 +21,8 @@
   --yn-space: 8px;
   --yn-radius: 8px;
   --yn-radius-sm: 6px;
-  --yn-max-width: 1440px;
+  /* 本文の最大幅。広い画面では表・グラフを横いっぱいに使う（§85） */
+  --yn-max-width: none;
 
   /* ライト */
   --theme-foreground: #0b0b0b;
@@ -176,7 +177,7 @@ body {
   padding: 0;
   background: var(--yn-card);
   border-bottom: 1px solid var(--yn-hairline);
-  /* 本文の最大幅（1440px）より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（border-image の外側は横スクロールを生まない） */
+  /* 本文の最大幅（--yn-max-width）より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（border-image の外側は横スクロールを生まない） */
   border-image: linear-gradient(to bottom, var(--yn-card) calc(100% - 1px), var(--yn-hairline) 0) fill 0 / 0 0 1px / 0 100vmax;
   font: 14px/1.5 var(--sans-serif);
 }
@@ -1537,6 +1538,15 @@ h3 {
 @media (min-width: 1200px) {
   .yn-cell-2line {
     max-width: min(20vw, 320px);
+  }
+}
+/* 本文の最大幅を外したので（§85）、さらに広い画面では名前列の上限も広げて省略を減らす */
+@media (min-width: 1600px) {
+  .yn-cell-2line {
+    max-width: min(24vw, 560px);
+  }
+  .yn-table .yn-primary-cell {
+    max-width: min(24vw, 560px);
   }
 }
 .yn-cell-main,
@@ -2943,6 +2953,17 @@ html:has(dialog.yn-dialog[open]) {
   min-width: 12em;
   max-width: 22em;
   overflow-wrap: anywhere;
+}
+/* 選ぶ値の列（チーム・事業本部・役職など）と先頭の名前の列も、長い値は折り返す（表を表示幅に収め、横スクロールを減らす。§85） */
+.yn-me-ledger td.is-val:not(.is-col-sized) {
+  white-space: normal;
+  min-width: 4em;
+  max-width: 14em;
+}
+.yn-me-ledger tbody th[scope="row"]:not(.is-col-sized) {
+  white-space: normal;
+  min-width: 8em;
+  max-width: 16em;
 }
 .yn-me-ledger .is-col-sized {
   box-sizing: border-box;

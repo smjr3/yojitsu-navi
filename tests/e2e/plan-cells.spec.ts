@@ -400,15 +400,17 @@ test("開いた内訳は人の行の配下と分かる: 左端の帯、控えめ
   expect(subCell.color).not.toBe(mainCell.color);
 });
 
-test("1440px より広い画面でも、ヘッダーの帯と下線はブラウザの端まで（横スクロールなし）", async ({ page }) => {
+test("広い画面（1920px）では本文も横いっぱい。ヘッダーの帯と下線はブラウザの端まで（横スクロールなし。§85）", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 600 });
   await gotoPage(page, "/contracts");
   // 帯の外（左右の余白）でもヘッダーの面の色になっている
   const colors = await page.evaluate(() => {
     const h = document.querySelector("#observablehq-header")!.getBoundingClientRect();
-    return { left: h.left, right: h.right, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
+    const m = document.querySelector("#observablehq-main")!.getBoundingClientRect();
+    return { left: h.left, right: h.right, mainW: m.width, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
   });
-  expect(colors.left).toBeGreaterThan(0); // 本文は最大幅で中央
+  // 本文の最大幅は設けない（左右の余白 32px ずつを除いた幅いっぱい）
+  expect(colors.mainW).toBeGreaterThanOrEqual(1920 - 64 - 20);
   expect(colors.sw).toBeLessThanOrEqual(colors.cw);
   const shot = await page.screenshot({ clip: { x: 0, y: 0, width: 1920, height: 120 } });
   // スクリーンショットの画素をページ内の canvas で読む（左右の端と、ヘッダー内の空き部分の色を比べる）
