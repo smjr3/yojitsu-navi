@@ -88,6 +88,17 @@ describe("作業実績の紐付け (SPEC §4.2)", () => {
     expect(amb.map((w) => w.ref?.contractId)).toEqual(["C1", "C0"]);
   });
 
+  it("顧客だけの行に落ちた複数の案件の MAPPING_AMBIGUOUS は案件ごとに出す", () => {
+    const C2 = contract({ contractId: "C2" });
+    const r = mapWorklogs(
+      [worklog({ date: "2026-05-10", memberId: "M1", projectName: "X", hours: 1 }), worklog({ date: "2026-05-11", memberId: "M1", projectName: "Y", hours: 2 })],
+      [rule("ABC株式会社", "", "C1"), rule("ABC株式会社", "", "C2")],
+      [C1, C2],
+    );
+    const amb = r.warnings.filter((w) => w.code === "MAPPING_AMBIGUOUS");
+    expect(amb.map((w) => [w.ref?.projectName, w.hours])).toEqual([["X", 1], ["Y", 2]]);
+  });
+
   it("同じルールが重複していても曖昧にはならない", () => {
     const r = mapWorklogs([worklog({ date: "2026-05-10", memberId: "M1", hours: 1 })], [rule("ABC株式会社", "", "C1"), rule("abc", "", "C1")], [C1]);
     expect(r.warnings).toEqual([]);

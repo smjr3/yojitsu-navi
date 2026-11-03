@@ -333,7 +333,8 @@ export function mapWorklogs(
     }
     const chosen = inPeriod[0] as Contract; // 契約ID昇順の先頭
     if (inPeriod.length > 1) {
-      const key = `${target.key}\u0000${chosen.contractId}`;
+      // 名前の行は従来どおり (顧客, 案件) ごと、作業コードの行はコードごとにまとめる
+      const key = groupCode !== null ? `code\u0000${groupCode}\u0000${chosen.contractId}` : `${customer}\u0000${project}\u0000${chosen.contractId}`;
       const acc = ambiguous.get(key);
       if (acc) {
         acc.hours += w.hours;
