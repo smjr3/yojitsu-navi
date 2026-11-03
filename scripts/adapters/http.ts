@@ -10,7 +10,8 @@
  *   columns      予実ナビの項目名 → 取得元の列名。"member.id" のように入れ子、["a","b"] で複数候補
  *   dateFormat   （任意）YYYY-MM-DD / YYYY/MM/DD / YYYYMMDD / ISO8601 / epochMillis。既定は自動判定
  *   hoursUnit    （任意）hours（既定）/ minutes / seconds
- *   pagination   （任意）none / page / offset / link / cursor（src/core/types.ts の PaginationConfig）
+ *   pagination   （任意）none / page / offset / link / cursor（src/core/types.ts の PaginationConfig）。
+ *                page / offset は件数パラメータの省略・終了条件 stopWhen（short / empty）・maxPages を指定できる
  *   query        （任意）追加のクエリ文字列（固定値）
  *   filters      （任意）取り込まない行の条件 [{ column, equals | notEquals | in }]
  *   encoding     （任意）CSV 応答の文字コード auto / utf-8 / shift_jis

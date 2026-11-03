@@ -1044,7 +1044,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ...columns.map((c) => {
           const raw = g.shown.record[c.name] ?? "";
           const hint = cellHint(fileId, c.name, raw);
-          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : ""}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
+          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
         }),
       ];
       if (isList) {
@@ -1100,7 +1100,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const nameChanged = nameColumn && ((idx > 0 && e.changes.includes(nameColumn)) || edited(nameColumn));
         const tds = [
           html`<th scope="row"><span class="yn-me-hist-from"><span class="yn-me-hist-arrow" aria-hidden="true">↳</span> ${e.from ? fmt(T.ledger.fromMonth, { month: e.from }) : T.masters.emptyValue}</span><span class="yn-me-hint">${label}${e.current ? html` ・ <strong>${T.ledger.current}</strong>` : e.future ? ` ・ ${T.ledger.future}` : ""}</span>${nameChanged ? html`<span class="yn-me-hist-name">${def.columns.find((c) => c.name === nameColumn).label}: ${valueOrDiff(nameColumn)}</span>` : null}</th>`,
-          ...columns.map((c) => html`<td class=${`${c.input === "number" ? "num" : ""}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}</td>`),
+          ...columns.map((c) => html`<td class=${`${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}</td>`),
         ];
         const tr = html`<tr data-key=${r.id} class=${`yn-me-row yn-me-hist is-${st}${invalid ? " is-invalid" : ""}`} aria-describedby=${list.length ? issueId : null}>
           ${tds}
