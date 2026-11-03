@@ -47,6 +47,7 @@ import ja from "./src/i18n/ja.js";
 import { badgeConfig, mrBadgeScript } from "./src/components/header-badge.js";
 import { appearanceConfig, appearanceScript } from "./src/components/appearance.js";
 import { withGitLabEnv } from "./src/components/gitlab-env.js";
+import { faviconLink } from "./src/components/favicon.js";
 
 /** config.json の masterEdit（ヘッダーのマージ待ち件数バッジの接続先。§27・§39.1）。読めなければ空 */
 function masterEditConfig() {
@@ -230,7 +231,7 @@ function buildInfo() {
 }
 const BUILD = buildInfo();
 const BUILD_META = `<meta name="yn-build" data-version="${escapeHtml(BUILD.version)}" data-commit="${escapeHtml(BUILD.commit)}" data-built-at="${escapeHtml(BUILD.builtAt)}">`;
-const head = `<link rel="icon" href="data:,">${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
+const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
 
 export default {
   title: ja.app.name,
