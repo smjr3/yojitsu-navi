@@ -95,6 +95,7 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
       const token = env.WORKLOG_API_TOKEN ?? "";
       if (token === "") throw new Error("環境変数 WORKLOG_API_TOKEN が設定されていません");
 
+      const reqs: ColumnRequirement[] = FIELDS.map((field) => ({ field, spec: http.columns[field] }));
       let raw: RawRow[];
       if (http.members) {
         // 取得対象の社員番号を chunkSize 人ずつ渡す（§87）。どれか 1 回でも失敗したら例外 = 何も書かない
@@ -107,7 +108,10 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
         raw = [];
         for (const [i, g] of groups.entries()) {
           try {
-            raw.push(...(await fetchRawRows(http, { from, to, token, log: logFn, deps, members: { config: http.members, ids: g } })));
+            const part = await fetchRawRows(http, { from, to, token, log: logFn, deps, members: { config: http.members, ids: g } });
+            // 回ごとに列を確かめる（2 回目以降だけ列が欠けていても、時間 0 などで書き換えない）
+            assertColumns(part[0], reqs, http.filters);
+            raw.push(...part);
           } catch (e) {
             throw new Error(`${i + 1}/${groups.length} 回目（${g[0]}〜${g[g.length - 1]}）で失敗: ${e instanceof Error ? e.message : String(e)}`);
           }
@@ -116,7 +120,6 @@ export function createHttpAdapter(deps: HttpAdapterDeps = {}): WorklogAdapter {
         raw = await fetchRawRows(http, { from, to, token, log: logFn, deps });
       }
 
-      const reqs: ColumnRequirement[] = FIELDS.map((field) => ({ field, spec: http.columns[field] }));
       assertColumns(raw[0], reqs, http.filters);
       const rows = raw.filter((r) => passesFilters(r, http.filters));
       if (report) {

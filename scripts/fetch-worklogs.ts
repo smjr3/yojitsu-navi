@@ -137,7 +137,9 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
 
   const log = (m: string) => console.error(m);
   // 取得対象の人（§87）: --members で指定した人、無ければ http.members を設定したときだけメンバーマスタの在籍者
-  const explicit = opts.members && opts.members.length > 0 ? opts.members : undefined;
+  // 人の指定が空（区切りだけ・空の変数）を「指定なし」と扱うと、全員分の書き直しに広がってしまうので止める
+  if (opts.members !== undefined && opts.members.length === 0) throw new Error("--members（FETCH_MEMBERS）に社員番号がありません");
+  const explicit = opts.members;
   let memberIds: string[] | undefined = explicit;
   if (!memberIds && adapter.name === "http" && config.worklogSource.http?.members) {
     memberIds = targetMemberIds(readMemberRecords(opts.rootDir, config), from, to);
@@ -219,7 +221,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
   const fromEnv: string[] = [];
   if (env.FETCH_FROM?.trim()) fromEnv.push("--from", env.FETCH_FROM.trim());
   if (env.FETCH_TO?.trim()) fromEnv.push("--to", env.FETCH_TO.trim());
-  if (env.FETCH_MEMBERS?.trim()) fromEnv.push("--members", env.FETCH_MEMBERS.trim());
+  if (env.FETCH_MEMBERS !== undefined && env.FETCH_MEMBERS !== "") fromEnv.push("--members", env.FETCH_MEMBERS);
   argv = [...fromEnv, ...argv];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
@@ -237,6 +239,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
       i++;
     } else if (a === "--members" && v !== undefined) {
       opts.members = parseMemberList(v);
+      if (opts.members.length === 0) throw new Error(`--members に社員番号がありません: ${JSON.stringify(v)}`);
       i++;
     } else if (a === "--adapter" && v !== undefined) {
       opts.adapter = v;

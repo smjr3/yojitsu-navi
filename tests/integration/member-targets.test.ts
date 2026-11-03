@@ -132,6 +132,10 @@ describe("取得対象の社員番号（メンバーマスタから）", () => {
     expect(o).toMatchObject({ from: "2025-04", to: "2025-06", members: ["M001", "M002"] });
     expect(parseArgs(["--from", "2025-05"], { FETCH_FROM: "2025-04" }).from).toBe("2025-05"); // コマンドラインが優先
     expect(() => parseArgs(["--from", "2025-13"])).toThrow(/YYYY-MM/);
+    // 空の指定は「指定なし」（全員分の書き直し）に広げない
+    expect(() => parseArgs(["--members", " , "])).toThrow(/社員番号がありません/);
+    expect(() => parseArgs([], { FETCH_MEMBERS: "," })).toThrow(/社員番号がありません/);
+    expect(parseArgs([], { FETCH_MEMBERS: "" }).members).toBeUndefined();
   });
 
   it("safeMessage: トークンを伏せ、改行をまとめ、長さを切る", () => {
@@ -185,6 +189,32 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
     await fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV);
     expect(readMeta().lastFailure).toBeUndefined();
     expect(loadDataset(root).issues.some((i) => i.code === "WORKLOG_FETCH_FAILED")).toBe(false);
+  });
+
+  it("--members が空なら止め、月ファイルを書き換えない", async () => {
+    const before = MONTHS.map(readMonth);
+    useMemberApi(50);
+    await expect(fetchWorklogs({ rootDir: root, asOf: AS_OF, members: [] }, ENV)).rejects.toThrow(/社員番号がありません/);
+    expect(MONTHS.map(readMonth)).toEqual(before);
+  });
+
+  it("2 回目以降の応答だけ列が欠けていても止め、月ファイルを書き換えない", async () => {
+    const before = MONTHS.map(readMonth);
+    const all = MONTHS.flatMap(original);
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls++;
+      const set = new Set((new URL(url).searchParams.get("member_ids") ?? "").split(","));
+      const body = all.filter((w) => set.has(w.memberId)).map((w) => {
+        const row: Record<string, unknown> = { date: w.date, member_id: w.memberId, member_name: w.memberName, customer_name: w.customerName, project_name: w.projectName, task: w.task, hours: w.hours };
+        if (calls >= 2) delete row.hours;
+        return row;
+      });
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    useMemberApi(30);
+    await expect(fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV)).rejects.toThrow(/^2\/\d+ 回目.*列が見つかりません: hours/);
+    expect(MONTHS.map(readMonth)).toEqual(before);
   });
 
   it("dry-run の失敗は記録しない", async () => {
