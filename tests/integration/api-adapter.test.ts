@@ -284,6 +284,31 @@ describe("fetch-members を通しで", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
+  it("http アダプタ: ページ番号だけ（件数を付けない）＋空配列で終了でも取り込める", async () => {
+    const people = [
+      { no: "P001", nm: "頁 一郎" },
+      { no: "P002", nm: "頁 二郎" },
+      { no: "P003", nm: "頁 三郎" },
+    ];
+    const f = vi.fn(async (url: string) => {
+      const u = new URL(url);
+      if ([...u.searchParams.keys()].some((k) => k !== "page")) return new Response("bad", { status: 400 });
+      const p = Number(u.searchParams.get("page"));
+      return new Response(JSON.stringify(people.slice((p - 1) * 2, p * 2)), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", f);
+    setConfig((c) => {
+      c.memberSource = {
+        adapter: "http",
+        http: { url: "https://hr.example.local/api/employees", authHeader: "Authorization", pagination: { type: "page", pageParam: "page", stopWhen: "empty" } },
+        columns: { memberId: "no", name: "nm" },
+      };
+    });
+    const r = await fetchMembers({ rootDir: root, asOf: AS_OF }, { MEMBER_API_TOKEN: TOKEN } as NodeJS.ProcessEnv);
+    expect(r.imported).toBe(3);
+    expect(f).toHaveBeenCalledTimes(3); // 2 + 1 + 空
+  });
+
   it("列名が違うときは列名一覧つきで止まる（値は出さない）", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{ id: "PRIVATE-NAME" }]), { status: 200, headers: { "content-type": "application/json" } })));
     setConfig((c) => {

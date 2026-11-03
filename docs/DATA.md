@@ -36,7 +36,7 @@
 | `columns.<項目>` | 取得元の列名。`member.id` で入れ子、`["a","b"]` で複数候補（最初に値があるもの）。項目: `date, memberId, memberName, customerName, projectName, task, hours` | 必須 |
 | `dateFormat` | `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYYMMDD` / `ISO8601`（JST に変換） / `epochMillis` | 自動判定 |
 | `hoursUnit` | `hours` / `minutes` / `seconds` | `hours` |
-| `pagination` | `{type:"none"}` / `{type:"page", pageParam, sizeParam, size, startPage}` / `{type:"offset", offsetParam, limitParam, limit}` / `{type:"link"}` / `{type:"cursor", cursorPath, cursorParam}`。どれも `maxPages`（既定 1000）を付けられる | `none` |
+| `pagination` | `{type:"none"}` / `{type:"page", pageParam, sizeParam, size, startPage, stopWhen}` / `{type:"offset", offsetParam, limitParam, limit, stopWhen}` / `{type:"link"}` / `{type:"cursor", cursorPath, cursorParam}`。どれも `maxPages`（既定 1000）を付けられる。`page` / `offset` は `sizeParam` / `limitParam` を省くと件数のパラメータを付けない。`stopWhen` は `short`（既定。`size` / `limit` 未満の行数で終了）か `empty`（0 行で終了。`size` / `limit` は件数を付けるときだけ必要）。例: ページ番号だけの API は `{type:"page", pageParam:"page", stopWhen:"empty"}` | `none` |
 | `query` | 追加のクエリ文字列（固定値）。`{from}` `{to}` `{fromDate}` `{toDate}` を置換 | なし |
 | `filters` | 取り込まない行の条件 `[{ "column": "state", "notEquals": "cancelled" }]`（`equals` / `notEquals` / `in`。すべてに合う行だけ取り込む） | なし |
 | `encoding` | CSV 応答の文字コード `auto` / `utf-8` / `shift_jis` | `auto` |
