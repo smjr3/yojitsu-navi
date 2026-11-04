@@ -42,6 +42,22 @@ describe("Windows・Linux の両方で動く", () => {
     expect(job).not.toContain("<<: *normal-rules");
   });
 
+  it("待ち時間を短くする: 検証は build の中、依存の取得はパイプライン 1 回につき build だけ、node_modules はキャッシュしない（SPEC §79.3）", () => {
+    const ci = readFileSync(join(ROOT, ".gitlab-ci.yml"), "utf-8");
+    const blocks = ci.split(/\n(?=\S)/);
+    const jobs = new Map(blocks.filter((b) => /^[\w-]+:/.test(b) && /\n {2}(stage|script):/.test(b)).map((b) => [b.slice(0, b.indexOf(":")), b]));
+    expect(jobs.has("validate")).toBe(false);
+    const build = jobs.get("build")!;
+    const cmds = build.split("\n").filter((l) => /^ {4}- /.test(l)).map((l) => l.trim());
+    expect(cmds.indexOf("- npm run validate")).toBeGreaterThanOrEqual(0);
+    expect(cmds.indexOf("- npm run validate")).toBeLessThan(cmds.indexOf("- npm run build"));
+    // push・MR で毎回動くジョブ（normal-rules と pages）のうち、依存を取る（before_script: [] でない）のは build だけ
+    const installs = [...jobs].filter(([name, b]) => (b.includes("<<: *normal-rules") || name === "pages") && !/before_script: \[\]/.test(b)).map(([name]) => name);
+    expect(installs).toEqual(["build"]);
+    const cache = blocks.find((b) => b.startsWith("cache:"))!;
+    expect(cache).not.toMatch(/^\s*- node_modules/m);
+  });
+
   it("改行は LF に固定している（.gitattributes）", () => {
     expect(readFileSync(join(ROOT, ".gitattributes"), "utf-8")).toMatch(/^\* text=auto eol=lf$/m);
     const attr = execFileSync("git", ["check-attr", "eol", "--", "data/masters/rates.csv", "scripts/ci/fetch-data.mjs"], { cwd: ROOT, encoding: "utf-8" });
