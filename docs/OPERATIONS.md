@@ -194,7 +194,7 @@ Windows は Linux よりプロセスの起動とファイルの読み書きが�
 
 | 設定 | 推奨 | 内容 |
 |---|---|---|
-| `VITEST_MAX_FORKS` | `2`（4 コアの Runner）。「`[vitest-worker]: Timeout calling …`」が出るなら `1` | 同時に動かすテストファイルの数（Vitest の機能。既定は CPU の数 - 1） |
+| `VITEST_MAX_FORKS` | `2`（4 コアの Runner）。「`[vitest-worker]: Timeout calling …`」が出るなら `1` | 同時に動かすテストファイルの数（既定は CPU の数 - 1）。Vitest 4 の `VITEST_MAX_WORKERS` と同じ（どちらで登録しても効く） |
 | `YOJITSU_TEST_TIMEOUT_SCALE` | 未設定（Windows は自動で `3`）。それでもタイムアウトするなら `5` | テストのタイムアウトの倍率（`vitest.config.ts` と結合テストの個別の値に掛かる） |
 | `YOJITSU_PERF` | CI は `report`（`.gitlab-ci.yml` の既定） | 性能テストの判定（下の表） |
 

@@ -11,6 +11,7 @@
 // gitlab-setup（scripts/gitlab-setup.ts を JS にしたもの）。パッケージ自体は依存を持たないので、
 // 社内で npx・npm install するときに外へ接続しない。
 // 社内 GitLab の接続先・個人や会社の情報はパッケージに入れない（展開先で init --gitlab … で入れる）。
+// 開発元のリポジトリ専用。init で作ったプロジェクト（利用環境）や、.npmrc・証明書などがあるときは止める（scripts/lib/package-guard.mjs、SPEC §84.1）。
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -20,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { isImage } from "./lib/image-detect.mjs";
 import { checkCiFiles, describeCiProblems } from "../packages/app/lib/ci-files.mjs";
+import { packageGuardProblems } from "./lib/package-guard.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PKG = join(ROOT, "packages/app");
@@ -43,6 +45,13 @@ const rootPkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
 const appPkg = JSON.parse(readFileSync(join(PKG, "package.json"), "utf-8"));
 if (rootPkg.version !== appPkg.version) {
   console.error(`packages/app/package.json の version（${appPkg.version}）をルートの package.json（${rootPkg.version}）に合わせてください`);
+  process.exit(1);
+}
+
+// 0. 利用環境で動かしていないか・社内の設定ファイルが紛れていないか（何か作る前に止める）
+const guardProblems = packageGuardProblems(ROOT, templateFiles(ROOT));
+if (guardProblems.length) {
+  console.error(`パッケージを作りません。\n${guardProblems.map((p) => `- ${p}`).join("\n")}`);
   process.exit(1);
 }
 
