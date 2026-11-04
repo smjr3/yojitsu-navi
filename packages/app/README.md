@@ -21,7 +21,7 @@ npx --yes ./yojitsu-navi-<版>.tgz init yojitsu-navi --gitlab https://<社内Git
 
 手順の全体は、できたフォルダの `docs/DEPLOY_GITLAB.md` にあります。
 
-新しい版にするときは、プロジェクトのフォルダで `npx yojitsu-navi@<版> update`（先に `--dry-run` で確かめられます）。`config.json` と `data/` は変えません。社内で変えたファイルがあると上書きの前に止まります（`--overwrite` か `--keep-local` を選ぶ）。上書き・削除する前のファイルは `.yojitsu-navi-backup/<日時>/` に残ります。
+新しい版にするときは、プロジェクトのフォルダで `npx yojitsu-navi@<版> update`（先に `--dry-run` で確かめられます）。`config.json` と `data/` は変えません。社内で変えたファイルがあると上書きの前に止まります（`--overwrite` か `--keep-local` を選ぶ）。上書き・削除する前のファイルは `.yojitsu-navi-backup/<日時>/` に残ります。社内向けの CI の設定は `.gitlab-ci.local.yml`・`.npmrc`・CI/CD 変数に書けば上書きされません。更新のあとに、今の版から新しい版までに導入先で行うこと・前提が変わることを 変更履歴（できたフォルダの `CHANGELOG.md`）から出します。
 
 ## 計算コアを使う
 

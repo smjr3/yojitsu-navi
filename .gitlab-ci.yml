@@ -26,6 +26,7 @@
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・運用のテスト）も動く。既定は動かさない
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   NODE_EXTRA_CA_CERTS （任意）社内の証明書（PEM）。種類を File にして中身を貼る（npm・Node がこの証明書も信頼する）
 #   以下 2 つは YOJITSU_RUN_TESTS=1 のときだけ使う
 #   VITEST_MAX_FORKS    （任意）テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows でワーカーのタイムアウトが出るとき 1
 #   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
@@ -47,6 +48,11 @@
 #   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は CI/CD 変数 NODE_IMAGE で差し替える
 
 image: $NODE_IMAGE
+
+# 社内向けの設定（ランナーのタグ・社内だけのジョブなど）は .gitlab-ci.local.yml に書く。update はそのファイルを上書きしない（SPEC §91.1）。
+# レジストリ・証明書・イメージは CI/CD 変数（NPM_CONFIG_REGISTRY・NODE_EXTRA_CA_CERTS・NODE_IMAGE）か .npmrc で渡す
+include:
+  - local: .gitlab-ci.local.yml
 
 # パイプラインの重複を防ぐ: MR があるブランチへの push は MR のパイプラインだけにする
 workflow:

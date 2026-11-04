@@ -10,7 +10,8 @@ PR を出す前に確認すること:
 - [ ] `git diff main --stat` で触った領域を確認し、関係する文書を直した
   - 画面 → README「画面」、[docs/UI_NOTES.md](docs/UI_NOTES.md)
   - 計算・仕様 → [docs/SPEC.md](docs/SPEC.md)、[docs/CORE_NOTES.md](docs/CORE_NOTES.md)。`src/core/index.ts` の公開 API を変えたら、パッケージ `yojitsu-navi` の版（ルートと `packages/app/package.json`）も上げる（SPEC §84）
-  - 公開・社内へ渡す版を作るとき → ルートと `packages/app/package.json` の `version` を同じ値に上げてから `npm run app:pack`（SPEC §44。npmjs.com への公開は [docs/RELEASE.md](docs/RELEASE.md)）
+  - 公開・社内へ渡す版を作るとき → ルートと `packages/app/package.json` の `version` を同じ値に上げ、[CHANGELOG.md](CHANGELOG.md) の「## 次の版」を「## <版>」にしてから `npm run app:pack`（SPEC §44。npmjs.com への公開は [docs/RELEASE.md](docs/RELEASE.md)）
+  - 導入先（社内のプロジェクト）に届く変更 → [CHANGELOG.md](CHANGELOG.md) の「## 次の版」に書く。導入先で設定・CI/CD 変数・手順を変える必要がある、テストや CI の前提（動くジョブ・既定値・止まる条件）が変わる、のどちらかなら「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」に必ず書く（`yojitsu-navi update` がそのまま表示する。SPEC §91.2）
   - データの列・ファイル → [docs/DATA.md](docs/DATA.md)
   - ダミーデータ → [docs/DUMMY_DATA.md](docs/DUMMY_DATA.md)（規模・警告の件数の表）
   - 画面の文言 → [docs/TEXTS.md](docs/TEXTS.md)
