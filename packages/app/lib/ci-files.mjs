@@ -98,10 +98,19 @@ export function ciRequiredFiles(projectDir) {
     // package.json が無い・壊れている → 下で package.json が足りないと出る
   }
   // include したファイルも CI 定義の一部（無いとパイプラインが作られない。中のコマンドも辿る）
+  // include 先がさらに include していても辿る（同じファイルは 1 回だけ）
   const cmds = ciCommands(yml);
-  for (const inc of ciLocalIncludes(yml)) {
+  const includes = [...ciLocalIncludes(yml)];
+  const seenInc = new Set([CI_FILE]);
+  while (includes.length) {
+    const inc = includes.shift();
+    if (seenInc.has(inc)) continue;
+    seenInc.add(inc);
     files.add(inc);
-    if (isFile(join(projectDir, inc))) cmds.push(...ciCommands(readFileSync(join(projectDir, inc), "utf-8")));
+    if (!isFile(join(projectDir, inc))) continue;
+    const text = readFileSync(join(projectDir, inc), "utf-8");
+    cmds.push(...ciCommands(text));
+    includes.push(...ciLocalIncludes(text));
   }
   if (cmds.some((c) => /\bnpm (ci|install|run)\b/.test(c) || /\bnpx\b/.test(c)) || cmds.some((c) => /scripts\/ci\/install\.mjs/.test(c))) {
     files.add("package.json");

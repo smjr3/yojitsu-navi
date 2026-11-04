@@ -630,6 +630,12 @@ describe("CI 定義とファイルの整合（SPEC §85）", () => {
     const r = ci.checkCiFiles(dir, { git: false });
     expect(r.required).toEqual([".gitlab-ci.local.yml", ".gitlab-ci.yml", "scripts/ci/a.mjs", "scripts/local.mjs"]);
     expect(r.missing).toEqual(["scripts/local.mjs"]);
+    // include 先がさらに include するファイルも辿る（循環しても止まる）
+    put(".gitlab-ci.local.yml", ["include:", "  - local: ci/nested.yml", "  - local: .gitlab-ci.yml", ""].join("\n"));
+    put("ci/nested.yml", ["include:", "  - local: .gitlab-ci.local.yml", "  - local: missing-ci.yml", ""].join("\n"));
+    const n = ci.checkCiFiles(dir, { git: false });
+    expect(n.required).toEqual([".gitlab-ci.local.yml", ".gitlab-ci.yml", "ci/nested.yml", "missing-ci.yml", "scripts/ci/a.mjs"]);
+    expect(n.missing).toEqual(["missing-ci.yml"]);
   });
 
   it("git: 追加しただけ（未コミット）のファイルは未コミットと出す。リポジトリのサブフォルダにあるプロジェクトも正しく見る", () => {
