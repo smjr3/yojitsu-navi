@@ -1,14 +1,16 @@
 # 予実ナビ — GitLab CI/CD
 #
 # パイプライン:
-#   validate → test → build → pages
-#   - validate : データ検証（scripts/validate-data.ts）。error があれば止める
-#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）
-#   - build    : Observable Framework で dist/ を生成
+#   build → pages（test は既定で動かさない）
+#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
+#                テストはアプリ本体の確認で、パッケージの公開前に済ませている。導入先で変わるのはデータと config.json だけで、
+#                それは build（データ検証を含む）と取り込みで確かめる（SPEC §79.2）
+#   - build    : データ検証（scripts/validate-data.ts。error があれば止める）→ Observable Framework で dist/ を生成。
+#                検証とビルドを 1 つのジョブにして、依存の取得（npm ci）を 1 回にする（Windows の Runner では 1 回に数分かかる。SPEC §79.3）
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
-#                      マージで通常パイプラインが走り、validate → … → pages まで流れる）
+#                      マージで通常パイプラインが走り、build → pages まで流れる）
 #
 # 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §39）。
 # 設定の確認・適用は `npm run gitlab:setup`（scripts/gitlab-setup.ts）
@@ -21,8 +23,10 @@
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
+#   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・ユニット・結合・性能テスト）も動く。既定は動かさない
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   以下 3 つは YOJITSU_RUN_TESTS=1 のときだけ使う
 #   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
 #   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
 #   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
@@ -68,13 +72,14 @@ variables:
   PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
   GIT_DEPTH: "20"
 
-# node_modules と npm キャッシュを lock ファイル単位で共有する
+# npm のダウンロードキャッシュを lock ファイル単位で共有する。
+# node_modules/ は入れない（npm ci は毎回 node_modules を消して入れ直すので、固めて戻す時間がまるごと無駄になる。
+# Windows の Runner ではファイル数の多い node_modules の圧縮・展開だけで数分かかる。SPEC §79.3）
 cache:
   key:
     files:
       - package-lock.json
   paths:
-    - node_modules/
     - .npm/
     - .cache/ms-playwright/
 
@@ -93,20 +98,18 @@ default:
     - if: $CI_COMMIT_BRANCH
 
 # --------------------------------------------------------------------------
-# validate: データの整合性チェック（契約ID重複・期間逆転・未知のチーム等で止める）
-# --------------------------------------------------------------------------
-validate:
-  stage: validate
-  <<: *normal-rules
-  script:
-    - npm run validate
-
-# --------------------------------------------------------------------------
-# test: 型チェックとテスト
+# test: 型チェックとテスト。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1、または Run pipeline で入れたときだけ）
+#   アプリ本体の確認はパッケージの公開前に済ませている。社内の Runner で本体を確かめたいとき（版を上げた直後など）に使う
 # --------------------------------------------------------------------------
 test:
   stage: test
-  <<: *normal-rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $YOJITSU_RUN_TESTS != "1"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
   variables:
     # 性能テストは時間を表示するだけにする（Runner の性能がばらつくため）。判定したいときは CI/CD 変数 YOJITSU_PERF に loose か strict。
     # Windows の Runner でワーカーのタイムアウトが出るときは CI/CD 変数 VITEST_MAX_FORKS を 2（それでも出るなら 1）にする（docs/OPERATIONS.md、SPEC §79.1）
@@ -122,7 +125,7 @@ test:
     expire_in: 1 week
 
 # --------------------------------------------------------------------------
-# build: 静的サイトを dist/ に生成
+# build: データの整合性チェック（案件ID重複・期間逆転・未知のチーム等で止める）→ 静的サイトを dist/ に生成
 # --------------------------------------------------------------------------
 build:
   stage: build
@@ -135,6 +138,7 @@ build:
     YOJITSU_GITLAB_API_URL: $CI_API_V4_URL
     YOJITSU_GITLAB_PROJECT: $CI_PROJECT_PATH
   script:
+    - npm run validate
     - npm run build
     # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
     - node scripts/ci/e2e.mjs

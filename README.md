@@ -76,7 +76,7 @@ npm run dev                                           # http://localhost:3000（
 
 社内へは npm パッケージ（`.tgz` 1 つ）で持ち込みます。`npm run app:pack` で作り、社内で `yojitsu-navi init` するとプロジェクトのフォルダができ、push すれば Pages まで流れます。新しい版は `yojitsu-navi update` で `data/` と `config.json` を残したまま入れ替えます（社内で変えたファイルがあれば上書きの前に止まり、`--dry-run` で差分を確かめられます。前のファイルは `.yojitsu-navi-backup/` に残ります）。社内 GitLab の URL はパッケージに入れず、社内で `init` するときに入れます（[docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md)）。
 
-`.gitlab-ci.yml` のパイプラインは `validate → test → build → pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。
+`.gitlab-ci.yml` のパイプラインは `build`（データ検証とビルド）→ `pages` です。既定ブランチでは `pages` ジョブが `dist/` を公開します。テスト（`test` ジョブ）はパッケージの公開前に済ませているので、社内では既定で動かしません（CI/CD 変数 `YOJITSU_RUN_TESTS=1` で動く）。
 GitLab 側の推奨構成（グループ・プロジェクト・保護ブランチ・権限・トークン）、展開の手順、社内で確認することのチェックリストは [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md) にあります。
 プロジェクトの設定は `GITLAB_TOKEN=… npm run gitlab:setup -- --api <URL> --project <グループ/プロジェクト>` で確認でき、`--apply` で推奨値に直せます。
 
