@@ -2,9 +2,10 @@
 #
 # パイプライン:
 #   build → pages（test は既定で動かさない）
-#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
-#                テストはアプリ本体の確認で、パッケージの公開前に済ませている。導入先で変わるのはデータと config.json だけで、
-#                それは build（データ検証を含む）と取り込みで確かめる（SPEC §79.2）
+#   - test     : 型チェック + 運用のテスト（取り込み・データ検証・CI のスクリプト。SPEC §93）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
+#                アプリ本体のテスト（計算・画面・パッケージ・性能など）は開発元で公開前に済ませていて、このプロジェクトには入っていない。
+#                導入先で変わるのはデータと config.json だけで、それは build（データ検証を含む）と取り込みで確かめる（SPEC §79.2）。
+#                テストは本番の config.json・data/ を使わない（設定はテストの中、データは tests/fixtures/）
 #   - build    : データ検証（scripts/validate-data.ts。error があれば止める）→ Observable Framework で dist/ を生成。
 #                検証とビルドを 1 つのジョブにして、依存の取得（npm ci）を 1 回にする（Windows の Runner では 1 回に数分かかる。SPEC §79.3）
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
@@ -23,13 +24,11 @@
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
-#   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・ユニット・結合・性能テスト）も動く。既定は動かさない
-#   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
+#   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・運用のテスト）も動く。既定は動かさない
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
 #   NODE_EXTRA_CA_CERTS （任意）社内の証明書（PEM）。種類を File にして中身を貼る（npm・Node がこの証明書も信頼する）
-#   以下 3 つは YOJITSU_RUN_TESTS=1 のときだけ使う
-#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
-#   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
+#   以下 2 つは YOJITSU_RUN_TESTS=1 のときだけ使う
+#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows でワーカーのタイムアウトが出るとき 1
 #   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
 #
 # 外部ネットワーク:
@@ -74,8 +73,6 @@ variables:
   NODE_IMAGE: "node:22"
   # npm のキャッシュをプロジェクト内に置いて cache: で共有する
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
-  # Playwright のブラウザもキャッシュ対象
-  PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
   GIT_DEPTH: "20"
 
 # npm のダウンロードキャッシュを lock ファイル単位で共有する。
@@ -87,7 +84,6 @@ cache:
       - package-lock.json
   paths:
     - .npm/
-    - .cache/ms-playwright/
 
 default:
   before_script:
@@ -116,10 +112,8 @@ test:
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
-  variables:
-    # 性能テストは時間を表示するだけにする（Runner の性能がばらつくため）。判定したいときは CI/CD 変数 YOJITSU_PERF に loose か strict。
-    # Windows の Runner でワーカーのタイムアウトが出るときは CI/CD 変数 VITEST_MAX_FORKS を 2（それでも出るなら 1）にする（docs/OPERATIONS.md、SPEC §79.1）
-    YOJITSU_PERF: "report"
+  # Windows の Runner では同時に動かすテストを 2 つにしている（vitest.config.ts）。それでもワーカーのタイムアウトが出るときは
+  # CI/CD 変数 VITEST_MAX_FORKS を 1 にする（docs/OPERATIONS.md、SPEC §79.1）
   script:
     - npm run typecheck
     # JUnit 形式のレポートも出して GitLab のテスト結果タブに表示する
@@ -146,8 +140,6 @@ build:
   script:
     - npm run validate
     - npm run build
-    # E2E は任意（PLAYWRIGHT_E2E=1 のとき）。tests/e2e/playwright.config.ts が無ければスキップ
-    - node scripts/ci/e2e.mjs
   artifacts:
     paths:
       - dist/

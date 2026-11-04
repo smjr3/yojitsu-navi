@@ -1,5 +1,5 @@
 // npm パッケージ yojitsu-navi を packages/app/ に組み立てる（SPEC §44・§84）。
-// 中身は 2 つ: アプリ一式を作るコマンド（bin・lib・template・dist/gitlab-setup.mjs）と、
+// 中身は 2 つ: アプリ一式を作るコマンド（bin・lib・template・sample・dist/gitlab-setup.mjs）と、
 // import して使う計算コア（dist/core・dist/i18n。ソースの正は src/core）。パッケージは 1 つだけ。
 //
 //   npm run app:build                         … packages/app/template・dist（計算コアを含む）を作り直す
@@ -7,7 +7,9 @@
 //   npm run app:pack -- --with-deps           … 依存（npm のキャッシュ）も入れた yojitsu-navi-<版>-with-deps.tgz を作る
 //                                               （社内に npm のミラーが無いとき。Linux x64 の CI と Windows x64 の PC で使える）
 //
-// template/ は git が管理しているファイル（.github/ を除く）をそのまま写したもの。dist/ は依存なしで動く
+// template/ は git が管理しているファイルのうち、利用環境に配るもの（開発元だけで使うファイル・テストを除く。SPEC §93、
+// packages/app/lib/template-files.mjs）。data/ はサンプルを除いた空のもの（見出しの行だけ）で、サンプルは sample/data/ に分ける
+// （init --sample のときだけ入れる）。dist/ は依存なしで動く
 // gitlab-setup（scripts/gitlab-setup.ts を JS にしたもの）。パッケージ自体は依存を持たないので、
 // 社内で npx・npm install するときに外へ接続しない。
 // 社内 GitLab の接続先・個人や会社の情報はパッケージに入れない（展開先で init --gitlab … で入れる）。
@@ -20,21 +22,24 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { isImage } from "./lib/image-detect.mjs";
 import { checkCiFiles, describeCiProblems } from "../packages/app/lib/ci-files.mjs";
+import { isShipped, starterData, testClosure, userPackageJson } from "../packages/app/lib/template-files.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PKG = join(ROOT, "packages/app");
 const TEMPLATE = join(PKG, "template");
 const DIST = join(PKG, "dist");
 const DEPS = join(PKG, "deps");
+const SAMPLE = join(PKG, "sample");
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
 
-/** git が管理するファイル（まだコミットしていない新しいファイルも含む。消したファイルと .github/ は除く） */
+/** git が管理するファイル（まだコミットしていない新しいファイルも含む。消したファイルは除く）のうち、利用環境に配るもの */
 function templateFiles(root) {
   const out = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root, encoding: "utf-8" });
+  const tests = testClosure(root);
   return [...new Set(out.split("\0").filter(Boolean))]
-    .filter((f) => !f.startsWith(".github/") && !f.startsWith("packages/app/template/"))
+    .filter((f) => isShipped(f, tests))
     .filter((f) => existsSync(join(root, f)))
     .sort();
 }
@@ -47,11 +52,22 @@ if (rootPkg.version !== appPkg.version) {
 }
 
 // 1. template/: 開発元のファイルを写す。.gitignore は npm pack が別扱いにするので _gitignore にしておく（init で戻す）
+//    data/ はサンプルを除いたもの（見出しの行だけ）を template に、サンプルそのものを sample/ に置く。package.json は開発元だけの scripts を外す
 rmSync(TEMPLATE, { recursive: true, force: true });
+rmSync(SAMPLE, { recursive: true, force: true });
+const put = (to, body) => {
+  mkdirSync(dirname(to), { recursive: true });
+  writeFileSync(to, body);
+};
 for (const f of templateFiles(ROOT)) {
   const to = join(TEMPLATE, f.replace(/(^|\/)\.gitignore$/, "$1_gitignore"));
-  mkdirSync(dirname(to), { recursive: true });
-  cpSync(join(ROOT, f), to);
+  const buf = readFileSync(join(ROOT, f));
+  if (f.startsWith("data/")) {
+    put(join(SAMPLE, f), buf);
+    const starter = starterData(f, buf);
+    if (starter) put(to, starter);
+  } else if (f === "package.json") put(to, userPackageJson(buf.toString("utf-8")));
+  else put(to, buf);
 }
 
 // CI 定義（.gitlab-ci.yml）が使うファイル（npm run の中身・読み込み先まで）が template に揃っていなければ止める（SPEC §85）

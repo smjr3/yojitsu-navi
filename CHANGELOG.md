@@ -10,18 +10,26 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 - 社内向けの CI の設定（ランナーのタグ・社内だけのジョブなど）は新しくできる `.gitlab-ci.local.yml` に、社内レジストリ・証明書は `.npmrc` か CI/CD 変数（`NPM_CONFIG_REGISTRY`・`NODE_EXTRA_CA_CERTS`）に移す。`.gitlab-ci.yml` を直したままだと毎回の更新で止まる。移したら `yojitsu-navi update --overwrite` で `.gitlab-ci.yml` を新しい版にする（置き場の一覧は docs/DEPLOY_GITLAB.md「社内の設定の置き場」）
 - CI/CD 変数 `YOJITSU_RUN_TESTS` を入れていなければ、パイプラインは build → pages だけになる（test ジョブは動かない）
+- 開発元だけのテスト（`tests/e2e/`・`tests/property/`・`tests/fuzz/`・`tests/integration/app-package.test.ts` など）とスクリプトが消える。テストを除外するために `vitest.config.ts` などを社内で変えていると止まるので、`yojitsu-navi update --dry-run` で確かめてから `--overwrite` にする（除外の設定は要らなくなる。SPEC §93）
+- `update` が「サンプルのまま残っているデータ」を出したら、本番のデータと混ざらないよう直す: `data/worklogs/` の月のファイル・`_meta.json` は消し、そのほかの CSV は本番のものに置き換える（docs/DEPLOY_GITLAB.md「サンプルのデータを消す」）
+- CI/CD 変数 `VITEST_MAX_FORKS=2`・`YOJITSU_PERF`・`PLAYWRIGHT_E2E` は消してよい（Windows は既定で 2。`YOJITSU_PERF`・`PLAYWRIGHT_E2E` はもう使わない）
 
 ### テスト・CI の前提
 
 - test ジョブ（型チェック・vitest）は既定で動かない。動かすときは CI/CD 変数 `YOJITSU_RUN_TESTS=1`（SPEC §79.2）
 - validate ジョブを build ジョブにまとめた。データ検証は build の最初に動き、error があれば build が失敗する（SPEC §79.3）
 - `.gitlab-ci.yml` が `.gitlab-ci.local.yml` を include する。消すとパイプラインが作られない（`yojitsu-navi check` が知らせる）
+- プロジェクトに入るテストは運用に要るもの（取り込み・データ検証・CI のスクリプト）の 9 ファイルだけ。本番の `config.json`・`data/` を読まない（設定はテストの中、データは `tests/fixtures/`）。計算・画面・パッケージ・ダミーデータ・ファズ・プロパティ・性能・E2E のテストは開発元だけで動かす（SPEC §93）
+- build ジョブの E2E のステップ（`scripts/ci/e2e.mjs`）を外した
+- Windows ではテストを同時に 2 つまで動かす（`VITEST_MAX_FORKS` を入れればそちら。SPEC §79.1）
+- `yojitsu-navi init` は `data/` を空（見出しの行だけ）で作る。サンプルは `--sample` のときだけ（SPEC §93）
 
 ### 変更
 
 - 社内のパイプラインを短くした: テストを既定で動かさない・検証を build にまとめる・`node_modules/` をキャッシュしない（#98）
 - `update` が `.gitlab-ci.local.yml`・`.npmrc` を上書き・削除しない。`.gitlab-ci.local.yml` が無ければひな形を足す（SPEC §91.1）
 - `update` のあとに、この変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を出す（SPEC §91.2）
+- 利用環境に配るテストとサンプルデータを減らす: 開発元だけのファイル・テストを配らない、テストは本番の設定・データを使わない、`init` は `data/` を空で作る（`--sample` でサンプル入り）、`update` がサンプルのまま残ったデータを知らせる、Windows のテストの並列数を既定 2 に（#100）
 
 ## 0.2.0
 

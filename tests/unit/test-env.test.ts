@@ -7,9 +7,18 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { perfLimit, perfMode, runAsync, runOk } from "../test-env.js";
+import { defaultForks, perfLimit, perfMode, runAsync, runOk } from "../test-env.js";
 
 const ROOT = join(__dirname, "..", "..");
+
+describe("同時に動かすワーカーの数", () => {
+  it("Windows は既定 2。VITEST_MAX_FORKS を設定したらそれに任せる。ほかの OS は Vitest の既定", () => {
+    expect(defaultForks("win32", {})).toEqual({ forks: { maxForks: 2 } });
+    expect(defaultForks("win32", { VITEST_MAX_FORKS: "" })).toEqual({ forks: { maxForks: 2 } });
+    expect(defaultForks("win32", { VITEST_MAX_FORKS: "1" })).toBeUndefined();
+    expect(defaultForks("linux", {})).toBeUndefined();
+  });
+});
 
 describe("性能テストの判定", () => {
   it("既定は目安の 3 倍まで、strict は目安どおり、report は判定しない", () => {
