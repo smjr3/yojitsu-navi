@@ -3,6 +3,7 @@
 //   - npm run X → package.json の scripts.X（と preX・postX）に書いたファイル（tsx scripts/build.ts、-c tests/e2e/playwright.config.ts など）
 //   - 上のファイルが相対パスで import しているファイル（scripts/ci/install.mjs → scripts/lib/npm.mjs など）を辿った先すべて
 //   - npm ci が読む package.json・package-lock.json
+//   - include: の local で読み込むファイル（.gitlab-ci.local.yml）と、その中のコマンドが使うファイル
 // init・update・npm run app:build がこれで確かめ、足りなければ止める（CI が「ファイルが無い」で落ちるのを持ち込む前に見つける）
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -37,6 +38,13 @@ export function ciCommands(yml) {
     else indent = -1;
   }
   return cmds;
+}
+
+/** include: の local のファイル（- local: a.yml・local: "/a.yml"）。社内の設定 .gitlab-ci.local.yml など（SPEC §91.1） */
+export function ciLocalIncludes(yml) {
+  const out = [];
+  for (const m of yml.matchAll(/^[ \t]*(?:-[ \t]+)?local:[ \t]*["']?([^"'\s#]+)["']?/gm)) out.push(m[1].replace(/^\/+/, ""));
+  return [...new Set(out)];
 }
 
 function unquote(s) {
@@ -89,7 +97,21 @@ export function ciRequiredFiles(projectDir) {
   } catch {
     // package.json が無い・壊れている → 下で package.json が足りないと出る
   }
+  // include したファイルも CI 定義の一部（無いとパイプラインが作られない。中のコマンドも辿る）
+  // include 先がさらに include していても辿る（同じファイルは 1 回だけ）
   const cmds = ciCommands(yml);
+  const includes = [...ciLocalIncludes(yml)];
+  const seenInc = new Set([CI_FILE]);
+  while (includes.length) {
+    const inc = includes.shift();
+    if (seenInc.has(inc)) continue;
+    seenInc.add(inc);
+    files.add(inc);
+    if (!isFile(join(projectDir, inc))) continue;
+    const text = readFileSync(join(projectDir, inc), "utf-8");
+    cmds.push(...ciCommands(text));
+    includes.push(...ciLocalIncludes(text));
+  }
   if (cmds.some((c) => /\bnpm (ci|install|run)\b/.test(c) || /\bnpx\b/.test(c)) || cmds.some((c) => /scripts\/ci\/install\.mjs/.test(c))) {
     files.add("package.json");
     files.add("package-lock.json");

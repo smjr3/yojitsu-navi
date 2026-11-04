@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, sep } from "node:path";
 import { cwd } from "node:process";
+import { CHANGELOG, updateNotes } from "./changelog.mjs";
 import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
+import { compareVersion } from "./version.mjs";
+
+export { compareVersion };
 
 /** 持ち込み先のプロジェクトに置く、どの版のどのファイルを入れたかの記録 */
 export const MANIFEST = ".yojitsu-navi.json";
@@ -15,14 +19,22 @@ export const VENDOR_CACHE = "vendor/npm-cache";
 /** update が上書きする前のファイルを写しておく置き場（git には入れない。.gitignore にもある） */
 export const BACKUP_DIR = ".yojitsu-navi-backup";
 
-/** 社内で書き換えるファイル。update は触らない（足しも消しもしない） */
+/**
+ * 社内の CI の設定を書くファイル（SPEC §91.1）。.gitlab-ci.yml が include する。ランナーのタグ・社内レジストリ・証明書など、
+ * .gitlab-ci.yml を直さずに足す・上書きする設定はここに書く。パッケージには中身の無いひな形が入り、update は無いときだけ足す
+ */
+export const LOCAL_CI_FILE = ".gitlab-ci.local.yml";
+/** npm の設定（社内レジストリの URL・認証・証明書）。パッケージには入れない。社内で置いたら update は触らない */
+export const NPMRC = ".npmrc";
+
+/** 社内で書き換えるファイル。update は触らない（消さない。足すのは LOCAL_CI_FILE が無いときだけ） */
 export function isUserOwned(path) {
-  return path === "config.json" || path.startsWith("data/");
+  return path === "config.json" || path.startsWith("data/") || path === LOCAL_CI_FILE || path === NPMRC;
 }
 
 /**
  * update でのファイルの扱い（SPEC §91。docs/DEPLOY_GITLAB.md「新しい版にする」の表と同じ）。
- * - keep: 社内のもの。触らない（config.json・data/ 以下すべて）
+ * - keep: 社内のもの。触らない（config.json・data/ 以下すべて・.gitlab-ci.local.yml・.npmrc。.gitlab-ci.local.yml は無ければひな形を足す）
  * - vendor: 依存込みのとき、パッケージのもので丸ごと入れ替える（vendor/npm-cache/）
  * - tool: コマンドが書く・使う（.yojitsu-navi.json・.yojitsu-navi-backup/）
  * - package: それ以外。パッケージの版にする（社内で変えていたら止まる）。パッケージに無く、前の版の記録にも無いファイルは社内で足したものとして触らない
@@ -173,13 +185,6 @@ function writeManifest(projectDir, version, files, kept = []) {
   writeFileSync(join(projectDir, MANIFEST), `${JSON.stringify(body, null, 2)}\n`);
 }
 
-/** "1.2.3" の大小（a<b で負） */
-export function compareVersion(a, b) {
-  const pa = String(a).split(".").map(Number);
-  const pb = String(b).split(".").map(Number);
-  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
-  return 0;
-}
 
 /**
  * 新しいプロジェクトのフォルダを作る。
@@ -251,6 +256,12 @@ function unifiedDiff(a, b, label, tmp) {
     .trimEnd();
 }
 
+/** 変更履歴から読んだ、導入先で行うこと（無ければ何も出さない） */
+function logNotes(log, notes, from, to) {
+  if (!notes.length) return;
+  log(`\n${from} → ${to} で導入先が行うこと・前提が変わること（${CHANGELOG} から。全体は ${CHANGELOG}）:\n${notes.map((l) => `  ${l}`).join("\n")}`);
+}
+
 const CONFLICT_LABEL = { modified: "社内で変更", created: "社内で作成", removedModified: "新しい版で削除（社内で変更）" };
 
 /**
@@ -293,7 +304,9 @@ export function update(o) {
   for (const [f, abs] of template) {
     const to = join(dir, f);
     if (fileKind(f) !== "package") {
-      if (fileKind(f) === "keep" && !existsSync(to)) notAdded.push(f);
+      // .gitlab-ci.local.yml は .gitlab-ci.yml が include するので、無ければひな形を足す（無いと CI が動かない）
+      if (f === LOCAL_CI_FILE && !existsSync(to)) writes.push({ f, next: readFileSync(abs), kind: "added" });
+      else if (fileKind(f) === "keep" && !existsSync(to)) notAdded.push(f);
       continue;
     }
     const next = readFileSync(abs);
@@ -333,7 +346,7 @@ export function update(o) {
     record.set(c.f, sha(c.next));
     kept.push(c.f);
   }
-  for (const w of writes) record.set(w.f, sha(w.next));
+  for (const w of writes) if (fileKind(w.f) === "package") record.set(w.f, sha(w.next));
   const sortByPath = (a, b) => (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
   conflicts.sort(sortByPath);
   writes.sort(sortByPath);
@@ -346,12 +359,16 @@ export function update(o) {
   // 作業実績（data/worklogs/）はサンプルの月が増えるだけなので知らせない
   const newData = notAdded.filter((f) => !f.startsWith("data/worklogs/"));
   let missing = [];
+  let localConfig = null;
   try {
-    missing = missingConfigKeys(JSON.parse(readFileSync(template.get("config.json"), "utf-8")), JSON.parse(readFileSync(join(dir, "config.json"), "utf-8")));
+    localConfig = JSON.parse(readFileSync(join(dir, "config.json"), "utf-8"));
+    missing = missingConfigKeys(JSON.parse(readFileSync(template.get("config.json"), "utf-8")), localConfig);
   } catch {
     // config.json が壊れているときは npm run validate が知らせる
   }
-  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData };
+  // 今の版から新しい版までの変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」（SPEC §91.2）
+  const notes = template.has(CHANGELOG) ? updateNotes(readFileSync(template.get(CHANGELOG), "utf-8"), manifest.version, version, localConfig) : [];
+  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes };
 
   // 2. 確かめるだけ（--dry-run）
   if (dry) {
@@ -362,6 +379,7 @@ export function update(o) {
     if (changed.length) log(`新しい版にするファイル:\n${changed.map((f) => `  ${f}`).join("\n")}`);
     if (added.length) log(`足すファイル:\n${added.map((f) => `  ${f}`).join("\n")}`);
     if (deletes.length) log(`消すファイル:\n${deletes.map((f) => `  ${f}`).join("\n")}`);
+    logNotes(log, notes, manifest.version, version);
     if (conflicts.length) {
       const tmp = mkdtempSync(join(tmpdir(), "yojitsu-update-"));
       try {
@@ -394,6 +412,9 @@ export function update(o) {
         "差分を見る:                         yojitsu-navi update --dry-run",
         `新しい版にする（前のものは ${BACKUP_DIR}/ に残す）: yojitsu-navi update --overwrite`,
         "社内の版のまま残す（次の更新でも残す）: yojitsu-navi update --keep-local",
+        ...(unresolved.some((c) => c.f === CI_FILE || c.f === "package.json")
+          ? ["", `社内向けの CI の設定（ランナーのタグ・レジストリ・証明書など）は ${LOCAL_CI_FILE}・${NPMRC}・CI/CD 変数に移すと、次からの更新で止まらずに残ります（docs/DEPLOY_GITLAB.md「社内の設定の置き場」）`]
+          : []),
       ].join("\n"),
     );
     e.conflicts = base.conflicts;
@@ -433,12 +454,13 @@ export function update(o) {
   if (keptNow.length) log(`社内の版のまま残したファイル（新しい版の変更は入っていません。yojitsu-navi update --dry-run で差分を確かめられます）:\n${listConflicts(keptNow)}`);
   if (newData.length) log(`新しい版のサンプルにあって、このプロジェクトに無いデータ（入れていません。要るなら docs/DATA.md を見て作ってください）:\n${newData.map((f) => `  ${f}`).join("\n")}`);
   if (missing.length) log(`config.json に無い新しい設定（無くても既定値で動きます。変えるときは docs/DATA.md）:\n${missing.map((k) => `  ${k}`).join("\n")}`);
+  logNotes(log, notes, manifest.version, version);
 
   let branch = "";
   let committed = false;
   if (useGit) {
     // git の除外設定に当たるパッケージのファイルも入れる（前の版で入らなかったものもここで入る）
-    gitAddPackageFiles(dir, [...[...template.keys()].filter((f) => !isUserOwned(f) && existsSync(join(dir, f))), MANIFEST], outsideBackup);
+    gitAddPackageFiles(dir, [...[...template.keys()].filter((f) => (!isUserOwned(f) || f === LOCAL_CI_FILE) && existsSync(join(dir, f))), MANIFEST], outsideBackup);
     if (git(dir, ["diff", "--cached", "--quiet"]).ok) {
       log("変更はありませんでした");
       committed = true;

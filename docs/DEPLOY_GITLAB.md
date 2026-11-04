@@ -28,7 +28,8 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 | `data/mapping.csv`・`task-types.csv`（・`contracts.csv` の行の追加と顧客名・案件名） | 名称の対応・作業種別・案件の行 | 編集者・リーダー | GitLab の画面（Web IDE）でブランチを作って編集 → MR |
 | `data/worklogs/` | 作業実績 | 取り込みの自動処理 | 定期取り込み（本番 API の確認後。下の「将来」） |
 | `config.json` | 計算の設定・取り込み元・マスタ編集の接続先 | 管理者 | MR |
-| `.gitlab-ci.yml`・`src/`・`scripts/` など | 画面・CI | 管理者 | 新しい版のパッケージで `yojitsu-navi update`（下の「新しい版にする」） |
+| `.gitlab-ci.yml`・`src/`・`scripts/` など | 画面・CI | 管理者 | 新しい版のパッケージで `yojitsu-navi update`（下の「新しい版にする」）。社内で直さない |
+| `.gitlab-ci.local.yml`・`.npmrc` | 社内向けの CI・npm の設定（ランナーのタグ・社内レジストリ・証明書） | 管理者 | MR（下の「社内の設定の置き場」。`update` は上書きしない） |
 | `.yojitsu-navi.json` | 入れた版とファイルの記録 | （コマンドが書く） | 手で編集しない |
 | `.yojitsu-navi-backup/` | `update` が上書き・削除する前のファイル | （コマンドが書く） | git に入れない。要らなければ消す |
 
@@ -126,7 +127,7 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 - **shell executor**（Windows の Runner に多い）: Runner のマシンに Node.js 22（20 以上）と Git を入れておきます。`image:` は使われません。
 - **Docker（または Kubernetes）executor**: `image:` の `node:22` を使います。Windows コンテナの Runner では、Windows 用の Node のイメージを `NODE_IMAGE` で指定します。
 - テスト（`test` ジョブ）は既定で動きません（アプリ本体の確認はパッケージの公開前に済ませている。SPEC §79.2）。社内の Runner で動かしたいときは CI/CD 変数 `YOJITSU_RUN_TESTS=1`。遅くてタイムアウトするときの設定（`VITEST_MAX_FORKS` など）は [OPERATIONS.md](OPERATIONS.md#テストを-windows-で動かすrunnerpc)。
-- Runner にタグが付いていてタグなしのジョブを受けない設定なら、管理者に「タグなしのジョブも実行する」を有効にしてもらうか、各ジョブに `tags:` を足します。
+- Runner にタグが付いていてタグなしのジョブを受けない設定なら、`.gitlab-ci.local.yml` に `default: tags: [...]` を書きます（下の「社内の設定の置き場」）。`.gitlab-ci.yml` に足すと、次の `update` で止まります。
 
 **CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
 
@@ -134,12 +135,13 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 |---|---|---|
 | `NPM_CONFIG_REGISTRY` | `npm ci` が registry.npmjs.org に接続できない | `https://nexus.example.local/repository/npm/` |
 | `NODE_IMAGE` | Runner が Docker Hub から `node:22` を取れない | `registry.example.local/mirror/node:22` |
+| `NODE_EXTRA_CA_CERTS` | 社内の証明書で `npm ci` が `SELF_SIGNED_CERT_IN_CHAIN` などになる | 種類 **File** にして社内 CA の PEM を貼る |
 
 作業実績 API 用の変数（`WORKLOG_API_TOKEN`・`GIT_PUSH_TOKEN` など）は、本番 API の確認が済むまで不要です（下の「将来」）。
 
 ### 5. 公開と接続を確認する
 
-1. 手順 1 の push で CI/CD > Pipelines にパイプラインが出る。4 段すべて緑になるのを待つ（手順 2 より前に終わっていてもよい）。
+1. 手順 1 の push で CI/CD > Pipelines にパイプラインが出る。`build` → `pages` が緑になるのを待つ（手順 2 より前に終わっていてもよい）。
 2. Deploy > **Pages** に公開 URL が出る（例: `https://yojitsu-navi.pages.<社内ドメイン>/yojitsu-navi/`。「Use unique domain」が有効なら `https://yojitsu-navi-xxxx.pages.<社内ドメイン>/`。どちらでも動きます）。
 3. 下の「社内で確認すること」を順に確かめる。
 
@@ -156,11 +158,33 @@ git push -u origin update-<新しい版>
 
 結果はブランチ `update-<版>` にコミットされるので、MR を作り、パイプラインが緑になったらリーダーがマージします。
 
+最後に、今の版から新しい版までの [CHANGELOG.md](../CHANGELOG.md) の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します。設定は `config.json` の今の値を添えて「項目 今: … / 推奨: …」の形で出るので、要るものを MR の中で `config.json` に書きます（`update` は `config.json` を変えません）。`--dry-run` でも同じものを出します。
+
+### 社内の設定の置き場
+
+社内だけの設定を `.gitlab-ci.yml`・`package.json` に書くと、毎回の `update` で「社内で変えたファイル」として止まり、`--overwrite` すると消えます。次の置き場に書けば `update` は触りません（SPEC §91.1）。
+
+| 設定 | 置き場 |
+|---|---|
+| Runner のタグ（全ジョブ） | `.gitlab-ci.local.yml` に `default:` → `tags: [windows]` |
+| ジョブごとのタグ・社内だけのジョブ・新しい変数 | `.gitlab-ci.local.yml`（例 `build:` → `tags: [large]`） |
+| npm の社内レジストリ（Nexus・JFrog Artifactory など） | CI/CD 変数 `NPM_CONFIG_REGISTRY`、または `.npmrc` に `registry=https://…` |
+| レジストリの認証 | `.npmrc` に `//<レジストリのホスト>/<パス>/:_authToken=${NPM_AUTH_TOKEN}`、値は CI/CD 変数 `NPM_AUTH_TOKEN`（Masked）。トークンそのものは書かない |
+| 社内の証明書 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`（種類 File）。リポジトリに置くなら `certs/` などに置き、`.gitlab-ci.local.yml` の `variables:` で `NODE_EXTRA_CA_CERTS: "$CI_PROJECT_DIR/certs/ca.pem"` |
+| Node のイメージ | CI/CD 変数 `NODE_IMAGE` |
+| テストを動かす・並列数 | CI/CD 変数 `YOJITSU_RUN_TESTS`・`VITEST_MAX_FORKS` |
+
+- GitLab は include したファイルと `.gitlab-ci.yml` を合わせます。同じ項目は `.gitlab-ci.yml` が勝つので、`.gitlab-ci.yml` にある項目（`variables:` の `NODE_IMAGE`、ジョブの `script:`・`rules:` など）は `.gitlab-ci.local.yml` では変えられません。変数は CI/CD 変数にすれば勝ちます。どうしても `.gitlab-ci.yml` の中身を変えるときは `--keep-local`（下）。
+- `.gitlab-ci.local.yml` は中身が空だと GitLab が失敗にするので、ひな形の `.yojitsu-navi-local: {}` は消さないでください。
+- 社内で足したほかのファイル（`certs/` など）も、パッケージに無ければ `update` は触りません。
+- 前の版で `.gitlab-ci.yml` に社内の設定を書いていたら: `yojitsu-navi update --dry-run` で差分を見て、社内の設定を上の置き場に移してから `yojitsu-navi update --overwrite`。
+
 ### 上書きするファイルと残すファイル
 
 | 区分 | ファイル | `update` での扱い |
 |---|---|---|
 | 残す（社内のもの） | `config.json`・`data/` 以下すべて（`mapping.csv`・`task-types.csv`・`masters/`・`worklogs/` など） | 足しも消しもしない。新しい版で増えた設定の項目・サンプルにだけある新しいデータのファイルは一覧で知らせる（無くても既定値で動く） |
+| 残す（社内の CI・npm の設定） | `.gitlab-ci.local.yml`・`.npmrc` | 上書きも削除もしない。`.gitlab-ci.local.yml` が無いときだけひな形を足す（`.gitlab-ci.yml` が include するので、無いと CI が動かない）。`.npmrc` はパッケージに入っていない |
 | 残す（社内で足したもの） | パッケージに無く、前の版の記録（`.yojitsu-navi.json`）にも無いファイル | 触らない |
 | 上書き | 上以外でパッケージに入っているもの（`.gitlab-ci.yml`・`.gitlab/`・`.gitignore`・`.gitattributes`・`package.json`・`package-lock.json`・`observablehq.config.js`・`src/`・`scripts/`・`tests/`・`docs/`・`README.md` など） | 新しい版にする。**社内で変えていたら止まる**（下） |
 | 削除 | 前の版の記録にあって新しい版に無いもの | 消す。社内で変えていたら止まる |

@@ -26,6 +26,7 @@
 #   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・ユニット・結合・性能テスト）も動く。既定は動かさない
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   NODE_EXTRA_CA_CERTS （任意）社内の証明書（PEM）。種類を File にして中身を貼る（npm・Node がこの証明書も信頼する）
 #   以下 3 つは YOJITSU_RUN_TESTS=1 のときだけ使う
 #   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
 #   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
@@ -48,6 +49,11 @@
 #   - 社内 GitLab のイメージレジストリ経由で node:22 を使う場合は CI/CD 変数 NODE_IMAGE で差し替える
 
 image: $NODE_IMAGE
+
+# 社内向けの設定（ランナーのタグ・社内だけのジョブなど）は .gitlab-ci.local.yml に書く。update はそのファイルを上書きしない（SPEC §91.1）。
+# レジストリ・証明書・イメージは CI/CD 変数（NPM_CONFIG_REGISTRY・NODE_EXTRA_CA_CERTS・NODE_IMAGE）か .npmrc で渡す
+include:
+  - local: .gitlab-ci.local.yml
 
 # パイプラインの重複を防ぐ: MR があるブランチへの push は MR のパイプラインだけにする
 workflow:

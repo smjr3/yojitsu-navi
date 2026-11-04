@@ -1,0 +1,20 @@
+# 社内向けの CI の設定（SPEC §91.1）。.gitlab-ci.yml が include する。
+#
+# このファイルは社内のものです。yojitsu-navi update は上書きも削除もしません（無いときだけ、このひな形を足します）。
+# .gitlab-ci.yml を直すと update が「社内で変えたファイル」として止まるので、社内だけの設定はここと CI/CD 変数に書きます。
+# 置き場の一覧は docs/DEPLOY_GITLAB.md「社内の設定の置き場」。
+#
+# 書けるもの（GitLab は include したファイルと .gitlab-ci.yml を合わせる。同じ項目は .gitlab-ci.yml が勝つ）:
+#   - ランナーのタグ（全ジョブ）:
+#       default:
+#         tags: [windows, yojitsu]
+#   - ジョブごとのタグ・変数の追加（.gitlab-ci.yml に無い項目だけ効く）:
+#       build:
+#         tags: [large]
+#   - 新しい変数（.gitlab-ci.yml にある変数 NODE_IMAGE などを変えるときは CI/CD 変数にする。CI/CD 変数が勝つ）:
+#       variables:
+#         NODE_EXTRA_CA_CERTS: "$CI_PROJECT_DIR/certs/ca.pem"
+#   - 社内だけのジョブ
+#
+# 中身が空だと GitLab が include を失敗にするので、下の何もしない項目（. で始まる名前は使われない）を消さないでください。
+.yojitsu-navi-local: {}
