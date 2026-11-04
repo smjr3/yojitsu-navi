@@ -1,10 +1,9 @@
 /**
  * 取り込みアダプタの結合テスト（docs/SPEC.md §20）
- * リポジトリのダミーデータを一時ディレクトリにコピーし、global fetch を差し替えたモック API から
+ * テスト用のプロジェクト（tests/fixtures/project.ts。プロジェクトの config.json・data/ は使わない）を一時ディレクトリに作り、global fetch を差し替えたモック API から
  * fetch-worklogs / fetch-members を通しで動かす。生成ファイルが validate を通ることまで確認する。
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { csvParse } from "d3-dsv";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,16 +12,14 @@ import { fetchWorklogs, formatDryRun } from "../../scripts/fetch-worklogs.js";
 import { runValidation } from "../../scripts/validate-data.js";
 import { parseWorklogCsv } from "../../scripts/lib/csv.js";
 import { sjis } from "../unit/sjis-helper.js";
+import { createTestProject, fixtureText } from "../fixtures/project.js";
 
-const REPO = join(import.meta.dirname, "..", "..");
 const TOKEN = "tok-INTEG-5555";
 const AS_OF = "2026-10-27";
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "yojitsu-api-"));
-  cpSync(join(REPO, "data"), join(root, "data"), { recursive: true });
-  cpSync(join(REPO, "config.json"), join(root, "config.json"));
+  root = createTestProject("yojitsu-api-");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -36,10 +33,10 @@ function setConfig(patch: (c: Record<string, any>) => void) {
 }
 const readMonth = (ym: string) => readFileSync(join(root, "data/worklogs", `${ym}.csv`), "utf-8");
 const MONTHS = ["2026-08", "2026-09", "2026-10"];
-const original = (ym: string) => parseWorklogCsv(readFileSync(join(REPO, "data/worklogs", `${ym}.csv`), "utf-8"));
+const original = (ym: string) => parseWorklogCsv(fixtureText(`worklogs/${ym}.csv`));
 
 describe("fetch-worklogs を本番風の API 形式で通す", () => {
-  it("入れ子・分単位・epochMillis・カーソル・filters・候補列 → 元のダミーデータと同じ月ファイルになる", async () => {
+  it("入れ子・分単位・epochMillis・カーソル・filters・候補列 → 元のテスト用データと同じ月ファイルになる", async () => {
     const all = MONTHS.flatMap((ym) => original(ym));
     // 本番風の応答: 入れ子の JSON、日付は epochMillis（JST 正午）、時間は分、取り消し行を混ぜる
     const apiRows = [
@@ -90,7 +87,7 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
 
     const res = await fetchWorklogs({ rootDir: root, asOf: AS_OF }, { WORKLOG_API_TOKEN: TOKEN } as NodeJS.ProcessEnv);
     expect(res.months).toEqual(MONTHS);
-    for (const ym of MONTHS) expect(readMonth(ym)).toBe(readFileSync(join(REPO, "data/worklogs", `${ym}.csv`), "utf-8"));
+    for (const ym of MONTHS) expect(readMonth(ym)).toBe(fixtureText(`worklogs/${ym}.csv`));
 
     expect(seen.length).toBeGreaterThan(2);
     expect(seen.every((s) => s.auth === null)).toBe(true); // X-Api-Key で送っている
@@ -123,7 +120,7 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
       };
     });
     await fetchWorklogs({ rootDir: root, asOf: AS_OF }, { WORKLOG_API_TOKEN: TOKEN } as NodeJS.ProcessEnv);
-    for (const ym of MONTHS) expect(readMonth(ym)).toBe(readFileSync(join(REPO, "data/worklogs", `${ym}.csv`), "utf-8"));
+    for (const ym of MONTHS) expect(readMonth(ym)).toBe(fixtureText(`worklogs/${ym}.csv`));
     expect(runValidation(root).errors).toEqual([]);
   });
 
@@ -169,7 +166,7 @@ describe("fetch-worklogs を本番風の API 形式で通す", () => {
 
 describe("fetch-members を通しで", () => {
   const memberRows = () => {
-    const rows = csvParse(readFileSync(join(REPO, "data/masters/members.csv"), "utf-8"));
+    const rows = csvParse(fixtureText("masters/members.csv"));
     return rows;
   };
   const readMembers = () => csvParse(readFileSync(join(root, "data/masters/members.csv"), "utf-8"));

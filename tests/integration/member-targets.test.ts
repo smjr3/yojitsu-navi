@@ -1,9 +1,8 @@
 /**
  * 作業実績 API の取得対象をメンバーマスタから作る・失敗時に CSV を書き換えない（SPEC §87）
- * リポジトリのダミーデータを一時ディレクトリにコピーし、global fetch を差し替えたモック API で通しで動かす。
+ * テスト用のプロジェクト（tests/fixtures/project.ts。プロジェクトの config.json・data/ は使わない）を一時ディレクトリに作り、global fetch を差し替えたモック API で通しで動かす。
  */
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchMembers } from "../../scripts/fetch-members.js";
@@ -14,8 +13,8 @@ import { safeMessage } from "../../scripts/lib/fetch-status.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 import { parseWorklogCsv } from "../../scripts/lib/csv.js";
 import type { MemberRecord, Worklog } from "../../src/core/types.js";
+import { createTestProject, fixtureText } from "../fixtures/project.js";
 
-const REPO = join(import.meta.dirname, "..", "..");
 const TOKEN = "tok-TARGET-7777";
 const AS_OF = "2026-10-27";
 const MONTHS = ["2026-08", "2026-09", "2026-10"];
@@ -23,9 +22,7 @@ const ENV = { WORKLOG_API_TOKEN: TOKEN } as NodeJS.ProcessEnv;
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "yojitsu-targets-"));
-  cpSync(join(REPO, "data"), join(root, "data"), { recursive: true });
-  cpSync(join(REPO, "config.json"), join(root, "config.json"));
+  root = createTestProject("yojitsu-targets-");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,7 +36,7 @@ function setConfig(patch: (c: Record<string, any>) => void) {
 }
 const readMonth = (ym: string) => readFileSync(join(root, "data/worklogs", `${ym}.csv`), "utf-8");
 const readMeta = () => JSON.parse(readFileSync(join(root, "data/worklogs/_meta.json"), "utf-8")) as Record<string, any>;
-const original = (ym: string) => parseWorklogCsv(readFileSync(join(REPO, "data/worklogs", `${ym}.csv`), "utf-8"));
+const original = (ym: string) => parseWorklogCsv(fixtureText(`worklogs/${ym}.csv`));
 
 const rec = (memberId: string, effectiveFrom: string, status?: string): MemberRecord => ({
   memberId,
@@ -96,7 +93,7 @@ describe("取得対象の社員番号（メンバーマスタから）", () => {
     expect(targetMemberIds(members, "2025-10", "2025-12")).toEqual(["A", "B", "C", "E"]);
   });
 
-  it("ダミーデータ: 期間前に退職した人は入らず、期間中に不在になった人は入る", () => {
+  it("テスト用のデータ: 期間前に退職した人は入らず、期間中に不在になった人は入る", () => {
     const config = JSON.parse(readFileSync(join(root, "config.json"), "utf-8"));
     const ids = targetMemberIds(readMemberRecords(root, config), "2026-08", "2026-10");
     expect(ids.length).toBeGreaterThan(100);
@@ -266,7 +263,7 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
     expect(after.filter((w) => w.memberId === id).every((w) => w.hours === 1)).toBe(true);
     expect(readMeta().fetchedAt).toBe(metaBefore.fetchedAt);
     // 対象外の月は触らない
-    expect(readMonth("2026-10")).toBe(readFileSync(join(REPO, "data/worklogs/2026-10.csv"), "utf-8"));
+    expect(readMonth("2026-10")).toBe(fixtureText("worklogs/2026-10.csv"));
   });
 
   it("members を設定しない API はこれまでどおり（社員番号を渡さず全件）", async () => {

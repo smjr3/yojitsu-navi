@@ -1130,15 +1130,15 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 79.1 テストの実行環境の差（2026-11-03 依頼者）
 社内の Windows（Git Bash）で、結合テストの失敗・Vitest のワーカーのタイムアウト・性能テストの時間超過が出た（導入先は並列数とタイムアウトを変え、`tests/integration/app-package.test.ts` を一時的に外していた）。テストを外さずに通すため、次のようにする。手順と推奨値は `docs/OPERATIONS.md`「テストを Windows で動かす」。
-- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は Vitest の `VITEST_MAX_FORKS` で減らせる。
+- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は Vitest の `VITEST_MAX_FORKS` で減らせる。Windows では既定で 2（`tests/test-env.ts` の `defaultForks()`。`VITEST_MAX_FORKS` を設定すればそちら。2026-11-04、導入先で並列実行時にワーカーのタイムアウトが出たため）。
 - 別プロセスを長く待つテストは `runAsync`（`tests/test-env.ts`）で待つ。`spawnSync`・`execFileSync` で数十秒止めると、その間ワーカーが Vitest の本体と通信できず「`[vitest-worker]: Timeout calling …`」で落ちるため。結合テストのパッケージの組み立て・`npm pack`（1 回だけ作って使い回す）・一式の `init`（コマンドで実行）・`tsc`・データローダが対象。
 - 結合テストが作る一時の git は、PC の設定に左右されないよう `core.autocrlf=false`・`core.longpaths=true`・`commit.gpgsign=false` を環境変数で渡す。一時フォルダは消せるまで何度か試す（Windows でファイルが一時的に使用中になるため）。
-- 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。社内の `.gitlab-ci.yml` の `test` は `report`（CI/CD 変数で変えられる）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
+- 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。性能テストは開発元だけにある（§93。社内の `test` ジョブには入らない）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
 - 確認は Linux（1 コアに絞った負荷の高い状態を含む）。Windows の実機での確認は導入先で行う。
 
 ### 79.2 社内のパイプラインではテストを既定で動かさない（2026-11-04 依頼者）
 テスト（型チェック・ユニット・結合・性能）はアプリ本体の確認で、このリポジトリで公開前に済ませている。導入先で変わるのはデータと `config.json` だけなので、毎回の push・MR で動かす必要がない（Windows の Runner では時間がかかり、タイムアウトの原因にもなっていた）。
-- `.gitlab-ci.yml` の `test` ジョブは CI/CD 変数 `YOJITSU_RUN_TESTS=1` のときだけ動く（Run pipeline で入れても同じ）。既定のパイプラインは `build → pages`（§79.3）、スケジュールは取り込み。E2E（`PLAYWRIGHT_E2E`）も従来どおり既定で動かさない。
+- `.gitlab-ci.yml` の `test` ジョブは CI/CD 変数 `YOJITSU_RUN_TESTS=1` のときだけ動く（Run pipeline で入れても同じ）。既定のパイプラインは `build → pages`（§79.3）、スケジュールは取り込み。E2E は社内のプロジェクトに入れない（§93。`PLAYWRIGHT_E2E` と `scripts/ci/e2e.mjs` は廃止）。
 - 導入先で確かめるのは、データ検証とビルド（`build`）・取り込み（`fetch-worklogs`・`fetch-members`）の成否。`yojitsu-navi check`（CI が使うファイルの不足）は `init`・`update` で動く。
 - `tests/unit/ci-portable.test.ts` で、`test` ジョブが既定で動かないことを検査する。
 
@@ -1333,3 +1333,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - ダミーデータ: C124（国際送金）の作業に作業コード `SK-001`〜（運用保守の 11 コードは契約期間つきで mapping.csv に登録）。今月に、未登録の `SK-900`、作業名の変更（`SK-005`）、キーワードに合わなくなった作業名の変更（`SK-004`。作業コードで登録済みなので運用保守のまま）を 1 件ずつ。config.json の `taskCodeCheck.include` は `_保守対応`。
 - 実装: `src/core/taskCodes.ts`（`findTaskCodeIssues`・`validateMappingPeriods`）、`src/core/mapping.ts`（作業コードの行・行の期間）、`scripts/lib/task-code-gate.ts`（取り込み時の点検）。
 - 再発防止: `tests/unit/task-codes.test.ts`、`tests/integration/task-code-fetch.test.ts`、`tests/integration/dummy-data.test.ts`（C124 の作業コード）、`tests/e2e/task-codes.spec.ts`。
+
+## 93. 利用環境に配るテストとサンプルデータを減らす（2026-11-04 依頼者。導入先のレビュー指摘）
+0.2.0 の導入で: 利用環境の CI でテストに 20 分以上かかった、開発元だけのテスト（`app-package.test.ts` は接続先が設定済みの利用環境では必ず失敗）が入っていた、テストが本番の `config.json`・`data/` に依存して失敗した、約 13 MB のサンプルの作業実績が `data/` に展開され本番のデータと混ざるおそれがあった。
+- **配るものの分け方**（`packages/app/lib/template-files.mjs`）: `npm run app:build` の template は git が管理するファイルから、開発元だけのもの（`CLAUDE.md`・`CONTRIBUTING.md`・`packages/`・パッケージの組み立てと公開のスクリプト）とテストを除く。package.json からは開発元だけの scripts（`app:build`・`app:pack`・`test:e2e`・`test:e2e:smoke`）を外す。
+- **利用環境のテスト**は運用に要るもの（取り込み・データ検証・CI のスクリプト）だけ: `USER_TESTS` の 9 ファイルと、それが読むヘルパー・`tests/test-env.ts`・`tests/fixtures/`。計算・画面・パッケージ・ダミーデータ・ファズ・プロパティ・性能・E2E は開発元だけ。型チェックは配ったファイルで通す。
+- **テストは本番の設定・データを使わない**: 設定は `tests/fixtures/project.ts` の `testConfig()`、データは `tests/fixtures/project/data/`（ダミーデータから作った固定の小さなもの。作業実績は 3 か月の各月 1〜5 日）を一時フォルダに写して使う。ダミーデータの生成を変えても作り直さない。開発元だけのテスト（`dummy-data.test.ts` など）はリポジトリのサンプル `data/` を見てよい。
+- **data/ はサンプルなし**: template の `data/` は各 CSV の見出しの行だけ（祝日 `holidays.csv`・作業種類 `task-types.csv` はそのまま。作業実績は入れない）。空のままでも検証・ビルドは通る。サンプル（リポジトリの `data/` 一式）はパッケージの `sample/` に入れ、`yojitsu-navi init --sample` のときだけ入れる（既定はなし。`--no-sample` も受け付ける）。`init` は知らないオプションで止める。
+- **update**: 前の版で配っていた開発元だけのファイルは「新しい版に無い」ので消える（社内で変えていたら §91 のとおり止まる）。`data/` のうちパッケージのサンプルと中身が同じファイル（空の `data/` と同じものは除く）を「サンプルのまま残っているデータ」として一覧に出す（消さない。`--dry-run` でも出す）。消し方は `docs/DEPLOY_GITLAB.md`「サンプルのデータを消す」。
+- 確認: `tests/integration/app-package.test.ts`（配るファイル・テスト・空の data/・sample/、配ったファイルだけで型チェックと運用のテストが通る、`init --sample`、update のサンプル残りの一覧）、`tests/unit/test-env.test.ts`（Windows の並列数の既定）。

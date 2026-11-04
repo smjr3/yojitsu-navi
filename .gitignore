@@ -15,4 +15,5 @@ packages/app/*.tgz
 vendor/npm-cache/_logs/
 packages/*/.npmrc
 packages/app/LICENSE
+packages/app/sample/
 .yojitsu-navi-backup/

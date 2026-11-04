@@ -24,6 +24,7 @@ const PKG = join(ROOT, "packages", "app");
 const pkgJson = JSON.parse(readFileSync(join(PKG, "package.json"), "utf-8"));
 const rootJson = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
 let app: any;
+let tpl: any;
 let work = "";
 let consumer = "";
 const logs: string[] = [];
@@ -38,6 +39,7 @@ beforeAll(async () => {
   const [npmCmd, npmArgs] = npmCommand(["pack", "--dry-run", "--json", "--ignore-scripts"]);
   packed = JSON.parse(await runOk(npmCmd, npmArgs, { cwd: PKG }))[0].files.map((f: { path: string }) => f.path);
   app = await import(pathToFileURL(join(PKG, "lib", "project.mjs")).href);
+  tpl = await import(pathToFileURL(join(PKG, "lib", "template-files.mjs")).href);
   work = mkdtempSync(join(tmpdir(), "yojitsu-app-"));
   // コミットする人の設定が無い環境（CI）でも動くように
   Object.assign(process.env, { GIT_AUTHOR_NAME: "test", GIT_AUTHOR_EMAIL: "test@example.local", GIT_COMMITTER_NAME: "test", GIT_COMMITTER_EMAIL: "test@example.local" });
@@ -65,8 +67,12 @@ afterAll(() => {
 }, scaled(60_000));
 
 /** 小さな偽のパッケージ（update の確認用）。files は template に置くファイル */
-function fakePackage(name: string, version: string, files: Record<string, string>, withDeps = false): string {
+function fakePackage(name: string, version: string, files: Record<string, string>, withDeps = false, sample: Record<string, string> = {}): string {
   const dir = join(work, name);
+  for (const [f, body] of Object.entries(sample)) {
+    mkdirSync(join(dir, "sample", f, ".."), { recursive: true });
+    writeFileSync(join(dir, "sample", f), body);
+  }
   for (const [f, body] of Object.entries(files)) {
     mkdirSync(join(dir, "template", f, ".."), { recursive: true });
     writeFileSync(join(dir, "template", f), body);
@@ -90,18 +96,66 @@ describe("パッケージの中身", () => {
     for (const k of ["author", "repository", "homepage", "bugs", "publishConfig"]) expect(pkgJson[k]).toBeUndefined();
   });
 
-  it("入るのは bin・lib・dist・template・README・LICENSE だけで、リポジトリ一式が揃っている", () => {
+  it("入るのは bin・lib・dist・template・sample・README・LICENSE だけで、利用環境に配るファイルが揃っている", () => {
     const files = packed;
-    expect(files.filter((f) => !/^(bin|lib|dist|template)\//.test(f) && !["README.md", "LICENSE", "package.json"].includes(f))).toEqual([]);
+    expect(files.filter((f) => !/^(bin|lib|dist|template|sample)\//.test(f) && !["README.md", "LICENSE", "package.json"].includes(f))).toEqual([]);
     for (const f of ["LICENSE", "bin/yojitsu-navi.mjs", "lib/project.mjs", "dist/gitlab-setup.mjs", "template/package.json", "template/package-lock.json", "template/.gitlab-ci.yml", "template/_gitignore", "template/config.json", "template/src/index.md", "template/data/contracts.csv", "template/docs/DEPLOY_GITLAB.md"]) {
       expect(files).toContain(f);
     }
     expect(files.some((f) => f.startsWith("template/.github/") || f.includes("node_modules/") || f.startsWith("deps/"))).toBe(false);
-    // git が管理するファイル（.github/ を除く）がすべて入っている
-    const tracked = git(ROOT, "ls-files").split("\n").filter((f) => f && !f.startsWith(".github/") && existsSync(join(ROOT, f)));
+    // git が管理するファイルのうち利用環境に配るもの（SPEC §93）がすべて入っている。data/ はサンプル（sample/）に、サンプルを除いたものが template に
+    const tests = tpl.testClosure(ROOT);
+    const tracked = git(ROOT, "ls-files").split("\n").filter((f) => f && existsSync(join(ROOT, f)) && tpl.isShipped(f, tests));
     const inPkg = new Set(files.filter((f) => f.startsWith("template/")).map((f) => f.slice("template/".length).replace(/(^|\/)_gitignore$/, "$1.gitignore")));
-    expect(tracked.filter((f) => !inPkg.has(f))).toEqual([]);
+    const inSample = new Set(files.filter((f) => f.startsWith("sample/")).map((f) => f.slice("sample/".length)));
+    expect(tracked.filter((f) => !f.startsWith("data/") && !inPkg.has(f))).toEqual([]);
+    expect(tracked.filter((f) => f.startsWith("data/") && !inSample.has(f))).toEqual([]);
+    expect([...inSample].filter((f) => !f.startsWith("data/"))).toEqual([]);
   });
+
+  it("開発元だけで使うファイル・テストは配らない。テストは運用に要るもの（取り込み・データ検証・CI）だけ（SPEC §93）", () => {
+    const t = packed.filter((f) => f.startsWith("template/")).map((f) => f.slice("template/".length));
+    for (const dev of ["CLAUDE.md", "CONTRIBUTING.md", "scripts/build-app.mjs", "scripts/check-publish.mjs", "scripts/ci/publish-npm.mjs", "tests/integration/app-package.test.ts", "tests/integration/dummy-data.test.ts", "tests/unit/perf.test.ts", "tests/unit/members.perf.test.ts"]) {
+      expect(t).not.toContain(dev);
+    }
+    expect(t.filter((f) => /^(packages|tests\/(e2e|fuzz|property))\//.test(f))).toEqual([]);
+    const shippedTests = t.filter((f) => /\.test\.ts$/.test(f)).sort();
+    expect(shippedTests).toEqual([...tpl.USER_TESTS].sort());
+    expect(t).toContain("tests/test-env.ts");
+    expect(t.filter((f) => f.startsWith("tests/fixtures/project/data/")).length).toBeGreaterThan(5);
+    // 配るテストは本番の config.json・data/ を読まない（設定はテストの中、データは tests/fixtures/）
+    for (const f of shippedTests) {
+      const text = readFileSync(join(PKG, "template", f), "utf-8");
+      expect(text, f).not.toMatch(/\b(REPO|ROOT)\b\s*,\s*["'](config\.json|data)/);
+      expect(text, f).not.toMatch(/["']\.\.\/\.\.\/(config\.json|data\/)/);
+    }
+    // 開発元だけの npm scripts は外す（中で使うファイルを配らないので）
+    const scripts = JSON.parse(readFileSync(join(PKG, "template", "package.json"), "utf-8")).scripts;
+    for (const s of tpl.DEV_SCRIPTS) expect(scripts[s]).toBeUndefined();
+    expect(scripts.test).toBe(rootJson.scripts.test);
+  });
+
+  it("data/ はサンプルを除いた空のもの（見出しの行だけ。祝日・作業種類はそのまま）。サンプルは sample/ にある", () => {
+    const tplData = packed.filter((f) => f.startsWith("template/data/"));
+    expect(tplData.some((f) => f.startsWith("template/data/worklogs/"))).toBe(false);
+    for (const f of tplData) {
+      const path = f.slice("template/".length);
+      const body = readFileSync(join(PKG, f), "utf-8");
+      if (tpl.STARTER_DATA_KEEP.has(path)) expect(body).toBe(readFileSync(join(ROOT, path), "utf-8"));
+      else expect(body.trimEnd().split("\n"), path).toHaveLength(1);
+    }
+    expect(packed).toContain("template/data/masters/members.csv");
+    expect(packed.filter((f) => f.startsWith("sample/data/worklogs/")).length).toBeGreaterThan(10);
+  });
+
+  it("利用環境に配るテストと型チェックは、配るファイルだけで通る", async () => {
+    const tplDir = join(PKG, "template");
+    // 依存はリポジトリの node_modules（template の親をたどって見つかる）を使う
+    await runOk(process.execPath, [join(ROOT, "node_modules", "typescript", "bin", "tsc"), "-p", join(tplDir, "tsconfig.json"), "--noEmit"], { cwd: tplDir });
+    const out = await runOk(process.execPath, [join(ROOT, "node_modules", "vitest", "vitest.mjs"), "run", "--root", tplDir], { cwd: tplDir, env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("VITEST"))), VITEST_MAX_FORKS: "2", NO_COLOR: "1" } });
+    // eslint-disable-next-line no-control-regex
+    expect(out.replace(/\u001b\[[0-9;]*m/g, "")).toMatch(new RegExp(`Test Files\\s+${tpl.USER_TESTS.length} passed`));
+  }, scaled(180_000));
 
   it("template に個人・会社の情報と接続先が入っていない", () => {
     // 個人名・アカウント名はここにも書けないので、持ち込む人が環境変数 YOJITSU_PRIVATE_WORDS（カンマ区切り）で渡す
@@ -196,6 +250,28 @@ describe("init", () => {
     expect(manifest.version).toBe(pkgJson.version);
     expect(Object.keys(manifest.files)).toContain(".gitignore");
     expect(r.stdout).toContain("git push -u origin main");
+    // data/ はサンプルなし（見出しの行だけ・作業実績なし。SPEC §93）
+    expect(existsSync(join(dir, "data", "worklogs"))).toBe(false);
+    expect(readFileSync(join(dir, "data", "contracts.csv"), "utf-8").trimEnd().split("\n")).toHaveLength(1);
+    expect(r.stdout).toContain("data/ は空です");
+    expect(app.sampleLeftovers(PKG, dir)).toEqual([]);
+  }, scaled(60_000));
+
+  it("--sample でサンプルのデータを入れる（記録にも入る）。知らないオプションは止める", async () => {
+    const dir = join(work, "proj-sample");
+    const r = await runAsync(process.execPath, [join(PKG, "bin", "yojitsu-navi.mjs"), "init", dir, "--sample", "--no-git"], { cwd: work });
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFileSync(join(dir, "data", "worklogs", "2026-10.csv"), "utf-8")).toBe(readFileSync(join(ROOT, "data", "worklogs", "2026-10.csv"), "utf-8"));
+    expect(readFileSync(join(dir, "data", "contracts.csv"), "utf-8")).toBe(readFileSync(join(ROOT, "data", "contracts.csv"), "utf-8"));
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).files)).toContain("data/worklogs/2026-10.csv");
+    expect(r.stdout).toContain("サンプル");
+    const left = app.sampleLeftovers(PKG, dir);
+    expect(left).toContain("data/worklogs/2026-10.csv");
+    expect(left).not.toContain("data/holidays.csv");
+    const bad = await runAsync(process.execPath, [join(PKG, "bin", "yojitsu-navi.mjs"), "init", join(work, "proj-bad"), "--sampel"], { cwd: work });
+    expect(bad.status).toBe(2);
+    expect(bad.stderr).toContain("--sampel");
+    expect(existsSync(join(work, "proj-bad"))).toBe(false);
   }, scaled(60_000));
 
   it("空でないフォルダには作らない", () => {
@@ -224,6 +300,26 @@ describe("update", () => {
     app.init({ pkgDir: fakePackage(`${name}-v1`, "1.0.0", v1, withDeps), version: "1.0.0", dir, log });
     return dir;
   }
+
+  it("data/ にサンプルのまま残っているファイルを知らせる（消さない。空の data/ と同じもの＝祝日などは除く。SPEC §93）", () => {
+    const dir = project("upd-sample");
+    mkdirSync(join(dir, "data", "worklogs"), { recursive: true });
+    writeFileSync(join(dir, "data", "worklogs", "2026-01.csv"), "w-sample\n");
+    writeFileSync(join(dir, "data", "worklogs", "2026-02.csv"), "本番\n");
+    writeFileSync(join(dir, "data", "holidays.csv"), "h\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内のデータ");
+    const sample = { "data/worklogs/2026-01.csv": "w-sample\r\n", "data/worklogs/2026-02.csv": "w2", "data/holidays.csv": "h\n", "data/contracts.csv": "sample1" };
+    const pkg = fakePackage("upd-sample-v2", "1.1.0", { ...v2, "data/holidays.csv": "h\n" }, false, sample);
+    logs.length = 0;
+    const dry = app.update({ pkgDir: pkg, version: "1.1.0", dir, log, dryRun: true });
+    // data/contracts.csv は v1 の init で入った "sample1"（サンプルと同じ）
+    expect(dry.sampleLeft).toEqual(["data/contracts.csv", "data/worklogs/2026-01.csv"]);
+    expect(logs.join("\n")).toContain("サンプルのまま残っているデータ");
+    const r = app.update({ pkgDir: pkg, version: "1.1.0", dir, log });
+    expect(r.sampleLeft).toEqual(dry.sampleLeft);
+    expect(readFileSync(join(dir, "data", "worklogs", "2026-01.csv"), "utf-8")).toBe("w-sample\n");
+  });
 
   it("data/ と config.json はそのまま、ほかは新しい版にし、消えたファイルを消してブランチにコミットする", () => {
     const dir = project("upd");
@@ -498,7 +594,7 @@ describe("CI 定義とファイルの整合（SPEC §85）", () => {
 
   it("CI 定義のコマンド・npm run の中身・読み込み先を辿って、要るファイルを洗い出す", () => {
     const r = ci.checkCiFiles(ROOT, { git: false });
-    for (const f of [".gitlab-ci.yml", "package.json", "package-lock.json", "scripts/ci/install.mjs", "scripts/lib/npm.mjs", "scripts/ci/fetch-data.mjs", "scripts/ci/push-data-mr.mjs", "scripts/ci/pages.mjs", "scripts/ci/e2e.mjs", "scripts/validate-data.ts", "scripts/build.ts", "scripts/seed-npm-cache.mjs", "scripts/fetch-worklogs.ts", "scripts/fetch-members.ts", "tests/e2e/playwright.config.ts", "tsconfig.json", "vitest.config.ts", "src/core/index.ts"].filter((f) => f !== "src/core/index.ts" || r.required.includes(f))) {
+    for (const f of [".gitlab-ci.yml", "package.json", "package-lock.json", "scripts/ci/install.mjs", "scripts/lib/npm.mjs", "scripts/ci/fetch-data.mjs", "scripts/ci/push-data-mr.mjs", "scripts/ci/pages.mjs", "scripts/validate-data.ts", "scripts/build.ts", "scripts/seed-npm-cache.mjs", "scripts/fetch-worklogs.ts", "scripts/fetch-members.ts", "tests/test-env.ts", "tsconfig.json", "vitest.config.ts", "src/core/index.ts"].filter((f) => f !== "src/core/index.ts" || r.required.includes(f))) {
       expect(r.required).toContain(f);
     }
     expect([r.missing, r.missingScripts]).toEqual([[], []]);

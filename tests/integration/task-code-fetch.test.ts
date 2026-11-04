@@ -2,24 +2,22 @@
  * 取り込み時の作業コード（SPEC §92）: API の作業コード列・CSV への書き出し・未登録や作業名の変更で止める設定
  * 一時ディレクトリに最小のデータを作り、global fetch を差し替えたモック API で通しで動かす。
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mapRow } from "../../scripts/adapters/http.js";
 import { fetchWorklogs, formatDryRun, parseArgs } from "../../scripts/fetch-worklogs.js";
 import { formatWorklogCsv, parseWorklogCsv } from "../../scripts/lib/csv.js";
+import { createTestProject } from "../fixtures/project.js";
 
-const REPO = join(import.meta.dirname, "..", "..");
 const ENV = { WORKLOG_API_TOKEN: "tok-CODE-1234" } as NodeJS.ProcessEnv;
 const AS_OF = "2026-10-27";
 const HEADER = "date,member_id,member_name,customer_name,project_name,task,hours,task_code\n";
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "yojitsu-taskcode-"));
-  mkdirSync(join(root, "data", "worklogs"), { recursive: true });
-  cpSync(join(REPO, "config.json"), join(root, "config.json"));
+  // 設定はテスト用のもの（tests/fixtures/project.ts）。データは下で最小のものを書く
+  root = createTestProject("yojitsu-taskcode-", { data: false });
   setConfig((c) => {
     c.worklogSource.adapter = "http";
     c.worklogSource.http.url = "https://worklog.example.local/api?from={from}&to={to}";

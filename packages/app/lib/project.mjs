@@ -15,6 +15,9 @@ export const VENDOR_CACHE = "vendor/npm-cache";
 /** update が上書きする前のファイルを写しておく置き場（git には入れない。.gitignore にもある） */
 export const BACKUP_DIR = ".yojitsu-navi-backup";
 
+/** サンプルのデータの置き場（パッケージの中。data/ と同じ並び。init --sample のときだけ入れる。SPEC §93） */
+export const SAMPLE_DIR = "sample";
+
 /** 社内で書き換えるファイル。update は触らない（足しも消しもしない） */
 export function isUserOwned(path) {
   return path === "config.json" || path.startsWith("data/");
@@ -182,23 +185,56 @@ export function compareVersion(a, b) {
 }
 
 /**
- * 新しいプロジェクトのフォルダを作る。
- * @param {{ pkgDir: string, version: string, dir: string, gitlab?: ReturnType<typeof normalizeGitlab>, git?: boolean, log: (s: string) => void }} o
+ * パッケージのサンプルのデータ（プロジェクトでのパス data/… → パッケージ内の実パス）。サンプルの無いパッケージでは空
+ */
+export function readSample(pkgDir) {
+  const dir = join(pkgDir, SAMPLE_DIR);
+  return existsSync(dir) ? readTemplate(dir) : new Map();
+}
+
+/**
+ * プロジェクトの data/ のうち、パッケージのサンプルと中身が同じファイル（サンプルのまま残っているもの）。
+ * サンプルを除いた空の data/（template）と同じものは除く（祝日など、もともと利用環境でも使うもの）
+ */
+export function sampleLeftovers(pkgDir, dir, template = readTemplate(join(pkgDir, "template"))) {
+  const out = [];
+  for (const [f, abs] of readSample(pkgDir)) {
+    const to = join(dir, f);
+    if (!existsSync(to)) continue;
+    const cur = readFileSync(to);
+    if (!sameContent(cur, readFileSync(abs))) continue;
+    const starter = template.get(f);
+    if (starter && sameContent(cur, readFileSync(starter))) continue;
+    out.push(f);
+  }
+  return out;
+}
+
+/**
+ * 新しいプロジェクトのフォルダを作る。data/ は空（見出しの行だけ）。sample なら試す用のサンプルのデータを入れる（SPEC §93）
+ * @param {{ pkgDir: string, version: string, dir: string, gitlab?: ReturnType<typeof normalizeGitlab>, git?: boolean, sample?: boolean, log: (s: string) => void }} o
  */
 export function init(o) {
   const { pkgDir, version, dir, log } = o;
   if (existsSync(dir) && readdirSync(dir).length > 0) throw new CliError(`${dir} は空ではありません。新しいフォルダ名を指定してください（今あるプロジェクトを新しい版にするときは update）`);
   const template = readTemplate(join(pkgDir, "template"));
   mkdirSync(dir, { recursive: true });
-  for (const [f, abs] of template) {
+  const files = new Map(template);
+  if (o.sample) {
+    const sample = readSample(pkgDir);
+    if (!sample.size) throw new CliError("このパッケージにはサンプルのデータが入っていません（--sample なしで作ってください）");
+    for (const [f, abs] of sample) files.set(f, abs);
+  }
+  for (const [f, abs] of files) {
     mkdirSync(dirname(join(dir, f)), { recursive: true });
     cpSync(abs, join(dir, f));
   }
   const gitlab = o.gitlab ?? readGitlabTarget(dir);
   if (o.gitlab) writeFileSync(join(dir, "config.json"), applyGitlabTarget(readFileSync(join(dir, "config.json"), "utf-8"), o.gitlab));
   const withDeps = copyCache(pkgDir, dir);
-  writeManifest(dir, version, [...template.keys()].map((f) => [f, readFileSync(join(dir, f))]));
-  log(`予実ナビ ${version} を ${dir} に作りました（${template.size} ファイル${withDeps ? "、依存込み" : ""}）`);
+  writeManifest(dir, version, [...files.keys()].map((f) => [f, readFileSync(join(dir, f))]));
+  log(`予実ナビ ${version} を ${dir} に作りました（${files.size} ファイル${withDeps ? "、依存込み" : ""}）`);
+  log(o.sample ? "data/ にはサンプル（架空の会社のデータ）が入っています。本番のデータを入れる前に、作業実績（data/worklogs/）を含めて置き換えてください" : "data/ は空です（見出しの行だけ）。docs/DATA.md を見て本番のデータを入れてください（試すだけなら init --sample でサンプル入りを作れます）");
   if (gitlab) log(`接続先: ${gitlab.webUrl} の ${gitlab.projectId}`);
 
   let repo = false;
@@ -212,7 +248,7 @@ export function init(o) {
       }
       repo = true;
       if (gitlab) git(dir, ["remote", "add", "origin", gitlab.remoteUrl]);
-      gitAddPackageFiles(dir, [...template.keys(), MANIFEST]);
+      gitAddPackageFiles(dir, [...files.keys(), MANIFEST]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビ ${version}`]);
       committed = c.ok;
       if (!c.ok) log(`git commit できませんでした（${c.err.split("\n")[0]}）。git config --global user.name と user.email を設定してから下の手順を続けてください`);
@@ -228,7 +264,7 @@ export function init(o) {
   if (!committed) log(`  git add -A && git commit -m "予実ナビ ${version}"`);
   log("  git push -u origin main");
   log("  yojitsu-navi gitlab-setup --apply   （Owner か Maintainer のトークンを聞かれます）");
-  return { files: template.size, withDeps, committed };
+  return { files: files.size, withDeps, committed, sample: Boolean(o.sample) };
 }
 
 /** 日時をフォルダ名にする（ローカル時刻の YYYYMMDD-HHMMSS。ロケールによらない。Windows で使えない「:」を使わない） */
@@ -343,7 +379,7 @@ export function update(o) {
   const added = writes.filter((w) => w.kind === "added").map((w) => w.f);
   const overwritten = take.map((c) => c.f).sort();
   const listConflicts = (cs) => cs.map((c) => `  ${c.f}（${CONFLICT_LABEL[c.type]}）`).join("\n");
-  // 作業実績（data/worklogs/）はサンプルの月が増えるだけなので知らせない
+  // 作業実績（data/worklogs/）は空の data/ に入っていないので、ここには出てこない（念のため除く）
   const newData = notAdded.filter((f) => !f.startsWith("data/worklogs/"));
   let missing = [];
   try {
@@ -351,7 +387,12 @@ export function update(o) {
   } catch {
     // config.json が壊れているときは npm run validate が知らせる
   }
-  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData };
+  // サンプルのまま残っているデータ（本番のデータと混ざって集計を誤らないよう知らせる。消すのは社内で）
+  const sampleLeft = sampleLeftovers(pkgDir, dir, template);
+  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, sampleLeft };
+  const sampleNote = () => {
+    if (sampleLeft.length) log(`サンプルのまま残っているデータ（本番のデータと混ざらないよう、消すか本番のものに置き換えてください。docs/DEPLOY_GITLAB.md「サンプルのデータを消す」）:\n${sampleLeft.map((f) => `  ${f}`).join("\n")}`);
+  };
 
   // 2. 確かめるだけ（--dry-run）
   if (dry) {
@@ -362,6 +403,7 @@ export function update(o) {
     if (changed.length) log(`新しい版にするファイル:\n${changed.map((f) => `  ${f}`).join("\n")}`);
     if (added.length) log(`足すファイル:\n${added.map((f) => `  ${f}`).join("\n")}`);
     if (deletes.length) log(`消すファイル:\n${deletes.map((f) => `  ${f}`).join("\n")}`);
+    sampleNote();
     if (conflicts.length) {
       const tmp = mkdtempSync(join(tmpdir(), "yojitsu-update-"));
       try {
@@ -431,7 +473,8 @@ export function update(o) {
   if (backup) log(`前のファイルは ${backup}/ に写しました（git には入りません。要らなければ消してください）`);
   if (overwritten.length) log(`社内で変えていたが新しい版にしたファイル（要るものは ${backup || BACKUP_DIR}/ から入れ直してください）:\n${listConflicts(take)}`);
   if (keptNow.length) log(`社内の版のまま残したファイル（新しい版の変更は入っていません。yojitsu-navi update --dry-run で差分を確かめられます）:\n${listConflicts(keptNow)}`);
-  if (newData.length) log(`新しい版のサンプルにあって、このプロジェクトに無いデータ（入れていません。要るなら docs/DATA.md を見て作ってください）:\n${newData.map((f) => `  ${f}`).join("\n")}`);
+  if (newData.length) log(`新しい版で増えたデータのファイルで、このプロジェクトに無いもの（入れていません。要るなら docs/DATA.md を見て作ってください）:\n${newData.map((f) => `  ${f}`).join("\n")}`);
+  sampleNote();
   if (missing.length) log(`config.json に無い新しい設定（無くても既定値で動きます。変えるときは docs/DATA.md）:\n${missing.map((k) => `  ${k}`).join("\n")}`);
 
   let branch = "";

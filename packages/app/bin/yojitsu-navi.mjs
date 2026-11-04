@@ -13,11 +13,14 @@ const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.u
 const HELP = `予実ナビ ${VERSION}
 
 使い方:
-  yojitsu-navi init [フォルダ] [--gitlab <社内GitLabのURL> --project <グループ/プロジェクト>] [--no-git]
+  yojitsu-navi init [フォルダ] [--gitlab <社内GitLabのURL> --project <グループ/プロジェクト>] [--sample] [--no-git]
       新しいプロジェクトのフォルダを作る（既定 yojitsu-navi）。接続先を config.json と git remote に入れる
+      data/ は空（見出しの行だけ）で作る
+        --sample      試す用のサンプルのデータ（架空の会社。作業実績 約 13MB）を data/ に入れる（本番には使わない）
   yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--force]
       今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> にコミットする
       上書き・削除するファイルを社内で変えていたら、何も変えずに止まる。前のファイルは .yojitsu-navi-backup/<日時>/ に写す
+      data/ にサンプルのまま残っているファイルがあれば一覧を出す（消さない）
         --dry-run     何も変えずに、変わるファイルと社内で変えたファイルの差分を出す
         --overwrite   社内で変えたファイルも新しい版にする
         --keep-local  社内で変えたファイルは社内の版のまま残す（次の update でも残す）
@@ -101,7 +104,11 @@ async function main(argv) {
       const url = await ask("社内 GitLab の URL（例 https://gitlab.example.local。わからなければ空のまま Enter）: ");
       if (url) gitlab = normalizeGitlab(url, (await ask("グループ/プロジェクト [yojitsu-navi/yojitsu-navi]: ")) || "yojitsu-navi/yojitsu-navi");
     }
-    init({ pkgDir: PKG_DIR, version: VERSION, dir, gitlab, git: !rest.includes("--no-git"), log });
+    const known = ["--gitlab", "--project", "--sample", "--no-sample", "--no-git"];
+    const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
+    if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
+    if (rest.includes("--sample") && rest.includes("--no-sample")) throw new CliError("--sample と --no-sample はどちらか 1 つにしてください");
+    init({ pkgDir: PKG_DIR, version: VERSION, dir, gitlab, git: !rest.includes("--no-git"), sample: rest.includes("--sample"), log });
     return 0;
   }
   if (cmd === "update") {
