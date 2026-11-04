@@ -18,6 +18,22 @@ const num = (v: string | undefined, fallback: number): number => {
 
 export const TIMEOUT_SCALE = num(process.env.YOJITSU_TEST_TIMEOUT_SCALE, process.platform === "win32" ? 3 : 1);
 
+/**
+ * 同時に動かすワーカーの数（vitest.config.ts の maxWorkers）。undefined は Vitest に任せる。
+ * - VITEST_MAX_WORKERS（Vitest 4 の名前）を設定していれば Vitest が読むので任せる
+ * - VITEST_MAX_FORKS（Vitest 3 のころの名前。導入先の CI/CD 変数に設定済み）を設定していればその数（Vitest 4 は読まないのでここで読む）
+ * - どちらも無ければ Windows は 2（並列が多いとワーカーの通信がタイムアウトする）、ほかの OS は Vitest の既定（CPU の数 - 1）
+ */
+export function defaultMaxWorkers(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): number | undefined {
+  if ((env.VITEST_MAX_WORKERS ?? "") !== "") return undefined;
+  const forks = env.VITEST_MAX_FORKS ?? "";
+  if (forks !== "") {
+    const n = Number(forks);
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  }
+  return platform === "win32" ? 2 : undefined;
+}
+
 /** タイムアウト（ミリ秒）に倍率を掛ける */
 export const scaled = (ms: number): number => Math.round(ms * TIMEOUT_SCALE);
 

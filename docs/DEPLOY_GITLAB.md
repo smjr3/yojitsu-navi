@@ -70,7 +70,8 @@ Premium 以上なら、保護ブランチの「Allowed to merge」に特定の�
 
 ### 0. 持ち込むもの
 
-予実ナビは npm パッケージ（`.tgz` のファイル 1 つ）で持ち込みます。中身は画面・計算・データローダ・サンプルデータ・CI 定義・文書の一式と、展開用のコマンド `yojitsu-navi` です（SPEC §44）。
+予実ナビは npm パッケージ（`.tgz` のファイル 1 つ）で持ち込みます。中身は画面・計算・データローダ・CI 定義・運用のテスト・文書の一式と、試す用のサンプルデータ、展開用のコマンド `yojitsu-navi` です（SPEC §44・§93）。
+開発元だけで使うもの（パッケージの組み立て・公開のスクリプト、計算・画面・ダミーデータ・性能・E2E などのテスト）は入っていません。
 パッケージには社内 GitLab の URL や個人・会社の情報は入っていません。接続先は手順 1 で入れます。
 
 | ファイル | 大きさ | 使う場面 |
@@ -95,7 +96,8 @@ git push -u origin main
 
 - `init` は一式を写し、`--gitlab`・`--project` の接続先を `config.json`（`masterEdit.gitlab`）と `git remote` に入れて、`main` に最初のコミットを作ります。省くとその場で聞かれます（空のまま進めても、CI が接続先を自動で補います）。
 - `npm install -g` ができない PC では、`npx --yes ./yojitsu-navi-<版>.tgz init …` でも同じです（以下の `yojitsu-navi …` も `npx --yes ./yojitsu-navi-<版>.tgz …` に読み替え）。
-- サンプルデータ（`data/`）が入っています。まず Pages に出ることを確かめ、そのあと本番のデータに差し替えてください（[DATA.md](DATA.md)）。
+- `data/` は空（各 CSV は見出しの行だけ。祝日 `holidays.csv` と作業種類 `task-types.csv` は既定のもの）で作ります。本番のデータの入れ方は [DATA.md](DATA.md)。空のままでもビルド・公開はできます（画面は 0 件）。
+- 試すだけならサンプル（架空の会社のデータ。作業実績 約 13 MB）入りで作れます: `yojitsu-navi init <フォルダ> --sample`。本番のプロジェクトでは使わないでください（本番のデータと混ざると集計を誤ります）。
 - git の履歴は新しく始まるので、開発元のアカウント名などは入りません。
 - 最後に、CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかを確かめます。足りないと一覧が出て止まります（SPEC §85）。
 
@@ -126,7 +128,7 @@ yojitsu-navi gitlab-setup --apply
 Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gitlab-ci.yml` の各ジョブは `node scripts/ci/*.mjs` と `npm run` だけで、シェルの違いに左右されません）。
 - **shell executor**（Windows の Runner に多い）: Runner のマシンに Node.js 22（20 以上）と Git を入れておきます。`image:` は使われません。
 - **Docker（または Kubernetes）executor**: `image:` の `node:22` を使います。Windows コンテナの Runner では、Windows 用の Node のイメージを `NODE_IMAGE` で指定します。
-- テスト（`test` ジョブ）は既定で動きません（アプリ本体の確認はパッケージの公開前に済ませている。SPEC §79.2）。社内の Runner で動かしたいときは CI/CD 変数 `YOJITSU_RUN_TESTS=1`。遅くてタイムアウトするときの設定（`VITEST_MAX_FORKS` など）は [OPERATIONS.md](OPERATIONS.md#テストを-windows-で動かすrunnerpc)。
+- テスト（`test` ジョブ）は既定で動きません（アプリ本体の確認はパッケージの公開前に済ませている。SPEC §79.2）。入っているテストは運用に要るもの（取り込み・データ検証・CI のスクリプト）だけで、本番の `config.json`・`data/` を使いません（SPEC §93）。社内の Runner で動かしたいときは CI/CD 変数 `YOJITSU_RUN_TESTS=1`。遅くてタイムアウトするときの設定は [OPERATIONS.md](OPERATIONS.md#テストを-windows-で動かすrunnerpc)。
 - Runner にタグが付いていてタグなしのジョブを受けない設定なら、`.gitlab-ci.local.yml` に `default: tags: [...]` を書きます（下の「社内の設定の置き場」）。`.gitlab-ci.yml` に足すと、次の `update` で止まります。
 
 **CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
@@ -183,11 +185,11 @@ git push -u origin update-<新しい版>
 
 | 区分 | ファイル | `update` での扱い |
 |---|---|---|
-| 残す（社内のもの） | `config.json`・`data/` 以下すべて（`mapping.csv`・`task-types.csv`・`masters/`・`worklogs/` など） | 足しも消しもしない。新しい版で増えた設定の項目・サンプルにだけある新しいデータのファイルは一覧で知らせる（無くても既定値で動く） |
+| 残す（社内のもの） | `config.json`・`data/` 以下すべて（`mapping.csv`・`task-types.csv`・`masters/`・`worklogs/` など） | 足しも消しもしない。新しい版で増えた設定の項目・データのファイルは一覧で知らせる（無くても既定値で動く）。サンプルのまま残っているデータも一覧で知らせる（下の「サンプルのデータを消す」） |
 | 残す（社内の CI・npm の設定） | `.gitlab-ci.local.yml`・`.npmrc` | 上書きも削除もしない。`.gitlab-ci.local.yml` が無いときだけひな形を足す（`.gitlab-ci.yml` が include するので、無いと CI が動かない）。`.npmrc` はパッケージに入っていない |
 | 残す（社内で足したもの） | パッケージに無く、前の版の記録（`.yojitsu-navi.json`）にも無いファイル | 触らない |
 | 上書き | 上以外でパッケージに入っているもの（`.gitlab-ci.yml`・`.gitlab/`・`.gitignore`・`.gitattributes`・`package.json`・`package-lock.json`・`observablehq.config.js`・`src/`・`scripts/`・`tests/`・`docs/`・`README.md` など） | 新しい版にする。**社内で変えていたら止まる**（下） |
-| 削除 | 前の版の記録にあって新しい版に無いもの | 消す。社内で変えていたら止まる |
+| 削除 | 前の版の記録にあって新しい版に無いもの（0.2.0 までに入っていた開発元だけのテスト・スクリプトなど。SPEC §93） | 消す。社内で変えていたら止まる |
 | 入れ替え | `vendor/npm-cache/` | 依存込みのパッケージのとき丸ごと入れ替える |
 | コマンドのもの | `.yojitsu-navi.json`・`.yojitsu-navi-backup/` | コマンドが書く |
 
@@ -205,7 +207,15 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 - 上書き・削除する前のファイルは、毎回 `.yojitsu-navi-backup/<日時>/`（`年月日-時分秒`）に写します。前の版の記録（`.yojitsu-navi.json`）も入ります。git には入りません（`.gitignore`）。要らなくなったら消してください。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
 - コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける。社内で変えたファイルの確認は `--force` でも飛ばしません）。
+- 0.2.0 以前から更新すると、開発元だけのテスト（`tests/e2e/`・`tests/property/`・`tests/fuzz/`・`tests/integration/app-package.test.ts` など）とスクリプトが消えます。テストを CI から外すために社内で変えたファイル（`vitest.config.ts` など）があると止まるので、`--dry-run` で確かめてから `--overwrite` にしてください（除外の設定は要らなくなります）。
 - 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
+
+### サンプルのデータを消す
+
+`update` は `data/` にサンプルと同じ中身のまま残っているファイルを一覧で出します（消しはしません）。0.2.0 以前の `init` はサンプル入りで作っていたので、本番のデータに入れ替えたつもりでも、取り込んでいない月の作業実績（`data/worklogs/<年月>.csv`）などがサンプルのまま残っていることがあります。本番のデータと混ざると集計を誤るので、一覧のファイルは次のように直して MR にします。
+
+- `data/worklogs/` の月のファイル・`_meta.json`: 消す（取り込みで作り直されます。過去の月は Run pipeline で `FETCH_FROM`・`FETCH_TO` を入れて取り直す。[OPERATIONS.md](OPERATIONS.md)）
+- そのほかの CSV（`contracts.csv`・`masters/members.csv` など）: 本番のものに置き換える。まだ無いものは見出しの行だけを残す（消すとビルドが止まるものがあります）
 
 ## 社内で確認すること（チェックリスト）
 
@@ -253,7 +263,6 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 | `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
 | CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `npm ci` が `… vulnerabilities` と出る | 依存の脆弱性の報告。残っているものは使い方の上で影響しないことを確かめてある（一覧と理由は [SPEC.md](SPEC.md) §84.2）。`npm audit fix --force` は Framework を古い版に下げるので実行しない |
-| `npm run app:build`／`app:pack` が「パッケージを作りません」 | init で作ったプロジェクトでは組み立てない（社内の設定が入るため。SPEC §84.1）。新しい版は `npm install -g yojitsu-navi@<版>` → `yojitsu-navi update` |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
