@@ -32,6 +32,8 @@ const DEV_FILES = new Set([
   "scripts/build-app.mjs",
   "scripts/check-publish.mjs",
   "scripts/lib/image-detect.mjs",
+  "scripts/lib/package-guard.mjs",
+  "scripts/lib/package-guard.d.mts",
   "scripts/ci/publish-npm.mjs",
 ]);
 /** 開発元だけで使うフォルダ（packages/ はこのパッケージ自体と計算コアの元） */

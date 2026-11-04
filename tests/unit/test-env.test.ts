@@ -7,16 +7,19 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { defaultForks, perfLimit, perfMode, runAsync, runOk } from "../test-env.js";
+import { defaultMaxWorkers, perfLimit, perfMode, runAsync, runOk } from "../test-env.js";
 
 const ROOT = join(__dirname, "..", "..");
 
 describe("同時に動かすワーカーの数", () => {
-  it("Windows は既定 2。VITEST_MAX_FORKS を設定したらそれに任せる。ほかの OS は Vitest の既定", () => {
-    expect(defaultForks("win32", {})).toEqual({ forks: { maxForks: 2 } });
-    expect(defaultForks("win32", { VITEST_MAX_FORKS: "" })).toEqual({ forks: { maxForks: 2 } });
-    expect(defaultForks("win32", { VITEST_MAX_FORKS: "1" })).toBeUndefined();
-    expect(defaultForks("linux", {})).toBeUndefined();
+  it("Windows は既定 2。VITEST_MAX_FORKS を設定したらその数。VITEST_MAX_WORKERS は Vitest に任せる。ほかの OS は Vitest の既定", () => {
+    expect(defaultMaxWorkers("win32", {})).toBe(2);
+    expect(defaultMaxWorkers("win32", { VITEST_MAX_FORKS: "" })).toBe(2);
+    expect(defaultMaxWorkers("win32", { VITEST_MAX_FORKS: "1" })).toBe(1);
+    expect(defaultMaxWorkers("linux", { VITEST_MAX_FORKS: "3" })).toBe(3);
+    expect(defaultMaxWorkers("win32", { VITEST_MAX_WORKERS: "4", VITEST_MAX_FORKS: "1" })).toBeUndefined();
+    expect(defaultMaxWorkers("linux", { VITEST_MAX_FORKS: "abc" })).toBeUndefined();
+    expect(defaultMaxWorkers("linux", {})).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "yojitsu-navi",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "保守契約の予実（予算と実績）管理ダッシュボード",
   "license": "MIT",
@@ -31,9 +31,8 @@
     "@observablehq/plot": "^0.6.17",
     "d3": "^7.9.0",
     "d3-dsv": "^3.0.1",
-    "exceljs": "^4.4.0",
-    "xlsx": "^0.18.5",
-    "htl": "^0.3.1"
+    "htl": "^0.3.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
@@ -42,7 +41,7 @@
     "fast-check": "^3.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.12"
   },
   "engines": {
     "node": ">=20"

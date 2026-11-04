@@ -1130,9 +1130,10 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 79.1 テストの実行環境の差（2026-11-03 依頼者）
 社内の Windows（Git Bash）で、結合テストの失敗・Vitest のワーカーのタイムアウト・性能テストの時間超過が出た（導入先は並列数とタイムアウトを変え、`tests/integration/app-package.test.ts` を一時的に外していた）。テストを外さずに通すため、次のようにする。手順と推奨値は `docs/OPERATIONS.md`「テストを Windows で動かす」。
-- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は Vitest の `VITEST_MAX_FORKS` で減らせる。Windows では既定で 2（`tests/test-env.ts` の `defaultForks()`。`VITEST_MAX_FORKS` を設定すればそちら。2026-11-04、導入先で並列実行時にワーカーのタイムアウトが出たため）。
+- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は `VITEST_MAX_FORKS` で減らせる（Vitest 4 の名前は `VITEST_MAX_WORKERS`。§84.2 で Vitest 4 に上げたので、設定済みの `VITEST_MAX_FORKS` は `vitest.config.ts` が `defaultMaxWorkers()` で読んで同じ意味にする。両方あれば `VITEST_MAX_WORKERS`）。Windows では既定で 2（`tests/test-env.ts` の `defaultMaxWorkers()`。`VITEST_MAX_FORKS` を設定すればそちら。2026-11-04、導入先で並列実行時にワーカーのタイムアウトが出たため）。
 - 別プロセスを長く待つテストは `runAsync`（`tests/test-env.ts`）で待つ。`spawnSync`・`execFileSync` で数十秒止めると、その間ワーカーが Vitest の本体と通信できず「`[vitest-worker]: Timeout calling …`」で落ちるため。結合テストのパッケージの組み立て・`npm pack`（1 回だけ作って使い回す）・一式の `init`（コマンドで実行）・`tsc`・データローダが対象。
 - 結合テストが作る一時の git は、PC の設定に左右されないよう `core.autocrlf=false`・`core.longpaths=true`・`commit.gpgsign=false` を環境変数で渡す。一時フォルダは消せるまで何度か試す（Windows でファイルが一時的に使用中になるため）。
+- 作業ログ明細の作り置き（`src/data/_shared.ts`、docs/DATA_LOADERS.md §5）は、一時フォルダを書き終えてから名前を変える。名前の変更に失敗しても無視してよいのは、別のプロセスが同じ指紋の作り置きを置き終えていた（`.complete` がある）ときだけで、それ以外は止める（2026-11-04 導入先のレビュー指摘。黙って続けて `.complete` の無いまま進み、全体テストが 1 回落ちた）。Windows でウイルス対策や別プロセスがファイルを掴んで起きる一時的な失敗（`EPERM`・`EACCES`・`EBUSY`）は、少し待って 6 回までやり直す（`renameWithRetry`、`scripts/lib/atomic.ts`。`writeFileAtomic` も同じ）。`tests/unit/memo-publish.test.ts`。
 - 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。性能テストは開発元だけにある（§93。社内の `test` ジョブには入らない）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
 - 確認は Linux（1 コアに絞った負荷の高い状態を含む）。Windows の実機での確認は導入先で行う。
 
@@ -1200,6 +1201,25 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 版はルートの `package.json` と同じ 1 つ。npmjs.com への公開はタグ `v<版>`（§83 の `core-v`・`app-v` をやめる）。
 - 社内 GitLab の Package Registry へ計算コアを出す `publish-core` ジョブは削除（ほかのプロジェクトは npmjs.com か `.tgz` から入れる）。
 - 再発防止: `tests/integration/app-package.test.ts`（計算コアの公開 API が `src/core` と同じ・`src/core` の import の制約・別プロジェクトから Node と NodeNext の型で使える。パッケージを組み立てるテストは並行で template を消し合うので 1 ファイルにまとめる）。
+
+### 84.1 組み立ては開発元のリポジトリだけ（2026-11-04 導入先のレビュー指摘）
+`scripts/build-app.mjs` は git が管理するファイルを template に写すので、`init` で作ったプロジェクト（利用環境）で動かすと社内の設定（`config.json`・`data/`・CI の設定・`.npmrc` の参照先・証明書）がパッケージに入る。§93 で `build-app.mjs` と `app:build`・`app:pack` は利用環境に配らなくなったが、写して動かす・開発元のリポジトリに社内のファイルが紛れる、といった誤操作に備えて次の確かめを残す（`package-guard.mjs` も配らない）。
+- `npm run app:build`・`app:pack` は、何か作る前に次を確かめて止める（`scripts/lib/package-guard.mjs`）: ①`.yojitsu-navi.json`（`init`・`update` の記録）がある＝利用環境 ②写すファイルに `.npmrc`・`.yarnrc`・`.env`・証明書と鍵（`.pem`・`.crt`・`.cer`・`.key`・`.p12`・`.pfx`）・`.yojitsu-navi-backup/`・`vendor/` がある。
+- 利用環境で新しい版にするのは `npm install -g yojitsu-navi@<版>` → `yojitsu-navi update`（§91）。
+- `tests/unit/package-guard.test.ts`。
+
+### 84.2 依存の脆弱性（2026-11-04 導入先のレビュー指摘）
+導入先の `npm ci` で 18 件（critical 2・high 1）と非推奨の警告が出た。更新できるものは更新し、残るものは理由を書いて残す。確かめ方は `npm audit`（開発元・利用環境どちらでも）。
+- 更新・削除したもの: `vitest` 3 → 4（critical 2 件の `tinypool` と `@vitest/mocker` を解消。Vitest 4 は `VITEST_MAX_FORKS` を読まないので §79.1 のとおり `vitest.config.ts` で読む）。`exceljs` は使っていなかったので削除（`archiver`・`uuid`・古い `glob`・`rimraf`・`fstream` などの警告が消える）。結果は 8 件（high 1・moderate 4・low 3）。
+- 残すもの（2026-11-04 時点。どれも画面を見る人の操作や外から来るデータが届かない）:
+
+| パッケージ | 内容 | 残す理由 |
+|---|---|---|
+| `xlsx`（high） | 細工した Excel ファイルを**読む**ときのプロトタイプ汚染・ReDoS | 画面の Excel 出力（書くだけ）と E2E テスト（自分で出したファイルを読む）でしか使わない。npm に修正版が無い（配布元の CDN にはあるが、社内のミラーで取れない恐れがある） |
+| `esbuild`（Framework 経由） | Windows で esbuild の開発サーバーを動かしたときのファイル読み出し | esbuild の開発サーバーは使わない（`npm run dev` は Framework 自身のサーバー）。Framework 1.13 が `esbuild` 0.27 を要求する |
+| `glob`・`minimatch`・`deepmerge`（Framework 経由） | 検索パターンの ReDoS・中断の無視・オブジェクトのマージ | ビルドのときにリポジトリ内のファイルを探すだけで、外からの入力を渡さない。`npm audit fix --force` は Framework を 1.10 に**下げる**ので採らない |
+
+- Framework の新しい版で解消したら上げる。`npm audit fix --force` は使わない（上の理由）。
 
 ## 85. 初期化・更新で CI のファイルを欠かさない（2026-11-03 依頼者）
 社内で `init` したプロジェクトの CI が「`scripts/ci/install.mjs` が無い」で失敗した、への対応。CI 定義（`.gitlab-ci.yml`）が使うファイルを、組み立て・`init`・`update` のたびに確かめる。

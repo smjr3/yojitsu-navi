@@ -10,13 +10,13 @@
  *   - 失敗したら非 0 で終わる（Framework は失敗した出力をキャッシュに残さない）
  *   - 出力には入力の指紋（_build.inputHash）を入れ、ビルド後の検証（scripts/verify-dist.ts）で古い出力の混入を見つける
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildModel, type Model, type ContractResult } from "../core/index.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 import { computeFingerprint, isAsOfFixed, resolveAsOf as resolveAsOfEnv, todayJst as todayJstNow } from "../../scripts/lib/inputs.js";
-import { writeFileAtomic } from "../../scripts/lib/atomic.js";
+import { renameWithRetry, writeFileAtomic } from "../../scripts/lib/atomic.js";
 import { serializeChecked } from "../../scripts/lib/json-out.js";
 
 export { findInvalidJsonValue, serializeChecked } from "../../scripts/lib/json-out.js";
@@ -154,15 +154,27 @@ export function worklogDetailJson(contractId: string, rootDir: string = ROOT_DIR
       if (id === contractId) own = text;
     }
     writeFileAtomic(join(temp, ".complete"), "ok\n");
-    try {
-      renameSync(temp, dir);
-    } catch {
-      // 同時に別のプロセスが作り終えていた（同じ指紋なので中身は同じ）。こちらは捨てる
-      rmSync(temp, { recursive: true, force: true });
-    }
+    publishMemoDir(temp, dir);
   } catch (error) {
     rmSync(temp, { recursive: true, force: true });
     throw error;
   }
   return own || serializeChecked(worklogDetailOf(model, contractId));
+}
+
+/**
+ * 書き終えた一時フォルダを作り置きフォルダの名前に変える。
+ * 失敗しても無視してよいのは、別のプロセスが同じ指紋の作り置きを置き終えていた（.complete がある）ときだけ。
+ * それ以外（権限・ディスク・中途半端なフォルダが残っている等）は止める。黙って続けると作り置きが無いまま進み、
+ * 原因が分からなくなる。Windows の一時的な失敗（EPERM 等）は renameWithRetry が待ってやり直す。
+ */
+export function publishMemoDir(temp: string, dir: string): void {
+  const completedByOther = () => existsSync(join(dir, ".complete"));
+  try {
+    if (!renameWithRetry(temp, dir, completedByOther)) rmSync(temp, { recursive: true, force: true });
+  } catch (error) {
+    rmSync(temp, { recursive: true, force: true });
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`作業ログ明細の作り置きを置けませんでした（${dir}）: ${reason}。このフォルダを消してからやり直してください`);
+  }
 }

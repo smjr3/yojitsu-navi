@@ -194,7 +194,7 @@ Windows は Linux よりプロセスの起動とファイルの読み書きが�
 
 | 設定 | 既定 | 内容 |
 |---|---|---|
-| `VITEST_MAX_FORKS` | Windows `2`・Linux は CPU の数 - 1。「`[vitest-worker]: Timeout calling …`」が出るなら `1` を登録 | 同時に動かすテストファイルの数（Vitest の機能。`vitest.config.ts` が Windows の既定を 2 にしている） |
+| `VITEST_MAX_FORKS` | Windows `2`・Linux は CPU の数 - 1。「`[vitest-worker]: Timeout calling …`」が出るなら `1` を登録 | 同時に動かすテストファイルの数（`vitest.config.ts` が読み、Windows の既定を 2 にしている）。Vitest 4 の `VITEST_MAX_WORKERS` と同じ（どちらで登録しても効く。両方あれば `VITEST_MAX_WORKERS`） |
 | `YOJITSU_TEST_TIMEOUT_SCALE` | Windows `3`・Linux `1`。それでもタイムアウトするなら `5` | テストのタイムアウトの倍率（`vitest.config.ts` と結合テストの個別の値に掛かる） |
 
 - GitLab では Settings > CI/CD > Variables に登録します。PC の Git Bash では `VITEST_MAX_FORKS=1 npm run test` のように前に付けます（`npm run test -- --maxWorkers=1` でも同じ）。
