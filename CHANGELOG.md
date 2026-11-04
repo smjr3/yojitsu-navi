@@ -10,18 +10,23 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 - 社内向けの CI の設定（ランナーのタグ・社内だけのジョブなど）は新しくできる `.gitlab-ci.local.yml` に、社内レジストリ・証明書は `.npmrc` か CI/CD 変数（`NPM_CONFIG_REGISTRY`・`NODE_EXTRA_CA_CERTS`）に移す。`.gitlab-ci.yml` を直したままだと毎回の更新で止まる。移したら `yojitsu-navi update --overwrite` で `.gitlab-ci.yml` を新しい版にする（置き場の一覧は docs/DEPLOY_GITLAB.md「社内の設定の置き場」）
 - CI/CD 変数 `YOJITSU_RUN_TESTS` を入れていなければ、パイプラインは build → pages だけになる（test ジョブは動かない）
+- 依存が入れ替わる（`vitest` 3 → 4、`exceljs` を削除）。`package-lock.json` は新しい版のものを使い、`npm audit fix --force` は実行しない（Framework が古い版に下がる。残る脆弱性と理由は SPEC §84.2）
 
 ### テスト・CI の前提
 
 - test ジョブ（型チェック・vitest）は既定で動かない。動かすときは CI/CD 変数 `YOJITSU_RUN_TESTS=1`（SPEC §79.2）
 - validate ジョブを build ジョブにまとめた。データ検証は build の最初に動き、error があれば build が失敗する（SPEC §79.3）
 - `.gitlab-ci.yml` が `.gitlab-ci.local.yml` を include する。消すとパイプラインが作られない（`yojitsu-navi check` が知らせる）
+- テストは Vitest 4 で動く。CI/CD 変数 `VITEST_MAX_FORKS` はそのまま効く（Vitest 4 の `VITEST_MAX_WORKERS` でもよい。両方あれば `VITEST_MAX_WORKERS`。SPEC §79.1）
+- 作業ログ明細の作り置き（ビルド中のキャッシュ）を置けないときは、黙って続けずにビルドが止まる。Windows で一時的に起きる失敗は待ってやり直す（SPEC §79.1）
+- `npm run app:build`／`app:pack` は導入先のプロジェクトでは止まる（社内の設定がパッケージに入るため。SPEC §84.1）
 
 ### 変更
 
 - 社内のパイプラインを短くした: テストを既定で動かさない・検証を build にまとめる・`node_modules/` をキャッシュしない（#98）
 - `update` が `.gitlab-ci.local.yml`・`.npmrc` を上書き・削除しない。`.gitlab-ci.local.yml` が無ければひな形を足す（SPEC §91.1）
 - `update` のあとに、この変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を出す（SPEC §91.2）
+- 作り置きの名前変更の失敗を止める・導入先でパッケージを組み立てない・依存の脆弱性を 18 件（critical 2）から 8 件（critical 0）に減らす（#101）
 
 ## 0.2.0
 
