@@ -427,10 +427,99 @@ describe("update", () => {
     expect(u.stderr).toContain("知らないオプション");
     expect(d.stdout).toContain("-社内で変えた");
     expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内で変えた");
+    // CI 定義で止まったときは、社内の設定の置き場を案内する（SPEC §91.1）
+    expect(r.stderr).toContain(".gitlab-ci.local.yml");
+  }, scaled(60_000));
+
+  it("社内の CI・npm の設定（.gitlab-ci.local.yml・.npmrc）は上書き・削除せず、.gitlab-ci.local.yml が無ければひな形を足す（SPEC §91.1）", () => {
+    // 前の版（.gitlab-ci.local.yml が無い）で作ったプロジェクトに、社内で .npmrc と証明書を足した
+    const dir = project("upd-local");
+    writeFileSync(join(dir, ".npmrc"), "registry=https://npm.example.local/\n");
+    mkdirSync(join(dir, "certs"));
+    writeFileSync(join(dir, "certs", "ca.pem"), "pem");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の設定");
+    const local = "# ひな形\n.yojitsu-navi-local: {}\n";
+    const v2l = { ...v2, ".gitlab-ci.local.yml": local, ".npmrc": "registry=https://registry.npmjs.org/\n" };
+    const r = app.update({ pkgDir: fakePackage("upd-local-v2", "1.1.0", v2l), version: "1.1.0", dir, log });
+    expect(r.conflicts).toEqual([]);
+    expect(r.added).toContain(".gitlab-ci.local.yml");
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe(local);
+    expect(readFileSync(join(dir, ".npmrc"), "utf-8")).toBe("registry=https://npm.example.local/\n");
+    expect(readFileSync(join(dir, "certs", "ca.pem"), "utf-8")).toBe("pem");
+    expect(git(dir, "ls-files", ".gitlab-ci.local.yml")).toBe(".gitlab-ci.local.yml");
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).files)).not.toContain(".gitlab-ci.local.yml");
+    // 社内で書き足した .gitlab-ci.local.yml は、ひな形が変わった版でも、消えた版でも残す（止まらない）
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.1.0");
+    writeFileSync(join(dir, ".gitlab-ci.local.yml"), "default:\n  tags: [windows]\n");
+    git(dir, "commit", "-qam", "ランナーのタグ");
+    const r3 = app.update({ pkgDir: fakePackage("upd-local-v3", "1.2.0", { ...v2l, ".gitlab-ci.local.yml": "# 新しいひな形\n.yojitsu-navi-local: {}\n" }), version: "1.2.0", dir, log });
+    expect([r3.conflicts, r3.removed]).toEqual([[], []]);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe("default:\n  tags: [windows]\n");
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.2.0");
+    const { ".gitlab-ci.local.yml": _gone, ...v4 } = v2l;
+    const r4 = app.update({ pkgDir: fakePackage("upd-local-v4", "1.3.0", v4), version: "1.3.0", dir, log });
+    expect([r4.conflicts, r4.removed]).toEqual([[], []]);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe("default:\n  tags: [windows]\n");
+  }, scaled(60_000));
+
+  it("更新後に、今の版から新しい版までの変更履歴の「更新後に行うこと」などを今の設定の値つきで出す（SPEC §91.2）", () => {
+    const dir = project("upd-notes");
+    writeFileSync(join(dir, "config.json"), CONFIG('\n  "p": { "stopWhen": "empty" },'));
+    git(dir, "commit", "-qam", "社内の設定");
+    const changelog = [
+      "# 変更履歴",
+      "## 次の版",
+      "### 更新後に行うこと",
+      "- まだ出さない",
+      "## 1.2.0",
+      "### 更新後に行うこと",
+      "- `x` を書く",
+      "### テスト・CI の前提",
+      "- test は既定で動かない",
+      "### 変更",
+      "- 出さない変更",
+      "## 1.1.0（例）",
+      "### 新しい設定と推奨値",
+      "| 項目 | 書かないとき | 推奨 | 理由・いつ |",
+      "|---|---|---|---|",
+      "| `p.stopWhen` | `short` | `empty` | ページ番号だけの API |",
+      "| `q.r` | なし | 列名 | |",
+      "## 1.0.0",
+      "### 更新後に行うこと",
+      "- 前の版のこと",
+      "",
+    ].join("\n");
+    const pkg = fakePackage("upd-notes-v2", "1.2.0", { ...v2, "CHANGELOG.md": changelog });
+    logs.length = 0;
+    const dry = app.update({ pkgDir: pkg, version: "1.2.0", dir, log, dryRun: true });
+    expect(dry.notes).toEqual([
+      "1.1.0:",
+      "  [新しい設定と推奨値]",
+      '    - p.stopWhen  今: "empty" / 推奨: empty（ページ番号だけの API）',
+      "    - q.r  今: 未設定（書かないとき: なし） / 推奨: 列名",
+      "1.2.0:",
+      "  [更新後に行うこと]",
+      "    - x を書く",
+      "  [テスト・CI の前提]",
+      "    - test は既定で動かない",
+    ]);
+    expect(logs.join("\n")).toContain("1.0.0 → 1.2.0 で導入先が行うこと");
+    logs.length = 0;
+    const r = app.update({ pkgDir: pkg, version: "1.2.0", dir, log });
+    expect(r.notes).toEqual(dry.notes);
+    const out = logs.join("\n");
+    expect(out).toContain("x を書く");
+    expect(out).not.toMatch(/まだ出さない|出さない変更|前の版のこと/);
+    // 同じ版での実行は何も出さない
+    expect(app.update({ pkgDir: pkg, version: "1.2.0", dir, log, dryRun: true }).notes).toEqual([]);
   }, scaled(60_000));
 
   it("ファイルの扱いの区分", () => {
     expect(["config.json", "data/mapping.csv", "data/masters/members.csv", "data/worklogs/x.csv"].map(app.fileKind)).toEqual(["keep", "keep", "keep", "keep"]);
+    expect([".gitlab-ci.local.yml", ".npmrc"].map(app.fileKind)).toEqual(["keep", "keep"]);
     expect(["vendor/npm-cache/index", ".yojitsu-navi.json", ".yojitsu-navi-backup/1/a"].map(app.fileKind)).toEqual(["vendor", "tool", "tool"]);
     expect([".gitlab-ci.yml", "package.json", "src/index.md", "scripts/ci/install.mjs", ".gitignore"].map(app.fileKind)).toEqual(["package", "package", "package", "package", "package"]);
     expect(app.backupStamp(new Date(2031, 11, 31, 23, 59, 8))).toBe("20311231-235908");
@@ -524,6 +613,23 @@ describe("CI 定義とファイルの整合（SPEC §85）", () => {
     expect(r.missing).toEqual(["scripts/ci/c.mjs", "scripts/inner.mjs", "src/z.js"]);
     expect(r.missingScripts).toEqual(["nope"]);
     expect(ci.describeCiProblems(r)).toMatch(/scripts\/ci\/c\.mjs[\s\S]*nope/);
+  });
+
+  it("include: の local のファイル（.gitlab-ci.local.yml）も要るファイルにし、その中のコマンドも辿る（SPEC §91.1）", () => {
+    const dir = mkdtempSync(join(work, "incl-"));
+    const put = (f: string, body: string) => {
+      mkdirSync(join(dir, f, ".."), { recursive: true });
+      writeFileSync(join(dir, f), body);
+    };
+    expect(ci.ciLocalIncludes(["include:", "  - local: .gitlab-ci.local.yml", '  - local: "/ci/extra.yml"', "  - project: g/p", "    file: x.yml", ""].join("\n"))).toEqual([".gitlab-ci.local.yml", "ci/extra.yml"]);
+    put(".gitlab-ci.yml", ["include:", "  - local: .gitlab-ci.local.yml", "job:", "  script:", "    - node scripts/ci/a.mjs", ""].join("\n"));
+    put("scripts/ci/a.mjs", "");
+    const missing = ci.checkCiFiles(dir, { git: false });
+    expect(missing.missing).toEqual([".gitlab-ci.local.yml"]);
+    put(".gitlab-ci.local.yml", ["local-job:", "  script:", "    - node scripts/local.mjs", ""].join("\n"));
+    const r = ci.checkCiFiles(dir, { git: false });
+    expect(r.required).toEqual([".gitlab-ci.local.yml", ".gitlab-ci.yml", "scripts/ci/a.mjs", "scripts/local.mjs"]);
+    expect(r.missing).toEqual(["scripts/local.mjs"]);
   });
 
   it("git: 追加しただけ（未コミット）のファイルは未コミットと出す。リポジトリのサブフォルダにあるプロジェクトも正しく見る", () => {
