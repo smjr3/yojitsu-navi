@@ -1136,6 +1136,12 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 性能テストは `measure()`（`tests/test-env.ts`）で測り、`YOJITSU_PERF` で判定を変える: 既定 `loose` は目安の 3 倍（`YOJITSU_PERF_FACTOR`）まで・超えたら 3 回まで測り直して最速で判定、`strict` は目安どおり、`report` は表示だけ。社内の `.gitlab-ci.yml` の `test` は `report`（CI/CD 変数で変えられる）。`performance.now()` で直接比べるテストを書かない（`tests/unit/test-env.test.ts` で検査）。
 - 確認は Linux（1 コアに絞った負荷の高い状態を含む）。Windows の実機での確認は導入先で行う。
 
+### 79.2 社内のパイプラインではテストを既定で動かさない（2026-11-04 依頼者）
+テスト（型チェック・ユニット・結合・性能）はアプリ本体の確認で、このリポジトリで公開前に済ませている。導入先で変わるのはデータと `config.json` だけなので、毎回の push・MR で動かす必要がない（Windows の Runner では時間がかかり、タイムアウトの原因にもなっていた）。
+- `.gitlab-ci.yml` の `test` ジョブは CI/CD 変数 `YOJITSU_RUN_TESTS=1` のときだけ動く（Run pipeline で入れても同じ）。既定のパイプラインは `validate → build → pages`、スケジュールは取り込み。E2E（`PLAYWRIGHT_E2E`）も従来どおり既定で動かさない。
+- 導入先で確かめるのは、データ検証（`validate`）・ビルド（`build`）・取り込み（`fetch-worklogs`・`fetch-members`）の成否。`yojitsu-navi check`（CI が使うファイルの不足）は `init`・`update` で動く。
+- `tests/unit/ci-portable.test.ts` で、`test` ジョブが既定で動かないことを検査する。
+
 ## 80. マスタ編集の「案件」「祝日」（2026-11-01 依頼者）
 保守案件（`data/contracts.csv`）と祝日（`data/holidays.csv`）を、マスタ編集のタブに出す（それまでは GitLab の Web IDE で CSV を直していた）。保存は他のマスタと同じ GitLab のマージ。作業種別（`task-types.csv`）はタブにしない（作業名から抜き出す運用になる予定。依頼者）。名称の対応（`mapping.csv`）もタブにしない。
 - タブの順: メンバー・単価・組織・**案件**・目標・**祝日**。URL は `/masters?view=contracts` / `?view=holidays`。

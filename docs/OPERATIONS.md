@@ -15,10 +15,11 @@ Settings > CI/CD > Variables に登録します。
 | `GIT_PUSH_TOKEN` | スケジュール実行の取り込み結果を MR にして自動マージするための Project Access Token（**Maintainer** / `write_repository`。Protected・Masked。`main` は直接プッシュ不可のため MR を通す。SPEC §39.4） |
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL（依存込みのパッケージで作ったプロジェクトは不要。[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md) 手順 0） |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
+| `YOJITSU_RUN_TESTS` | 任意。`1` で `test` ジョブ（型チェック・ユニット・結合・性能テスト）も動く。既定は動かさない（[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc)） |
 | `PLAYWRIGHT_E2E` | 任意。`1` で build 後に E2E も実行 |
-| `VITEST_MAX_FORKS` | 任意。テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき `2`（または `1`）。[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc) |
-| `YOJITSU_PERF` | 任意。性能テストの判定（既定は `.gitlab-ci.yml` の `report`＝表示だけ。`loose`・`strict` で判定する） |
-| `YOJITSU_TEST_TIMEOUT_SCALE` | 任意。テストのタイムアウトの倍率（既定 Windows 3・Linux 1） |
+| `VITEST_MAX_FORKS` | 任意（テストを動かすときだけ）。テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき `2`（または `1`）。[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc) |
+| `YOJITSU_PERF` | 任意（テストを動かすときだけ）。性能テストの判定（既定は `.gitlab-ci.yml` の `report`＝表示だけ。`loose`・`strict` で判定する） |
+| `YOJITSU_TEST_TIMEOUT_SCALE` | 任意（テストを動かすときだけ）。テストのタイムアウトの倍率（既定 Windows 3・Linux 1） |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
 直近 N か月の作業実績を取り直して MR（`data/worklogs-<日時>`）を作り、パイプラインの成功後に自動でマージされて公開まで進みます。
@@ -186,6 +187,9 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 
 ## テストを Windows で動かす（Runner・PC）
 
+社内のパイプラインでは、テスト（`test` ジョブ）は既定で動きません（SPEC §79.2）。テストはアプリ本体が壊れていないかの確認で、パッケージの公開前に済ませています。社内で変わるのはデータと `config.json` だけで、それは `validate`・`build`・取り込みのジョブで確かめます。
+社内の Runner や PC でも本体を確かめたいとき（版を上げた直後など）は、CI/CD 変数 `YOJITSU_RUN_TESTS=1` を登録するか、Run pipeline で入れて実行します。PC では `npm run test` です。以下はそのときの設定です。
+
 Windows は Linux よりプロセスの起動とファイルの読み書きが遅く（ウイルス対策の検査も入る）、同じテストでも時間がかかります。テストは除外せず、次の設定で全部動かします（SPEC §79.1）。
 
 | 設定 | 推奨 | 内容 |
@@ -196,7 +200,7 @@ Windows は Linux よりプロセスの起動とファイルの読み書きが�
 
 - GitLab では Settings > CI/CD > Variables に登録します（`.gitlab-ci.yml` の値より優先）。PC の Git Bash では `VITEST_MAX_FORKS=2 npm run test` のように前に付けます（`npm run test -- --maxWorkers=2` でも同じ）。
 - ワーカーの方式は `forks` に固定しています（`vitest.config.ts`）。`threads` に変えないでください。
-- 結合テスト（`tests/integration/app-package.test.ts` など）は、パッケージの組み立て・`npm pack`・一式のコピーとコミットを別プロセスで動かして待つので、遅くてもワーカーの通信が切れません。作る一時フォルダの git の設定（`core.autocrlf`・`core.longpaths`・コミットの署名）はテストが固定するので、PC の git の設定は変えなくて構いません。一時的に CI の対象から外していたら戻してください。
+- 結合テスト（`tests/integration/app-package.test.ts` など）は、パッケージの組み立て・`npm pack`・一式のコピーとコミットを別プロセスで動かして待つので、遅くてもワーカーの通信が切れません。作る一時フォルダの git の設定（`core.autocrlf`・`core.longpaths`・コミットの署名）はテストが固定するので、PC の git の設定は変えなくて構いません。一時的に CI の対象から外していたら戻してください（既定でテストを動かさなくなったので、除外の設定ごと消して構いません）。
 
 Git Bash の注意:
 
@@ -209,7 +213,7 @@ Git Bash の注意:
 | `YOJITSU_PERF` | 判定 | 使う場面 |
 |---|---|---|
 | 未設定（`loose`） | 目安の 3 倍（`YOJITSU_PERF_FACTOR` で変更）を超えたら失敗。超えたら 3 回まで測り直し、最も速い値で判定 | 開発の PC・GitHub Actions |
-| `report` | 失敗にしない。かかった時間を表示するだけ | 性能がばらつく CI の Runner（社内の `.gitlab-ci.yml` の既定） |
+| `report` | 失敗にしない。かかった時間を表示するだけ | 性能がばらつく CI の Runner（社内の `.gitlab-ci.yml` の `test` の既定） |
 | `strict` | 目安どおりで判定 | 性能の劣化を確かめるとき（いつも同じ PC で動かして比べる） |
 
 性能の劣化は、`report` の表示（`[性能] …ms`）を前回と比べるか、同じ PC で `YOJITSU_PERF=strict npm run test -- tests/unit/perf.test.ts` を動かして確かめます。

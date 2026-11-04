@@ -346,7 +346,7 @@ PR #1〜#80 はすべて main にマージ済み（#17 は #19 経由。#43・#6
 - 本番 API の社員番号の渡し方（パラメータ名・カンマ区切りか繰り返しか・1 回の上限人数）。`worklogSource.http.members` で合わせる（SPEC §87）。
 - GitLab API 経由のマスタ保存（CORS・権限）。
 - 定期取り込み（スケジュール実行）。
-- Windows の Runner でのパイプライン（ビルド・テスト・公開・定期取り込み）。両 OS 対応は Linux で確認済み、Windows は外部の実行結果で落ちた箇所を直した段階（SPEC §79）。テストの遅さ（ワーカーのタイムアウト・性能テストの時間超過）は §79.1 で対策し、推奨設定は docs/OPERATIONS.md「テストを Windows で動かす」。導入先で `tests/integration/app-package.test.ts` の一時的な除外を外して全部通るかが未確認。
+- Windows の Runner でのパイプライン（ビルド・テスト・公開・定期取り込み）。両 OS 対応は Linux で確認済み、Windows は外部の実行結果で落ちた箇所を直した段階（SPEC §79）。テストの遅さ（ワーカーのタイムアウト・性能テストの時間超過）は §79.1 で対策し、推奨設定は docs/OPERATIONS.md「テストを Windows で動かす」。導入先で `tests/integration/app-package.test.ts` の一時的な除外を外して全部通るかが未確認。2026-11-04 からテストは社内のパイプラインで既定で動かさない（`YOJITSU_RUN_TESTS=1` で動く。§79.2）。
 
 「必要なデータと格納形式」の資料によると、次の場合は改修が必要になる: 作業実績に社員番号がない、月合計しかない、単位が人日、CI から固定トークンで API につなげない。契約金額は手入力。資料の次の手順は、サンプルを入手 → `npm run fetch -- --dry-run` で試す → 差分を改修 → task-types.csv と mapping.csv を作る。
 

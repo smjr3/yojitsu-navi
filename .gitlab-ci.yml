@@ -3,7 +3,9 @@
 # パイプライン:
 #   validate → test → build → pages
 #   - validate : データ検証（scripts/validate-data.ts）。error があれば止める
-#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）
+#   - test     : 型チェック + vitest（ユニット・プロパティ・結合）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
+#                テストはアプリ本体の確認で、パッケージの公開前に済ませている。導入先で変わるのはデータと config.json だけで、
+#                それは validate・build・取り込みで確かめる（SPEC §79.2）
 #   - build    : Observable Framework で dist/ を生成
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
@@ -21,8 +23,10 @@
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
+#   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・ユニット・結合・性能テスト）も動く。既定は動かさない
 #   PLAYWRIGHT_E2E      （任意）"1" にすると build 後に E2E（Playwright）も実行する（ブラウザの取得に外部接続が要る）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
+#   以下 3 つは YOJITSU_RUN_TESTS=1 のときだけ使う
 #   VITEST_MAX_FORKS    （任意）テストを同時に動かす数。Windows の Runner でワーカーのタイムアウトが出るとき 2（または 1）
 #   YOJITSU_PERF        （任意）性能テストの判定。既定は test ジョブの report（表示だけ）。loose・strict で判定する
 #   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
@@ -102,11 +106,18 @@ validate:
     - npm run validate
 
 # --------------------------------------------------------------------------
-# test: 型チェックとテスト
+# test: 型チェックとテスト。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1、または Run pipeline で入れたときだけ）
+#   アプリ本体の確認はパッケージの公開前に済ませている。社内の Runner で本体を確かめたいとき（版を上げた直後など）に使う
 # --------------------------------------------------------------------------
 test:
   stage: test
-  <<: *normal-rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $YOJITSU_RUN_TESTS != "1"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
   variables:
     # 性能テストは時間を表示するだけにする（Runner の性能がばらつくため）。判定したいときは CI/CD 変数 YOJITSU_PERF に loose か strict。
     # Windows の Runner でワーカーのタイムアウトが出るときは CI/CD 変数 VITEST_MAX_FORKS を 2（それでも出るなら 1）にする（docs/OPERATIONS.md、SPEC §79.1）
