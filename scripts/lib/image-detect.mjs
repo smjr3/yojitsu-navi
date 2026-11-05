@@ -31,3 +31,16 @@ export function looksLikeImage(abs) {
 
 /** 画像か（拡張子または中身） */
 export const isImage = (path, abs) => IMAGE_EXT.test(path) || looksLikeImage(abs);
+
+/**
+ * 置いてよい画像（リポジトリでの場所 → 理由）。ここ以外の画像はリポジトリにも npm パッケージにも入れない。
+ * npm パッケージの中では template/ の下に入る
+ */
+export const IMAGE_ALLOWLIST = {
+  "src/icons/favicon.svg": "ファビコン（SPEC §89。data URI の埋め込みが社内の配信先で出なかったため依頼者が許可）",
+  "src/icons/favicon-32.png": "ファビコンの PNG（SVG のファビコンを使わないブラウザ向け。SPEC §89）",
+  "src/icons/apple-touch-icon.png": "iPhone のホーム画面アイコン（PNG のみ対応。SPEC §89）",
+};
+
+/** 置いてよい画像か（リポジトリ内のパス、または npm パッケージ内の template/ のパス） */
+export const isAllowedImage = (path) => path.replace(/\\/g, "/").replace(/^template\//, "") in IMAGE_ALLOWLIST;

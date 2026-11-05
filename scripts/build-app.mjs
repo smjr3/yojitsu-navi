@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { npm } from "./lib/npm.mjs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { isImage } from "./lib/image-detect.mjs";
+import { isAllowedImage, isImage } from "./lib/image-detect.mjs";
 import { checkCiFiles, describeCiProblems } from "../packages/app/lib/ci-files.mjs";
 import { isShipped, starterData, testClosure, userPackageJson } from "../packages/app/lib/template-files.mjs";
 import { packageGuardProblems } from "./lib/package-guard.mjs";
@@ -138,8 +138,9 @@ if (flag("pack")) {
   const out = npm(["pack", "--json"], { cwd: PKG, encoding: "utf-8" });
   const packed = JSON.parse(out)[0];
   const name = packed.filename;
-  // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）。依存（deps/）は外部の npm パッケージなので見ない
-  const images = packed.files.map((f) => f.path).filter((f) => !f.startsWith("deps/") && isImage(f, join(PKG, f)));
+  // 画像を同梱しない（リポジトリにも置かない。tests/unit/docs-links.test.ts）。ファビコン（IMAGE_ALLOWLIST）だけ例外。
+  // 依存（deps/）は外部の npm パッケージなので見ない
+  const images = packed.files.map((f) => f.path).filter((f) => !f.startsWith("deps/") && !isAllowedImage(f) && isImage(f, join(PKG, f)));
   if (images.length) {
     rmSync(join(PKG, name), { force: true });
     console.error(`パッケージに画像が入っています（入れない）: ${images.join(", ")}`);

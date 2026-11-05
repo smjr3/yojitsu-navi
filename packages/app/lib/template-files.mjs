@@ -35,6 +35,7 @@ const DEV_FILES = new Set([
   "scripts/lib/package-guard.mjs",
   "scripts/lib/package-guard.d.mts",
   "scripts/ci/publish-npm.mjs",
+  "scripts/make-favicons.mjs",
 ]);
 /** 開発元だけで使うフォルダ（packages/ はこのパッケージ自体と計算コアの元） */
 const DEV_DIRS = [".github/", "packages/"];

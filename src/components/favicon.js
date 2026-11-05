@@ -1,6 +1,8 @@
 /**
- * ファビコン（§89）。画像ファイルは置かない（§44）ので、SVG の文字列を data URI にして全ページの <head> に埋め込む。
- * 色はテーマカラーの既定（Blue）。OS がダーク表示ならダーク側の色にする（SVG 内の prefers-color-scheme）。
+ * ファビコン（§89）。src/icons/ のファイル（favicon.svg・favicon-32.png・apple-touch-icon.png）を全ページの <head> から読む。
+ * data URI の埋め込みは社内の配信先で表示されなかったため、ファイルにした（2026-11-04）。
+ * favicon.svg はこの FAVICON_SVG と同じ中身（tests/unit/favicon.test.ts で確かめる）。PNG は scripts/make-favicons.mjs で作り直す。
+ * 色はテーマカラーの既定（Blue）。OS がダーク表示ならダーク側の色にする（SVG 内の prefers-color-scheme。PNG はライトの色だけ）。
  * 図柄は「月ごとに伸びる 3 本の棒」（予実の推移）。16px でも潰れないよう線を細くしない。
  */
 export const FAVICON_SVG =
@@ -12,7 +14,11 @@ export const FAVICON_SVG =
   '<rect class="f" x="20.5" y="6" width="5.5" height="20" rx="1"/>' +
   "</svg>";
 
-/** <head> に入れる <link rel="icon">（data URI。外部ファイルを読まない） */
+/** <head> に入れるリンク。Framework が href のファイルを dist にハッシュ付きの名前で出す（フォントと同じ） */
 export function faviconLink() {
-  return `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}">`;
+  return (
+    '<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">' +
+    '<link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">' +
+    '<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">'
+  );
 }

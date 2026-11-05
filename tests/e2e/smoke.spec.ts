@@ -41,10 +41,15 @@ for (const p of PAGES) {
     await page.waitForLoadState("networkidle");
     // タイトルにサイト名
     await expect(page).toHaveTitle(/予実ナビ/);
-    // ファビコンは埋め込みの SVG（§89。画像ファイルを読まない）
-    const icons = page.locator('link[rel="icon"]');
-    await expect(icons).toHaveCount(1);
-    expect(await icons.getAttribute("href")).toMatch(/^data:image\/svg\+xml,%3Csvg/);
+    // ファビコンは src/icons/ のファイル（§89）。ハッシュ付きの名前で出て、実際に読める
+    const icons = page.locator('link[rel="icon"], link[rel="apple-touch-icon"]');
+    await expect(icons).toHaveCount(3);
+    for (const href of await icons.evaluateAll((ls) => ls.map((l) => (l as HTMLLinkElement).href))) {
+      expect(href).toMatch(/\/_file\/icons\/[^/]+\.(png|svg)$/);
+      const res = await page.request.get(href);
+      expect(res.status(), href).toBe(200);
+      expect(res.headers()["content-type"], href).toMatch(/^image\/(png|svg\+xml)/);
+    }
   });
 }
 
