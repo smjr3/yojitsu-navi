@@ -22,12 +22,20 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `package-lock.json` は新しい版のものを使う（`esbuild`・`glob` を上げた。`npm audit` は 7 件 → 4 件。残る理由は SPEC §84.2）
 - CI/CD 変数 `VITEST_MAX_FORKS` を入れてテストを動かしていて、Windows の Runner で結果が安定しないなら `1` にする
 - 社内 CA が Windows の証明書ストアに入っているなら、`NODE_EXTRA_CA_CERTS` の代わりに `NODE_USE_SYSTEM_CA=1` も使える（Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」）
+- 作業名から案件名を抜き出して紐付けるなら、`config.json` に `projectFromTask`（下の表）を足し、データ確認の「未紐付けの作業実績」で理由「未登録の案件」を確かめる。表記の違いだけのものは `data/project-aliases.csv`（`alias,project_name`）に別名を足す。mapping.csv の作業コードの行・名前の行はそのまま使える（そちらが先。SPEC §97）
 
 ### テスト・CI の前提
 
 - `npm run ci:check` を足した（`yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC でもプロジェクトの中から動かせる）。CI が使うファイルに加え、`.gitlab-ci.yml`・`.gitlab-ci.local.yml` の GitLab が受け付けない書き方（中身の無いジョブ・空のファイル）も見つける。`init`・`update` の最後の確かめも同じ（SPEC §91.3）
 - `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
+
+### 新しい設定と推奨値
+
+| 項目 | 書かないとき | 推奨 | 理由・いつ |
+|---|---|---|---|
+| `projectFromTask.marker` | なし（`projectFromTask` ごと書かないと使わない） | 運用保守の作業名に入る目印（例 `_保守対応`） | 目印より前の案件名で contracts.csv の案件に紐付ける（SPEC §97） |
+| `projectFromTask.enabled` | `true` | そのまま | 一時的に止めるときだけ `false` |
 
 ### 変更
 
@@ -37,6 +45,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 - `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
+- 作業名の目印（例 `_保守対応`）より前を案件名として抜き出し、contracts.csv の案件名と完全一致する案件へ紐付ける（mapping.csv への作業コードの事前登録が要らない）。表記揺れは `data/project-aliases.csv` の別名だけで吸収し、曖昧一致はしない。contracts.csv に無い案件名は「未登録の案件」として警告。案件名で紐付いた作業の作業コードは未登録に数えず、取り込みで新しい作業コードを知らせるだけにした（SPEC §97）
 
 ## 0.2.1
 

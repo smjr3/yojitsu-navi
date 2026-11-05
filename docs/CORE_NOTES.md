@@ -14,6 +14,8 @@
 | §2 / §4.2 | `CONTRACT_INVALID` / 重複で除外した契約を指すルール | 「存在しない契約」と同じ扱い（`MAPPING_UNKNOWN_CONTRACT`） |
 | §4.2 | `UNMAPPED_WORKLOG` 警告の粒度 | 未紐付けグループ `(顧客名, 案件名, 理由)` ごとに 1 件（時間・件数・期間を持つ）。`model.unmapped` と同じ粒度 |
 | §4.2 | hours 不正・日付不正の行 | 警告なしで無視。`MappingResult.ignoredCount` に件数だけ持つ（validate では warning `WORKLOG_INVALID_HOURS` / `WORKLOG_INVALID_DATE` として件数を表示） |
+| §97 | 作業名の案件名が同じ契約を複数指す（顧客の違う同じ案件名など） | 顧客名では絞らない。期間で絞り、2 件以上なら従来どおり `MAPPING_AMBIGUOUS`（契約ID昇順の先頭）。未紐付けのまとめは `(顧客名, 抜き出した案件名, 理由)`（`UnmappedWorklogGroup.fromTask`） |
+| §97 | 同じ別名が複数の案件名を指す | 照合に使わず（未登録の案件）、検証で `ALIAS_DUPLICATE`（error） |
 | §6 手順 4 | 未登録メンバーで個人単価も無い場合に `RATE_MISSING` も出すか | 出さない。`UNKNOWN_MEMBER`（メンバーごと 1 件）だけ。`CostLine.rateMissing` は true |
 | §6 | メンバーの `title` が空 | 役職検索はせず `rateMissing` |
 | §7 | `WorklogEntry.amount` の丸め | 作業ログ 1 行ごとに `round(hours × rate)`。`CostLine.amount` は行（メンバー×月）単位で `round(Σhours × rate)` なので、両者の合計は最大 0.5 円/件ずれうる。原価（`cost`）は **CostLine の合計**が正 |

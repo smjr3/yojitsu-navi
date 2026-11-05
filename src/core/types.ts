@@ -49,6 +49,22 @@ export interface Config {
   masterEdit?: MasterEditConfig;
   /** 作業コードの点検（§92）。省略 = 点検しない */
   taskCodeCheck?: TaskCodeCheckConfig;
+  /** 作業名から案件名を抜き出して紐付ける（§97）。省略 = 使わない */
+  projectFromTask?: ProjectFromTaskConfig;
+}
+
+/** 作業名から案件名を抜き出す設定（§97） */
+export interface ProjectFromTaskConfig {
+  /** 運用保守の目印（例「_保守対応」）。作業名の最初の目印より前を案件名とする。空 = 使わない */
+  marker: string;
+  /** false で止める（既定 true） */
+  enabled?: boolean;
+}
+
+/** 案件名の別名（§97。data/project-aliases.csv の 1 行）。作業名から抜き出した名前 alias を contracts.csv の projectName として扱う */
+export interface ProjectAlias {
+  alias: string;
+  projectName: string;
 }
 
 /** 作業コードの点検の設定（§92） */
@@ -361,6 +377,8 @@ export interface Dataset {
   outsidePlans?: OutsidePlan[];
   /** 目標（§63）。省略・空 = なし */
   targets?: Target[];
+  /** 案件名の別名（§97）。省略・空 = なし */
+  projectAliases?: ProjectAlias[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }
@@ -530,9 +548,11 @@ export interface UnmappedWorklogGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
-  reason: "NO_RULE" | "OUT_OF_PERIOD" | "RULE_OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT";
+  reason: "NO_RULE" | "OUT_OF_PERIOD" | "RULE_OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT" | "UNREGISTERED_PROJECT";
   /** 作業コードの行（§92）で探した未紐付け。顧客名・案件名ではなくこのコードでまとめる */
   taskCode?: string;
+  /** 作業名から抜き出した案件名（§97）で探した未紐付け。projectName はこの名前（作業実績の案件名ではない） */
+  fromTask?: true;
 }
 
 /** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3）。(顧客名, 案件名, 作業名) を正規化してまとめる（表記は最初の行） */

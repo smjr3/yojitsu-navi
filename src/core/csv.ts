@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName, splitKeywords } from "./normalize.js";
-import type { Assignment, FetchFailure, OutsidePlan, Target, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, FetchFailure, OutsidePlan, ProjectAlias, Target, Config, Contract, Dataset, Holiday, MappingRule, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -155,6 +155,8 @@ export interface DatasetFiles {
   outsidePlans?: string;
   /** 目標（§63）。省略・空 = なし */
   targets?: string;
+  /** 案件名の別名（§97）。省略・空 = なし */
+  projectAliases?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
   /** worklogs と同じ順のファイル名（警告にファイル名・行番号を出すため。無ければ worklogs[i]） */
@@ -176,6 +178,7 @@ const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs"
   taskTypes: ["task", "category"],
   outsidePlans: ["member_id", "start_month", "end_month", "person_months"],
   targets: ["target_type", "target_id", "end_month", "remaining_rate"],
+  projectAliases: ["alias", "project_name"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -385,7 +388,14 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           note: r.get("note"),
         }));
 
+  // 案件名の別名（§97）: 省略可
+  const projectAliases: ProjectAlias[] =
+    (files.projectAliases ?? "").trim() === ""
+      ? []
+      : parseTable("project-aliases.csv", files.projectAliases as string, REQUIRED_COLUMNS.projectAliases, issues).rows.map((r) => ({ alias: r.get("alias"), projectName: r.get("project_name") }));
+
   const dataset: Dataset = { config: files.config, contracts, mappings, assignments, teams, members, rates, holidays, worklogs };
+  if (projectAliases.length > 0) dataset.projectAliases = projectAliases;
   if (taskTypes.length > 0) dataset.taskTypes = taskTypes;
   if (outsidePlans.length > 0) dataset.outsidePlans = outsidePlans;
   if (targets.length > 0) dataset.targets = targets;

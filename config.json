@@ -48,6 +48,10 @@
     "onUnregistered": "warn",
     "onChange": "warn"
   },
+  "projectFromTask": {
+    "marker": "_保守対応",
+    "enabled": false
+  },
   "costTypes": [
     { "id": "labor", "label": "工数" }
   ],

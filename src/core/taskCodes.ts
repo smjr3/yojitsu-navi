@@ -5,10 +5,12 @@
  *   または行はあるが期間に入らない日付の作業がある作業コード
  * - 作業名の変更: 同じ作業コードで作業名が変わった（日付順に前の名前 → 次の名前）。キーワードの一致が変わったかも添える
  * - 案件の割り当ては人が mapping.csv に書く。ここでは見つけるだけで、案件を決めない
+ * - 作業名から抜き出した案件名で契約が見つかる作業（§97）は未登録に数えない（作業コードは監視・変更検知に使う）
  */
 import { isValidISODate, isValidYearMonth, monthOfDate } from "./calendar.js";
 import { isCodeRule, ruleCoversMonth } from "./mapping.js";
 import { includesAnyKeyword, normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
+import { resolvesByTask, type ProjectMatcher } from "./projectFromTask.js";
 import type { Contract, ISODate, MappingRule, TaskCodeChange, TaskCodeCheckConfig, UnregisteredTaskCode, Warning, Worklog, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -46,7 +48,7 @@ interface CodeAcc {
  * 作業コードの点検。作業コードの無い行・日付や時間が不正な行は見ない。
  * 名前の変更は点検の設定が無くても出す（一致の欄は null）。未登録は設定があるときだけ
  */
-export function findTaskCodeIssues(worklogs: readonly Worklog[], rules: readonly MappingRule[], check: TaskCodeCheckConfig | undefined): TaskCodeFindings {
+export function findTaskCodeIssues(worklogs: readonly Worklog[], rules: readonly MappingRule[], check: TaskCodeCheckConfig | undefined, projects?: ProjectMatcher): TaskCodeFindings {
   const enabled = taskCodeCheckEnabled(check);
   const codeRules = new Map<string, MappingRule[]>();
   for (const r of rules) {
@@ -85,6 +87,7 @@ export function findTaskCodeIssues(worklogs: readonly Worklog[], rules: readonly
     const month = monthOfDate(w.date);
     const list = codeRules.get(code);
     if (list && list.some((r) => ruleCoversMonth(r, month))) continue;
+    if (!list && resolvesByTask(projects, w.task)) continue;
     const status = list ? "period" : "none";
     const u = acc.unreg;
     if (!u) {

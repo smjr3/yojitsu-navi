@@ -9,6 +9,7 @@
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude, task_code, start_month, end_month]` （案件名が空 = その顧客の全工数。task_code = 作業コード（書いた行は顧客名・案件名・キーワードを使わずコードで紐付ける。空の顧客名・案件名でよい）、start_month / end_month = その行を使う期間（作業日の月。片方だけ・省略可。省略 = 全期間）。同じ作業コードを契約の更新後も使うときは、新しい契約IDの行を足して期間で分ける（SPEC §92）。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62。紐付けの判定の順序と契約の更新のときの書き方は SPEC §86） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation[, updated_by, updated_at]` （人 × 契約 × 期間の配分人月。updated_by・updated_at は保存した人の GitLab ユーザー名と保存日（YYYY-MM-DD）。画面が保存時に追加・変更した行へ書く。列なし・空欄 = 記録なし。SPEC §56。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note[, updated_by, updated_at]` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。updated_by・updated_at は assignments.csv と同じ。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |
+| `data/project-aliases.csv` | `alias, project_name` （案件名の別名。省略可。作業名から抜き出した案件名 `alias` を contracts.csv の `project_name` として扱う。config.json の `projectFromTask` を使うときだけ。同じ別名が複数の案件名を指すとエラー、案件名と同じ別名・contracts.csv に無い案件名は警告。SPEC §97） |
 | `data/targets.csv` | `target_type, target_id, end_month, remaining_rate, start_month, note[, updated_by, updated_at]` （目標。省略可。target_type = `team` / `customer` / `project`、target_id = チームID / 顧客名 / 契約ID、end_month = 終了月、remaining_rate = 目標の残予算率（%。`20` = 20%、100 以下。超過を減らす目標はマイナス `-50`（`▲50` も可））、start_month = 開始月（空 = 終了月を含む年度の最初の月）、note 省略可。updated_by・updated_at は assignments.csv と同じ（保存した人と保存日。一覧の対象名の下に出す）。同じ対象・同じ終了月の重複はエラー、見つからない対象は警告。数値の計算には使わない。画面はマスタ編集の「目標」。SPEC §63） |
 | `data/masters/teams.csv` | `team_id, name, parent_team_id, effective_from, level, leader_member_id` （level = 種別「課」「チーム」「班」など自由入力・省略可、leader_member_id = リーダーの社員番号・省略可。SPEC §21・§22） |
 | `data/masters/members.csv` | `member_id, name, kind, title, division, department, section, team_id, effective_from, status` （所属は division = 事業本部・department = 部・section = 課の 3 段。division は列ごと省略可（SPEC §60）。kind = employee / partner。status = 空（在籍）/ それ以外は何でも不在（`退職`・`休職` など、理由は問わない。その月から不在。その月に計画か実績があればその月までは稼働）、列ごと省略可。SPEC §35） |
@@ -22,6 +23,8 @@
 `config.json` の項目は `src/core/types.ts` の `Config` を参照。
 
 `taskCodeCheck`（作業コードの点検。省略 = 点検しない。SPEC §92）: `include`（運用保守の作業名に含むキーワード）、`exclude`（含むと対象外）、`onUnregistered`（未登録の作業コードを見つけたとき `warn` = 警告だけ・既定 / `stop` = 取り込みを失敗にする）、`onChange`（作業名の変更・キーワードの一致の変化を見つけたとき。`warn` / `stop`。`stop` で止まったら確かめて `FETCH_ACCEPT_TASK_CHANGES=1` で取り込む）。
+
+`projectFromTask`（作業名から案件名を抜き出して紐付ける。省略 = 使わない。SPEC §97）: `marker`（運用保守の目印。例 `_保守対応`。作業名の最初の目印より前を案件名とし、contracts.csv の `project_name` と完全一致する案件へ紐付ける。全角半角・空白は区別しない）、`enabled`（`false` で止める。既定 `true`）。mapping.csv の行がある作業はそちらが先。目印も mapping.csv の行も無い作業は運用保守以外。表記揺れは `data/project-aliases.csv` に別名を登録する（曖昧一致はしない）。
 
 ## 取り込み元の設定（config.json の `worklogSource.http` と `memberSource`）
 

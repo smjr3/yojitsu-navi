@@ -11,6 +11,7 @@ import { customerKey } from "./customers.js";
 import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { createKeywordRouter } from "./mapping.js";
 import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
+import type { ProjectMatcher } from "./projectFromTask.js";
 import { monthStatusFromMeta } from "./status.js";
 import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
@@ -53,7 +54,7 @@ export interface TaskClassifier {
  * 分類表（と紐付けルールの作業名キーワード）から分類器を作る。
  * 照合は 完全一致（正規化後）→ 含む（§62.2。ファイルの順で最初の行）。正規化後に同じ作業種別が複数あれば先の行を使う
  */
-export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined, mappings: readonly MappingRule[] = []): TaskClassifier {
+export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined, mappings: readonly MappingRule[] = [], projects?: ProjectMatcher): TaskClassifier {
   const index = new Map<string, { category: TaskCategory; group: string }>();
   const contains: Array<{ key: string; task: string; category: TaskCategory; group: string }> = [];
   for (const r of rules ?? []) {
@@ -64,7 +65,7 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined,
     if (r.match === "contains") contains.push({ key: normalizeKeyword(r.task), task: r.task.trim(), ...entry });
   }
   const hasTypes = index.size > 0;
-  const router = createKeywordRouter(mappings);
+  const router = createKeywordRouter(mappings, projects);
   const cache = new Map<string, TaskClassification>();
   const classify = (task: string): TaskClassification => {
     let c = cache.get(task);
@@ -95,6 +96,8 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined,
       const m = router.match(w);
       if (m === "hit") c = { category: "contract", group: "", label: base.label, unclassified: false };
       else if (m === "miss") c = { category: "outside", group: base.category === "outside" ? base.group : T.work.otherType, label: base.label, unclassified: false, keywordMiss: true };
+      // 作業名に運用保守の目印が無く、紐付けの行も無い（§97）
+      else if (m === "unmarked") c = { category: "outside", group: base.category === "outside" ? base.group : T.work.otherType, label: base.label, unclassified: false };
       else c = base;
       byWorklog.set(key, c);
       return c;

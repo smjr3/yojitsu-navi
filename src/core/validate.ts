@@ -7,6 +7,7 @@
 import { contractInvalidReason } from "./budget.js";
 import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
+import { projectMatcherFor, validateProjectAliases } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
 import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
@@ -90,10 +91,18 @@ function validateMappings(dataset: Dataset, contractIds: ReadonlySet<string>, pu
   }
 }
 
+/** 案件名の別名（§97） */
+function validateAliases(dataset: Dataset, push: IssueSink): void {
+  const file = "project-aliases.csv";
+  for (const issue of validateProjectAliases(dataset.projectAliases ?? [], dataset.contracts)) {
+    push({ severity: issue.severity, code: issue.code, message: issue.message, file, row: issue.row, ref: issue.ref });
+  }
+}
+
 /** 作業コードの点検（§92）。警告だけ（取り込みを止めるかは fetch-worklogs の設定） */
 function validateTaskCodes(dataset: Dataset, push: IssueSink): void {
   const file = "worklogs";
-  for (const w of taskCodeWarnings(findTaskCodeIssues(dataset.worklogs, dataset.mappings, dataset.config.taskCodeCheck))) {
+  for (const w of taskCodeWarnings(findTaskCodeIssues(dataset.worklogs, dataset.mappings, dataset.config.taskCodeCheck, projectMatcherFor(dataset)))) {
     push({ severity: "warning", code: w.code, message: w.message, file, ref: { ...(w.ref ?? {}), ...(w.hours !== undefined ? { hours: w.hours } : {}), ...(w.count !== undefined ? { count: w.count } : {}) } });
   }
 }
@@ -400,9 +409,10 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   const excluded = new Map(dataset.contracts.filter((c) => !valid.has(c)).map((c) => [c.contractId, contractInvalidReason(c) ?? T.calcWarnings.duplicateReason]));
   for (const c of validContracts) excluded.delete(c.contractId); // 重複 ID は 1 行目が有効
   // 契約外の作業（§30）は紐付けの対象外（buildModel と同じ）
-  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings);
+  const projects = projectMatcherFor(dataset);
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects);
   const inScope = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
-  const mapping = mapWorklogs(inScope, dataset.mappings, validContracts, excluded);
+  const mapping = mapWorklogs(inScope, dataset.mappings, validContracts, excluded, projects);
   for (const w of unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier)) {
     push({ severity: "warning", code: w.code, message: w.message, file: "task-types.csv", ref: { task: String(w.ref?.task ?? ""), hours: w.hours ?? 0, count: w.count ?? 0 } });
   }
@@ -449,6 +459,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
 
   validateContracts(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
+  validateAliases(dataset, push);
   validateAssignments(dataset, contractIds, memberIds, push);
   validateOutsidePlans(dataset, memberIds, push);
   validateTargets(dataset, teamIds, contractIds, push);

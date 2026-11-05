@@ -1,8 +1,10 @@
 /**
- * 作業実績と契約の紐付け（SPEC §4.2・§86）・作業名のキーワードによる振り分け（§62）・作業コードと行の期間（§92）
+ * 作業実績と契約の紐付け（SPEC §4.2・§86）・作業名のキーワードによる振り分け（§62）・作業コードと行の期間（§92）・
+ * 作業名から抜き出した案件名での紐付け（§97）
  */
 import { isValidISODate, monthOfDate } from "./calendar.js";
 import { includesAnyKeyword, normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
+import type { ProjectMatcher } from "./projectFromTask.js";
 import type { Contract, ISODate, MappingRule, UnmappedWorklogGroup, Warning, Worklog, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -87,8 +89,10 @@ export function ruleCoversMonth(rule: { startMonth?: YearMonth | undefined; endM
  * - none: キーワードの無いルール（または顧客名なし・ルールなし）→ 作業種別の分類表で決める
  * ルールの探し方は mapWorklogs と同じ（(顧客, 案件) → 無ければ (顧客, "")）。
  * 作業コードの行（§92）がある作業は、人が案件に割り当てたものなので常に hit
+ * 作業名から案件名を抜き出す設定（§97）があるとき: 名前の行のキーワードで決まらなければ、作業名に目印があれば hit。
+ * 目印が無く、作業コードの行・名前の行のどちらも無い作業は unmarked（運用保守以外。キーワードに合致しない作業の一覧には出さない）
  */
-export type KeywordMatch = "hit" | "miss" | "none";
+export type KeywordMatch = "hit" | "miss" | "none" | "unmarked";
 
 export interface KeywordRouter {
   /** キーワードのあるルール、または作業コードの行（§92）が 1 行以上ある */
@@ -104,7 +108,8 @@ interface PeriodCond extends KeywordCond {
   endMonth?: YearMonth | undefined;
 }
 
-export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRouter {
+export function createKeywordRouter(rules: readonly MappingRule[], projects?: ProjectMatcher): KeywordRouter {
+  const byTask = projects?.enabled === true ? projects : null;
   const index = new Map<string, PeriodCond[]>();
   const codes = new Set<string>();
   let hasPeriod = false;
@@ -121,7 +126,13 @@ export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRoute
     else index.set(key, [cond]);
   }
   const hasKeywordRules = [...index.values()].some((list) => list.some(hasKeywords));
-  const enabled = hasKeywordRules || codes.size > 0;
+  const enabled = hasKeywordRules || codes.size > 0 || byTask !== null;
+  // 名前の行で決まらなかったとき（§97）: 目印があれば運用保守、名前の行も無ければ運用保守以外
+  const fallback = (hasNameRule: boolean, task: string): KeywordMatch => {
+    if (!byTask) return "none";
+    if (byTask.extract(task) !== null) return "hit";
+    return hasNameRule ? "none" : "unmarked";
+  };
   return {
     enabled,
     dependsOnCode: codes.size > 0,
@@ -129,16 +140,14 @@ export function createKeywordRouter(rules: readonly MappingRule[]): KeywordRoute
     match(w) {
       if (!enabled) return "none";
       if (codes.size > 0 && codes.has(normalizeCode(w.taskCode))) return "hit";
-      if (!hasKeywordRules) return "none";
       const customer = normalizeName(w.customerName);
-      if (customer === "") return "none";
-      const all = index.get(ruleKey(customer, normalizeName(w.projectName))) ?? index.get(ruleKey(customer, ""));
-      if (!all) return "none";
+      const all = customer === "" ? undefined : (index.get(ruleKey(customer, normalizeName(w.projectName))) ?? index.get(ruleKey(customer, "")));
+      if (!hasKeywordRules || !all) return fallback(all !== undefined, w.task);
       // 作業日の月に掛かる行だけで決める（§92。期間の違う行でキーワードを変えられる）。掛かる行が無ければ全行（紐付けで「対応表の期間外」になる）
       const month = w.date !== undefined && isValidISODate(w.date) ? monthOfDate(w.date) : "";
       const inPeriod = hasPeriod && month !== "" ? all.filter((c) => ruleCoversMonth(c, month)) : all;
       const conds = inPeriod.length > 0 ? inPeriod : all;
-      if (!conds.some(hasKeywords)) return "none";
+      if (!conds.some(hasKeywords)) return fallback(true, w.task);
       const task = normalizeKeyword(w.task);
       return conds.some((c) => passes(c, task)) ? "hit" : "miss";
     },
@@ -224,6 +233,14 @@ function candidatesFor(target: RuleTarget, month: YearMonth, taskName: string): 
   return { contracts, reason: selected.some((e) => e.excluded) ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT" };
 }
 
+/** 作業名の案件名（§97）が一致した契約ID → 候補。一致なし = 未登録の案件、すべて除外中・存在しない = その理由 */
+function projectCandidates(ids: readonly string[] | null, contractsById: ReadonlyMap<string, Contract>, excludedContracts: ReadonlyMap<string, string>): { contracts: Contract[]; reason?: UnmappedReason } {
+  if (!ids) return { contracts: [], reason: "UNREGISTERED_PROJECT" };
+  const contracts = ids.map((id) => contractsById.get(id)).filter((c): c is Contract => c !== undefined).sort(byContractId);
+  if (contracts.length > 0) return { contracts };
+  return { contracts, reason: ids.some((id) => excludedContracts.has(id)) ? "EXCLUDED_CONTRACT" : "UNKNOWN_CONTRACT" };
+}
+
 interface AmbiguousAcc {
   customerName: string;
   projectName: string;
@@ -243,7 +260,10 @@ export function mapWorklogs(
   contracts: readonly Contract[],
   /** 不備で除外した契約ID → 理由。指すルールを「存在しない契約」と区別するため */
   excludedContracts: ReadonlyMap<string, string> = new Map(),
+  /** 作業名から抜き出した案件名での紐付け（§97）。省略 = 使わない */
+  projects?: ProjectMatcher,
 ): MappingResult {
+  const byTask = projects?.enabled === true ? projects : null;
   const warnings: Warning[] = [];
   const contractsById = new Map<string, Contract>();
   for (const c of contracts) contractsById.set(c.contractId, c);
@@ -260,8 +280,15 @@ export function mapWorklogs(
   let excludedCount = 0;
   let ignoredCount = 0;
 
-  const addUnmapped = (w: Worklog, reason: UnmappedReason, code: string | null): void => {
-    const key = code !== null ? `\u0001${code}\u0000${reason}` : `${w.customerName}\u0000${w.projectName}\u0000${reason}`;
+  /** 未紐付けのまとめ方: 作業コード（§92）・作業名から抜き出した案件名（§97）・無ければ作業実績の (顧客名, 案件名) */
+  type GroupBy = { code: string } | { taskProject: string } | null;
+  const addUnmapped = (w: Worklog, reason: UnmappedReason, by: GroupBy): void => {
+    const key =
+      by && "code" in by
+        ? `\u0001${by.code}\u0000${reason}`
+        : by
+          ? `\u0002${w.customerName}\u0000${normalizeName(by.taskProject)}\u0000${reason}`
+          : `${w.customerName}\u0000${w.projectName}\u0000${reason}`;
     const g = unmappedGroups.get(key);
     if (g) {
       g.hours += w.hours;
@@ -271,14 +298,15 @@ export function mapWorklogs(
     } else {
       const group: UnmappedWorklogGroup = {
         customerName: w.customerName,
-        projectName: w.projectName,
+        projectName: by && "taskProject" in by ? by.taskProject : w.projectName,
         hours: w.hours,
         count: 1,
         firstDate: w.date as ISODate,
         lastDate: w.date as ISODate,
         reason,
       };
-      if (code !== null) group.taskCode = (w.taskCode ?? "").trim();
+      if (by && "code" in by) group.taskCode = (w.taskCode ?? "").trim();
+      if (by && "taskProject" in by) group.fromTask = true;
       unmappedGroups.set(key, group);
     }
   };
@@ -299,42 +327,60 @@ export function mapWorklogs(
     const code = hasCodeRules ? normalizeCode(w.taskCode) : "";
     const codeTarget = code !== "" ? ruleIndex.byCode.get(code) : undefined;
     const customer = normalizeName(w.customerName);
-    if (!codeTarget && customer === "") {
-      mappings.push({ kind: "excluded", worklog: w, month, reason: "NO_CUSTOMER" });
-      excludedHours += w.hours;
-      excludedCount++;
-      continue;
-    }
     const project = normalizeName(w.projectName);
     // (顧客, 案件) の完全一致 → 無ければ (顧客, "")
-    const target = codeTarget ?? ruleIndex.byName.get(ruleKey(customer, project)) ?? ruleIndex.byName.get(ruleKey(customer, ""));
-    const groupCode = codeTarget ? code : null;
-    if (!target) {
-      mappings.push({ kind: "unmapped", worklog: w, month, reason: "NO_RULE" });
-      addUnmapped(w, "NO_RULE", null);
-      continue;
-    }
-    const cacheKey = `${target.key}\u0000${month}\u0000${target.byCode ? "" : w.task}`;
-    let candidates = candidateCache.get(cacheKey);
-    if (!candidates) {
-      candidates = candidatesFor(target, month, w.task);
-      candidateCache.set(cacheKey, candidates);
+    const target = codeTarget ?? (customer === "" ? undefined : (ruleIndex.byName.get(ruleKey(customer, project)) ?? ruleIndex.byName.get(ruleKey(customer, ""))));
+    let groupBy: GroupBy = codeTarget ? { code } : null;
+    let candidates: { contracts: Contract[]; reason?: UnmappedReason } | undefined;
+    if (target) {
+      const cacheKey = `${target.key}\u0000${month}\u0000${target.byCode ? "" : w.task}`;
+      candidates = candidateCache.get(cacheKey);
+      if (!candidates) {
+        candidates = candidatesFor(target, month, w.task);
+        candidateCache.set(cacheKey, candidates);
+      }
+    } else {
+      // mapping.csv に行が無い: 作業名から抜き出した案件名（§97）で contracts.csv の案件名と完全一致する契約を探す
+      const taskProject = byTask ? byTask.extract(w.task) : null;
+      if (taskProject === null) {
+        if (customer === "") {
+          mappings.push({ kind: "excluded", worklog: w, month, reason: "NO_CUSTOMER" });
+          excludedHours += w.hours;
+          excludedCount++;
+        } else {
+          mappings.push({ kind: "unmapped", worklog: w, month, reason: "NO_RULE" });
+          addUnmapped(w, "NO_RULE", null);
+        }
+        continue;
+      }
+      groupBy = { taskProject };
+      const cacheKey = `\u0002${normalizeName(taskProject)}`;
+      candidates = candidateCache.get(cacheKey);
+      if (!candidates) {
+        candidates = projectCandidates((byTask as ProjectMatcher).contractIdsFor(taskProject), contractsById, excludedContracts);
+        candidateCache.set(cacheKey, candidates);
+      }
     }
     if (candidates.reason) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: candidates.reason });
-      addUnmapped(w, candidates.reason, groupCode);
+      addUnmapped(w, candidates.reason, groupBy);
       continue;
     }
     const inPeriod = candidates.contracts.filter((c) => c.startMonth <= month && month <= c.endMonth);
     if (inPeriod.length === 0) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: "OUT_OF_PERIOD" });
-      addUnmapped(w, "OUT_OF_PERIOD", groupCode);
+      addUnmapped(w, "OUT_OF_PERIOD", groupBy);
       continue;
     }
     const chosen = inPeriod[0] as Contract; // 契約ID昇順の先頭
     if (inPeriod.length > 1) {
-      // 名前の行は従来どおり (顧客, 案件) ごと、作業コードの行はコードごとにまとめる
-      const key = groupCode !== null ? `code\u0000${groupCode}\u0000${chosen.contractId}` : `${customer}\u0000${project}\u0000${chosen.contractId}`;
+      // 名前の行は従来どおり (顧客, 案件) ごと、作業コードの行はコードごと、作業名の案件名は案件名ごとにまとめる
+      const key =
+        groupBy && "code" in groupBy
+          ? `code\u0000${groupBy.code}\u0000${chosen.contractId}`
+          : groupBy
+            ? `task\u0000${normalizeName(groupBy.taskProject)}\u0000${chosen.contractId}`
+            : `${customer}\u0000${project}\u0000${chosen.contractId}`;
       const acc = ambiguous.get(key);
       if (acc) {
         acc.hours += w.hours;
@@ -343,7 +389,7 @@ export function mapWorklogs(
       } else {
         ambiguous.set(key, {
           customerName: w.customerName,
-          projectName: groupCode !== null ? fmt(T.calcWarnings.taskCodeLabel, { code: (w.taskCode ?? "").trim() }) : w.projectName,
+          projectName: groupBy && "code" in groupBy ? fmt(T.calcWarnings.taskCodeLabel, { code: (w.taskCode ?? "").trim() }) : groupBy ? groupBy.taskProject : w.projectName,
           contractIds: new Set(inPeriod.map((c) => c.contractId)),
           chosen: chosen.contractId,
           hours: w.hours,
@@ -402,5 +448,7 @@ export function unmappedReasonLabel(reason: UnmappedReason): string {
       return T.calcWarnings.reasonUnknownContract;
     case "EXCLUDED_CONTRACT":
       return T.calcWarnings.reasonExcludedContract;
+    case "UNREGISTERED_PROJECT":
+      return T.calcWarnings.reasonUnregisteredProject;
   }
 }
