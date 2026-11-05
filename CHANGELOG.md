@@ -21,6 +21,8 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `update` が「サンプルのまま残っているデータ」を出したら、`yojitsu-navi reset-data --dry-run` で確かめてから `yojitsu-navi reset-data` で空にし、本番のデータを入れる
 - `package-lock.json` は新しい版のものを使う（`esbuild`・`glob` を上げた。`npm audit` は 7 件 → 4 件。残る理由は SPEC §84.2）
 - CI/CD 変数 `VITEST_MAX_FORKS` を入れてテストを動かしていて、Windows の Runner で結果が安定しないなら `1` にする
+- `upgrade` の 2 番目の手順「設定の互換確認」で止まったら、表示のとおり `config.json` を直してコミットし、もう一度 `upgrade`（必須の項目が無い・型や値が違うものだけがエラー。使わない項目は注意だけ。SPEC §96）
+- 初回の導入で今年度の初めから取り込むときは、Run pipeline で変数 `FETCH_MODE` = `initial`（コマンドは `npm run fetch -- --initial`）。年月を手で入れなくてよい（docs/OPERATIONS.md「取り込む期間の 3 とおり」）
 - 案件の顧客名・案件名を案件管理システムの正式な値にそろえるときは、`config.json` に `projectSource` を足し（下の表）、CI/CD 変数 `PROJECT_API_TOKEN` を登録して `npm run fetch:projects -- --dry-run` で確かめる。`contracts.csv` の `note` に案件 ID を書いていたら `--id-from-note` で `project_id` の列に移す（docs/OPERATIONS.md「正式な案件の一覧を取り込む」。SPEC §98）。使わないなら何もしなくてよい
 - 社内 CA が Windows の証明書ストアに入っているなら、`NODE_EXTRA_CA_CERTS` の代わりに `NODE_USE_SYSTEM_CA=1` も使える（Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」）
 - 作業名から案件名を抜き出して紐付けるなら、`config.json` に `projectFromTask`（下の表）を足し、データ確認の「未紐付けの作業実績」で理由「未登録の案件」を確かめる。表記の違いだけのものは `data/project-aliases.csv`（`alias,project_name`）に別名を足す。mapping.csv の作業コードの行・名前の行はそのまま使える（そちらが先。SPEC §97）
@@ -28,6 +30,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 ### テスト・CI の前提
 
 - `npm run ci:check` を足した（`yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC でもプロジェクトの中から動かせる）。CI が使うファイルに加え、`.gitlab-ci.yml`・`.gitlab-ci.local.yml` の GitLab が受け付けない書き方（中身の無いジョブ・空のファイル）も見つける。`init`・`update` の最後の確かめも同じ（SPEC §91.3）
+- `npm run validate`（CI の build）が `config.json` の互換確認も行う。必須の項目が無い・型や値が違うと build が止まる（`npm run config:check` で同じ確かめだけをできる。SPEC §96）
 - `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
 - `.gitlab-ci.yml` に `fetch-projects` ジョブが増える。既定は動かない（スケジュール実行かつ CI/CD 変数 `PROJECT_FETCH_ENABLED=1`、または Run pipeline の変数 `PROJECT_FETCH=1` のときだけ）。`projectSource.adapter` が `none` なら何もしない
@@ -40,6 +43,8 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `yojitsu-navi migrate-ci`: 社内で `.gitlab-ci.yml` に書いたランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移す。移したあとの `update` は `.gitlab-ci.yml` で止まらない（SPEC §91.4）
 - プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 - `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
+- 取り込む期間の初回モード `--initial`（`FETCH_MODE=initial`）: 今年度の初めから今月まで。メンバーマスタから 50 人ずつ取る方式を本番の標準として docs に明記（SPEC §87・§96）
+- `config.json` の互換確認（`npm run config:check`）。`update`・`upgrade`・`npm run validate` でも行う（SPEC §96）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
 - 作業名の目印より前を案件名として抜き出し、contracts.csv の案件名と完全一致する案件へ紐付ける（mapping.csv への作業コードの事前登録が要らない）。表記揺れは `data/project-aliases.csv` の別名だけで吸収し、曖昧一致はしない。contracts.csv に無い案件名は「未登録の案件」として警告。案件名で紐付いた作業の作業コードは未登録に数えず、取り込みで新しい作業コードを知らせるだけにした（SPEC §97）
 - 案件管理システムの正式な案件の一覧の取り込み `npm run fetch:projects`（`data/projects.csv`）。`contracts.csv` に任意列 `project_id`（正式な案件ID）。`project_id` のある案件の顧客名・案件名は一覧の値、期間・金額・担当チームは手入力のまま。ページングなし・取得後の `filters` に対応。データ確認に「正式な案件IDの無い案件」「マスタに無い正式な案件」（SPEC §98）

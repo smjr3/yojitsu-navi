@@ -178,11 +178,12 @@ git push -u origin update-<新しい版>
 | 順 | すること | 中身 |
 |---|---|---|
 | 1 | ファイルを新しい版にする | `yojitsu-navi update`（下）。ブランチ `update-<版>` を作って自動でコミットする |
-| 2 | 依存を入れる | `node scripts/ci/install.mjs`（CI と同じ `npm ci`。依存込みなら `vendor/npm-cache/` から） |
-| 3 | CI が使うファイルの確認 | `yojitsu-navi check` |
-| 4 | データ検証 | `npm run validate` |
-| 5 | テスト | `npm run typecheck`・`npm test`。既定は飛ばす（`--test` か環境変数 `YOJITSU_RUN_TESTS=1` のときだけ。CI の test ジョブと同じ） |
-| 6 | ビルド | `npm run build` |
+| 2 | 設定の互換確認 | 本番の `config.json` が新しい版でそのまま動くか（下の「本番固有の部分とパッケージの部分」）。直すところがあれば止まる |
+| 3 | 依存を入れる | `node scripts/ci/install.mjs`（CI と同じ `npm ci`。依存込みなら `vendor/npm-cache/` から） |
+| 4 | CI が使うファイルの確認 | `yojitsu-navi check` |
+| 5 | データ検証 | `npm run validate` |
+| 6 | テスト | `npm run typecheck`・`npm test`。既定は飛ばす（`--test` か環境変数 `YOJITSU_RUN_TESTS=1` のときだけ。CI の test ジョブと同じ） |
+| 7 | ビルド | `npm run build` |
 
 - 画面には要約だけを出し、全部の出力（ファイルの一覧・変更履歴・npm の出力）は `.yojitsu-navi-log/upgrade-<日時>.log`（UTF-8。git には入りません）に残します。置き場を変えるときは `--log <ファイル>`。失敗したときは、その手順の最後の出力も画面に出します。
 - `--overwrite`・`--keep-local`・`--no-commit`・`--force` は `update` と同じです。直してからもう一度 `upgrade` を実行すれば、済んだところは何も変わらずに進みます。
@@ -193,6 +194,23 @@ git push -u origin update-<新しい版>
 - PowerShell で「このシステムではスクリプトの実行が無効」と出たら、`yojitsu-navi` の代わりに `yojitsu-navi.cmd` と打ちます（npm が入れた `.ps1` が実行ポリシーで止まるため）。
 - プロジェクトの中の `npx yojitsu-navi@<版> …` は 0.2.1 までのプロジェクトでは動きません（プロジェクトの名前がコマンドと同じ `yojitsu-navi` だったため「could not determine executable to run」。次の版から `yojitsu-navi-site`）。`npm install -g` で入れたコマンドを使います。
 - CI の設定だけを確かめるときは、プロジェクトの中で `npm run ci:check`（`yojitsu-navi check` と同じ。コマンドを入れていない PC でも動く）。
+
+### 本番固有の部分とパッケージの部分
+
+本番で決めた設定・データはすべて「本番固有」の置き場にあり、`update`・`upgrade` は触りません（SPEC §96）。版上げのたびに見直す必要はなく、`upgrade` の「設定の互換確認」が通ればそのまま MR・CI に進めます。
+
+| 区分 | 置き場 | 中身 |
+|---|---|---|
+| 本番固有 | `config.json` | 作業実績 API の設定（`worklogSource`: 接続先・列名・作業コードの列・ページング `stopWhen`・取得する人 `members`）、人事の取り込み（`memberSource`）、案件管理システムの正式な案件の一覧（`projectSource`）、作業コードの点検（`taskCodeCheck`）、計算の設定 |
+| 本番固有 | `data/masters/members.csv` | メンバーマスタ（作業実績を取得する人もここから作る） |
+| 本番固有 | `data/contracts.csv`・`data/mapping.csv` など `data/` 以下 | 手入力の契約情報（期間・金額・担当チーム）・対応表・計画。取り込んだ作業実績 |
+| 本番固有 | `.gitlab-ci.local.yml` | Runner のタグ・社内だけのジョブ・変数 |
+| 本番固有 | `.npmrc`、CI/CD 変数 `NPM_CONFIG_REGISTRY`・`NPM_AUTH_TOKEN` | 社内の npm レジストリと認証 |
+| 本番固有 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`・`NODE_USE_SYSTEM_CA`（か社内で足した `certs/`） | 社内の証明書 |
+| 本番固有 | CI/CD 変数 `WORKLOG_API_TOKEN`・`MEMBER_API_TOKEN`・`PROJECT_API_TOKEN`・`GIT_PUSH_TOKEN`・`MEMBER_FETCH_ENABLED`・`PROJECT_FETCH_ENABLED` | 各 API・取り込みの MR のトークン、定期取り込みの有効化 |
+| パッケージ | 上以外（`.gitlab-ci.yml`・`package.json`・`src/`・`scripts/`・`docs/` など） | `update` が新しい版にする（社内で変えていたら止まる。下の「上書きするファイルと残すファイル」） |
+
+「設定の互換確認」は、新しい版で `config.json` に必須の項目が増えた・型や決まった値が変わったものだけをエラーにします（直すまで `upgrade` も CI の build も止まる）。この版で使わない項目・名前が変わった項目は注意として出すだけで止めません。新しい任意の項目は書かなくても既定値で動きます（推奨値は「新しい設定と推奨値」に出ます）。プロジェクトの中では `npm run config:check` で同じ確かめができ、`npm run validate` も含みます。
 
 ### 社内で手を加えたプロジェクトの版を上げる順番
 

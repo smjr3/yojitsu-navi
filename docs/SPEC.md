@@ -1285,6 +1285,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
   - 失敗は記録して **データ確認画面の「データの検証」に警告で出す**: 作業実績は `data/worklogs/_meta.json`、人事は `data/masters/_members-meta.json` の `lastFailure`（日時と理由。トークンは伏せ、300 文字まで）。作業実績の取得日時（`fetchedAt`）は前回成功のまま。次に成功すると消える。
   - CI（`scripts/ci/fetch-data.mjs`）は失敗の記録だけを MR にしてからジョブを失敗で終える（GitLab の通知も出る）。`--dry-run` の失敗は記録しない。
 - `members` を設定しない API はこれまでどおり（社員番号を渡さず全件を取る）。
+- **本番の標準**（2026-11-05 依頼者。§96）: この取り方（`members` ＋ `chunkSize` 既定 50）を本番の標準とする。
 - 実装: `scripts/lib/fetch-targets.ts`（対象者・分割）、`scripts/lib/fetch-status.ts`（失敗の記録）、`scripts/adapters/http.ts`、`buildRequestUrl`（`scripts/adapters/http-source.ts`）。再発防止: `tests/integration/member-targets.test.ts`。
 
 ## 88. 広い画面では横幅を使い切る（2026-11-03 依頼者）
@@ -1413,7 +1414,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 
 ## 94. 版上げを 1 回で行う・update の出力を読みやすくする（2026-11-05 依頼者。導入先のレビュー指摘）
 0.2.1 の適用で: 版上げに update・npm ci・check・データ検証・テスト・ビルドを 1 つずつ打った、update が自動でコミットしたことに気づきにくい、`update --dry-run` の出力が画面からあふれた、社内で足したテスト用のデータが使われないまま残っていた、サンプルのまま残ったデータを手で空にした、PowerShell で日本語が化けた、変更履歴の手順どおり先に `.gitlab-ci.local.yml` を作ると「コミットしていない変更」で止まった。作り変えはパッケージ側で行う（社内のスクリプトにしない。どの導入先でも同じ手順にするため）。
-- **`yojitsu-navi upgrade [フォルダ]`**（`packages/app/lib/upgrade.mjs`）: ①`update` ②依存（`node scripts/ci/install.mjs`。CI の before_script と同じ）③`check` ④`npm run validate` ⑤テスト（`npm run typecheck`・`npm test`。既定は飛ばす。`--test` か環境変数 `YOJITSU_RUN_TESTS=1`。§79.2 の CI と同じ考え）⑥`npm run build` を順に行い、失敗した手順で止める（残りは「未実行」）。最後に手順ごとの結果（済み・失敗・飛ばした・未実行、件数・かかった秒）を出す。`update` のオプション（`--overwrite`・`--keep-local`・`--no-commit`・`--force`）を受け付ける。終了コードは `update` の社内の変更で止まれば 2、ほかの失敗は 1。
+- **`yojitsu-navi upgrade [フォルダ]`**（`packages/app/lib/upgrade.mjs`）: ①`update` ②設定の互換確認（§96）③依存（`node scripts/ci/install.mjs`。CI の before_script と同じ）④`check` ⑤`npm run validate` ⑥テスト（`npm run typecheck`・`npm test`。既定は飛ばす。`--test` か環境変数 `YOJITSU_RUN_TESTS=1`。§79.2 の CI と同じ考え）⑦`npm run build` を順に行い、失敗した手順で止める（残りは「未実行」）。最後に手順ごとの結果（済み・失敗・飛ばした・未実行、件数・かかった秒）を出す。`update` のオプション（`--overwrite`・`--keep-local`・`--no-commit`・`--force`）を受け付ける。終了コードは `update` の社内の変更で止まれば 2、ほかの失敗は 1。
 - **ログ**: `upgrade` は画面に要約だけを出し（`update` は `--summary` と同じ。npm の出力は出さず、失敗したときだけその手順の最後の 40 行を出す）、全部を `.yojitsu-navi-log/upgrade-<年月日-時分秒>.log` に書く（`--log <ファイル>` で変える）。`.yojitsu-navi-log/` は区分「コマンドのもの」で git に入れない（`.gitignore`。古い版の `.gitignore` でも `update` の `git status`・`git add` はこのフォルダを除く）。
 - **`--log <ファイル>`**（`update`・`check`・`reset-data`）: 出力を UTF-8（BOM 付き。メモ帳・PowerShell 5.1 の `Get-Content` でも化けない）のファイルにも書く。止まったときのメッセージも書く。画面の文字コードは変えない（`chcp` はコンソール全体を変えてほかのプログラムに響くため）。PowerShell で化けるときの対処（`[Console]::OutputEncoding`）は `docs/DEPLOY_GITLAB.md`。
 - **`--summary`**（`update`）: 画面には件数（変更・追加・削除・一覧の件数・変更履歴の行数）と、社内で変えたファイルの一覧（止まるかどうかの判断に要る）だけを出す。ファイルの一覧・差分・変更履歴の中身・新しい設定の項目は `--log` のファイルにだけ書く。
@@ -1423,6 +1424,16 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - **`yojitsu-navi reset-data [フォルダ] [--dry-run]`**: §93 の「サンプルのまま残っているデータ」（パッケージのサンプルと中身が同じファイル）だけを直す。`data/worklogs/` の月のファイル・`_meta.json` は消し（取り込みで作り直される）、ほかの CSV は見出しの行だけにする（消すとビルドが止まるものがあるため）。本番のデータ・社内で直したファイル・`config.json` は対象にならない。変える前のファイルは `.yojitsu-navi-backup/<日時>/` に写す。コミットはしない（本番のデータを入れて検証してから MR にするため）。
 - 確認: `tests/integration/app-package.test.ts`「upgrade・reset-data・update の出力」（順番・失敗で止まる・テストは既定で飛ばす・ログ・`--summary`・`--log`・BOM・コミットの表示と番号・`--no-commit`・`.gitlab-ci.local.yml` と `.npmrc`・パッケージに無いファイル・`reset-data`）。
 
+## 96. 取り込む期間の使い分けと、本番の設定の互換確認（2026-11-05 依頼者。導入先のレビュー指摘）
+初回の導入で年度の初めから今月までを手で指定しなくてよいように、また版上げのたびに本番で決めた設定を見直さなくてよいようにする。継続して版を上げる導入先のための仕組みをパッケージ側に持つ。
+- **取り込む期間の 3 とおり**（`scripts/fetch-worklogs.ts`）: 通常＝今月を含む直近 `refetchMonths` か月（スケジュール実行。従来どおり）、初回＝今年度の初めから今月まで（`--initial`、GitLab は Run pipeline の変数 `FETCH_MODE=initial`）、必要なとき＝任意の期間（`--from`・`--to`、`FETCH_FROM`・`FETCH_TO`。§87）。年度の初めは `fiscalYearStartMonth`（既定 4。値が壊れていれば 4）と「今日」から決める（年度・年月を書かない。§49）。`--initial` と `--from`／`--to` は一緒に使えない（エラー）。`FETCH_MODE` は `initial` か `recent`（＝通常）、ほかの値はエラー。取得する人はどれもその期間の在籍者（§87）。`.gitlab-ci.yml` の `fetch-worklogs` は `FETCH_MODE` でも動く。
+- **本番固有の部分とパッケージの部分**: 本番で決めるもの（`config.json`、`data/` 以下〈`members.csv`・手入力の契約情報など〉、`.gitlab-ci.local.yml`、`.npmrc`、証明書・トークンの CI/CD 変数）は `update` が触らない（§91・§91.1）。表は `docs/DEPLOY_GITLAB.md`「本番固有の部分とパッケージの部分」。
+- **設定の互換確認**（`scripts/lib/config-schema.mjs`。Node の標準機能だけで動く）: 設定の項目（型・必須・決まった値・範囲・ページングの種類ごとの項目・名前が変わった／廃止された項目）を宣言で持ち、導入先の `config.json` を確かめる。
+  - エラー: 必須の項目が無い（`worklogSource.http` の `url`・`columns` の 7 項目は `adapter` が `http` のときだけ、人事の `columns.memberId`・`name` は `csv`・`http` のときだけ）、型が違う、決まった値のどれでもない、範囲の外（`fiscalYearStartMonth` 1〜12 など）。
+  - 注意（止めない）: この版で使わない項目（打ち間違い・古い版の項目）、廃止・名前が変わった項目（移し方を出す）。`_` で始まる項目と `$schema` はメモとして見ない。任意の項目が無いことは知らせない（推奨値は CHANGELOG.md「新しい設定と推奨値」。§91.2）。
+  - 使う場所: `npm run config:check`（`scripts/check-config.mjs`。エラーで終了コード 1）、`npm run validate`（エラーは CI の build を止める）、`yojitsu-navi update`（`--dry-run` も。新しい版で動くかを出す）、`yojitsu-navi upgrade` の 2 番目の手順「設定の互換確認」（エラーなら止まる。§94 の手順は update → 設定の互換確認 → 依存 → check → データ検証 → テスト → ビルドの 7 つ）。コマンドは `npm run app:build` が写したもの（`packages/app/lib/config-schema.mjs`）で新しい版の項目と比べる。
+  - 開発元: 項目を足すときはスキーマにも足し、既定値のある任意の項目にする（必須にすると導入先の版上げが止まる）。名前を変える・やめるときは `deprecated` に移し方を書く（`CONTRIBUTING.md`）。
+- 確認: `tests/unit/config-schema.test.ts`（リポジトリの config.json・テスト用の設定・全項目入りの設定が通る＝項目の足し忘れ、エラーと注意の種類、`config:check`・`validate`）、`tests/integration/member-targets.test.ts`「取り込む期間の 3 とおり」「初回の取り込み」、`tests/integration/app-package.test.ts`「config.json が新しい版で動かなければ…」。
 ## 97. 作業名から案件名を抜き出して紐付ける（2026-11-05 依頼者。導入先のレビュー指摘）
 「mapping.csv への作業コードの事前登録を必須にしたくない。作業名の目印より前が案件名なので、contracts.csv の案件名と一致すれば作業コードが未登録でも紐付けたい。目印の後ろの書式は判定に使わない。contracts.csv に無い案件名だけを未登録として警告したい。未登録の作業コードはエラーにせず、新しいコード・名前の変更・監査に使う。表記揺れは別名を明示的に登録したい。曖昧一致で勝手に割り当てない」への対応。依頼者は「完全一致ならやる」（2026-11-05）。
 

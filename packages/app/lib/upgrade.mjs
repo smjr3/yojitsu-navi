@@ -1,11 +1,11 @@
 // yojitsu-navi upgrade（SPEC §94）: 版を上げる作業を 1 回で行う。
-// update → 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト（既定は飛ばす）→ ビルド。
+// update → 設定の互換確認（SPEC §96）→ 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト（既定は飛ばす）→ ビルド。
 // 失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CliError, check, update } from "./project.mjs";
+import { CliError, check, configCompat, update } from "./project.mjs";
 
 /** npm を OS によらず起動する [コマンド, 引数, shell]（Windows の npm は npm.cmd で、shell なしでは起動できないため Node の隣の npm-cli.js を使う） */
 export function npmCommand(args, env = process.env, execPath = process.execPath) {
@@ -80,6 +80,8 @@ export async function upgrade(o) {
   let committed = true;
   let branch = "";
   let notes = 0;
+  /** @type {{ errors: number, warnings: number, lines: string[] } | null} */
+  let configCheck = null;
   /** @type {{ name: string, title: string, run: () => Promise<{ ok: boolean, note?: string, tail?: string[], code?: number }> | { ok: boolean, note?: string, tail?: string[], code?: number }, skip?: string }[]} */
   const steps = [
     {
@@ -92,9 +94,20 @@ export async function upgrade(o) {
         committed = Boolean(r.commit) || (!r.changed.length && !r.added.length && !r.removed.length && o.update?.commit !== false);
         branch = r.commit?.branch ?? "";
         notes = r.notes.length;
+        configCheck = r.configCheck ?? null;
         const note = `変更 ${r.changed.length}・追加 ${r.added.length}・削除 ${r.removed.length}${r.commit ? `・ブランチ ${r.commit.branch} にコミット（${r.commit.hash}）` : r.changed.length + r.added.length + r.removed.length ? "・コミットしていない" : ""}`;
         const warn = [r.sampleLeft.length ? `サンプルのまま残っているデータ ${r.sampleLeft.length}` : "", r.extras.length ? `パッケージに無いファイル ${r.extras.length}` : ""].filter(Boolean);
         return { ok: true, note: warn.length ? `${note}（要確認: ${warn.join("・")}）` : note };
+      },
+    },
+    {
+      name: "config",
+      title: "設定の互換確認（config.json）",
+      run: () => {
+        // 本番で決めた設定（config.json）が新しい版でそのまま動くかだけを見る。必須の項目の追加・型や値の違いがあれば止める（SPEC §96）
+        const c = configCheck ?? configCompat(dir);
+        if (c.errors) return { ok: false, tail: [...c.lines, "config.json を直してコミットしてから、もう一度 yojitsu-navi upgrade を実行してください（項目は docs/DATA.md）"] };
+        return { ok: true, note: c.warnings ? `問題なし（注意 ${c.warnings}。ログのファイルに一覧）` : "問題なし" };
       },
     },
     {

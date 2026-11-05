@@ -24,6 +24,8 @@
 
 `config.json` の項目は `src/core/types.ts` の `Config` を参照。
 
+`config.json` が今の版で動くかは `npm run config:check`（`npm run validate`・`yojitsu-navi upgrade`・`update` も同じ確かめをする。SPEC §96）で確かめる。必須の項目が無い・型や値が違うとエラー（CI の build が止まる）、この版で使わない項目・廃止された項目は注意（止めない）。`_` で始まる項目（`"_comment"` など）はメモとして見ない。開発元で項目を足す・変えるときは `scripts/lib/config-schema.mjs` も直す。
+
 `taskCodeCheck`（作業コードの点検。省略 = 点検しない。SPEC §92）: `include`（運用保守の作業名に含むキーワード）、`exclude`（含むと対象外）、`onUnregistered`（未登録の作業コードを見つけたとき `warn` = 警告だけ・既定 / `stop` = 取り込みを失敗にする）、`onChange`（作業名の変更・キーワードの一致の変化を見つけたとき。`warn` / `stop`。`stop` で止まったら確かめて `FETCH_ACCEPT_TASK_CHANGES=1` で取り込む）。
 
 `projectFromTask`（作業名から案件名を抜き出して紐付ける。省略 = 使わない。SPEC §97）: `marker`（運用保守の目印。作業名の最初の目印より前を案件名とし、contracts.csv の `project_name` と完全一致する案件へ紐付ける。全角半角・空白は区別しない）、`enabled`（`false` で止める。既定 `true`）。mapping.csv の行がある作業はそちらが先。目印も mapping.csv の行も無い作業は運用保守以外。表記揺れは `data/project-aliases.csv` に別名を登録する（曖昧一致はしない）。

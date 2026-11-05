@@ -858,6 +858,8 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       });
     const files = (v: string) => ({
       ...v1,
+      // 設定の互換確認（§96）が通る本物の config.json
+      "config.json": readFileSync(join(ROOT, "config.json"), "utf-8"),
       "src/a.js": `a${v}`,
       "package.json": pkgJsonFor(v),
       "package-lock.json": "{}\n",
@@ -877,7 +879,7 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       const file = join(dir, app.LOG_DIR, "upgrade-test.log");
       const o = out.createOutput({ file, summary: true, screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s) });
       const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
-      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "skipped", "ok"]);
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "skipped", "ok"]);
       expect(r.code).toBe(0);
       expect(screen.join("\n")).toContain("結果: すべて済みました");
       expect(screen.join("\n")).toContain("git push -u origin update-1.1.0");
@@ -896,11 +898,11 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       const o = out.createOutput({ screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s), summary: true });
       const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, test: true, env: { ...process.env, FAIL_VALIDATE: "1" } });
       expect(r.code).toBe(1);
-      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "failed", "notRun", "notRun"]);
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "failed", "notRun", "notRun"]);
       expect(screen.join("\n")).toContain("検証した");
       expect(screen.join("\n")).toContain("データ検証（npm run validate） で止まりました");
       const again = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, test: true, env: { ...process.env, FAIL_VALIDATE: "" } });
-      expect(again.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "ok"]);
+      expect(again.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "ok", "ok"]);
     }, scaled(120_000));
 
     it("自動のコミットに失敗したら（フックに断られたなど）update の手順で止まる。--no-commit なら進む", async () => {
@@ -908,7 +910,7 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       writeFileSync(join(dir, ".git", "hooks", "pre-commit"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
       const o = out.createOutput({ screen: () => {}, errScreen: () => {} });
       const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
-      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["failed", "notRun", "notRun", "notRun", "notRun", "notRun"]);
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["failed", "notRun", "notRun", "notRun", "notRun", "notRun", "notRun"]);
       expect(r.code).toBe(1);
     }, scaled(60_000));
 
@@ -926,6 +928,33 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(text).toContain("日本語の診断");
       expect(text).not.toContain("\uFFFD");
       expect(r.steps[0].note).not.toContain("パッケージに無いファイル");
+    }, scaled(120_000));
+
+    it("config.json が新しい版で動かなければ（必須の項目が無い・値が違う）設定の互換確認で止まる。直せば進む（§96）", async () => {
+      const { dir, up, pkg } = await setup("v96-up-config");
+      const cfg = JSON.parse(readFileSync(join(dir, "config.json"), "utf-8"));
+      cfg.taskCodeCheck.onChange = "halt";
+      delete cfg.forecastRecentMonths;
+      cfg.oldSetting = 1;
+      writeFileSync(join(dir, "config.json"), JSON.stringify(cfg, null, 2));
+      git(dir, "commit", "-qam", "本番の設定");
+      const screen: string[] = [];
+      const o = out.createOutput({ screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s), summary: true });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.code).toBe(1);
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "failed", "notRun", "notRun", "notRun", "notRun", "notRun"]);
+      const text = screen.join("\n");
+      expect(text).toContain("taskCodeCheck.onChange");
+      expect(text).toContain("forecastRecentMonths: 必須の項目がありません");
+      expect(text).toContain("設定の互換確認（config.json） で止まりました");
+      // 直してコミットすれば、注意（使わない項目）だけでは止まらない
+      cfg.taskCodeCheck.onChange = "warn";
+      cfg.forecastRecentMonths = 3;
+      writeFileSync(join(dir, "config.json"), JSON.stringify(cfg, null, 2));
+      git(dir, "commit", "-qam", "設定を直す");
+      const again = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(again.code).toBe(0);
+      expect(again.steps[1].note).toContain("注意 1");
     }, scaled(120_000));
 
     it("社内で変えたファイルで update が止まれば、終了コード 2 で止まる", async () => {

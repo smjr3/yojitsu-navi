@@ -100,7 +100,7 @@ Settings > CI/CD > Variables に登録します。
 
 ### 取得する人をメンバーマスタから決める（SPEC §87）
 
-社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
+**本番の標準の取り方です**（SPEC §96）: 取得する人をメンバーマスタの在籍者から作り、50 人ずつに分けて取ります。社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
 
 ```json
 "members": { "param": "member_ids", "chunkSize": 50 }
@@ -132,6 +132,18 @@ Settings > CI/CD > Variables に登録します。
 
 ページングは、上限ページ数（`maxPages`、既定 5000）と、同じカーソル・同じページの繰り返しの検出で無限ループしません。上限を超えたらエラーで止め、ファイルは書き換えません（データ確認画面の「データの検証」に警告が出ます。SPEC §87）。
 トークンはログにも例外メッセージにも出ません（環境変数のみ）。
+
+### 取り込む期間の 3 とおり（SPEC §96）
+
+| いつ | 取る期間 | コマンド | GitLab |
+|---|---|---|---|
+| 通常（毎日） | 今月を含む直近 `refetchMonths` か月（既定 3。前月の締め後の訂正も拾う） | `npm run fetch` | スケジュール実行（変数なし） |
+| 初回の導入 | 今年度の初め（`fiscalYearStartMonth`、既定 4 月）から今月まで | `npm run fetch -- --initial` | Run pipeline で変数 `FETCH_MODE` = `initial` |
+| 必要なとき | 好きな期間（過去の年度も。人を絞ることもできる） | `npm run fetch -- --from YYYY-MM --to YYYY-MM`（`--members` も可） | Run pipeline で変数 `FETCH_FROM`・`FETCH_TO`（`FETCH_MEMBERS`） |
+
+- どれも取得する人は、その期間に在籍していた人（メンバーマスタから。上の「取得する人をメンバーマスタから決める」）。期間の月のファイルを全員分で書き直します
+- `--initial` と `--from` / `--to` は一緒に使えません。年度の途中で導入したときは、初回に `--initial`、前の年度が要れば `--from`・`--to` で足します
+- `FETCH_MODE`・`FETCH_FROM` などは Run pipeline でだけ入れ、CI/CD 変数（Settings）には登録しません（毎日の取り込みが同じ期間になります）
 
 ### 氏名・役職を人事データから取り込む（任意）
 
