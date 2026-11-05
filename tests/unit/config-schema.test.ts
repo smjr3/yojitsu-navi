@@ -90,10 +90,13 @@ describe("config.json の互換確認（§96）", () => {
     c.worklogSource.adapter = "http";
     expect(codes(c)).toEqual(["error:CONFIG_MISSING:worklogSource.http"]);
     c.worklogSource.http = { refetchMonths: 3 };
-    expect(codes(c)).toEqual(["error:CONFIG_MISSING:worklogSource.http.authHeader", "error:CONFIG_MISSING:worklogSource.http.columns", "error:CONFIG_MISSING:worklogSource.http.url"]);
+    // authHeader は省略で Authorization（http-source.ts）なので必須にしない
+    expect(codes(c)).toEqual(["error:CONFIG_MISSING:worklogSource.http.columns", "error:CONFIG_MISSING:worklogSource.http.url"]);
     const m = repoConfig();
-    m.memberSource = { adapter: "csv" };
+    m.memberSource = { adapter: "none" };
     expect(codes(m)).toEqual([]);
+    m.memberSource = { adapter: "csv" };
+    expect(codes(m)).toEqual(["error:CONFIG_MISSING:memberSource.columns", "error:CONFIG_MISSING:memberSource.csv"]);
     m.memberSource.csv = {};
     m.memberSource.columns = {};
     expect(codes(m)).toEqual(["error:CONFIG_MISSING:memberSource.columns.memberId", "error:CONFIG_MISSING:memberSource.columns.name", "error:CONFIG_MISSING:memberSource.csv.path"]);

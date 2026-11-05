@@ -43,12 +43,12 @@ const PAGINATION = {
   },
 };
 const ENCODING = oneOf(["auto", "utf-8", "shift_jis"]);
-/** http の取得元の共通の項目（作業実績・人事。url・authHeader は adapter が http のときだけ必須） */
+/** http の取得元の共通の項目（作業実績・人事。url は adapter が http のときだけ必須。authHeader は省略で Authorization） */
 function httpOptions(isHttp, extra = {}) {
   const when = { required: isHttp, requiredWhen: "adapter が http のとき" };
   return obj({
     url: str(when),
-    authHeader: str(when),
+    authHeader: str(),
     authScheme: str(),
     dataPath: str(),
     method: str(),
@@ -102,7 +102,10 @@ export const CONFIG_SCHEMA = obj({
   ),
   memberSource: obj({
     adapter: oneOf(["csv", "http", "none"], { required: true }),
-    csv: obj({ path: str({ required: (root) => memberAdapter(root) === "csv", requiredWhen: "adapter が csv のとき" }), encoding: ENCODING }),
+    csv: obj(
+      { path: str({ required: (root) => memberAdapter(root) === "csv", requiredWhen: "adapter が csv のとき" }), encoding: ENCODING },
+      { required: (root) => memberAdapter(root) === "csv", requiredWhen: "adapter が csv のとき" },
+    ),
     http: httpOptions((root) => memberAdapter(root) === "http"),
     columns: obj({
       memberId: column({ required: (root) => ["csv", "http"].includes(memberAdapter(root)), requiredWhen: "adapter が csv・http のとき" }),
@@ -112,7 +115,7 @@ export const CONFIG_SCHEMA = obj({
       division: column(),
       department: column(),
       section: column(),
-    }),
+    }, { required: (root) => ["csv", "http"].includes(memberAdapter(root)), requiredWhen: "adapter が csv・http のとき" }),
     kindMap: { type: "object", props: {}, additional: oneOf(["employee", "partner"]) },
     filters: arr(FILTER),
   }),
