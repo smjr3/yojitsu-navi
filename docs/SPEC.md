@@ -1158,7 +1158,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ### 80.1 案件（期間・金額・担当チームだけ直せる）
 - 1 行 = 1 件（`contracts.csv` の 1 行。履歴は持たない。更新・金額変更は §32 のとおり別 ID の行）。列: 顧客（先頭。下に案件ID）・案件名・開始月・終了月・金額（円・税抜。`48,000,000円` の形。CSV の読み込みと同じく `48,000,000`・全角・`円` 付きも数値として表示・並べ替え）・担当チーム（名前）・メモ。並べ替え・列ごとの絞り込み・列幅・検索・「変更・エラーの行だけ表示」は他の表と同じ（§70・§73）。案件名・メモのような自由な文字の列は折り返す。
 - **顧客名・案件名は他システムから API で取り込む予定**（依頼者）なので、画面で変えられるのは **開始月・終了月・金額・担当チームだけ**（担当チームは依頼者の指示で編集可）。案件ID・顧客名・案件名・メモは修正のダイアログの上に値だけ出し（「他システムから取り込むため変更できません」）、入力欄にしない。行の追加・削除と CSV で編集も出さない（行は取り込みで増減する）。決め方は `MASTER_FILES.contracts.editableColumns`。
-- 取り込みの方式（列名・頻度、画面で直した期間・金額・担当チームを取り込みで上書きしないか）は未定。決まったら取り込みの側で、それらを上書きしないように作る。
+- 取り込みは §98（案件管理システムの正式な案件の一覧）。取り込みが書き換えるのは `project_id` のある行の顧客名・案件名だけで、画面で直す期間・金額・担当チームは上書きしない。`project_id` の列がある contracts.csv では修正のダイアログに「正式な案件ID」を値だけ出す（一覧の列にはしない。表が横にはみ出すため。画面では変えず、CSV で入れる）。
 - 確認: 予算は金額を期間の月数で均等に割るので、金額・期間を変えるとその案件の期間の月の予算が変わる。計算基準月以前の月にかかれば §19.1 と同じ「過去の計算結果が変わります（影響: n か月）」を出す（予算・残予算・消化率・着地見込み）。担当チームを変えると、計算基準月以前の期間の月のチーム別の集計が変わる（同じ確認）。
 - 検証は今の `contracts.csv` の検証（§14: 月の形式、期間の逆転、金額など）を編集中の内容で行い、エラーは行に出す。
 - 保存時に変更した行へ変更者・変更日（`updated_by`・`updated_at`、§56）を書く（列が無ければ末尾に足す）。一覧の顧客名の下に出す。
@@ -1404,7 +1404,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 ## 93. 利用環境に配るテストとサンプルデータを減らす（2026-11-04 依頼者。導入先のレビュー指摘）
 0.2.0 の導入で: 利用環境の CI でテストに 20 分以上かかった、開発元だけのテスト（`app-package.test.ts` は接続先が設定済みの利用環境では必ず失敗）が入っていた、テストが本番の `config.json`・`data/` に依存して失敗した、約 13 MB のサンプルの作業実績が `data/` に展開され本番のデータと混ざるおそれがあった。
 - **配るものの分け方**（`packages/app/lib/template-files.mjs`）: `npm run app:build` の template は git が管理するファイルから、開発元だけのもの（`CLAUDE.md`・`CONTRIBUTING.md`・`packages/`・パッケージの組み立てと公開のスクリプト）とテストを除く。package.json からは開発元だけの scripts（`app:build`・`app:pack`・`test:e2e`・`test:e2e:smoke`）を外す。
-- **利用環境のテスト**は運用に要るもの（取り込み・データ検証・CI のスクリプト）だけ: `USER_TESTS` の 9 ファイルと、それが読むヘルパー・`tests/test-env.ts`・`tests/fixtures/`。計算・画面・パッケージ・ダミーデータ・ファズ・プロパティ・性能・E2E は開発元だけ。型チェックは配ったファイルで通す。
+- **利用環境のテスト**は運用に要るもの（取り込み・データ検証・CI のスクリプト）だけ: `USER_TESTS` の 10 ファイル（§98 で `project-fetch.test.ts` を追加）と、それが読むヘルパー・`tests/test-env.ts`・`tests/fixtures/`。計算・画面・パッケージ・ダミーデータ・ファズ・プロパティ・性能・E2E は開発元だけ。型チェックは配ったファイルで通す。
 - **テストは本番の設定・データを使わない**: 設定は `tests/fixtures/project.ts` の `testConfig()`、データは `tests/fixtures/project/data/`（ダミーデータから作った固定の小さなもの。作業実績は 3 か月の各月 1〜5 日）を一時フォルダに写して使う。ダミーデータの生成を変えても作り直さない。開発元だけのテスト（`dummy-data.test.ts` など）はリポジトリのサンプル `data/` を見てよい。
 - **data/ はサンプルなし**: template の `data/` は各 CSV の見出しの行だけ（祝日 `holidays.csv`・作業種類 `task-types.csv` はそのまま。作業実績は入れない）。空のままでも検証・ビルドは通る。サンプル（リポジトリの `data/` 一式）はパッケージの `sample/` に入れ、`yojitsu-navi init --sample` のときだけ入れる（既定はなし。`--no-sample` も受け付ける）。`init` は知らないオプションで止める。
 - **update**: 前の版で配っていた開発元だけのファイルは「新しい版に無い」ので消える（社内で変えていたら §91 のとおり止まる）。`data/` のうちパッケージのサンプルと中身が同じファイル（空の `data/` と同じものは除く）を「サンプルのまま残っているデータ」として一覧に出す（消さない。`--dry-run` でも出す）。消し方は `docs/DEPLOY_GITLAB.md`「サンプルのデータを消す」。
@@ -1421,3 +1421,37 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - **パッケージに無いファイル**: `update`（`--dry-run` も）は、パッケージにも前の版の記録にも無いファイル（社内で足したもの。区分「残す」）を一覧で知らせる（触らない）。git のプロジェクトでは git が管理する・除外設定に当たらないファイルから探す。`config.json`・`data/`・`.gitlab-ci.local.yml`・`.npmrc`・コマンドのものは出さない。
 - **`yojitsu-navi reset-data [フォルダ] [--dry-run]`**: §93 の「サンプルのまま残っているデータ」（パッケージのサンプルと中身が同じファイル）だけを直す。`data/worklogs/` の月のファイル・`_meta.json` は消し（取り込みで作り直される）、ほかの CSV は見出しの行だけにする（消すとビルドが止まるものがあるため）。本番のデータ・社内で直したファイル・`config.json` は対象にならない。変える前のファイルは `.yojitsu-navi-backup/<日時>/` に写す。コミットはしない（本番のデータを入れて検証してから MR にするため）。
 - 確認: `tests/integration/app-package.test.ts`「upgrade・reset-data・update の出力」（順番・失敗で止まる・テストは既定で飛ばす・ログ・`--summary`・`--log`・BOM・コミットの表示と番号・`--no-commit`・`.gitlab-ci.local.yml` と `.npmrc`・パッケージに無いファイル・`reset-data`）。
+
+## 98. 案件管理システムの正式な案件の一覧と照合する（2026-11-05 依頼者。導入先のレビュー指摘）
+案件の顧客名・案件名を人が推測して入れるのをやめ、外部の案件管理システムの正式な値（案件ID・顧客名・案件名）を正とする。期間・金額などの手入力の情報と組み合わせる。案件ID はメモではなく正式な列で持つ。ページングに対応しない API、サーバー側で絞り込めない API にも合わせる。照合できない案件は推測で登録せず保留し、外部にあってマスタに無い案件を確かめられるようにする。接続先・列名・条件は導入先の `config.json` に置く。
+
+### 98.1 データ
+- **`data/projects.csv`**（`project_id, customer_name, project_name`。省略可）: 案件管理システムの正式な案件の一覧。`npm run fetch:projects` が取り込んだ一覧で丸ごと置き換える（案件ID順。並べ替えは言語に依らない）。手では直さない。無い・空なら照合しない（取り込みを使わない導入先はこれまでどおり）。
+- **`contracts.csv` の任意列 `project_id`**（正式な案件ID）: 空 = 未照合（保留）。契約の更新（§32。別の契約ID の行）の前後は同じ `project_id` でよい。列が無いファイルもそのまま読める（読み込みは見出しの名前で列を探す）。
+- 何を正とするか: **顧客名・案件名 = 正式な案件の一覧**（`project_id` のある行だけ）。**契約期間（`start_month`・`end_month`）・金額（`total_amount`）・担当チーム（`team_id`）= contracts.csv の手入力**。`team_id` は空でよく（§80 の「担当チーム未設定」）、後でマスタ編集の「案件」か CSV で入れる。
+- 作業実績の紐付け（§86・§92、作業名から案件名を取り出す紐付け）はこれまでどおり contracts.csv の顧客名・案件名を見る。取り込みで contracts.csv の名前を正式な値に書き換えるので、紐付けも正式な案件名で行われる（読み込みのときに 2 つのファイルを結合しない）。
+
+### 98.2 取り込み（`npm run fetch:projects`。`config.json` の `projectSource`）
+- 設定は `memberSource`（§20.2）と同じ形: `adapter`（`none` 既定・`csv`・`http`）、`csv`、`http`（`worklogSource.http` と同じ項目）、`columns`（`projectId`・`customerName`・`projectName`。3 つとも必須）、`filters`。トークンは環境変数 `PROJECT_API_TOKEN`（ログ・記録には出さない）。`PROJECT_ADAPTER` でアダプタを上書きできる。
+- **ページングなし**: `http.pagination` を書かなければ 1 回のリクエストで全件を取り、ページ・件数のパラメータを付けない（§90 の `type: "none"`。既定）。
+- **取得後の絞り込み**: `filters`（`equals`・`notEquals`・`in`。すべてに合う行だけ。入れ子の列はドット区切り）で、案件の種類・状態などを取得した後で判定する。値は文字列にしてから比べるので、`1` と `"1"`・`true` と `"true"` は同じ。合わない件数はログに出す。
+- 書き込み: `projects.csv` を置き換え、contracts.csv の **`project_id` のある行の `customer_name`・`project_name` だけ**を一覧の値にする。ほかの列（期間・金額・担当チーム・メモ・変更者）は触らない。行を足さない・消さない。`project_id` が一覧に無い行も触らない（検証の警告）。変化が無ければ書かない。2 つのファイルは両方書けたときだけ置き換える（§87 の `writeFilesAtomic`）。
+- 案件ID が空の行は捨て、同じ案件ID は先頭を採用する（ログに件数）。
+- **失敗**: 通信・列の欠落・**0 件**（`filters`・`dataPath` の誤りとみなす）のときは、どちらのファイルも書き換えず、`data/_projects-meta.json` の `lastFailure` に記録してデータ確認の「データの検証」に警告 `PROJECT_FETCH_FAILED` を出す（§87 と同じ。次に成功すると消える）。
+- `--dry-run --sample=N`: 書かずに、列の対応表・取り込む案件の先頭 N 件・contracts.csv の変更・照合の件数を出す。知らないオプションは止める。
+- **移行（初回だけ。指定したときだけ行う）**:
+  - `--id-from-note "<正規表現>"`: `project_id` が空の行のメモから、正規表現の 1 つ目のかっこ（無ければ一致した全体）を `project_id` に移し、一致した部分をメモから消す。
+  - `--link-exact`: `project_id` が空の行のうち、案件名（§4.1 の正規化）が同じ正式な案件が **ちょうど 1 件** のときだけ、その ID を入れる。複数あれば入れずに候補を出す。無ければ保留。顧客名・案件名の似たものを探す曖昧な照合はしない。
+  - `project_id` の列が無ければ `contract_id` の次に足す。結果は MR の差分で確かめる。
+- CI: `.gitlab-ci.yml` の `fetch-projects` ジョブ（`node scripts/ci/fetch-data.mjs projects`）。スケジュール実行かつ CI/CD 変数 `PROJECT_FETCH_ENABLED=1`、または Run pipeline で変数 `PROJECT_FETCH=1` のときだけ動く。結果は `data/projects-<日時>` の MR（`projects.csv`・`contracts.csv`・`_projects-meta.json`）。`adapter` が `none` なら何もしない。
+
+### 98.3 検証と画面
+- 検証（§14。一覧があるときだけ）: `PROJECT_ID_EMPTY`・`DUPLICATE_PROJECT_ID`（error。projects.csv の案件ID の空・重複）、`PROJECT_ID_UNKNOWN`（warning。contracts.csv の `project_id` が一覧に無い）、`PROJECT_NAME_MISMATCH`（warning。`project_id` のある行の顧客名・案件名が一覧と違う。取り込みで直る）。未照合（`project_id` が空）は保留でよいので警告にしない。
+- データ確認（一覧があり、該当があるときだけ見出しごと出す。説明は見出し横の「?」）:
+  - **正式な案件IDの無い案件**: 案件ID・顧客名・案件名・期間・候補の正式な案件ID（案件名が §4.1 の正規化で同じもの。自動では入れない）。顧客名・期間はスマホで隠す。
+  - **マスタに無い正式な案件**: 一覧にあって、contracts.csv のどの行の `project_id` にも無いもの（正式な案件ID・顧客名・案件名）。新しい保守の案件の見落としを防ぐ。行の追加は contracts.csv で行う（§80 のとおり画面では足さない）。
+- マスタ編集の「案件」: `project_id` の列があるときだけ、修正のダイアログに「正式な案件ID」を値だけ出す（画面では変えない。一覧の列にはしない `listHidden`）。列が無いファイルに列を足さない（`onlyIfPresent`）。
+- ダミーデータ: 同じ顧客名・案件名の案件に同じ正式な案件ID（`PJ-0001`〜）。C009（同じ案件名の候補あり）と C021（候補なし）は保留。一覧にだけある案件が 3 件（C009 の案件と、架空の 2 件）。
+- 実装: `src/core/projects.ts`（`checkProjects`・`validateProjects`）、`scripts/adapters/projects.ts`、`scripts/lib/projects-merge.ts`（`syncContracts`）、`scripts/fetch-projects.ts`、`src/data-check.md`。`packages/app/lib/project.mjs` の `applyGitlabTarget` は `masterEdit` より後ろだけを書き換える（`projectSource.columns.projectId` と名前が同じため）。
+- 再発防止: `tests/unit/projects.test.ts`、`tests/integration/project-fetch.test.ts`（利用環境にも配る）、`tests/e2e/projects.spec.ts`。
+

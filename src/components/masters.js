@@ -864,7 +864,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 目標は対象の名前（チーム・顧客・案件）を先頭に出す。案件（§80）は顧客名（補足に案件ID）
     const isGoal = fileId === "targets";
     const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : fileId === "contracts" && doc.header.includes("customer_name") ? "customer_name" : null;
-    const columns = def.columns.filter((c) => doc.header.includes(c.name) && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
+    const columns = def.columns.filter((c) => doc.header.includes(c.name) && !c.listHidden && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
     const keyDef = def.columns.find((c) => c.name === keyColumn);
     const leadLabel = isGoal ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
     const colCount = columns.length + (isList ? 3 : 4);

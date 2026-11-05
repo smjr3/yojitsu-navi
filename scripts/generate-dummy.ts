@@ -16,6 +16,7 @@
  *   data/masters/teams.csv, data/masters/members.csv, data/masters/rates.csv
  *   data/worklogs/YYYY-MM.csv, data/worklogs/_meta.json
  *   data/task-types.csv（作業種別の分類表。SPEC §30）
+ *   data/projects.csv（案件管理システムの正式な案件の一覧。SPEC §98）と contracts.csv の project_id
  */
 import { mkdirSync, writeFileSync, readdirSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -785,6 +786,41 @@ function withTargetStamps<T>(rows: readonly T[], asOf: string): Array<T & { upda
   return rows.map((r, i) => ({ ...r, updated_by: STAMP_USERS[(i + 1) % STAMP_USERS.length] as string, updated_at: at }));
 }
 
+/** 正式な案件ID を入れない（未照合のまま保留する）案件の例（§98）。C009 は同じ案件名の候補あり、C021 は候補なし */
+export const DUMMY_UNLINKED_CONTRACTS: ReadonlySet<string> = new Set(["C009", "C021"]);
+
+/** 正式な案件の一覧にだけある案件の例（契約マスタに未登録。§98） */
+const DUMMY_EXTRA_PROJECTS = [
+  { customer_name: "やまびこ通信", project_name: "監視基盤更改" },
+  { customer_name: "つばめ運輸", project_name: "倉庫連携システム保守" },
+];
+
+/**
+ * 正式な案件の一覧（§98）。同じ顧客名・案件名の案件（更新の前後）は同じ正式な案件ID（PJ-0001 から出てきた順）。
+ * DUMMY_UNLINKED_CONTRACTS の案件には ID を入れない（C009 の案件は一覧にあるので候補として出る）
+ */
+export function dummyProjects(contracts: readonly ContractRow[]): { contracts: Array<ContractRow & { project_id: string }>; projects: Array<{ project_id: string; customer_name: string; project_name: string }> } {
+  const ids = new Map<string, string>();
+  const projects: Array<{ project_id: string; customer_name: string; project_name: string }> = [];
+  const idOf = (customer: string, project: string): string => {
+    const key = `${customer}\u0000${project}`;
+    let id = ids.get(key);
+    if (id === undefined) {
+      id = `PJ-${String(ids.size + 1).padStart(4, "0")}`;
+      ids.set(key, id);
+      projects.push({ project_id: id, customer_name: customer, project_name: project });
+    }
+    return id;
+  };
+  const out = contracts.map((c) => {
+    if (c.contract_id === "C021") return { ...c, project_id: "" };
+    const id = idOf(c.customer_name, c.project_name);
+    return { ...c, project_id: DUMMY_UNLINKED_CONTRACTS.has(c.contract_id) ? "" : id };
+  });
+  for (const p of DUMMY_EXTRA_PROJECTS) idOf(p.customer_name, p.project_name);
+  return { contracts: out, projects };
+}
+
 export interface WriteOptions extends GenOptions {
   outDir: string;
 }
@@ -796,7 +832,9 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   mkdirSync(join(out, "masters"), { recursive: true });
   mkdirSync(join(out, "worklogs"), { recursive: true });
 
-  writeFileSync(join(out, "contracts.csv"), csv(g.contracts, ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
+  const pj = dummyProjects(g.contracts);
+  writeFileSync(join(out, "contracts.csv"), csv(pj.contracts, ["contract_id", "project_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
+  writeFileSync(join(out, "projects.csv"), csv(pj.projects, ["project_id", "customer_name", "project_name"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include", "task_code", "start_month", "end_month"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));

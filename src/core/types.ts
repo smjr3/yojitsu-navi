@@ -44,6 +44,8 @@ export interface Config {
   worklogSource: WorklogSourceConfig;
   /** 所属・役職の取り込み元（省略 = none: 手入力） */
   memberSource?: MemberSourceConfig;
+  /** 正式な案件の一覧の取り込み元（案件管理システム。§98）。省略 = none: 取り込まない */
+  projectSource?: ProjectSourceConfig;
   costTypes: CostTypeDef[];
   /** マスタ編集画面の保存方式（SPEC §19.2）。省略時は download */
   masterEdit?: MasterEditConfig;
@@ -124,8 +126,8 @@ export interface MemberTargetConfig {
 
 /** 取り込みの失敗の記録（§87。_meta.json の lastFailure。データ確認画面に出す） */
 export interface FetchFailure {
-  /** worklogs = 作業実績、members = 人事（所属・役職） */
-  source: "worklogs" | "members";
+  /** worklogs = 作業実績、members = 人事（所属・役職）、projects = 正式な案件の一覧（§98） */
+  source: "worklogs" | "members" | "projects";
   /** 失敗した日時（ISO 8601） */
   at: string;
   message: string;
@@ -195,6 +197,21 @@ export interface MemberSourceConfig {
   filters?: SourceFilter[];
 }
 
+/** 正式な案件の一覧の取り込み項目（§98） */
+export type ProjectImportField = "projectId" | "customerName" | "projectName";
+
+/** 正式な案件の一覧の取り込み元（案件管理システム。§98）。adapter が none の間は取り込まない */
+export interface ProjectSourceConfig {
+  adapter: "csv" | "http" | "none";
+  csv?: { path: string; encoding?: "auto" | "utf-8" | "shift_jis" };
+  /** pagination を省略するとページングなし（1 回で全件） */
+  http?: HttpSourceOptions;
+  /** 取得元の列名。3 つとも必須 */
+  columns?: Partial<Record<ProjectImportField, ColumnSpec>>;
+  /** 任意: 取得した後で取り込む案件を絞る条件（案件の種類・状態など。すべてに合う行だけ） */
+  filters?: SourceFilter[];
+}
+
 // ---------------------------------------------------------------------------
 // 入力データ（data/ 配下のCSVと同じ構造）
 // ---------------------------------------------------------------------------
@@ -210,6 +227,15 @@ export interface Contract {
   /** 契約総額（税抜・円） */
   totalAmount: number;
   note?: string;
+  /** 正式な案件の ID（案件管理システム。§98）。空 = 未照合 */
+  projectId?: string;
+}
+
+/** 正式な案件（data/projects.csv。案件管理システムから取り込む。§98） */
+export interface Project {
+  projectId: string;
+  customerName: string;
+  projectName: string;
 }
 
 export interface MappingRule {
@@ -361,6 +387,8 @@ export interface Dataset {
   outsidePlans?: OutsidePlan[];
   /** 目標（§63）。省略・空 = なし */
   targets?: Target[];
+  /** 正式な案件の一覧（§98）。省略・空 = 取り込んでいない（照合しない） */
+  projects?: Project[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }
