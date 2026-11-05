@@ -90,6 +90,11 @@ describe("合わせた結果で見る（SPEC §91.3）", () => {
     const local = "build: {}\n.yojitsu-navi-local: {}\n";
     expect(gitlabLint(CI, { ".gitlab-ci.local.yml": local })).toEqual(["jobs:.yojitsu-navi-local config can't be blank"]);
     expect(lintCiYaml(local, ".gitlab-ci.local.yml", new Set(filledKeys(CI)))).toEqual([expect.stringContaining(".yojitsu-navi-local")]);
+    // .gitlab-ci.yml（合わせるとき勝つ）の null・空は include の中身を消すので知らせる。{} は合わさるので知らせない
+    const job = "build:\n  script: [a]\n";
+    for (const [main, bad] of [["build: null\n", true], ["build:\n", true], ["build: {}\n", false]] as const) {
+      expect(lintCiYaml(main, ".gitlab-ci.yml", new Set(filledKeys(job)), true).length > 0).toBe(bad);
+    }
   });
 });
 

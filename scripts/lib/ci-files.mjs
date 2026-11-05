@@ -180,7 +180,7 @@ export function checkCiFiles(projectDir, o = {}) {
   }
   // GitLab は include を合わせてから確かめるので、ほかの定義が中身つきで書いた項目は空でもよい
   const defs = definitions.filter((f) => isFile(join(projectDir, f))).map((f) => ({ f, text: readFileSync(join(projectDir, f), "utf-8") }));
-  const invalid = defs.flatMap(({ f, text }) => lintCiYaml(text, f, new Set(defs.filter((d) => d.f !== f).flatMap((d) => filledKeys(d.text)))));
+  const invalid = defs.flatMap(({ f, text }) => lintCiYaml(text, f, new Set(defs.filter((d) => d.f !== f).flatMap((d) => filledKeys(d.text))), f === CI_FILE));
   return { required: files, missing, untracked, missingScripts, invalid };
 }
 

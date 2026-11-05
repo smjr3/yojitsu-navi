@@ -1335,7 +1335,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 原因: 0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}`。GitLab はジョブ（`.` で始まる隠しジョブも）の設定が空でないことを求め、`{}` を「can't be blank」で失敗にする。プロジェクトの名前は関係ない。
 - ひな形は `.yojitsu-navi-local:` の下に使われない変数 `YOJITSU_NAVI_LOCAL: "1"` を持たせる（隠しジョブは中身が空でなければ中を見られないので、GitLab の版によらず通る）。
 - `update` は `.gitlab-ci.local.yml`（区分「残す」）のうち、0.2.0・0.2.1 のひな形の中身の無い行だけを上の形に直す（ほかの行・改行は変えない。前のファイルはバックアップ）。
-- 点検（`scripts/lib/ci-local.mjs` の `lintCiYaml`）: CI 定義（`.gitlab-ci.yml` と include 先）に、項目が 1 つも無いファイル・中身の無いジョブ（空・`{}`・`null`）・中身の無い全体の設定（`variables:` だけなど）があれば、行番号つきで知らせる。§85 の確かめ（`init`・`update`・`npm run app:build`・`yojitsu-navi check`）に入れる。GitLab と同じく合わせた結果で見る（ほかの CI 定義が中身つきで書いた項目は、include 先で空の `build: {}` などでも知らせない）。
+- 点検（`scripts/lib/ci-local.mjs` の `lintCiYaml`）: CI 定義（`.gitlab-ci.yml` と include 先）に、項目が 1 つも無いファイル・中身の無いジョブ（空・`{}`・`null`）・中身の無い全体の設定（`variables:` だけなど）があれば、行番号つきで知らせる。§85 の確かめ（`init`・`update`・`npm run app:build`・`yojitsu-navi check`）に入れる。GitLab と同じく合わせた結果で見る（ほかの CI 定義が中身つきで書いた項目は、空の `build: {}` などでも知らせない。ただし `.gitlab-ci.yml` の `null`・空の項目は include の中身を消すので知らせる）。
 - `npm run ci:check`（`scripts/ci/check.mjs`）: `yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC・Runner でもプロジェクトの中から動かせる。
 - `npx yojitsu-navi` がプロジェクトの中で「could not determine executable to run」になるのは、プロジェクトの `package.json` の名前がコマンドのパッケージと同じ `yojitsu-navi` だったため（npm が自分自身を指す）。利用環境の `package.json`・`package-lock.json` の `name` を `yojitsu-navi-site` にする（`packages/app/lib/template-files.mjs`。開発元のリポジトリは `yojitsu-navi` のまま）。
 - 再発防止: `tests/unit/ci-local.test.ts`（GitLab の CI Lint の代わりに、YAML として読んで GitLab と同じく合わせ、空のファイル・中身の無いジョブ・`script` の無いジョブが無いこと。古いひな形を見つけて直す）、`tests/integration/app-package.test.ts`「config can't be blank」。GitLab の実機の CI Lint は導入先で確かめる（CI/CD > エディタ > 検証）。

@@ -88,16 +88,17 @@ const sameBlock = (a, b) => {
  * - ファイルに項目が 1 つも無い（include 先が空だと GitLab はパイプラインを作らない）
  * - 中身の無いジョブ（「jobs:<名前> config can't be blank」。0.2.0〜0.2.1 のひな形 .yojitsu-navi-local: {} もこれ）
  * - 中身の無い全体の設定（variables: だけ など）
- * definedElsewhere: ほかの CI 定義で中身つきで書いた項目の名前（GitLab は include を合わせてから確かめるので、それは空でも失敗にならない）
+ * definedElsewhere: ほかの CI 定義で中身つきで書いた項目の名前（GitLab は include を合わせてから確かめるので、それは空でも失敗にならない）。
+ * ただし main（.gitlab-ci.yml。合わせるとき勝つ）の null・空は include の中身を消すので、{} 以外は除かない
  */
-export function lintCiYaml(text, file, definedElsewhere = new Set()) {
+export function lintCiYaml(text, file, definedElsewhere = new Set(), main = false) {
   const ls = lines(text);
   const top = blocks(ls, 0, ls.length, 0);
   const out = [];
   if (!top.length) out.push(`${file}: 設定が 1 つもありません（空のファイルは GitLab が include できず、パイプラインが作られません）`);
   for (const b of top) {
     // 同じ名前の項目をほかの CI 定義（include 先・.gitlab-ci.yml）が中身つきで書いていれば、合わせた結果は空でない
-    if (!isBlank(ls, b) || definedElsewhere.has(b.key)) continue;
+    if (!isBlank(ls, b) || (definedElsewhere.has(b.key) && (!main || b.value === "{}"))) continue;
     const fix = b.key === PLACEHOLDER_KEY ? "。yojitsu-navi update か yojitsu-navi migrate-ci で直ります" : "";
     if (GLOBAL_KEYS.has(b.key)) {
       if (b.value !== "{}") out.push(`${file} ${b.start + 1} 行目: ${b.key}: の中身がありません（GitLab が失敗にします。要らなければ行ごと消す）`);
