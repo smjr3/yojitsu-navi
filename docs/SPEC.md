@@ -1335,7 +1335,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - 原因: 0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}`。GitLab はジョブ（`.` で始まる隠しジョブも）の設定が空でないことを求め、`{}` を「can't be blank」で失敗にする。プロジェクトの名前は関係ない。
 - ひな形は `.yojitsu-navi-local:` の下に使われない変数 `YOJITSU_NAVI_LOCAL: "1"` を持たせる（隠しジョブは中身が空でなければ中を見られないので、GitLab の版によらず通る）。
 - `update` は `.gitlab-ci.local.yml`（区分「残す」）のうち、0.2.0・0.2.1 のひな形の中身の無い行だけを上の形に直す（ほかの行・改行は変えない。前のファイルはバックアップ）。
-- 点検（`scripts/lib/ci-local.mjs` の `lintCiYaml`）: CI 定義（`.gitlab-ci.yml` と include 先）に、項目が 1 つも無いファイル・中身の無いジョブ（空・`{}`・`null`）・中身の無い全体の設定（`variables:` だけなど）があれば、行番号つきで知らせる。§85 の確かめ（`init`・`update`・`npm run app:build`・`yojitsu-navi check`）に入れる。
+- 点検（`scripts/lib/ci-local.mjs` の `lintCiYaml`）: CI 定義（`.gitlab-ci.yml` と include 先）に、項目が 1 つも無いファイル・中身の無いジョブ（空・`{}`・`null`）・中身の無い全体の設定（`variables:` だけなど）があれば、行番号つきで知らせる。§85 の確かめ（`init`・`update`・`npm run app:build`・`yojitsu-navi check`）に入れる。GitLab と同じく合わせた結果で見る（ほかの CI 定義が中身つきで書いた項目は、include 先で空の `build: {}` などでも知らせない）。
 - `npm run ci:check`（`scripts/ci/check.mjs`）: `yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC・Runner でもプロジェクトの中から動かせる。
 - `npx yojitsu-navi` がプロジェクトの中で「could not determine executable to run」になるのは、プロジェクトの `package.json` の名前がコマンドのパッケージと同じ `yojitsu-navi` だったため（npm が自分自身を指す）。利用環境の `package.json`・`package-lock.json` の `name` を `yojitsu-navi-site` にする（`packages/app/lib/template-files.mjs`。開発元のリポジトリは `yojitsu-navi` のまま）。
 - 再発防止: `tests/unit/ci-local.test.ts`（GitLab の CI Lint の代わりに、YAML として読んで GitLab と同じく合わせ、空のファイル・中身の無いジョブ・`script` の無いジョブが無いこと。古いひな形を見つけて直す）、`tests/integration/app-package.test.ts`「config can't be blank」。GitLab の実機の CI Lint は導入先で確かめる（CI/CD > エディタ > 検証）。
@@ -1345,9 +1345,9 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]`。`.gitlab-ci.yml` は変えず、`.gitlab-ci.local.yml` だけを書く（無ければひな形から作り、古いひな形は §91.3 のとおり直す）。
 - 比べる相手（もとの版）: 記録（`.yojitsu-navi.json`）のハッシュと同じ中身の `.gitlab-ci.yml` を、インストールしたパッケージ・git の履歴（直近 200 コミット）から探す。見つからなければインストールしたパッケージの版と比べる（そのときは新しい版での変更も「自動で移せないもの」に出ることがあると添える）。
 - 移すもの: `default:` とジョブの `tags:`、全体・ジョブの `variables:` のうちもとの版に無いもの、もとの版に無いジョブ・項目（社内だけのジョブ）、もとの版のジョブに無い項目。`.gitlab-ci.local.yml` に同じ項目があれば中へ足し、同じものがあれば何もしない。
-- 自動で移せないもの（一覧に出す）: もとの版にある変数の値の変更（include は `.gitlab-ci.yml` が勝つので CI/CD 変数に登録する）、ジョブの `script:` などの変更、消したジョブ・項目、`include:` の追加、`.gitlab-ci.local.yml` に同じ名前で違う中身があるもの。
+- 自動で移せないもの（一覧に出す）: もとの版にある変数の値の変更・消した変数（include は `.gitlab-ci.yml` が勝つので CI/CD 変数で変える）、1 行で書いた `variables: { … }`（読めない）、ジョブの `script:` などの変更、消したジョブ・項目、`include:` の追加、`.gitlab-ci.local.yml` に同じ名前で違う中身があるもの。
 - 自動で移せないものが無ければ（か `--force`）、`.gitlab-ci.local.yml` の最後に印 `# yojitsu-navi migrate-ci: .gitlab-ci.yml sha256=<そのときの .gitlab-ci.yml>` を書く。`update` は `.gitlab-ci.yml` が社内で変わっていても、中身（改行の違いは見ない）が印と同じなら止めずに新しい版にする（前のものはバックアップ）。印のあとでまた変えたら従来どおり止まる。
-- 字下げで読む簡単な YAML の解釈（アンカー・フロー形式の中は見ない）。読めないものは自動で移さず一覧に出す。
+- 字下げで読む簡単な YAML の解釈（アンカー・フロー形式の中は見ない）。読めないものは自動で移さず一覧に出す。移す項目の行はそのまま写す（値の中の「 #」・複数行の文字列を変えない）。比べるときだけコメントの行・空行を除く。
 - 再発防止: `tests/unit/ci-local.test.ts`「migrate-ci」（移したものと新しい版を GitLab と同じく合わせると社内の `.gitlab-ci.yml` と同じ設定になる・2 回目は変わらない・既存の項目に足す・手で移すもの）、`tests/integration/app-package.test.ts`「migrate-ci」（git の履歴からもとの版を探す・`--dry-run` は変えない・移したあとの `update` が止まらない・また変えたら止まる）。
 
 ## 92. 作業コードでの紐付けと、未登録の作業コードの検出（2026-11-03 依頼者。導入先のレビュー指摘）

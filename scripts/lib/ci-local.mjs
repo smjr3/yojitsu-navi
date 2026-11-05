@@ -68,35 +68,49 @@ const isBlank = (ls, b) => {
   return !hasBody && (v === "" || v === "null" || v === "~" || v === "{}");
 };
 
-/** 項目の行（コメント・空行を除き、字下げを項目の行に合わせて外す） */
+/**
+ * 項目の行（字下げを項目の行に合わせて外す）。値の中の「 #」・複数行の文字列（script: | など）の空行やコメントに見える行を
+ * 変えないよう、行の中身はそのまま写す（行末の空白だけ外す）
+ */
 function blockText(ls, b) {
   const base = indentOf(ls[b.start]);
-  return ls
-    .slice(b.start, b.end)
-    .filter((l) => !isSkip(l))
-    .map((l) => l.slice(Math.min(base, indentOf(l))).replace(/[ \t]+#.*$/, "").trimEnd());
+  return ls.slice(b.start, b.end).map((l) => l.slice(Math.min(base, indentOf(l))).trimEnd());
 }
-const sameBlock = (a, b) => a.join("\n") === b.join("\n");
+/** 同じ設定か（コメントだけの行・空行は比べない） */
+const sameBlock = (a, b) => {
+  const norm = (x) => x.filter((l) => !isSkip(l)).join("\n");
+  return norm(a) === norm(b);
+};
 
 /**
  * GitLab が受け付けない書き方を探す（見つかったものの説明の配列。無ければ空）。
  * - ファイルに項目が 1 つも無い（include 先が空だと GitLab はパイプラインを作らない）
  * - 中身の無いジョブ（「jobs:<名前> config can't be blank」。0.2.0〜0.2.1 のひな形 .yojitsu-navi-local: {} もこれ）
  * - 中身の無い全体の設定（variables: だけ など）
+ * definedElsewhere: ほかの CI 定義で中身つきで書いた項目の名前（GitLab は include を合わせてから確かめるので、それは空でも失敗にならない）
  */
-export function lintCiYaml(text, file) {
+export function lintCiYaml(text, file, definedElsewhere = new Set()) {
   const ls = lines(text);
   const top = blocks(ls, 0, ls.length, 0);
   const out = [];
   if (!top.length) out.push(`${file}: 設定が 1 つもありません（空のファイルは GitLab が include できず、パイプラインが作られません）`);
   for (const b of top) {
-    if (!isBlank(ls, b)) continue;
+    // 同じ名前の項目をほかの CI 定義（include 先・.gitlab-ci.yml）が中身つきで書いていれば、合わせた結果は空でない
+    if (!isBlank(ls, b) || definedElsewhere.has(b.key)) continue;
     const fix = b.key === PLACEHOLDER_KEY ? "。yojitsu-navi update か yojitsu-navi migrate-ci で直ります" : "";
     if (GLOBAL_KEYS.has(b.key)) {
       if (b.value !== "{}") out.push(`${file} ${b.start + 1} 行目: ${b.key}: の中身がありません（GitLab が失敗にします。要らなければ行ごと消す）`);
     } else out.push(`${file} ${b.start + 1} 行目: ジョブ ${b.key} の中身がありません（GitLab が「jobs:${b.key} config can't be blank」で失敗にします）${fix}`);
   }
   return out;
+}
+
+/** 中身のある一番上の項目の名前（lintCiYaml の definedElsewhere に渡す） */
+export function filledKeys(text) {
+  const ls = lines(text);
+  return blocks(ls, 0, ls.length, 0)
+    .filter((b) => !isBlank(ls, b))
+    .map((b) => b.key);
 }
 
 /** 0.2.0〜0.2.1 のひな形の行を直す（直す必要が無ければ同じ文字列を返す） */
@@ -211,6 +225,12 @@ export function migrateCi({ current, base, local, force = false }) {
     const curKids = children(cur, b);
     const baseKids = new Map(children(bas, bb).map((k) => [k.key, k]));
     if (b.key === "variables") {
+      // 同じ行に書いた変数（variables: { A: "1" }）は読めないので、自動で移さない
+      if (b.value || bb.value) {
+        manual.push(`variables: の変更（1 行の書き方は読めないので、変わった変数を手で ${LOCAL_CI_FILE}・CI/CD 変数に移す）`);
+        continue;
+      }
+      for (const k of baseKids.keys()) if (!curKids.some((c) => c.key === k)) manual.push(`変数 ${k} を消したこと（${LOCAL_CI_FILE} では消せない。CI/CD 変数で値を変える）`);
       for (const v of curKids) {
         const bv = baseKids.get(v.key);
         if (!bv) items.push({ path: ["variables"], entry: blockText(cur, v), label: `変数 ${v.key}` });
@@ -227,13 +247,17 @@ export function migrateCi({ current, base, local, force = false }) {
       const ktext = blockText(cur, k);
       if (bk && sameBlock(ktext, blockText(bas, bk))) continue;
       if (k.key === "tags" && !bk) items.push({ path: [b.key], entry: ktext, label: `${b.key} のタグ` });
-      else if (k.key === "variables") {
+      else if (k.key === "variables" && (k.value || bk?.value)) {
+        manual.push(`${b.key} の variables: の変更（1 行の書き方は読めないので、変わった変数を手で ${LOCAL_CI_FILE}・CI/CD 変数に移す）`);
+      } else if (k.key === "variables") {
         const baseVars = new Map(bk ? children(bas, bk).map((v) => [v.key, v]) : []);
         for (const v of children(cur, k)) {
           const bv = baseVars.get(v.key);
           if (!bv) items.push({ path: [b.key, "variables"], entry: blockText(cur, v), label: `${b.key} の変数 ${v.key}` });
           else if (!sameBlock(blockText(cur, v), blockText(bas, bv))) manual.push(`${b.key} の変数 ${v.key} の値（${LOCAL_CI_FILE} では変えられない。CI/CD 変数に ${v.key} を登録する）`);
         }
+        const curVars = new Set(children(cur, k).map((v) => v.key));
+        for (const name of baseVars.keys()) if (!curVars.has(name)) manual.push(`${b.key} の変数 ${name} を消したこと（${LOCAL_CI_FILE} では消せない。CI/CD 変数で値を変える）`);
       } else if (!bk) items.push({ path: [b.key], entry: ktext, label: `${b.key} の ${k.key}:` });
       else manual.push(`${b.key} の ${k.key}: の変更（${LOCAL_CI_FILE} では変えられない。差分は yojitsu-navi update --dry-run）`);
     }

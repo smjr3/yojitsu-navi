@@ -10,7 +10,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, normalize, sep } from "node:path";
-import { lintCiYaml } from "./ci-local.mjs";
+import { filledKeys, lintCiYaml } from "./ci-local.mjs";
 
 export const CI_FILE = ".gitlab-ci.yml";
 
@@ -178,7 +178,9 @@ export function checkCiFiles(projectDir, o = {}) {
     const committed = gitCommitted(projectDir);
     if (committed) untracked = files.filter((f) => !missing.includes(f) && !committed.has(f));
   }
-  const invalid = definitions.filter((f) => isFile(join(projectDir, f))).flatMap((f) => lintCiYaml(readFileSync(join(projectDir, f), "utf-8"), f));
+  // GitLab は include を合わせてから確かめるので、ほかの定義が中身つきで書いた項目は空でもよい
+  const defs = definitions.filter((f) => isFile(join(projectDir, f))).map((f) => ({ f, text: readFileSync(join(projectDir, f), "utf-8") }));
+  const invalid = defs.flatMap(({ f, text }) => lintCiYaml(text, f, new Set(defs.filter((d) => d.f !== f).flatMap((d) => filledKeys(d.text)))));
   return { required: files, missing, untracked, missingScripts, invalid };
 }
 

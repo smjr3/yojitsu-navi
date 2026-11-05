@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLACEHOLDER, ciHash, lintCiYaml, migrateCi, migratedHash, repairLocalPlaceholder } from "../../scripts/lib/ci-local.mjs";
+import { PLACEHOLDER, ciHash, filledKeys, lintCiYaml, migrateCi, migratedHash, repairLocalPlaceholder } from "../../scripts/lib/ci-local.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +85,14 @@ describe("GitLab が受け付ける CI 定義か（CI Lint の代わり）", () 
   });
 });
 
+describe("合わせた結果で見る（SPEC §91.3）", () => {
+  it("ほかの定義が中身つきで書いたジョブは、include 先で空でも失敗にしない（GitLab は合わせてから確かめる）", () => {
+    const local = "build: {}\n.yojitsu-navi-local: {}\n";
+    expect(gitlabLint(CI, { ".gitlab-ci.local.yml": local })).toEqual(["jobs:.yojitsu-navi-local config can't be blank"]);
+    expect(lintCiYaml(local, ".gitlab-ci.local.yml", new Set(filledKeys(CI)))).toEqual([expect.stringContaining(".yojitsu-navi-local")]);
+  });
+});
+
 describe("ひな形の直し（SPEC §91.3）", () => {
   it("0.2.0〜0.2.1 のひな形の行だけを直し、ほかの行・改行（CRLF）は変えない", () => {
     const fixed = repairLocalPlaceholder("# 社内\r\n.yojitsu-navi-local: {}\r\ndefault:\r\n  tags: [windows]\r\n");
@@ -134,6 +142,31 @@ describe("migrate-ci（SPEC §91.4）", () => {
     expect(r.local).toContain("# 最後のコメント");
     // --force なら印を書く
     expect(migratedHash(migrateCi({ current: cur, base: CI, local, force: true }).local)).toBe(ciHash(cur));
+  });
+
+  it("値の中の「 #」・複数行の文字列はそのまま写す", () => {
+    const cur = CI.replace('  GIT_DEPTH: "20"\n', '  GIT_DEPTH: "20"\n  CUSTOM: "hello # world"\n').concat("\ninternal:\n  script:\n    - |\n      echo a\n\n      # 文字列の中\n      echo b\n");
+    const r = migrateCi({ current: cur, base: CI, local: "" });
+    expect(r.manual).toEqual([]);
+    const merged = deepMerge(load(r.local), load(CI)) as Obj;
+    const want = load(cur) as Obj;
+    expect(merged.variables).toEqual(want.variables);
+    expect(merged.internal).toEqual(want.internal);
+  });
+
+  it("消した変数・1 行で書いた variables は自動で移さず、手で移すものに出す（印を書かない）", () => {
+    const removed = CI.replace('  GIT_DEPTH: "20"\n', "").replace('    YOJITSU_GITLAB_PROJECT: $CI_PROJECT_PATH\n', "");
+    const r = migrateCi({ current: removed, base: CI, local: "" });
+    expect(r.manual).toEqual([expect.stringContaining("変数 GIT_DEPTH を消した"), expect.stringContaining("build の変数 YOJITSU_GITLAB_PROJECT を消した")]);
+    expect(migratedHash(r.local)).toBe("");
+    const flow = CI.replace(/\nvariables:\n(?:  .*\n|\s*#.*\n)+/, '\nvariables: { NODE_IMAGE: "node:22", CUSTOM: "3" }\n');
+    expect(flow).not.toBe(CI);
+    const f = migrateCi({ current: flow, base: CI, local: "" });
+    expect(f.manual).toEqual([expect.stringContaining("1 行の書き方")]);
+    expect(migratedHash(f.local)).toBe("");
+    const jobFlow = CI.replace(/(\nbuild:\n[\s\S]*?)  variables:\n(?:    .*\n|\s*#.*\n)+/, '$1  variables: { GIT_DEPTH: "0", X: "1" }\n');
+    expect(jobFlow).not.toBe(CI);
+    expect(migrateCi({ current: jobFlow, base: CI, local: "" }).manual).toEqual([expect.stringContaining("build の variables: の変更")]);
   });
 
   it("ジョブの script の変更・ジョブを消したことは手で移すものに出す。.gitlab-ci.local.yml が無くても何もしない項目を入れて空にしない", () => {
