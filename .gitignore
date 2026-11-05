@@ -17,3 +17,4 @@ packages/*/.npmrc
 packages/app/LICENSE
 packages/app/sample/
 .yojitsu-navi-backup/
+.yojitsu-navi-log/

@@ -8,17 +8,22 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ### 更新後に行うこと
 
+- 次からは `yojitsu-navi upgrade` で版を上げられる（update → 依存 → check → データ検証 → ビルドを 1 回で。結果の要約を出し、全部の出力を `.yojitsu-navi-log/` に残す。docs/DEPLOY_GITLAB.md「新しい版にする」）
+- `update` が「パッケージに無いファイル」を出したら、使っていないもの（社内で足したテスト用のデータなど）は消して MR に入れる
+- `update` が「サンプルのまま残っているデータ」を出したら、`yojitsu-navi reset-data --dry-run` で確かめてから `yojitsu-navi reset-data` で空にし、本番のデータを入れる
 - `package-lock.json` は新しい版のものを使う（`esbuild`・`glob` を上げた。`npm audit` は 7 件 → 4 件。残る理由は SPEC §84.2）
 - CI/CD 変数 `VITEST_MAX_FORKS` を入れてテストを動かしていて、Windows の Runner で結果が安定しないなら `1` にする
 - 社内 CA が Windows の証明書ストアに入っているなら、`NODE_EXTRA_CA_CERTS` の代わりに `NODE_USE_SYSTEM_CA=1` も使える（Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」）
 
 ### テスト・CI の前提
 
+- `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
 
 ### 変更
 
 - ファビコンを画像ファイル（`src/icons/`）にした。0.2.0・0.2.1 の埋め込み（data URI）は社内の配信先でタブに出なかったため（SPEC §89）
+- `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
 
 ## 0.2.1

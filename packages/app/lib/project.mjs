@@ -18,6 +18,8 @@ export const VENDOR_CACHE = "vendor/npm-cache";
 
 /** update が上書きする前のファイルを写しておく置き場（git には入れない。.gitignore にもある） */
 export const BACKUP_DIR = ".yojitsu-navi-backup";
+/** upgrade などのログの置き場（git には入れない。.gitignore にもある。SPEC §94） */
+export const LOG_DIR = ".yojitsu-navi-log";
 
 /** サンプルのデータの置き場（パッケージの中。data/ と同じ並び。init --sample のときだけ入れる。SPEC §93） */
 export const SAMPLE_DIR = "sample";
@@ -39,13 +41,13 @@ export function isUserOwned(path) {
  * update でのファイルの扱い（SPEC §91。docs/DEPLOY_GITLAB.md「新しい版にする」の表と同じ）。
  * - keep: 社内のもの。触らない（config.json・data/ 以下すべて・.gitlab-ci.local.yml・.npmrc。.gitlab-ci.local.yml は無ければひな形を足す）
  * - vendor: 依存込みのとき、パッケージのもので丸ごと入れ替える（vendor/npm-cache/）
- * - tool: コマンドが書く・使う（.yojitsu-navi.json・.yojitsu-navi-backup/）
+ * - tool: コマンドが書く・使う（.yojitsu-navi.json・.yojitsu-navi-backup/・.yojitsu-navi-log/）
  * - package: それ以外。パッケージの版にする（社内で変えていたら止まる）。パッケージに無く、前の版の記録にも無いファイルは社内で足したものとして触らない
  */
 export function fileKind(path) {
   if (isUserOwned(path)) return "keep";
   if (path === VENDOR_CACHE || path.startsWith(`${VENDOR_CACHE}/`)) return "vendor";
-  if (path === MANIFEST || path === BACKUP_DIR || path.startsWith(`${BACKUP_DIR}/`)) return "tool";
+  if (path === MANIFEST || [BACKUP_DIR, LOG_DIR].some((d) => path === d || path.startsWith(`${d}/`))) return "tool";
   return "package";
 }
 
@@ -138,6 +140,25 @@ function git(cwd, args, input) {
   return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() || String(r.error ?? "") };
 }
 
+/** コミットしていない変更・新しいファイルのパス（git status。名前を引用符で囲まないよう -z で読む） */
+function gitStatusPaths(dir, pathspec = []) {
+  // git() は前後の空白を落とすので使わない（先頭の「 M」の空白が要る）
+  const r = spawnSync("git", ["status", "--porcelain", "-z", "--untracked-files=all", ...pathspec], { cwd: dir, encoding: "utf-8" });
+  const parts = (r.stdout ?? "").split("\0").filter(Boolean);
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    out.push(parts[i].slice(3));
+    // 名前の変更は「新しい名前\0前の名前」の 2 つ
+    if (/^[RC]/.test(parts[i])) i++;
+  }
+  return out;
+}
+
+/** git が管理する・管理していない（除外設定に当たらない）ファイル */
+function gitFiles(dir) {
+  return git(dir, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).out.split("\0").filter(Boolean);
+}
+
 /**
  * パッケージのファイルを git に入れる。git add -A に加えて、git の除外設定（PC 全体の core.excludesFile など）に
  * 当たるファイルも -f で入れる（入らないと push しても CI から見えず、「ファイルが無い」で落ちる）
@@ -158,7 +179,7 @@ function assertCiFiles(dir, template, useGit) {
 export function check(o) {
   const { dir, log } = o;
   if (!existsSync(join(dir, CI_FILE))) throw new CliError(`${dir} に ${CI_FILE} がありません。予実ナビのプロジェクトのフォルダで実行してください`);
-  const r = checkCiFiles(dir, { git: isGitRepo(dir) });
+  const r = checkCiFiles(dir, { git: o.git === false ? false : isGitRepo(dir) });
   const problems = describeCiProblems(r);
   if (problems) throw new CliError(problems);
   log(`CI（.gitlab-ci.yml）が使う ${r.required.length} ファイルは揃っています`);
@@ -293,9 +314,10 @@ function unifiedDiff(a, b, label, tmp) {
 }
 
 /** 変更履歴から読んだ、導入先で行うこと（無ければ何も出さない） */
-function logNotes(log, notes, from, to) {
+function logNotes(log, detail, notes, from, to) {
   if (!notes.length) return;
-  log(`\n${from} → ${to} で導入先が行うこと・前提が変わること（${CHANGELOG} から。全体は ${CHANGELOG}）:\n${notes.map((l) => `  ${l}`).join("\n")}`);
+  log(`\n${from} → ${to} で導入先が行うこと・前提が変わること: ${notes.length} 行（${CHANGELOG} から。全体は ${CHANGELOG}）`);
+  detail(notes.map((l) => `  ${l}`).join("\n"));
 }
 
 const CONFLICT_LABEL = { modified: "社内で変更", created: "社内で作成", removedModified: "新しい版で削除（社内で変更）" };
@@ -307,10 +329,13 @@ const CONFLICT_LABEL = { modified: "社内で変更", created: "社内で作成"
  *   overwrite で新しい版にする、keepLocal で社内の版を残す（次の update でも残す）
  * - 上書き・削除する前のファイルは .yojitsu-navi-backup/<日時>/ に写す
  * - dryRun は何も変えず、変わるファイルの一覧と、社内の変更があるファイルの差分（社内の今 → 新しい版）を出す
- * @param {{ pkgDir: string, version: string, dir: string, force?: boolean, overwrite?: boolean, keepLocal?: boolean, dryRun?: boolean, git?: boolean, now?: Date, log: (s: string) => void }} o
+ * - commit が false（--no-commit）ならブランチを作らず、コミットもしない（変更は git add までする）
+ * - detail は詳しい行（ファイルの一覧・差分・変更履歴）。--summary のときは画面に出さずログのファイルにだけ書く（SPEC §94）
+ * @param {{ pkgDir: string, version: string, dir: string, force?: boolean, overwrite?: boolean, keepLocal?: boolean, dryRun?: boolean, git?: boolean, commit?: boolean, now?: Date, log: (s: string) => void, detail?: (s: string) => void }} o
  */
 export function update(o) {
   const { pkgDir, version, dir, log } = o;
+  const detail = o.detail ?? log;
   if (o.overwrite && o.keepLocal) throw new CliError("--overwrite と --keep-local はどちらか 1 つにしてください");
   const manifestPath = join(dir, MANIFEST);
   if (!existsSync(manifestPath)) throw new CliError(`${dir} に ${MANIFEST} がありません。yojitsu-navi init で作ったプロジェクトのフォルダで実行してください`);
@@ -321,8 +346,15 @@ export function update(o) {
   if (compareVersion(version, manifest.version) < 0 && !o.force && !dry) throw new CliError(`今のプロジェクト（${manifest.version}）より古い版（${version}）です。戻すときは --force`);
   const useGit = o.git !== false && isGitRepo(dir);
   // バックアップの置き場は git の外（.gitignore が古い版でも「コミットしていない変更」にしない）
-  const outsideBackup = ["--", ".", `:(exclude)${BACKUP_DIR}`];
-  if (useGit && !dry && git(dir, ["status", "--porcelain", ...outsideBackup]).out !== "" && !o.force) throw new CliError("コミットしていない変更があります。コミットするか取り消してから実行してください（差分を MR で確かめられるように）");
+  // --log で指定したプロジェクトの中のファイル（先に書き始めるので、変更・コミットに数えない）
+  const excludeExtra = (o.exclude ?? []).map((p) => posix(relative(dir, p))).filter((p) => p && !p.startsWith("..") && !/^[A-Za-z]:/.test(p));
+  const outsideBackup = ["--", ".", `:(exclude)${BACKUP_DIR}`, `:(exclude)${LOG_DIR}`, ...excludeExtra.map((p) => `:(exclude,literal)${p}`)];
+  if (useGit && !dry && !o.force) {
+    // .gitlab-ci.local.yml だけは、変更履歴の手順どおり update の前に作った・直したものとして止めない（update のコミットに入る）。
+    // .npmrc は社内レジストリのトークンが入ることがあるので、コミットに入れないよう止める（SPEC §94）
+    const dirty = gitStatusPaths(dir, outsideBackup).filter((p) => p !== LOCAL_CI_FILE);
+    if (dirty.length) throw new CliError(`コミットしていない変更があります。コミットするか取り消してから実行してください（差分を MR で確かめられるように）:\n${dirty.map((p) => `  ${p}`).join("\n")}`);
+  }
   const hasVendor = existsSync(join(dir, VENDOR_CACHE));
   const pkgHasDeps = existsSync(join(pkgDir, "deps", "npm-cache"));
   if (hasVendor && !pkgHasDeps && !o.force && !dry) throw new CliError(`このプロジェクトは依存込み（${VENDOR_CACHE}）です。依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で update してください`);
@@ -402,14 +434,25 @@ export function update(o) {
   } catch {
     // config.json が壊れているときは npm run validate が知らせる
   }
-  // サンプルのまま残っているデータ（本番のデータと混ざって集計を誤らないよう知らせる。消すのは社内で）
+  // サンプルのまま残っているデータ（本番のデータと混ざって集計を誤らないよう知らせる。消すのは yojitsu-navi reset-data か社内で）
   const sampleLeft = sampleLeftovers(pkgDir, dir, template);
-  const sampleNote = () => {
-    if (sampleLeft.length) log(`サンプルのまま残っているデータ（本番のデータと混ざらないよう、消すか本番のものに置き換えてください。docs/DEPLOY_GITLAB.md「サンプルのデータを消す」）:\n${sampleLeft.map((f) => `  ${f}`).join("\n")}`);
-  };
+  // パッケージに無いファイル（社内で足したもの。触らないが、使われないまま残ったテスト用のデータなどに気づけるよう知らせる。SPEC §94）
+  const extras = localExtras(dir, template, old, useGit).filter((f) => !excludeExtra.includes(f));
   // 今の版から新しい版までの変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」（SPEC §91.2）
   const notes = template.has(CHANGELOG) ? updateNotes(readFileSync(template.get(CHANGELOG), "utf-8"), manifest.version, version, localConfig) : [];
-  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft };
+  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras };
+  /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */
+  const list = (title, items) => {
+    if (!items.length) return;
+    log(`${title}: ${items.length} ファイル`);
+    detail(items.map((f) => `  ${f}`).join("\n"));
+  };
+  const reportFound = () => {
+    list(`サンプルのまま残っているデータ（本番のデータと混ざらないよう消すか本番のものに置き換える。yojitsu-navi reset-data で見出しの行だけにできます。docs/DEPLOY_GITLAB.md「サンプルのデータを消す」）`, sampleLeft);
+    if (extras.length) {
+      list(`パッケージに無いファイル（社内で足したもの。update は触りません。使っていないものは消してください。${summarizeDirs(extras)}）`, extras);
+    }
+  };
 
   // 2. 確かめるだけ（--dry-run）
   if (dry) {
@@ -417,11 +460,11 @@ export function update(o) {
     if (unresolved.length) log(`社内で変えたファイル（このままでは止まります。--overwrite で新しい版に、--keep-local で社内の版のまま）:\n${listConflicts(unresolved)}`);
     if (take.length) log(`社内で変えていたが新しい版にするファイル（前のものは ${BACKUP_DIR}/ に残します）:\n${listConflicts(take)}`);
     if (keptNow.length) log(`社内の版のまま残すファイル:\n${listConflicts(keptNow)}`);
-    if (changed.length) log(`新しい版にするファイル:\n${changed.map((f) => `  ${f}`).join("\n")}`);
-    if (added.length) log(`足すファイル:\n${added.map((f) => `  ${f}`).join("\n")}`);
-    if (deletes.length) log(`消すファイル:\n${deletes.map((f) => `  ${f}`).join("\n")}`);
-    sampleNote();
-    logNotes(log, notes, manifest.version, version);
+    list("新しい版にするファイル", changed);
+    list("足すファイル", added);
+    list("消すファイル", deletes);
+    reportFound();
+    logNotes(log, detail, notes, manifest.version, version);
     if (conflicts.length) {
       const tmp = mkdtempSync(join(tmpdir(), "yojitsu-update-"));
       try {
@@ -437,12 +480,15 @@ export function update(o) {
           }
           diffs.push(d);
         }
-        if (diffs.length) log(`\n社内で変えたファイルの差分（- が社内の今、+ が新しい版）:\n${diffs.join("\n")}`);
+        if (diffs.length) {
+          log(`社内で変えたファイルの差分: ${diffs.length} ファイル（- が社内の今、+ が新しい版）`);
+          detail(diffs.join("\n"));
+        }
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
     }
-    return { ...base, dryRun: true, backup: "", branch: "", vendorUpdated: false };
+    return { ...base, dryRun: true, backup: "", branch: "", commit: null, vendorUpdated: false };
   }
 
   if (unresolved.length) {
@@ -464,19 +510,8 @@ export function update(o) {
   }
 
   // 3. 上書き・削除する前のファイルを写す
-  let backup = "";
   const toBackup = [...changed, ...overwritten.filter((f) => existsSync(join(dir, f))), ...deletes].filter((f, i, a) => a.indexOf(f) === i && existsSync(join(dir, f)));
-  if (toBackup.length) {
-    const stamp = backupStamp(o.now);
-    backup = `${BACKUP_DIR}/${stamp}`;
-    for (let n = 2; existsSync(join(dir, backup)); n++) backup = `${BACKUP_DIR}/${stamp}-${n}`;
-    for (const f of toBackup) {
-      mkdirSync(dirname(join(dir, backup, f)), { recursive: true });
-      // シンボリックリンクは指す先の中身を写す（下で上書きするのはリンクではなく中身なので）
-      copyFileSync(join(dir, f), join(dir, backup, f));
-    }
-    writeFileSync(join(dir, backup, MANIFEST), readFileSync(manifestPath));
-  }
+  const backup = toBackup.length ? backupFiles(dir, toBackup, o.now, manifestPath) : "";
 
   // 4. 入れ替える
   for (const w of writes) {
@@ -491,32 +526,56 @@ export function update(o) {
   writeManifest(dir, version, record, kept);
 
   log(`予実ナビ ${manifest.version} → ${version}: 変更 ${changed.length}・追加 ${added.length}・削除 ${deletes.length} ファイル${vendorUpdated ? "・依存を入れ替え" : ""}（data/ と config.json はそのまま）`);
+  const touched = [...changed.map((f) => `  変更 ${f}`), ...added.map((f) => `  追加 ${f}`), ...deletes.map((f) => `  削除 ${f}`)];
+  if (touched.length) detail(touched.join("\n"));
   if (backup) log(`前のファイルは ${backup}/ に写しました（git には入りません。要らなければ消してください）`);
   if (overwritten.length) log(`社内で変えていたが新しい版にしたファイル（要るものは ${backup || BACKUP_DIR}/ から入れ直してください）:\n${listConflicts(take)}`);
   if (keptNow.length) log(`社内の版のまま残したファイル（新しい版の変更は入っていません。yojitsu-navi update --dry-run で差分を確かめられます）:\n${listConflicts(keptNow)}`);
-  if (newData.length) log(`新しい版で増えたデータのファイルで、このプロジェクトに無いもの（入れていません。要るなら docs/DATA.md を見て作ってください）:\n${newData.map((f) => `  ${f}`).join("\n")}`);
-  sampleNote();
-  if (missing.length) log(`config.json に無い新しい設定（無くても既定値で動きます。変えるときは docs/DATA.md）:\n${missing.map((k) => `  ${k}`).join("\n")}`);
-  logNotes(log, notes, manifest.version, version);
+  list("新しい版で増えたデータのファイルで、このプロジェクトに無いもの（入れていません。要るなら docs/DATA.md を見て作ってください）", newData);
+  reportFound();
+  if (missing.length) {
+    log(`config.json に無い新しい設定: ${missing.length} 項目（無くても既定値で動きます。変えるときは docs/DATA.md）`);
+    detail(missing.map((k) => `  ${k}`).join("\n"));
+  }
+  logNotes(log, detail, notes, manifest.version, version);
 
   let branch = "";
   let committed = false;
+  let commit = null;
+  let commitError = "";
+  const commitIt = o.commit !== false;
   if (useGit) {
     // git の除外設定に当たるパッケージのファイルも入れる（前の版で入らなかったものもここで入る）
     gitAddPackageFiles(dir, [...[...template.keys()].filter((f) => (!isUserOwned(f) || f === LOCAL_CI_FILE) && existsSync(join(dir, f))), MANIFEST], outsideBackup);
     if (git(dir, ["diff", "--cached", "--quiet"]).ok) {
-      log("変更はありませんでした");
+      log("変更はありませんでした（コミットしていません）");
       committed = true;
+    } else if (!commitIt) {
+      log("");
+      log(`【コミットしていません】--no-commit のため、変更は git add までにしてあります（ブランチは今のまま: ${currentBranch(dir) || "（不明）"}）`);
+      log("MR にするには:");
+      log(`  git switch -c update-${version}`);
+      log(`  git commit -m "予実ナビを ${version} に更新"`);
+      log(`  git push -u origin update-${version}`);
+      log(`取り消すには: git reset --hard（変える前のファイルは ${backup || BACKUP_DIR}/ にもあります）`);
     } else {
+      const from = currentBranch(dir);
       branch = `update-${version}`;
+      for (let n = 2; git(dir, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).ok; n++) branch = `update-${version}-${n}`;
       const sw = git(dir, ["switch", "-c", branch]);
       if (!sw.ok) git(dir, ["checkout", "-b", branch]);
       const c = git(dir, ["commit", "-q", "-m", `予実ナビを ${version} に更新`]);
       committed = c.ok;
       if (!c.ok) {
-        log(`git commit できませんでした（${c.err.split("\n")[0]}）。変更はフォルダに入っています`);
-        branch = "";
+        commitError = c.err.split("\n")[0] || "git commit が失敗しました";
+        log(`git commit できませんでした（${commitError}）。変更はフォルダに入っています`);
+        branch = currentBranch(dir) === branch ? branch : "";
       } else {
+        const hash = git(dir, ["rev-parse", "--short", "HEAD"]).out;
+        commit = { branch, from, hash };
+        log("");
+        log(`【自動でコミットしました】ブランチ ${branch}（${from || "今のブランチ"} から作成）に「予実ナビを ${version} に更新」（${hash}）`);
+        log(`  コミットしたくないときは --no-commit。取り消すには: git switch ${from || "main"} && git branch -D ${branch}`);
         log("");
         log("次に行うこと:");
         log(`  git push -u origin ${branch}`);
@@ -525,5 +584,109 @@ export function update(o) {
     }
   }
   assertCiFiles(dir, template, committed);
-  return { ...base, dryRun: false, backup, branch, vendorUpdated };
+  return { ...base, dryRun: false, backup, branch: commit ? branch : "", commit, commitError, vendorUpdated };
+}
+
+/** 今のブランチの名前（ブランチに居ないときは空） */
+function currentBranch(dir) {
+  const b = git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]).out;
+  return b === "HEAD" ? "" : b;
+}
+
+/** ファイルを .yojitsu-navi-backup/<日時>/ に写す（前の版の記録も入れる）。写した先（プロジェクトからのパス）を返す */
+function backupFiles(dir, files, now, manifestPath) {
+  const stamp = backupStamp(now);
+  let backup = `${BACKUP_DIR}/${stamp}`;
+  for (let n = 2; existsSync(join(dir, backup)); n++) backup = `${BACKUP_DIR}/${stamp}-${n}`;
+  for (const f of files) {
+    mkdirSync(dirname(join(dir, backup, f)), { recursive: true });
+    // シンボリックリンクは指す先の中身を写す（上書きするのはリンクではなく中身なので）
+    copyFileSync(join(dir, f), join(dir, backup, f));
+  }
+  if (manifestPath && existsSync(manifestPath)) writeFileSync(join(dir, backup, MANIFEST), readFileSync(manifestPath));
+  return backup;
+}
+
+/** git を使わないときに見ないフォルダ（依存・ビルドの結果・コマンドのもの） */
+const NOT_PROJECT_FILES = new Set([".git", "node_modules", "dist", ".npm", ".observablehq", "test-results", "playwright-report", BACKUP_DIR, LOG_DIR, VENDOR_CACHE.split("/")[0]]);
+
+/**
+ * パッケージに無く、前の版の記録にも無いファイル（社内で足したもの）。社内のもの（config.json・data/ など）とコマンドのものは除く。
+ * git のプロジェクトでは git が管理する・除外設定に当たらないファイルから、そうでなければフォルダを辿って探す
+ */
+export function localExtras(dir, template, recorded = {}, useGit = isGitRepo(dir)) {
+  const files = useGit ? gitFiles(dir) : walkFiles(dir);
+  return files.filter((f) => fileKind(f) === "package" && !template.has(f) && !(f in recorded) && existsSync(join(dir, f))).sort();
+}
+
+function walkFiles(root) {
+  const out = [];
+  const walk = (rel) => {
+    for (const name of readdirSync(join(root, rel))) {
+      const r = rel ? `${rel}/${name}` : name;
+      if (!rel && NOT_PROJECT_FILES.has(name)) continue;
+      const st = lstatSync(join(root, r));
+      if (st.isDirectory()) walk(r);
+      else out.push(r);
+    }
+  };
+  walk("");
+  return out;
+}
+
+/** 「tests/ 3・certs/ 1」の形（上の階層のフォルダごとの数） */
+function summarizeDirs(files) {
+  const n = new Map();
+  for (const f of files) {
+    const top = f.includes("/") ? `${f.split("/")[0]}/` : f;
+    n.set(top, (n.get(top) ?? 0) + 1);
+  }
+  return [...n].map(([k, v]) => `${k} ${v}`).join("・");
+}
+
+/**
+ * サンプルのまま残っているデータを空にする（yojitsu-navi reset-data。SPEC §94）。
+ * 対象はパッケージのサンプルと中身が同じファイルだけ（sampleLeftovers。本番のデータ・社内で直したファイル・config.json には触らない）。
+ * - data/worklogs/ の月のファイル・_meta.json: 消す（取り込みで作り直される）
+ * - そのほかの CSV: 見出しの行だけを残す（消すとビルドが止まるものがあるため）
+ * - 変える前のファイルは .yojitsu-navi-backup/<日時>/ に写す。git のコミットはしない（MR にするのは社内で）
+ * @param {{ pkgDir: string, dir: string, dryRun?: boolean, now?: Date, log: (s: string) => void }} o
+ */
+export function resetData(o) {
+  const { pkgDir, dir, log } = o;
+  if (!existsSync(join(dir, MANIFEST))) throw new CliError(`${dir} に ${MANIFEST} がありません。yojitsu-navi init で作ったプロジェクトのフォルダで実行してください`);
+  if (!existsSync(join(pkgDir, SAMPLE_DIR))) throw new CliError("このパッケージにはサンプルのデータが入っていないので、サンプルのまま残っているかを見分けられません");
+  const plan = sampleLeftovers(pkgDir, dir).map((f) => {
+    if (f.startsWith("data/worklogs/")) return { f, action: "remove" };
+    if (f.endsWith(".csv")) return { f, action: "header" };
+    return { f, action: "skip" };
+  });
+  const label = { remove: "消す", header: "見出しの行だけにする", skip: "そのまま（CSV でないので手で直す）" };
+  if (!plan.length) {
+    log("サンプルのまま残っているデータはありません（何も変えていません）");
+    return { dryRun: Boolean(o.dryRun), removed: [], emptied: [], skipped: [], backup: "" };
+  }
+  const by = (a) => plan.filter((p) => p.action === a).map((p) => p.f);
+  const result = { dryRun: Boolean(o.dryRun), removed: by("remove"), emptied: by("header"), skipped: by("skip"), backup: "" };
+  const lines = plan.map((p) => `  ${p.f}（${label[p.action]}）`).join("\n");
+  if (o.dryRun) {
+    log(`サンプルのまま残っているデータ: ${plan.length} ファイル（何も変えていません。yojitsu-navi reset-data で次のようにします）:\n${lines}`);
+    return result;
+  }
+  const targets = plan.filter((p) => p.action !== "skip").map((p) => p.f);
+  if (targets.length) result.backup = backupFiles(dir, targets, o.now, join(dir, MANIFEST));
+  for (const { f, action } of plan) {
+    const to = join(dir, f);
+    if (action === "remove") rmSync(to);
+    else if (action === "header") {
+      const text = readFileSync(to, "utf-8");
+      const end = text.indexOf("\n");
+      writeFileSync(to, end < 0 ? `${text}\n` : text.slice(0, end + 1));
+    }
+  }
+  log(`サンプルのまま残っていたデータを直しました: ${plan.length} ファイル（前のものは ${result.backup || BACKUP_DIR}/ に写しました）:\n${lines}`);
+  log("");
+  log("次に行うこと: 本番のデータを入れ、npm run validate で確かめてから MR にする（git add data && git commit）");
+  if (result.removed.length) log("消した作業実績の月は、取り込みで作り直されます（過去の月は Run pipeline で FETCH_FROM・FETCH_TO を入れて取り直す。docs/OPERATIONS.md）");
+  return result;
 }

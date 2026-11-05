@@ -343,6 +343,9 @@ describe("update", () => {
     expect(r.added).toEqual(["src/new.js"]);
     expect(r.missing).toEqual(["b"]);
     expect(r.newData).toEqual(["data/new.csv"]);
+    // 社内で足したファイルは触らずに知らせる（SPEC §94）
+    expect(r.extras).toEqual(["src/local.js"]);
+    expect(logs.join("\n")).toMatch(/パッケージに無いファイル[^\n]*src\/ 1[\s\S]*src\/local\.js/);
     // 上書き・削除する前のファイルを日時のフォルダに写し、git には入れない
     expect(r.backup).toBe(".yojitsu-navi-backup/20300102-030405");
     expect(readFileSync(join(dir, r.backup, "src", "a.js"), "utf-8")).toBe("a1");
@@ -616,10 +619,11 @@ describe("update", () => {
   it("ファイルの扱いの区分", () => {
     expect(["config.json", "data/mapping.csv", "data/masters/members.csv", "data/worklogs/x.csv"].map(app.fileKind)).toEqual(["keep", "keep", "keep", "keep"]);
     expect([".gitlab-ci.local.yml", ".npmrc"].map(app.fileKind)).toEqual(["keep", "keep"]);
-    expect(["vendor/npm-cache/index", ".yojitsu-navi.json", ".yojitsu-navi-backup/1/a"].map(app.fileKind)).toEqual(["vendor", "tool", "tool"]);
+    expect(["vendor/npm-cache/index", ".yojitsu-navi.json", ".yojitsu-navi-backup/1/a", ".yojitsu-navi-log/upgrade.log"].map(app.fileKind)).toEqual(["vendor", "tool", "tool", "tool"]);
     expect([".gitlab-ci.yml", "package.json", "src/index.md", "scripts/ci/install.mjs", ".gitignore"].map(app.fileKind)).toEqual(["package", "package", "package", "package", "package"]);
     expect(app.backupStamp(new Date(2031, 11, 31, 23, 59, 8))).toBe("20311231-235908");
     expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain(".yojitsu-navi-backup/");
+    expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain(".yojitsu-navi-log/");
   });
 
   it("コミットしていない変更・古い版・記録の無いフォルダでは止まる", () => {
@@ -646,6 +650,221 @@ describe("update", () => {
     expect(app.compareVersion("1.10.0", "1.9.9")).toBeGreaterThan(0);
     expect(app.compareVersion("1.0.0", "1.0.0")).toBe(0);
     expect(app.compareVersion("0.9.0", "1.0.0")).toBeLessThan(0);
+  });
+});
+
+describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
+  const v1 = { "config.json": CONFIG(), "data/contracts.csv": "id\nC1\n", "src/a.js": "a1", "_gitignore": "node_modules/\n" };
+  const v2 = { ...v1, "src/a.js": "a2", "src/b.js": "b", ".gitlab-ci.local.yml": ".yojitsu-navi-local:\n  script: []\n" };
+  function project(name: string) {
+    const dir = join(work, name);
+    app.init({ pkgDir: fakePackage(`${name}-v1`, "1.0.0", v1), version: "1.0.0", dir, log });
+    return dir;
+  }
+  let out: any;
+  beforeAll(async () => {
+    out = await import(pathToFileURL(join(PKG, "lib", "output.mjs")).href);
+  });
+
+  it("自動でコミットしたことをはっきり出す。同じ名前のブランチがあれば番号を付ける", () => {
+    const dir = project("v94-commit");
+    git(dir, "branch", "update-1.1.0");
+    logs.length = 0;
+    const r = app.update({ pkgDir: fakePackage("v94-commit-v2", "1.1.0", v2), version: "1.1.0", dir, log });
+    expect(r.commit.branch).toBe("update-1.1.0-2");
+    expect(r.commit.from).toBe("main");
+    expect(r.commit.hash).toBe(git(dir, "rev-parse", "--short", "HEAD"));
+    expect(logs.join("\n")).toContain(`【自動でコミットしました】ブランチ update-1.1.0-2（main から作成）`);
+    expect(logs.join("\n")).toContain("--no-commit");
+  }, scaled(60_000));
+
+  it("--no-commit はブランチを作らずコミットもしない（git add まで）", () => {
+    const dir = project("v94-nocommit");
+    const head = git(dir, "rev-parse", "HEAD");
+    logs.length = 0;
+    const r = app.update({ pkgDir: fakePackage("v94-nocommit-v2", "1.1.0", v2), version: "1.1.0", dir, log, commit: false });
+    expect([r.commit, r.branch]).toEqual([null, ""]);
+    expect(git(dir, "rev-parse", "HEAD")).toBe(head);
+    expect(git(dir, "branch", "--show-current")).toBe("main");
+    expect(git(dir, "diff", "--cached", "--name-only")).toContain("src/a.js");
+    expect(logs.join("\n")).toContain("【コミットしていません】");
+  }, scaled(60_000));
+
+  it("update の前に作った .gitlab-ci.local.yml では止まらずにコミットに入れる。.npmrc は止まる（トークンをコミットしない）", () => {
+    const dir = project("v94-local");
+    writeFileSync(join(dir, ".gitlab-ci.local.yml"), "default:\n  tags: [windows]\n");
+    writeFileSync(join(dir, ".npmrc"), "registry=https://npm.example.local/\n");
+    const pkg = fakePackage("v94-local-v2", "1.1.0", v2);
+    expect(() => app.update({ pkgDir: pkg, version: "1.1.0", dir, log })).toThrow(/コミットしていない変更[\s\S]*\.npmrc/);
+    rmSync(join(dir, ".npmrc"));
+    const r = app.update({ pkgDir: pkg, version: "1.1.0", dir, log });
+    expect(r.commit.branch).toBe("update-1.1.0");
+    expect(git(dir, "show", "HEAD:.gitlab-ci.local.yml")).toContain("tags: [windows]");
+  }, scaled(60_000));
+
+  it("--summary は画面に件数と要るものだけを出し、一覧と差分はログのファイル（UTF-8・BOM 付き）に書く", () => {
+    const dir = project("v94-summary");
+    writeFileSync(join(dir, "src", "a.js"), "社内で変えた");
+    mkdirSync(join(dir, "tests", "fixtures"), { recursive: true });
+    writeFileSync(join(dir, "tests", "fixtures", "社内のテスト用.csv"), "x\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "社内の変更");
+    const screen: string[] = [];
+    const file = join(work, "v94-summary.log");
+    const o = out.createOutput({ file, summary: true, screen: (s: string) => screen.push(s) });
+    const r = app.update({ pkgDir: fakePackage("v94-summary-v2", "1.1.0", v2), version: "1.1.0", dir, dryRun: true, log: o.log, detail: o.detail });
+    expect(r.extras).toEqual(["tests/fixtures/社内のテスト用.csv"]);
+    const shown = screen.join("\n");
+    expect(shown).toContain("社内で変えたファイル");
+    expect(shown).toContain("src/a.js（社内で変更）");
+    expect(shown).toMatch(/パッケージに無いファイル[^\n]*: 1 ファイル/);
+    expect(shown).not.toContain("tests/fixtures/社内のテスト用.csv");
+    expect(shown).not.toContain("+a2");
+    const buf = readFileSync(file);
+    expect([...buf.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const text = buf.toString("utf-8");
+    expect(text).toContain("  tests/fixtures/社内のテスト用.csv");
+    expect(text).toContain("+a2");
+    expect(text).toContain("-社内で変えた");
+  }, scaled(60_000));
+
+  it("コマンド: update --dry-run --summary --log、check --log、知らないオプション・値の無い --log は止まる", () => {
+    const dir = join(work, "v94-cli");
+    app.init({ pkgDir: PKG, version: pkgJson.version, dir, log });
+    const bin = join(PKG, "bin", "yojitsu-navi.mjs");
+    const file = join(work, "v94-cli.log");
+    const r = spawnSync(process.execPath, [bin, "update", dir, "--dry-run", "--summary", "--log", file], { encoding: "utf-8" });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("何も変えていません");
+    expect(r.stdout).toContain(file);
+    expect(readFileSync(file, "utf-8")).toContain("何も変えていません");
+    const c = spawnSync(process.execPath, [bin, "check", dir, "--log", file], { encoding: "utf-8" });
+    expect(c.status).toBe(0);
+    expect(readFileSync(file, "utf-8")).toContain("揃っています");
+    expect(spawnSync(process.execPath, [bin, "update", dir, "--log"], { encoding: "utf-8" }).stderr).toContain("--log のあとに");
+    expect(spawnSync(process.execPath, [bin, "upgrade", dir, "--summary"], { encoding: "utf-8" }).stderr).toContain("知らないオプション");
+    // 止まったときもログのファイルに残す
+    const bad = spawnSync(process.execPath, [bin, "update", work, "--log", file], { encoding: "utf-8" });
+    expect(bad.status).toBe(2);
+    expect(readFileSync(file, "utf-8")).toContain(".yojitsu-navi.json がありません");
+  }, scaled(60_000));
+
+  it("reset-data: サンプルと同じファイルだけを空にする（作業実績の月は消し、CSV は見出しの行だけ）。--dry-run は何も変えない", () => {
+    const sample = { "data/contracts.csv": "id\nC1\n", "data/mapping.csv": "code,id\nX,C1\n", "data/worklogs/2026-01.csv": "d,h\n1,2\n", "data/worklogs/_meta.json": "{}\n" };
+    const pkg = fakePackage("v94-reset-pkg", "1.0.0", { ...v1, "data/contracts.csv": "id\n", "data/mapping.csv": "code,id\n" }, false, sample);
+    const dir = join(work, "v94-reset");
+    app.init({ pkgDir: pkg, version: "1.0.0", dir, log, sample: true });
+    // 本番のものに置き換えたファイルは触らない
+    writeFileSync(join(dir, "data", "mapping.csv"), "code,id\n本番,C9\n");
+    const dry = app.resetData({ pkgDir: pkg, dir, log, dryRun: true });
+    expect([dry.removed, dry.emptied]).toEqual([["data/worklogs/2026-01.csv", "data/worklogs/_meta.json"], ["data/contracts.csv"]]);
+    expect(readFileSync(join(dir, "data", "contracts.csv"), "utf-8")).toBe("id\nC1\n");
+    const r = app.resetData({ pkgDir: pkg, dir, log, now: new Date(2030, 0, 2, 3, 4, 5) });
+    expect(readFileSync(join(dir, "data", "contracts.csv"), "utf-8")).toBe("id\n");
+    expect(readFileSync(join(dir, "data", "mapping.csv"), "utf-8")).toBe("code,id\n本番,C9\n");
+    expect(existsSync(join(dir, "data", "worklogs", "2026-01.csv"))).toBe(false);
+    expect(readFileSync(join(dir, r.backup, "data", "worklogs", "2026-01.csv"), "utf-8")).toBe("d,h\n1,2\n");
+    expect(readFileSync(join(dir, "config.json"), "utf-8")).toBe(CONFIG());
+    logs.length = 0;
+    expect(app.resetData({ pkgDir: pkg, dir, log }).emptied).toEqual([]);
+    expect(logs.join("\n")).toContain("ありません");
+  }, scaled(60_000));
+
+  describe("upgrade", () => {
+    // npm run で動くスクリプトだけの小さなパッケージ（本物の npm ci・ビルドは重いので、CI と同じ順に呼ばれるかを確かめる）
+    const pkgJsonFor = (v: string) =>
+      JSON.stringify({
+        name: "p",
+        version: v,
+        private: true,
+        scripts: {
+          validate: "node -e \"console.log('検証した'); process.exit(process.env.FAIL_VALIDATE ? 1 : 0)\"",
+          typecheck: "node -e \"console.log('型チェックした')\"",
+          test: "node -e \"console.log('テストした')\"",
+          build: "node -e \"console.log('ビルドした')\"",
+        },
+      });
+    const files = (v: string) => ({
+      ...v1,
+      "src/a.js": `a${v}`,
+      "package.json": pkgJsonFor(v),
+      "package-lock.json": "{}\n",
+      ".gitlab-ci.yml": "build:\n  script:\n    - node scripts/ci/install.mjs\n    - npm run validate\n    - npm run build\n",
+      "scripts/ci/install.mjs": "console.log('依存を入れた')\n",
+    });
+    async function setup(name: string) {
+      const dir = join(work, name);
+      app.init({ pkgDir: fakePackage(`${name}-v1`, "1.0.0", files("1.0.0")), version: "1.0.0", dir, log });
+      const up = await import(pathToFileURL(join(PKG, "lib", "upgrade.mjs")).href);
+      return { dir, up, pkg: fakePackage(`${name}-v2`, "1.1.0", files("1.1.0")) };
+    }
+
+    it("update → npm ci → check → データ検証 → テスト（既定は飛ばす）→ ビルドを順に行い、要約を出してログに残す", async () => {
+      const { dir, up, pkg } = await setup("v94-up");
+      const screen: string[] = [];
+      const file = join(dir, app.LOG_DIR, "upgrade-test.log");
+      const o = out.createOutput({ file, summary: true, screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s) });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "skipped", "ok"]);
+      expect(r.code).toBe(0);
+      expect(screen.join("\n")).toContain("結果: すべて済みました");
+      expect(screen.join("\n")).toContain("git push -u origin update-1.1.0");
+      expect(screen.join("\n")).not.toContain("ビルドした");
+      const text = readFileSync(file, "utf-8");
+      for (const s of ["依存を入れた", "検証した", "ビルドした", "src/a.js"]) expect(text).toContain(s);
+      expect(text).not.toContain("テストした");
+      // ログは git に入れない（.gitignore が古い版でも、先に書いたログで update を止めず、コミットにも入れない）
+      expect(git(dir, "ls-files", app.LOG_DIR)).toBe("");
+      expect(git(dir, "status", "--porcelain", "--", ".", ":(exclude).yojitsu-navi-backup", ":(exclude).yojitsu-navi-log")).toBe("");
+    }, scaled(120_000));
+
+    it("失敗したところで止まり、残りは動かさない。テストは --test で動く", async () => {
+      const { dir, up, pkg } = await setup("v94-up-fail");
+      const screen: string[] = [];
+      const o = out.createOutput({ screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s), summary: true });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, test: true, env: { ...process.env, FAIL_VALIDATE: "1" } });
+      expect(r.code).toBe(1);
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "failed", "notRun", "notRun"]);
+      expect(screen.join("\n")).toContain("検証した");
+      expect(screen.join("\n")).toContain("データ検証（npm run validate） で止まりました");
+      const again = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, test: true, env: { ...process.env, FAIL_VALIDATE: "" } });
+      expect(again.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "ok"]);
+    }, scaled(120_000));
+
+    it("自動のコミットに失敗したら（フックに断られたなど）update の手順で止まる。--no-commit なら進む", async () => {
+      const { dir, up, pkg } = await setup("v94-up-hook");
+      writeFileSync(join(dir, ".git", "hooks", "pre-commit"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const o = out.createOutput({ screen: () => {}, errScreen: () => {} });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["failed", "notRun", "notRun", "notRun", "notRun", "notRun"]);
+      expect(r.code).toBe(1);
+    }, scaled(60_000));
+
+    it("--log でプロジェクトの中のファイルを選んでも、update を止めずコミットにも入れない。子の出力は区切りの途中で分かれても化けない", async () => {
+      const { dir, up } = await setup("v94-up-log");
+      // 「日本語の診断」を 1 文字の途中で 2 回に分けて出す
+      const split = "const b = Buffer.from('日本語の診断\\n'); process.stdout.write(b.subarray(0, 4)); setTimeout(() => process.stdout.write(b.subarray(4)), 50);\n";
+      const pkg = fakePackage("v94-up-log-v2", "1.1.0", { ...files("1.1.0"), "scripts/ci/install.mjs": split });
+      const file = join(dir, "output.txt");
+      const o = out.createOutput({ file, summary: true, screen: () => {}, errScreen: () => {} });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.code).toBe(0);
+      expect(git(dir, "ls-files", "output.txt")).toBe("");
+      const text = readFileSync(file, "utf-8");
+      expect(text).toContain("日本語の診断");
+      expect(text).not.toContain("\uFFFD");
+      expect(r.steps[0].note).not.toContain("パッケージに無いファイル");
+    }, scaled(120_000));
+
+    it("社内で変えたファイルで update が止まれば、終了コード 2 で止まる", async () => {
+      const { dir, up, pkg } = await setup("v94-up-conflict");
+      writeFileSync(join(dir, "src", "a.js"), "社内");
+      git(dir, "commit", "-qam", "社内の変更");
+      const o = out.createOutput({ screen: () => {}, errScreen: () => {} });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o });
+      expect(r.code).toBe(2);
+      expect(r.steps[0].status).toBe("failed");
+    }, scaled(60_000));
   });
 });
 
