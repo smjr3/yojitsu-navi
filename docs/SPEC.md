@@ -1284,7 +1284,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
   - 失敗は記録して **データ確認画面の「データの検証」に警告で出す**: 作業実績は `data/worklogs/_meta.json`、人事は `data/masters/_members-meta.json` の `lastFailure`（日時と理由。トークンは伏せ、300 文字まで）。作業実績の取得日時（`fetchedAt`）は前回成功のまま。次に成功すると消える。
   - CI（`scripts/ci/fetch-data.mjs`）は失敗の記録だけを MR にしてからジョブを失敗で終える（GitLab の通知も出る）。`--dry-run` の失敗は記録しない。
 - `members` を設定しない API はこれまでどおり（社員番号を渡さず全件を取る）。
-- **本番の標準**（2026-11-05 依頼者。§96）: 導入先で 100 人超を 50 人ずつ（50・50・残り）に分けて全員分を取れたので、この取り方（`members` ＋ `chunkSize` 既定 50）を本番の標準とする。
+- **本番の標準**（2026-11-05 依頼者。§96）: この取り方（`members` ＋ `chunkSize` 既定 50）を本番の標準とする。
 - 実装: `scripts/lib/fetch-targets.ts`（対象者・分割）、`scripts/lib/fetch-status.ts`（失敗の記録）、`scripts/adapters/http.ts`、`buildRequestUrl`（`scripts/adapters/http-source.ts`）。再発防止: `tests/integration/member-targets.test.ts`。
 
 ## 88. 広い画面では横幅を使い切る（2026-11-03 依頼者）
@@ -1424,7 +1424,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 確認: `tests/integration/app-package.test.ts`「upgrade・reset-data・update の出力」（順番・失敗で止まる・テストは既定で飛ばす・ログ・`--summary`・`--log`・BOM・コミットの表示と番号・`--no-commit`・`.gitlab-ci.local.yml` と `.npmrc`・パッケージに無いファイル・`reset-data`）。
 
 ## 96. 取り込む期間の使い分けと、本番の設定の互換確認（2026-11-05 依頼者。導入先のレビュー指摘）
-0.2.1 の本番適用で: 初回の導入で年度の初めから今月までを `--from`・`--to` で手で指定した、版上げのたびに本番で決めた設定（`taskCodeCheck.include`・取得する人 `members`・`pagination.stopWhen`・作業コードの列名など）を手で見直した、への対応。継続して版を上げる導入先のための仕組みをパッケージ側に持つ。
+初回の導入で年度の初めから今月までを手で指定しなくてよいように、また版上げのたびに本番で決めた設定を見直さなくてよいようにする。継続して版を上げる導入先のための仕組みをパッケージ側に持つ。
 - **取り込む期間の 3 とおり**（`scripts/fetch-worklogs.ts`）: 通常＝今月を含む直近 `refetchMonths` か月（スケジュール実行。従来どおり）、初回＝今年度の初めから今月まで（`--initial`、GitLab は Run pipeline の変数 `FETCH_MODE=initial`）、必要なとき＝任意の期間（`--from`・`--to`、`FETCH_FROM`・`FETCH_TO`。§87）。年度の初めは `fiscalYearStartMonth`（既定 4。値が壊れていれば 4）と「今日」から決める（年度・年月を書かない。§49）。`--initial` と `--from`／`--to` は一緒に使えない（エラー）。`FETCH_MODE` は `initial` か `recent`（＝通常）、ほかの値はエラー。取得する人はどれもその期間の在籍者（§87）。`.gitlab-ci.yml` の `fetch-worklogs` は `FETCH_MODE` でも動く。
 - **本番固有の部分とパッケージの部分**: 本番で決めるもの（`config.json`、`data/` 以下〈`members.csv`・手入力の契約情報など〉、`.gitlab-ci.local.yml`、`.npmrc`、証明書・トークンの CI/CD 変数）は `update` が触らない（§91・§91.1）。表は `docs/DEPLOY_GITLAB.md`「本番固有の部分とパッケージの部分」。
 - **設定の互換確認**（`scripts/lib/config-schema.mjs`。Node の標準機能だけで動く）: 設定の項目（型・必須・決まった値・範囲・ページングの種類ごとの項目・名前が変わった／廃止された項目）を宣言で持ち、導入先の `config.json` を確かめる。

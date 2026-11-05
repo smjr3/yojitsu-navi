@@ -155,9 +155,9 @@ describe("取得対象の社員番号（メンバーマスタから）", () => {
     expect(() => parseArgs([], { FETCH_MODE: "all" })).toThrow(/FETCH_MODE/);
   });
 
-  it("50 人ずつ（既定）: 113 人は 50・50・13 の 3 回", () => {
-    const ids = Array.from({ length: 113 }, (_, i) => `M${String(i).padStart(3, "0")}`);
-    expect(chunk(ids, 50).map((c) => c.length)).toEqual([50, 50, 13]);
+  it("50 人ずつ（既定）: 101 人は 50・50・1 の 3 回", () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `M${String(i).padStart(3, "0")}`);
+    expect(chunk(ids, 50).map((c) => c.length)).toEqual([50, 50, 1]);
   });
 
   it("safeMessage: トークンを伏せ、改行をまとめ、長さを切る", () => {

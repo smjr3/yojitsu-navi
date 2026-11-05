@@ -98,7 +98,7 @@ Settings > CI/CD > Variables に登録します。
 
 ### 取得する人をメンバーマスタから決める（SPEC §87）
 
-**本番の標準の取り方です**（SPEC §96）: 取得する人をメンバーマスタの在籍者から作り、50 人ずつに分けて取ります（100 人を超える導入先で、50・50・残りの 3 回で全員分を取れることを確かめています）。社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
+**本番の標準の取り方です**（SPEC §96）: 取得する人をメンバーマスタの在籍者から作り、50 人ずつに分けて取ります。社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
 
 ```json
 "members": { "param": "member_ids", "chunkSize": 50 }

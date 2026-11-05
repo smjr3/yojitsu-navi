@@ -201,11 +201,11 @@ git push -u origin update-<新しい版>
 
 | 区分 | 置き場 | 中身 |
 |---|---|---|
-| 本番固有 | `config.json` | 作業情報システム API の設定（`worklogSource`: 接続先・列名・作業コードの列・ページング `stopWhen`・取得する人 `members`）、人事の取り込み（`memberSource`）、作業コードの点検（`taskCodeCheck`）、計算の設定 |
+| 本番固有 | `config.json` | 作業実績 API の設定（`worklogSource`: 接続先・列名・作業コードの列・ページング `stopWhen`・取得する人 `members`）、人事の取り込み（`memberSource`）、作業コードの点検（`taskCodeCheck`）、計算の設定 |
 | 本番固有 | `data/masters/members.csv` | メンバーマスタ（作業実績を取得する人もここから作る） |
 | 本番固有 | `data/contracts.csv`・`data/mapping.csv` など `data/` 以下 | 手入力の契約情報（期間・金額・担当チーム）・対応表・計画。取り込んだ作業実績 |
 | 本番固有 | `.gitlab-ci.local.yml` | Runner のタグ・社内だけのジョブ・変数 |
-| 本番固有 | `.npmrc`、CI/CD 変数 `NPM_CONFIG_REGISTRY`・`NPM_AUTH_TOKEN` | 社内の npm レジストリ（JFrog Artifactory・Nexus など）と認証 |
+| 本番固有 | `.npmrc`、CI/CD 変数 `NPM_CONFIG_REGISTRY`・`NPM_AUTH_TOKEN` | 社内の npm レジストリと認証 |
 | 本番固有 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`・`NODE_USE_SYSTEM_CA`（か社内で足した `certs/`） | 社内の証明書 |
 | 本番固有 | CI/CD 変数 `WORKLOG_API_TOKEN`・`MEMBER_API_TOKEN`・`GIT_PUSH_TOKEN` | 各 API・取り込みの MR のトークン |
 | パッケージ | 上以外（`.gitlab-ci.yml`・`package.json`・`src/`・`scripts/`・`docs/` など） | `update` が新しい版にする（社内で変えていたら止まる。下の「上書きするファイルと残すファイル」） |
