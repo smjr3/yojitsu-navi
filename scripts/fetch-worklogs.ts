@@ -6,6 +6,10 @@
  *   npx tsx scripts/fetch-worklogs.ts --months 3 --asOf 2026-10-27 --adapter http
  *   npm run fetch -- --from 2025-04 --to 2025-09                  # 過去の期間を取り直す（対象者はその期間の在籍者。§87）
  *   npm run fetch -- --from 2025-04 --to 2025-09 --members M050,M051   # 指定した人の行だけ取り直す（他の人の行は残す）
+ *   npm run fetch -- --initial                                    # 初回の取り込み: 今年度の初め（config.fiscalYearStartMonth）から今月まで（§96）
+ *
+ * 取り込む期間は 3 とおり（§96）: 通常＝直近 refetchMonths か月（スケジュール実行）、初回＝今年度の初めから今月まで（--initial / FETCH_MODE=initial）、
+ * 必要なとき＝任意の期間（--from / --to / FETCH_FROM・FETCH_TO）。
  *
  * - 取り直す月数は config.worklogSource.http.refetchMonths（既定 3）。
  *   前月分の修正入力（締め後の訂正）を拾うため、毎回「今月を含む直近 N か月」を上書きする。
@@ -18,6 +22,7 @@
  *
  * 環境変数: WORKLOG_API_TOKEN（http アダプタ）、WORKLOG_ADAPTER（アダプタ名の上書き）
  *           FETCH_FROM / FETCH_TO / FETCH_MEMBERS（CI の手動実行で --from / --to / --members の代わり。scripts/ci/fetch-data.mjs が渡す）
+ *           FETCH_MODE=initial（--initial の代わり。CI の Run pipeline で入れる）
  *           FETCH_ACCEPT_TASK_CHANGES=1（--accept-task-changes。作業名の変更を確かめたので取り込む。§92）
  * - config.taskCodeCheck（§92）で作業コードを点検する。stop の設定なら、未登録の作業コード・新しい作業名の変更があるとき月ファイルを書かずに止める
  */
@@ -45,6 +50,8 @@ interface CliOptions {
   /** 取り直す期間（YYYY-MM。指定すると months より優先。過去の再取得用。§87） */
   from?: YearMonth;
   to?: YearMonth;
+  /** 初回の取り込み: 今年度の初めから今月まで（§96。--from / --to とは一緒に使えない） */
+  initial?: boolean;
   /** 取り直す人を明示する（指定した人の行だけ差し替え、他の人の行は残す。§87） */
   members?: string[];
   /** 基準日（省略時は今日）。テストや再現用 */
@@ -104,8 +111,19 @@ function monthsBetween(from: YearMonth, to: YearMonth): YearMonth[] {
   return out;
 }
 
-/** 取り直す期間: --from/--to があればそれ、無ければ基準日を含む直近 N か月 */
-export function targetMonths(opts: Pick<CliOptions, "from" | "to" | "months">, asOf: string, refetchMonths: number | undefined): YearMonth[] {
+/** 基準日を含む年度の最初の月（年度は fiscalYearStartMonth 月に始まる。§96） */
+export function fiscalYearStart(asOf: string, fiscalYearStartMonth = 4): YearMonth {
+  const start = Number.isInteger(fiscalYearStartMonth) && fiscalYearStartMonth >= 1 && fiscalYearStartMonth <= 12 ? fiscalYearStartMonth : 4;
+  const [y, m] = asOf.slice(0, 7).split("-").map(Number) as [number, number];
+  return `${m >= start ? y : y - 1}-${pad2(start)}`;
+}
+
+/** 取り直す期間: 初回なら今年度の初めから今月、--from/--to があればそれ、無ければ基準日を含む直近 N か月（§96） */
+export function targetMonths(opts: Pick<CliOptions, "from" | "to" | "months" | "initial">, asOf: string, refetchMonths: number | undefined, fiscalYearStartMonth?: number): YearMonth[] {
+  if (opts.initial) {
+    if (opts.from !== undefined || opts.to !== undefined) throw new Error("--initial（FETCH_MODE=initial）と --from / --to（FETCH_FROM / FETCH_TO）は一緒に使えません");
+    return monthsBetween(fiscalYearStart(asOf, fiscalYearStartMonth), asOf.slice(0, 7));
+  }
   if (opts.from !== undefined || opts.to !== undefined) {
     const from = opts.from ?? opts.to ?? "";
     const to = opts.to ?? asOf.slice(0, 7);
@@ -138,7 +156,7 @@ export async function fetchWorklogs(opts: CliOptions, env: NodeJS.ProcessEnv = p
 async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof loadConfig>, dir: string, env: NodeJS.ProcessEnv, now: () => Date): Promise<FetchResult> {
   const adapter = selectAdapter(config, opts.adapter ? { ...env, WORKLOG_ADAPTER: opts.adapter } : env);
   const asOf = opts.asOf ?? todayJst();
-  const months = targetMonths(opts, asOf, config.worklogSource.http?.refetchMonths);
+  const months = targetMonths(opts, asOf, config.worklogSource.http?.refetchMonths, config.fiscalYearStartMonth);
   const from = months[0];
   const to = months[months.length - 1];
   if (!from || !to) throw new Error("対象月がありません");
@@ -248,6 +266,9 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
   if (env.FETCH_FROM?.trim()) fromEnv.push("--from", env.FETCH_FROM.trim());
   if (env.FETCH_TO?.trim()) fromEnv.push("--to", env.FETCH_TO.trim());
   if (env.FETCH_MEMBERS !== undefined && env.FETCH_MEMBERS !== "") fromEnv.push("--members", env.FETCH_MEMBERS);
+  const mode = env.FETCH_MODE?.trim().toLowerCase() ?? "";
+  if (mode === "initial") fromEnv.push("--initial");
+  else if (mode && mode !== "recent") throw new Error(`FETCH_MODE は initial（今年度の初めから今月まで）か recent（直近。既定）にしてください: ${JSON.stringify(env.FETCH_MODE)}`);
   if (env.FETCH_ACCEPT_TASK_CHANGES === "1" || env.FETCH_ACCEPT_TASK_CHANGES === "true") fromEnv.push("--accept-task-changes");
   argv = [...fromEnv, ...argv];
   for (let i = 0; i < argv.length; i++) {
@@ -271,6 +292,8 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): CliOptio
     } else if (a === "--adapter" && v !== undefined) {
       opts.adapter = v;
       i++;
+    } else if (a === "--initial") {
+      opts.initial = true;
     } else if (a === "--accept-task-changes") {
       opts.acceptTaskChanges = true;
     } else if (a === "--dry-run") {

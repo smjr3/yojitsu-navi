@@ -8,6 +8,7 @@ import { cwd } from "node:process";
 import { CHANGELOG, updateNotes } from "./changelog.mjs";
 import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
 import { ciHash, migrateCi, migratedHash, repairLocalPlaceholder } from "./ci-local.mjs";
+import { checkConfig, formatConfigIssues, parseConfigText } from "./config-schema.mjs";
 import { compareVersion } from "./version.mjs";
 
 export { compareVersion };
@@ -321,6 +322,35 @@ function logNotes(log, detail, notes, from, to) {
   detail(notes.map((l) => `  ${l}`).join("\n"));
 }
 
+/**
+ * config.json が新しい版で動くか（SPEC §96）。読めないときもエラーにする。
+ * @returns {{ errors: number, warnings: number, lines: string[] }}
+ */
+export function configCompat(dir) {
+  const path = join(dir, "config.json");
+  if (!existsSync(path)) return { errors: 1, warnings: 0, lines: ["  - config.json がありません"] };
+  const r = parseConfigText(readFileSync(path, "utf-8"));
+  if (r.error) return { errors: 1, warnings: 0, lines: [`  - ${r.error}`] };
+  const issues = checkConfig(r.config);
+  const errors = issues.filter((i) => i.level === "error").length;
+  return { errors, warnings: issues.length - errors, lines: formatConfigIssues(issues) };
+}
+
+/** 互換確認の結果を出す。エラーは画面に、注意の中身は詳しい行に */
+function reportConfig(log, detail, c, version) {
+  if (!c.errors && !c.warnings) {
+    log(`config.json の互換確認: ${version} でそのまま動きます（直すところはありません）`);
+    return;
+  }
+  if (c.errors) {
+    log(`config.json の互換確認: ${version} で直すところがあります（エラー ${c.errors}・注意 ${c.warnings}。直すまで npm run validate と CI の build が止まります。docs/DATA.md）`);
+    log(c.lines.join("\n"));
+    return;
+  }
+  log(`config.json の互換確認: ${version} で動きます（注意 ${c.warnings}。止めません）`);
+  detail(c.lines.join("\n"));
+}
+
 const CONFLICT_LABEL = { modified: "社内で変更", created: "社内で作成", removedModified: "新しい版で削除（社内で変更）" };
 
 /**
@@ -451,6 +481,8 @@ export function update(o) {
   } catch {
     // config.json が壊れているときは npm run validate が知らせる
   }
+  // config.json の互換確認（SPEC §96）: 新しい版で必須になった項目・型や値の違い・使わなくなった項目だけを見る
+  const configCheck = configCompat(dir);
   // サンプルのまま残っているデータ（本番のデータと混ざって集計を誤らないよう知らせる。消すのは yojitsu-navi reset-data か社内で）
   const sampleLeft = sampleLeftovers(pkgDir, dir, template);
   // パッケージに無いファイル（社内で足したもの。触らないが、使われないまま残ったテスト用のデータなどに気づけるよう知らせる。SPEC §94）
@@ -464,7 +496,7 @@ export function update(o) {
   const ciNote = () => {
     if (ciNotes.length) log(ciNotes.join("\n"));
   };
-  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras };
+  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
   /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */
   const list = (title, items) => {
     if (!items.length) return;
@@ -489,6 +521,7 @@ export function update(o) {
     list("足すファイル", added);
     list("消すファイル", deletes);
     reportFound();
+    reportConfig(log, detail, configCheck, version);
     logNotes(log, detail, notes, manifest.version, version);
     if (conflicts.length) {
       const tmp = mkdtempSync(join(tmpdir(), "yojitsu-update-"));
@@ -563,6 +596,7 @@ export function update(o) {
     log(`config.json に無い新しい設定: ${missing.length} 項目（無くても既定値で動きます。変えるときは docs/DATA.md）`);
     detail(missing.map((k) => `  ${k}`).join("\n"));
   }
+  reportConfig(log, detail, configCheck, version);
   logNotes(log, detail, notes, manifest.version, version);
 
   let branch = "";

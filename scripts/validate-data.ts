@@ -7,10 +7,23 @@
  * 読み込み（scripts/lib/load.ts → src/core/csv.ts parseDataset）で見つかった問題と、
  * src/core/validate.ts validateDataset の結果を、重要度→ファイル順にまとめて表示する。
  * warning（未紐付け工数・単価なし等）は表示するだけで止めない。
+ * config.json の互換確認（§96。scripts/lib/config-schema.mjs）も含める: 必須の項目が無い・型や値が違うものは error。
  */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ValidationIssue } from "../src/core/validate.js";
+import { checkConfig, parseConfigText } from "./lib/config-schema.mjs";
 import { loadDataset } from "./lib/load.js";
+
+/** config.json の互換確認（§96）を検証の問題の形にする。読めないときは loadDataset が止めるのでここでは出さない */
+export function configIssues(rootDir: string): ValidationIssue[] {
+  const path = join(rootDir, "config.json");
+  if (!existsSync(path)) return [];
+  const r = parseConfigText(readFileSync(path, "utf-8"));
+  if (r.error) return [];
+  return checkConfig(r.config).map((i) => ({ severity: i.level, code: i.code, file: "config.json", message: `${i.path || "(全体)"}: ${i.message}` }));
+}
 
 export interface Report {
   errors: ValidationIssue[];
@@ -74,7 +87,7 @@ export function runValidation(rootDir: string): Report {
   // parseDataset（loadDataset）は validateDataset の結果も含む（壊れたファイル起因の大量のエラーは除いた上で）。
   // ここで validateDataset をもう一度かけると、同じ問題が文面違いで二重に出て、除いたエラーも戻ってしまう
   const { dataset, issues } = loadDataset(rootDir);
-  return buildReport(issues, {
+  return buildReport([...configIssues(rootDir), ...issues], {
     contracts: dataset.contracts.length,
     members: dataset.members.length,
     worklogs: dataset.worklogs.length,

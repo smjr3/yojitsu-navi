@@ -21,11 +21,14 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `update` が「サンプルのまま残っているデータ」を出したら、`yojitsu-navi reset-data --dry-run` で確かめてから `yojitsu-navi reset-data` で空にし、本番のデータを入れる
 - `package-lock.json` は新しい版のものを使う（`esbuild`・`glob` を上げた。`npm audit` は 7 件 → 4 件。残る理由は SPEC §84.2）
 - CI/CD 変数 `VITEST_MAX_FORKS` を入れてテストを動かしていて、Windows の Runner で結果が安定しないなら `1` にする
+- `upgrade` の 2 番目の手順「設定の互換確認」で止まったら、表示のとおり `config.json` を直してコミットし、もう一度 `upgrade`（必須の項目が無い・型や値が違うものだけがエラー。使わない項目は注意だけ。SPEC §96）
+- 初回の導入で今年度の初めから取り込むときは、Run pipeline で変数 `FETCH_MODE` = `initial`（コマンドは `npm run fetch -- --initial`）。年月を手で入れなくてよい（docs/OPERATIONS.md「取り込む期間の 3 とおり」）
 - 社内 CA が Windows の証明書ストアに入っているなら、`NODE_EXTRA_CA_CERTS` の代わりに `NODE_USE_SYSTEM_CA=1` も使える（Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」）
 
 ### テスト・CI の前提
 
 - `npm run ci:check` を足した（`yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC でもプロジェクトの中から動かせる）。CI が使うファイルに加え、`.gitlab-ci.yml`・`.gitlab-ci.local.yml` の GitLab が受け付けない書き方（中身の無いジョブ・空のファイル）も見つける。`init`・`update` の最後の確かめも同じ（SPEC §91.3）
+- `npm run validate`（CI の build）が `config.json` の互換確認も行う。必須の項目が無い・型や値が違うと build が止まる（`npm run config:check` で同じ確かめだけをできる。SPEC §96）
 - `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
 
@@ -36,6 +39,8 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `yojitsu-navi migrate-ci`: 社内で `.gitlab-ci.yml` に書いたランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移す。移したあとの `update` は `.gitlab-ci.yml` で止まらない（SPEC §91.4）
 - プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 - `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
+- 取り込む期間の初回モード `--initial`（`FETCH_MODE=initial`）: 今年度の初めから今月まで。メンバーマスタから 50 人ずつ取る方式を本番の標準として docs に明記（SPEC §87・§96）
+- `config.json` の互換確認（`npm run config:check`）。`update`・`upgrade`・`npm run validate` でも行う（SPEC §96）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
 
 ## 0.2.1

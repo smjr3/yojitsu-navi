@@ -98,7 +98,7 @@ Settings > CI/CD > Variables に登録します。
 
 ### 取得する人をメンバーマスタから決める（SPEC §87）
 
-社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
+**本番の標準の取り方です**（SPEC §96）: 取得する人をメンバーマスタの在籍者から作り、50 人ずつに分けて取ります（100 人を超える導入先で、50・50・残りの 3 回で全員分を取れることを確かめています）。社員番号を指定して取る API では、`worklogSource.http.members` を設定します。社員番号は **メンバーマスタ（`data/masters/members.csv`）だけ** で管理し、API の設定には書きません。
 
 ```json
 "members": { "param": "member_ids", "chunkSize": 50 }
@@ -116,6 +116,18 @@ Settings > CI/CD > Variables に登録します。
 | 特定の人の行だけ取り直す（ほかの人の行は残す。マスタに無い人も指定できる） | `npm run fetch -- --from 2025-04 --to 2025-09 --members M050,M051`（＋`FETCH_MEMBERS`） |
 
 年月は例です。GitLab では Build > Pipelines > Run pipeline で対象ブランチ `main`、変数に `FETCH_FROM` などを入れて実行すると、`fetch-worklogs` ジョブが取り直して MR にします。これらの変数は CI/CD 変数（Settings）には登録しないでください（毎日の取り込みが同じ期間になります）。
+
+### 取り込む期間の 3 とおり（SPEC §96）
+
+| いつ | 取る期間 | コマンド | GitLab |
+|---|---|---|---|
+| 通常（毎日） | 今月を含む直近 `refetchMonths` か月（既定 3。前月の締め後の訂正も拾う） | `npm run fetch` | スケジュール実行（変数なし） |
+| 初回の導入 | 今年度の初め（`fiscalYearStartMonth`、既定 4 月）から今月まで | `npm run fetch -- --initial` | Run pipeline で変数 `FETCH_MODE` = `initial` |
+| 必要なとき | 好きな期間（過去の年度も。人を絞ることもできる） | `npm run fetch -- --from YYYY-MM --to YYYY-MM`（`--members` も可） | Run pipeline で変数 `FETCH_FROM`・`FETCH_TO`（`FETCH_MEMBERS`） |
+
+- どれも取得する人は、その期間に在籍していた人（メンバーマスタから。上の「取得する人をメンバーマスタから決める」）。期間の月のファイルを全員分で書き直します
+- `--initial` と `--from` / `--to` は一緒に使えません。年度の途中で導入したときは、初回に `--initial`、前の年度が要れば `--from`・`--to` で足します
+- `FETCH_MODE`・`FETCH_FROM` などは Run pipeline でだけ入れ、CI/CD 変数（Settings）には登録しません（毎日の取り込みが同じ期間になります）
 
 **作業コードの点検（SPEC §92）**: `config.json` の `taskCodeCheck.include` に運用保守の作業名のキーワード（例 `_保守対応`）を書くと、キーワードに合うのに `mapping.csv` に無い作業コードと、作業名の変更をデータ確認画面に出します。`onUnregistered` / `onChange` を `stop` にすると、見つかったときに取り込みを失敗にします（月ファイルは書き換えない）。
 

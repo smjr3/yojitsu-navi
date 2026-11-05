@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchMembers } from "../../scripts/fetch-members.js";
-import { fetchWorklogs, parseArgs, targetMonths } from "../../scripts/fetch-worklogs.js";
+import { fetchWorklogs, fiscalYearStart, parseArgs, targetMonths } from "../../scripts/fetch-worklogs.js";
 import { buildRequestUrl, checkMemberTarget } from "../../scripts/adapters/http-source.js";
 import { chunk, parseMemberList, readMemberRecords, targetMemberIds } from "../../scripts/lib/fetch-targets.js";
 import { safeMessage } from "../../scripts/lib/fetch-status.js";
@@ -136,6 +136,30 @@ describe("取得対象の社員番号（メンバーマスタから）", () => {
     expect(parseArgs([], { FETCH_MEMBERS: "" }).members).toBeUndefined();
   });
 
+  it("取り込む期間の 3 とおり（§96）: 通常＝直近、初回＝今年度の初めから今月まで、必要なとき＝任意の期間", () => {
+    expect(fiscalYearStart("2026-10-27", 4)).toBe("2026-04");
+    expect(fiscalYearStart("2027-03-31", 4)).toBe("2026-04");
+    expect(fiscalYearStart("2026-04-01", 4)).toBe("2026-04");
+    expect(fiscalYearStart("2026-02-10", 1)).toBe("2026-01");
+    expect(fiscalYearStart("2026-02-10", 10)).toBe("2025-10");
+    expect(fiscalYearStart("2026-02-10", 0)).toBe("2025-04"); // 設定が壊れていれば 4 月始まり
+    expect(targetMonths({ initial: true }, AS_OF, 3, 4)).toEqual(["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(targetMonths({ initial: true }, "2026-04-02", 3, 4)).toEqual(["2026-04"]);
+    expect(targetMonths({}, AS_OF, 3, 4)).toEqual(MONTHS);
+    expect(() => targetMonths({ initial: true, from: "2026-05" }, AS_OF, 3, 4)).toThrow(/一緒に使えません/);
+    expect(parseArgs(["--initial"]).initial).toBe(true);
+    expect(parseArgs([], { FETCH_MODE: "initial" }).initial).toBe(true);
+    expect(parseArgs([], { FETCH_MODE: " Initial " }).initial).toBe(true);
+    expect(parseArgs([], { FETCH_MODE: "recent" }).initial).toBeUndefined();
+    expect(parseArgs([], { FETCH_MODE: "" }).initial).toBeUndefined();
+    expect(() => parseArgs([], { FETCH_MODE: "all" })).toThrow(/FETCH_MODE/);
+  });
+
+  it("50 人ずつ（既定）: 113 人は 50・50・13 の 3 回", () => {
+    const ids = Array.from({ length: 113 }, (_, i) => `M${String(i).padStart(3, "0")}`);
+    expect(chunk(ids, 50).map((c) => c.length)).toEqual([50, 50, 13]);
+  });
+
   it("safeMessage: トークンを伏せ、改行をまとめ、長さを切る", () => {
     expect(safeMessage(`HTTP 400\nkey=${TOKEN}`, [TOKEN])).toBe("HTTP 400 key=***");
     expect(safeMessage("x".repeat(500), []).length).toBe(301);
@@ -162,6 +186,22 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
       expect(parseWorklogCsv(readMonth(ym))).toEqual(expected);
     }
     expect(readMeta().lastFailure).toBeUndefined();
+  });
+
+  it("初回の取り込み（--initial）: 今年度の初めから今月までを、その期間の在籍者で取り、各月のファイルを書く（§96）", async () => {
+    const all = MONTHS.flatMap(original);
+    const seen: string[][] = [];
+    vi.stubGlobal("fetch", memberApi(all, { seen }));
+    useMemberApi(50);
+    const config = JSON.parse(readFileSync(join(root, "config.json"), "utf-8"));
+    const targets = targetMemberIds(readMemberRecords(root, config), "2026-04", "2026-10");
+    const r = await fetchWorklogs({ rootDir: root, asOf: AS_OF, initial: true }, ENV);
+    expect(r.months).toEqual(["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(r.targetCount).toBe(targets.length);
+    expect(seen.flat()).toEqual(targets);
+    expect(seen.every((ids) => ids.length <= 50)).toBe(true);
+    for (const ym of r.months) expect(existsSync(join(root, "data", "worklogs", `${ym}.csv`))).toBe(true);
+    expect(readMeta().refetchedMonths).toEqual(r.months);
   });
 
   it("途中の回で失敗したら月ファイルを 1 つも書き換えず、失敗を記録してデータ確認に出す。次に成功すると消える", async () => {

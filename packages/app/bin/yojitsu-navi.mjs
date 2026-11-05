@@ -20,13 +20,14 @@ const HELP = `予実ナビ ${VERSION}
       data/ は空（見出しの行だけ）で作る
         --sample      試す用のサンプルのデータ（架空の会社。作業実績 約 13MB）を data/ に入れる（本番には使わない）
   yojitsu-navi upgrade [フォルダ] [--overwrite | --keep-local] [--no-commit] [--force] [--test] [--log <ファイル>]
-      版を上げる作業を 1 回で行う: update → 依存を入れる（npm ci）→ check → データ検証 → テスト（既定は飛ばす）→ ビルド
+      版を上げる作業を 1 回で行う: update → 設定の互換確認（config.json）→ 依存を入れる（npm ci）→ check → データ検証 → テスト（既定は飛ばす）→ ビルド
       失敗したところで止まり、最後に結果の要約を出す。全部の出力は ${LOG_DIR}/upgrade-<日時>.log（UTF-8）に残す
         --test        テストも動かす（CI/CD 変数と同じく環境変数 YOJITSU_RUN_TESTS=1 でもよい）
         ほかのオプションは update と同じ
   yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--no-commit] [--force] [--summary] [--log <ファイル>]
       今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> を作って自動でコミットする
       上書き・削除するファイルを社内で変えていたら、何も変えずに止まる。前のファイルは .yojitsu-navi-backup/<日時>/ に写す
+      config.json が新しい版でそのまま動くか（必須の項目・型・値）も確かめる
       data/ にサンプルのまま残っているファイル・パッケージに無いファイル（社内で足したもの）があれば一覧を出す（消さない）
         --dry-run     何も変えずに、変わるファイルと社内で変えたファイルの差分を出す
         --overwrite   社内で変えたファイルも新しい版にする

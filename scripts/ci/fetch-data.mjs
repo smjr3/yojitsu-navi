@@ -9,7 +9,8 @@
  * 記録はデータ確認画面に出る。検証（validate）で落ちたときは記録しない（MR を開いたまま理由を直す運用）。
  *
  * 過去の取り直し（作業実績のみ）: Build > Pipelines > Run pipeline で変数 FETCH_FROM / FETCH_TO（YYYY-MM）、
- * 必要なら FETCH_MEMBERS（社員番号をカンマ区切り）を入れて実行する。npm run fetch がそのまま読む
+ * 必要なら FETCH_MEMBERS（社員番号をカンマ区切り）を入れて実行する。初回の取り込みは FETCH_MODE=initial（今年度の初めから今月まで。§96）。
+ * npm run fetch がそのまま読む
  */
 import { execFileSync } from "node:child_process";
 import { npm } from "../lib/npm.mjs";

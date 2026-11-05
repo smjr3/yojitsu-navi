@@ -18,5 +18,6 @@ packages/app/LICENSE
 packages/app/sample/
 packages/app/lib/ci-files.mjs
 packages/app/lib/ci-local.mjs
+packages/app/lib/config-schema.mjs
 .yojitsu-navi-backup/
 .yojitsu-navi-log/
