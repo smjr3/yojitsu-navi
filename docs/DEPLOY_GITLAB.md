@@ -154,13 +154,43 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 ```sh
 npm install -g ./yojitsu-navi-<新しい版>.tgz
 git switch main && git pull
-yojitsu-navi update
+yojitsu-navi upgrade
 git push -u origin update-<新しい版>
 ```
 
-結果はブランチ `update-<版>` にコミットされるので、MR を作り、パイプラインが緑になったらリーダーがマージします。
+`yojitsu-navi upgrade` は、CI と同じ確かめ方を手元で 1 回に行います（SPEC §94）。失敗したところで止まり、最後に結果の要約を出します。
+
+| 順 | すること | 中身 |
+|---|---|---|
+| 1 | ファイルを新しい版にする | `yojitsu-navi update`（下）。ブランチ `update-<版>` を作って自動でコミットする |
+| 2 | 依存を入れる | `node scripts/ci/install.mjs`（CI と同じ `npm ci`。依存込みなら `vendor/npm-cache/` から） |
+| 3 | CI が使うファイルの確認 | `yojitsu-navi check` |
+| 4 | データ検証 | `npm run validate` |
+| 5 | テスト | `npm run typecheck`・`npm test`。既定は飛ばす（`--test` か環境変数 `YOJITSU_RUN_TESTS=1` のときだけ。CI の test ジョブと同じ） |
+| 6 | ビルド | `npm run build` |
+
+- 画面には要約だけを出し、全部の出力（ファイルの一覧・変更履歴・npm の出力）は `.yojitsu-navi-log/upgrade-<日時>.log`（UTF-8。git には入りません）に残します。置き場を変えるときは `--log <ファイル>`。失敗したときは、その手順の最後の出力も画面に出します。
+- `--overwrite`・`--keep-local`・`--no-commit`・`--force` は `update` と同じです。直してからもう一度 `upgrade` を実行すれば、済んだところは何も変わらずに進みます。
+- 1 つずつ行うときは、上の表の順に実行します。
+
+結果はブランチ `update-<版>` にコミットされ、「【自動でコミットしました】ブランチ … に …」と出ます（同じ名前のブランチがあれば `update-<版>-2`）。MR を作り、パイプラインが緑になったらリーダーがマージします。コミットしたくないときは `--no-commit`（ブランチを作らず、`git add` までにします。MR にする手順を表示します）。
 
 最後に、今の版から新しい版までの [CHANGELOG.md](../CHANGELOG.md) の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します。設定は `config.json` の今の値を添えて「項目 今: … / 推奨: …」の形で出るので、要るものを MR の中で `config.json` に書きます（`update` は `config.json` を変えません）。`--dry-run` でも同じものを出します。
+
+`update` はほかに次のものを一覧で知らせます（どれも消しません）。
+
+- サンプルのまま残っているデータ（下の「サンプルのデータを消す」）
+- パッケージに無いファイル（社内で足したもの。社内で足したテスト用のデータが使われないまま残っていないかなど。要らなければ消して MR に入れる）
+
+### 出力が長いとき・文字化けするとき
+
+```sh
+yojitsu-navi update --dry-run --summary --log update.log   # 画面には件数と社内で変えたファイルだけ。一覧・差分・変更履歴は update.log に
+```
+
+- `--summary`: 画面には件数と、社内で変えたファイルの一覧など判断に要るものだけを出します。
+- `--log <ファイル>`: 出力を UTF-8（BOM 付き）のファイルにも書きます。`update`・`check`・`reset-data` で使えます（`upgrade` は指定しなくても書きます）。止まったときのメッセージも入ります。
+- Windows の PowerShell で日本語が化けるとき: ログのファイルをメモ帳・VS Code で開くか、先に `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` を実行してから動かします（コマンドの出力を変数・パイプで受けたときに化けやすい）。Git Bash ではそのままで化けません。
 
 ### 社内の設定の置き場
 
@@ -206,16 +236,23 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 - `--keep-local` で残したファイルには新しい版の直しが入りません。`.gitlab-ci.yml` や `package.json` を残すと CI が動かなくなることがあるので、`--dry-run` の差分で確かめ、社内の変更を新しい版に入れ直す（`--overwrite` のあと MR で手直し）ほうが安全です。
 - 上書き・削除する前のファイルは、毎回 `.yojitsu-navi-backup/<日時>/`（`年月日-時分秒`）に写します。前の版の記録（`.yojitsu-navi.json`）も入ります。git には入りません（`.gitignore`）。要らなくなったら消してください。
 - 依存込みで作ったプロジェクトは、依存込みのパッケージ（`-with-deps.tgz`）で更新します（`vendor/npm-cache/` も入れ替わります）。
-- コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける。社内で変えたファイルの確認は `--force` でも飛ばしません）。
+- コミットしていない変更があるとき・今より古い版のときは止まります（`--force` で続ける。社内で変えたファイルの確認は `--force` でも飛ばしません）。ただし `.gitlab-ci.local.yml` は、変更履歴の手順どおり `update` の前に作った・直したものとして止めず、`update` のコミットに入れます。`.npmrc` は社内レジストリのトークンが入ることがあるので、コミットしていなければ止まります（コミットするか、`.npmrc` を使わず CI/CD 変数にする）。
 - 0.2.0 以前から更新すると、開発元だけのテスト（`tests/e2e/`・`tests/property/`・`tests/fuzz/`・`tests/integration/app-package.test.ts` など）とスクリプトが消えます。テストを CI から外すために社内で変えたファイル（`vitest.config.ts` など）があると止まるので、`--dry-run` で確かめてから `--overwrite` にしてください（除外の設定は要らなくなります）。
 - 前の版で欠けていた CI のファイルも入れ直します。最後に `init` と同じく CI のファイルを確かめます。今のプロジェクトだけを確かめるときは `yojitsu-navi check`。
 
 ### サンプルのデータを消す
 
-`update` は `data/` にサンプルと同じ中身のまま残っているファイルを一覧で出します（消しはしません）。0.2.0 以前の `init` はサンプル入りで作っていたので、本番のデータに入れ替えたつもりでも、取り込んでいない月の作業実績（`data/worklogs/<年月>.csv`）などがサンプルのまま残っていることがあります。本番のデータと混ざると集計を誤るので、一覧のファイルは次のように直して MR にします。
+`update` は `data/` にサンプルと同じ中身のまま残っているファイルを一覧で出します（消しはしません）。消すのは `yojitsu-navi reset-data` で行えます。0.2.0 以前の `init` はサンプル入りで作っていたので、本番のデータに入れ替えたつもりでも、取り込んでいない月の作業実績（`data/worklogs/<年月>.csv`）などがサンプルのまま残っていることがあります。本番のデータと混ざると集計を誤るので、一覧のファイルは次のように直して MR にします。
 
 - `data/worklogs/` の月のファイル・`_meta.json`: 消す（取り込みで作り直されます。過去の月は Run pipeline で `FETCH_FROM`・`FETCH_TO` を入れて取り直す。[OPERATIONS.md](OPERATIONS.md)）
 - そのほかの CSV（`contracts.csv`・`masters/members.csv` など）: 本番のものに置き換える。まだ無いものは見出しの行だけを残す（消すとビルドが止まるものがあります）
+
+```sh
+yojitsu-navi reset-data --dry-run   # 何も変えずに、直すファイルと直し方の一覧を出す
+yojitsu-navi reset-data             # 上のとおりに直す（作業実績の月のファイル・_meta.json は消し、ほかの CSV は見出しの行だけにする）
+```
+
+`reset-data` が変えるのは、パッケージのサンプルと中身が同じファイルだけです（本番のデータに置き換えたもの・社内で直したもの・`config.json` は触りません）。変える前のファイルは `.yojitsu-navi-backup/<日時>/` に写します。コミットはしないので、本番のデータを入れて `npm run validate` で確かめてから MR にします。
 
 ## 社内で確認すること（チェックリスト）
 
@@ -261,6 +298,9 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
 | `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
+| `yojitsu-navi update` が「コミットしていない変更があります」 | 一覧のファイルをコミットするか取り消す（`.gitlab-ci.local.yml` は止まらない。`.npmrc` は止まる）。`--force` でも続けられるが、MR の差分に社内の変更が混ざる |
+| `yojitsu-navi upgrade` が「… で止まりました」 | 要約の「失敗」の手順を直してから、もう一度 `upgrade`。手順の全部の出力は要約の下に出る `.yojitsu-navi-log/upgrade-<日時>.log` にある |
+| PowerShell で日本語が化ける | `--log <ファイル>` で書いた UTF-8 のファイルを開くか、`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` を実行してから動かす（「出力が長いとき・文字化けするとき」） |
 | CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
 | `npm ci` が `… vulnerabilities` と出る | 依存の脆弱性の報告。残っているものは使い方の上で影響しないことを確かめてある（一覧と理由は [SPEC.md](SPEC.md) §84.2）。`npm audit fix --force` は Framework を古い版に下げるので実行しない |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
