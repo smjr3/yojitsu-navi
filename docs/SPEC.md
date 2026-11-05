@@ -1424,10 +1424,10 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 確認: `tests/integration/app-package.test.ts`「upgrade・reset-data・update の出力」（順番・失敗で止まる・テストは既定で飛ばす・ログ・`--summary`・`--log`・BOM・コミットの表示と番号・`--no-commit`・`.gitlab-ci.local.yml` と `.npmrc`・パッケージに無いファイル・`reset-data`）。
 
 ## 97. 作業名から案件名を抜き出して紐付ける（2026-11-05 依頼者。導入先のレビュー指摘）
-「mapping.csv への作業コードの事前登録を必須にしたくない。本番では作業名に `_保守対応` を含むものが運用保守で、最初の `_保守対応` より前が案件名。案件あたりの作業コードが多く（数個〜十数個）、全コードの手管理は負荷が高い。`_保守対応` の後ろの書式は揃っていないので判定に使わない。contracts.csv の案件名と一致すれば作業コードが未登録でも紐付けたい。contracts.csv に無い案件名だけを未登録として警告したい。未登録の作業コードはエラーにせず、新しいコード・名前の変更・監査に使う。表記揺れは別名を明示的に登録したい。曖昧一致で勝手に割り当てない」への対応。依頼者は「完全一致ならやる」（2026-11-05）。
+「mapping.csv への作業コードの事前登録を必須にしたくない。作業名の目印より前が案件名なので、contracts.csv の案件名と一致すれば作業コードが未登録でも紐付けたい。目印の後ろの書式は判定に使わない。contracts.csv に無い案件名だけを未登録として警告したい。未登録の作業コードはエラーにせず、新しいコード・名前の変更・監査に使う。表記揺れは別名を明示的に登録したい。曖昧一致で勝手に割り当てない」への対応。依頼者は「完全一致ならやる」（2026-11-05）。
 
 ### 97.1 設定とデータ
-- `config.json` の `projectFromTask`（省略可。無ければ使わない）: `marker`（運用保守の目印。例 `_保守対応`。空なら使わない）、`enabled`（`false` で止める。既定 `true`）。リポジトリの `config.json` は `enabled: false`（ダミーデータの作業名は目印より前が案件名ではないため）。
+- `config.json` の `projectFromTask`（省略可。無ければ使わない）: `marker`（運用保守の目印。空なら使わない）、`enabled`（`false` で止める。既定 `true`）。リポジトリの `config.json` は `enabled: false`（ダミーデータの作業名は目印より前が案件名ではないため）。
 - `data/project-aliases.csv`（省略可）: `alias, project_name`。作業名から抜き出した名前 `alias` を contracts.csv の `project_name` として扱う。
 - 目印の照合は `normalizeKeyword`（NFKC・小文字・空白を除く）と同じく全角半角・空白を区別しない。案件名は作業名（NFKC）の**最初の**目印より前を前後の空白を除いたもの。目印の後ろ（括弧内の表記など）は使わない。案件名の照合は §4.1 の `normalizeName` 後の完全一致。
 
@@ -1458,7 +1458,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 未登録の案件は従来の `UNMAPPED_WORKLOG`（warning、理由「未登録の案件」）。エラーにはしない。
 
 ### 97.6 他の節との関係
-- 案件の顧客名・案件名を SI 案件管理システムの正式名で contracts.csv に書き戻す連携（別の節）があれば、照合は書き戻した後の contracts.csv をそのまま使う。
+- 案件の顧客名・案件名を外部の案件管理の正式名で contracts.csv に書き戻す連携があれば、照合は書き戻した後の contracts.csv をそのまま使う。
 - 画面: データ確認の「未紐付けの作業実績」に理由「未登録の案件」で出る（新しい表は足さない。説明は「?」だけ）。
 - 実装: `src/core/projectFromTask.ts`（抜き出し・照合・別名の検証）、`src/core/mapping.ts`（`mapWorklogs`・`createKeywordRouter`）、`scripts/lib/task-code-gate.ts`（取り込み時）。
 - 再発防止: `tests/unit/project-from-task.test.ts`、`tests/integration/task-code-fetch.test.ts`（§97）。

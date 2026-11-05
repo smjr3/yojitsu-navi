@@ -55,7 +55,7 @@ export interface Config {
 
 /** 作業名から案件名を抜き出す設定（§97） */
 export interface ProjectFromTaskConfig {
-  /** 運用保守の目印（例「_保守対応」）。作業名の最初の目印より前を案件名とする。空 = 使わない */
+  /** 運用保守の目印。作業名の最初の目印より前を案件名とする。空 = 使わない */
   marker: string;
   /** false で止める（既定 true） */
   enabled?: boolean;

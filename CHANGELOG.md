@@ -34,7 +34,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 | 項目 | 書かないとき | 推奨 | 理由・いつ |
 |---|---|---|---|
-| `projectFromTask.marker` | なし（`projectFromTask` ごと書かないと使わない） | 運用保守の作業名に入る目印（例 `_保守対応`） | 目印より前の案件名で contracts.csv の案件に紐付ける（SPEC §97） |
+| `projectFromTask.marker` | なし（`projectFromTask` ごと書かないと使わない） | 運用保守の作業名に入る目印 | 目印より前の案件名で contracts.csv の案件に紐付ける（SPEC §97） |
 | `projectFromTask.enabled` | `true` | そのまま | 一時的に止めるときだけ `false` |
 
 ### 変更
@@ -45,7 +45,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 - `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
-- 作業名の目印（例 `_保守対応`）より前を案件名として抜き出し、contracts.csv の案件名と完全一致する案件へ紐付ける（mapping.csv への作業コードの事前登録が要らない）。表記揺れは `data/project-aliases.csv` の別名だけで吸収し、曖昧一致はしない。contracts.csv に無い案件名は「未登録の案件」として警告。案件名で紐付いた作業の作業コードは未登録に数えず、取り込みで新しい作業コードを知らせるだけにした（SPEC §97）
+- 作業名の目印より前を案件名として抜き出し、contracts.csv の案件名と完全一致する案件へ紐付ける（mapping.csv への作業コードの事前登録が要らない）。表記揺れは `data/project-aliases.csv` の別名だけで吸収し、曖昧一致はしない。contracts.csv に無い案件名は「未登録の案件」として警告。案件名で紐付いた作業の作業コードは未登録に数えず、取り込みで新しい作業コードを知らせるだけにした（SPEC §97）
 
 ## 0.2.1
 

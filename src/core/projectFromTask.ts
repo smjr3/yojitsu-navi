@@ -1,7 +1,7 @@
 /**
  * 作業名から案件名を抜き出して案件に紐付ける（SPEC §97）
  *
- * - 作業名に目印（config.projectFromTask.marker。例「_保守対応」）があれば運用保守の作業とし、最初の目印より前を案件名とする。
+ * - 作業名に目印（config.projectFromTask.marker）があれば運用保守の作業とし、最初の目印より前を案件名とする。
  *   目印の後ろ（括弧内の表記など）は使わない。目印の照合は全角半角・大文字小文字・空白を区別しない
  * - 抜き出した案件名が contracts.csv の project_name と完全一致（§4.1 の正規化後）する契約へ紐付ける。曖昧一致はしない
  * - 表記揺れは data/project-aliases.csv（alias → project_name）で明示的に登録したものだけを使う

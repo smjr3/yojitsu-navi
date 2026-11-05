@@ -117,7 +117,7 @@ Settings > CI/CD > Variables に登録します。
 
 年月は例です。GitLab では Build > Pipelines > Run pipeline で対象ブランチ `main`、変数に `FETCH_FROM` などを入れて実行すると、`fetch-worklogs` ジョブが取り直して MR にします。これらの変数は CI/CD 変数（Settings）には登録しないでください（毎日の取り込みが同じ期間になります）。
 
-**作業名から案件名を抜き出して紐付ける（SPEC §97）**: `config.json` の `projectFromTask.marker` に運用保守の目印（例 `_保守対応`）を書くと、作業名の最初の目印より前を案件名とし、`contracts.csv` の `project_name` と完全一致する案件へ紐付けます（`mapping.csv` に作業コードを書かなくてよい）。案件名が無いものはデータ確認の「未紐付けの作業実績」に理由「未登録の案件」で出ます。案件を足すか、表記の違いだけなら `data/project-aliases.csv`（`alias,project_name`）に別名を足してください。似た名前に自動で割り当てることはしません。
+**作業名から案件名を抜き出して紐付ける（SPEC §97）**: `config.json` の `projectFromTask.marker` に運用保守の目印を書くと、作業名の最初の目印より前を案件名とし、`contracts.csv` の `project_name` と完全一致する案件へ紐付けます（`mapping.csv` に作業コードを書かなくてよい）。案件名が無いものはデータ確認の「未紐付けの作業実績」に理由「未登録の案件」で出ます。案件を足すか、表記の違いだけなら `data/project-aliases.csv`（`alias,project_name`）に別名を足してください。似た名前に自動で割り当てることはしません。
 
 **作業コードの点検（SPEC §92）**: `config.json` の `taskCodeCheck.include` に運用保守の作業名のキーワード（例 `_保守対応`）を書くと、キーワードに合うのに `mapping.csv` に無い作業コードと、作業名の変更をデータ確認画面に出します。`onUnregistered` / `onChange` を `stop` にすると、見つかったときに取り込みを失敗にします（月ファイルは書き換えない）。
 
