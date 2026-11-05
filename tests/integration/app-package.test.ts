@@ -622,8 +622,15 @@ describe("update", () => {
     expect(readFileSync(join(dir, u.backup, ".gitlab-ci.yml"), "utf-8")).toBe(custom);
     expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe(moved);
     expect(() => app.check({ dir, log })).not.toThrow();
-    // 社内で変えていなければ移すものは無い
+    // 社内で変えていなければ移すものは無い。古いひな形だけは直す
     expect(app.migrateCiCommand({ pkgDir: pkg2, dir, log }).moved).toEqual([]);
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.1.0");
+    writeFileSync(join(dir, ".gitlab-ci.local.yml"), "# ひな形\n.yojitsu-navi-local: {}\n");
+    git(dir, "commit", "-qam", "古いひな形に戻す");
+    expect(app.migrateCiCommand({ pkgDir: pkg2, dir, dryRun: true, log }).written).toBe(false);
+    expect(app.migrateCiCommand({ pkgDir: pkg2, dir, log }).written).toBe(true);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe(`# ひな形\n${placeholder}\n`);
   }, scaled(60_000));
 
   it("更新後に、今の版から新しい版までの変更履歴の「更新後に行うこと」などを今の設定の値つきで出す（SPEC §91.2）", () => {

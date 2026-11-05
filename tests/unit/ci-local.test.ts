@@ -169,6 +169,19 @@ describe("migrate-ci（SPEC §91.4）", () => {
     expect(migrateCi({ current: jobFlow, base: CI, local: "" }).manual).toEqual([expect.stringContaining("build の variables: の変更")]);
   });
 
+  it("ほかで定義したアンカーを使うジョブ・<<: で受け継ぐ項目の追加は自動で移さない", () => {
+    const alias = CI.concat('\ninternal:\n  <<: *normal-rules\n  script: ["node -v"]\n');
+    const a = migrateCi({ current: alias, base: CI, local: "" });
+    expect(a.manual).toEqual([expect.stringContaining("アンカー *normal-rules")]);
+    expect(migratedHash(a.local)).toBe("");
+    const ownAnchor = CI.concat('\n.mine: &mine\n  tags: [x]\n');
+    expect(migrateCi({ current: ownAnchor, base: CI, local: "" }).manual).toEqual([]);
+    const rules = CI.replace("build:\n  stage: build\n", "build:\n  stage: build\n  rules:\n    - when: manual\n");
+    expect(rules).not.toBe(CI);
+    const r = migrateCi({ current: rules, base: CI, local: "" });
+    expect([r.moved, r.manual]).toEqual([[], [expect.stringContaining("build の rules: の追加")]]);
+  });
+
   it("ジョブの script の変更・ジョブを消したことは手で移すものに出す。.gitlab-ci.local.yml が無くても何もしない項目を入れて空にしない", () => {
     const cur = CI.replace("    - npm run validate\n", "    - npm run validate -- --strict\n").replace(/\nfetch-members:[\s\S]*$/, "\n");
     const r = migrateCi({ current: cur, base: CI, local: "" });

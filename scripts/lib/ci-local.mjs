@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 
 export const LOCAL_CI_FILE = ".gitlab-ci.local.yml";
+const CI_NAME = ".gitlab-ci.yml";
 
 /** 何もしない項目の名前（. で始まる名前は GitLab がジョブとして動かさない） */
 export const PLACEHOLDER_KEY = ".yojitsu-navi-local";
@@ -212,6 +213,12 @@ export function migrateCi({ current, base, local, force = false }) {
   const baseTop = new Map(blocks(bas, 0, bas.length, 0).map((b) => [b.key, b]));
   const curTop = blocks(cur, 0, cur.length, 0);
   const curKeys = new Set(curTop.map((b) => b.key));
+  // もとの版のアンカー（.normal-rules: &normal-rules など）の中の項目。<<: *名前 で受け継ぐ項目は .gitlab-ci.yml が勝つ
+  const anchorKeys = new Map();
+  for (const b of baseTop.values()) {
+    const m = /^&([\w-]+)/.exec(b.value);
+    if (m) anchorKeys.set(m[1], new Set(children(bas, b).map((k) => k.key)));
+  }
 
   for (const b of curTop) {
     const text = blockText(cur, b);
@@ -242,6 +249,8 @@ export function migrateCi({ current, base, local, force = false }) {
       manual.push(`${b.key}: の変更（${b.key === "image" ? "CI/CD 変数 NODE_IMAGE にする" : "差分は yojitsu-navi update --dry-run"}）`);
       continue;
     }
+    const inherited = new Set();
+    for (const k of baseKids.values()) if (k.key === "<<") for (const a of k.value.matchAll(/\*([\w-]+)/g)) for (const x of anchorKeys.get(a[1]) ?? []) inherited.add(x);
     for (const k of curKids) {
       const bk = baseKids.get(k.key);
       const ktext = blockText(cur, k);
@@ -258,6 +267,8 @@ export function migrateCi({ current, base, local, force = false }) {
         }
         const curVars = new Set(children(cur, k).map((v) => v.key));
         for (const name of baseVars.keys()) if (!curVars.has(name)) manual.push(`${b.key} の変数 ${name} を消したこと（${LOCAL_CI_FILE} では消せない。CI/CD 変数で値を変える）`);
+      } else if (!bk && inherited.has(k.key)) {
+        manual.push(`${b.key} の ${k.key}: の追加（${CI_NAME} の共通の設定（<<:）から受け継ぐ項目で、${LOCAL_CI_FILE} では変えられない）`);
       } else if (!bk) items.push({ path: [b.key], entry: ktext, label: `${b.key} の ${k.key}:` });
       else manual.push(`${b.key} の ${k.key}: の変更（${LOCAL_CI_FILE} では変えられない。差分は yojitsu-navi update --dry-run）`);
     }
@@ -266,6 +277,13 @@ export function migrateCi({ current, base, local, force = false }) {
   for (const k of baseTop.keys()) if (!curKeys.has(k)) manual.push(`${GLOBAL_KEYS.has(k) ? `${k}:` : `ジョブ ${k}`} を消したこと（${LOCAL_CI_FILE} では消せない）`);
 
   for (const it of items) {
+    // アンカーはファイルをまたげないので、ほかで定義したアンカーを使う（*名前・<<:）ものは移さない
+    const defined = new Set([...it.entry.join("\n").matchAll(/&([\w-]+)/g)].map((m) => m[1]));
+    const used = [...it.entry.join("\n").matchAll(/(?:^|[\s[{,:])\*([A-Za-z0-9_-]+)/gm)].map((m) => m[1]).filter((a) => !defined.has(a));
+    if (used.length) {
+      manual.push(`${it.label}（${CI_NAME} のアンカー *${used[0]} を使っているので自動で移せない。中身を展開して ${LOCAL_CI_FILE} に書く）`);
+      continue;
+    }
     const r = place(loc, it.path, it.entry);
     if (r === "added") moved.push(it.label);
     else if (r === "same") same.push(it.label);

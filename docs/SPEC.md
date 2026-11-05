@@ -1342,10 +1342,10 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 91.4 社内で直した .gitlab-ci.yml の設定を移す（2026-11-05 依頼者。導入先のレビュー指摘）
 「社内で `.gitlab-ci.yml` を直していた場合に、ランナーのタグや変数を `.gitlab-ci.local.yml` へ自動で移す機能が欲しい（今回は手作業で移した）」への対応。
-- `yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]`。`.gitlab-ci.yml` は変えず、`.gitlab-ci.local.yml` だけを書く（無ければひな形から作り、古いひな形は §91.3 のとおり直す）。
+- `yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]`。`.gitlab-ci.yml` は変えず、`.gitlab-ci.local.yml` だけを書く（無ければひな形から作り、古いひな形は §91.3 のとおり直す。`.gitlab-ci.yml` を社内で変えていなくても古いひな形は直す）。
 - 比べる相手（もとの版）: 記録（`.yojitsu-navi.json`）のハッシュと同じ中身の `.gitlab-ci.yml` を、インストールしたパッケージ・git の履歴（直近 200 コミット）から探す。見つからなければインストールしたパッケージの版と比べる（そのときは新しい版での変更も「自動で移せないもの」に出ることがあると添える）。
 - 移すもの: `default:` とジョブの `tags:`、全体・ジョブの `variables:` のうちもとの版に無いもの、もとの版に無いジョブ・項目（社内だけのジョブ）、もとの版のジョブに無い項目。`.gitlab-ci.local.yml` に同じ項目があれば中へ足し、同じものがあれば何もしない。
-- 自動で移せないもの（一覧に出す）: もとの版にある変数の値の変更・消した変数（include は `.gitlab-ci.yml` が勝つので CI/CD 変数で変える）、1 行で書いた `variables: { … }`（読めない）、ジョブの `script:` などの変更、消したジョブ・項目、`include:` の追加、`.gitlab-ci.local.yml` に同じ名前で違う中身があるもの。
+- 自動で移せないもの（一覧に出す）: もとの版にある変数の値の変更・消した変数（include は `.gitlab-ci.yml` が勝つので CI/CD 変数で変える）、1 行で書いた `variables: { … }`（読めない）、ほかで定義したアンカーを使う（`*名前`）項目（アンカーはファイルをまたげない）、`<<: *名前` で受け継ぐ項目の追加（`.gitlab-ci.yml` が勝つ）、ジョブの `script:` などの変更、消したジョブ・項目、`include:` の追加、`.gitlab-ci.local.yml` に同じ名前で違う中身があるもの。
 - 自動で移せないものが無ければ（か `--force`）、`.gitlab-ci.local.yml` の最後に印 `# yojitsu-navi migrate-ci: .gitlab-ci.yml sha256=<そのときの .gitlab-ci.yml>` を書く。`update` は `.gitlab-ci.yml` が社内で変わっていても、中身（改行の違いは見ない）が印と同じなら止めずに新しい版にする（前のものはバックアップ）。印のあとでまた変えたら従来どおり止まる。
 - 字下げで読む簡単な YAML の解釈（アンカー・フロー形式の中は見ない）。読めないものは自動で移さず一覧に出す。移す項目の行はそのまま写す（値の中の「 #」・複数行の文字列を変えない）。比べるときだけコメントの行・空行を除く。
 - 再発防止: `tests/unit/ci-local.test.ts`「migrate-ci」（移したものと新しい版を GitLab と同じく合わせると社内の `.gitlab-ci.yml` と同じ設定になる・2 回目は変わらない・既存の項目に足す・手で移すもの）、`tests/integration/app-package.test.ts`「migrate-ci」（git の履歴からもとの版を探す・`--dry-run` は変えない・移したあとの `update` が止まらない・また変えたら止まる）。

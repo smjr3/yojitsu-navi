@@ -589,13 +589,19 @@ export function migrateCiCommand(o) {
     // init で作っていないプロジェクトでも、新しい版と比べて移す
   }
   const hash = manifest.files?.[CI_FILE] ?? "";
+  const localPath = join(dir, LOCAL_CI_FILE);
   if (hash && matchesHash(Buffer.from(current, "utf-8"), hash)) {
     log(`${CI_FILE} は社内で変えていません（移すものはありません）`);
-    return { moved: [], same: [], manual: [], written: false, base: "original" };
+    // 0.2.0〜0.2.1 のひな形（GitLab が失敗にする）だけは直す（SPEC §91.3）
+    const before = existsSync(localPath) ? readFileSync(localPath, "utf-8") : null;
+    const fixed = before === null ? null : repairLocalPlaceholder(before);
+    const repair = fixed !== null && fixed !== before;
+    if (repair) log(`${LOCAL_CI_FILE} の中身の無い項目（GitLab が「config can't be blank」で失敗にする）を${o.dryRun ? "直します（何も変えていません）" : "直しました。コミットしてください"}`);
+    if (repair && !o.dryRun) writeFileSync(localPath, fixed);
+    return { moved: [], same: [], manual: [], written: repair && !o.dryRun, base: "original" };
   }
   const original = originalCi(dir, templateCi, hash);
   if (!original && !templateCi) throw new CliError("比べるもとの .gitlab-ci.yml が見つかりません");
-  const localPath = join(dir, LOCAL_CI_FILE);
   const local = existsSync(localPath) ? readFileSync(localPath, "utf-8") : template.has(LOCAL_CI_FILE) ? readFileSync(template.get(LOCAL_CI_FILE), "utf-8") : "";
   const r = migrateCi({ current, base: original ?? templateCi.toString("utf-8"), local, force: o.force });
   const dry = Boolean(o.dryRun);
