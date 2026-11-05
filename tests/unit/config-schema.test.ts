@@ -42,6 +42,13 @@ function fullConfig(): Record<string, any> {
     kindMap: { 正社員: "employee", 委託: "partner" },
     filters: [{ column: "retired", equals: false }],
   };
+  c.projectSource = {
+    adapter: "http",
+    csv: { path: "data/hr/projects.csv", encoding: "utf-8" },
+    http: { url: "https://projects.example.local/api", authHeader: "Authorization", dataPath: "items", pagination: { type: "none" } },
+    columns: { projectId: "id", customerName: ["customer.name", "customer"], projectName: "name" },
+    filters: [{ column: "maintenance", equals: true }, { column: "status", in: ["ordered"] }],
+  };
   c.masterEdit.gitlab.projectId = 123;
   return c;
 }
@@ -93,6 +100,9 @@ describe("config.json の互換確認（§96）", () => {
     // authHeader は省略で Authorization（http-source.ts）なので必須にしない
     expect(codes(c)).toEqual(["error:CONFIG_MISSING:worklogSource.http.columns", "error:CONFIG_MISSING:worklogSource.http.url"]);
     const m = repoConfig();
+    const p = repoConfig();
+    p.projectSource = { adapter: "http", http: { url: "https://x.local" } };
+    expect(codes(p)).toEqual(["error:CONFIG_MISSING:projectSource.columns"]);
     m.memberSource = { adapter: "none" };
     expect(codes(m)).toEqual([]);
     m.memberSource = { adapter: "csv" };

@@ -188,7 +188,7 @@ describe("migrate-ci（SPEC §91.4）", () => {
   });
 
   it("ジョブの script の変更・ジョブを消したことは手で移すものに出す。.gitlab-ci.local.yml が無くても何もしない項目を入れて空にしない", () => {
-    const cur = CI.replace("    - npm run validate\n", "    - npm run validate -- --strict\n").replace(/\nfetch-members:[\s\S]*$/, "\n");
+    const cur = CI.replace("    - npm run validate\n", "    - npm run validate -- --strict\n").replace(/\nfetch-members:[\s\S]*?(?=\n# -{10}|$)/, "\n");
     const r = migrateCi({ current: cur, base: CI, local: "" });
     expect(r.manual).toEqual(["build の script: の変更（.gitlab-ci.local.yml では変えられない。差分は yojitsu-navi update --dry-run）", "ジョブ fetch-members を消したこと（.gitlab-ci.local.yml では消せない）"]);
     expect(lintCiYaml(r.local, ".gitlab-ci.local.yml")).toEqual([]);

@@ -1,9 +1,10 @@
 /**
- * スケジュール実行の取り込み（.gitlab-ci.yml の fetch-worklogs / fetch-members）。Windows・Linux のどちらの Runner でも動くよう、
+ * スケジュール実行の取り込み（.gitlab-ci.yml の fetch-worklogs / fetch-members / fetch-projects）。Windows・Linux のどちらの Runner でも動くよう、
  * シェルの書き方に頼らず Node で書く（SPEC §39.4）
  *
  *   node scripts/ci/fetch-data.mjs worklogs   作業実績 API から直近を取り直す → 検証 → MR
  *   node scripts/ci/fetch-data.mjs members    人事データから所属・役職を取り込む → 検証 → MR
+ *   node scripts/ci/fetch-data.mjs projects   案件管理システムから正式な案件の一覧を取り込み、契約の顧客名・案件名をそろえる → 検証 → MR（§98）
  *
  * 取り込みに失敗したとき（§87）: CSV は書き換えず、失敗の記録（meta）だけを MR にしてからジョブを失敗で終える。
  * 記録はデータ確認画面に出る。検証（validate）で落ちたときは記録しない（MR を開いたまま理由を直す運用）。
@@ -19,6 +20,7 @@ import { pushDataMr } from "./push-data-mr.mjs";
 const JOBS = {
   worklogs: { script: "fetch", tokens: ["WORKLOG_API_TOKEN", "GIT_PUSH_TOKEN"], title: "作業実績を更新", paths: ["data/worklogs"], meta: "data/worklogs/_meta.json", failTitle: "作業実績の取得に失敗（記録のみ）" },
   members: { script: "fetch:members", tokens: ["GIT_PUSH_TOKEN"], title: "メンバーの所属・役職を更新", paths: ["data/masters/members.csv", "data/masters/_members-meta.json"], meta: "data/masters/_members-meta.json", failTitle: "所属・役職の取り込みに失敗（記録のみ）" },
+  projects: { script: "fetch:projects", tokens: ["GIT_PUSH_TOKEN"], title: "正式な案件の一覧と契約の顧客名・案件名を更新", paths: ["data/projects.csv", "data/contracts.csv", "data/_projects-meta.json"], meta: "data/_projects-meta.json", failTitle: "正式な案件の一覧の取り込みに失敗（記録のみ）" },
 };
 
 const kind = process.argv[2] ?? "";

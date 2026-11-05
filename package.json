@@ -13,6 +13,7 @@
     "clean": "observable clean",
     "fetch": "tsx scripts/fetch-worklogs.ts",
     "fetch:members": "tsx scripts/fetch-members.ts",
+    "fetch:projects": "tsx scripts/fetch-projects.ts",
     "validate": "tsx scripts/validate-data.ts",
     "config:check": "node scripts/check-config.mjs",
     "gitlab:setup": "tsx scripts/gitlab-setup.ts",

@@ -12,6 +12,8 @@ Settings > CI/CD > Variables に登録します。
 | `WORKLOG_API_TOKEN` | 作業実績 API のトークン（http アダプタ）。Protected・Masked にする |
 | `MEMBER_FETCH_ENABLED` | 任意。`1` でスケジュール実行時に `fetch-members` ジョブも動く（既定は無効） |
 | `MEMBER_API_TOKEN` | 任意。人事 API のトークン（`memberSource.adapter = http`）。Protected・Masked にする |
+| `PROJECT_FETCH_ENABLED` | 任意。`1` でスケジュール実行時に `fetch-projects` ジョブ（正式な案件の一覧の取り込み。SPEC §98）も動く（既定は無効）。1 回だけ動かすときは Run pipeline で変数 `PROJECT_FETCH=1` |
+| `PROJECT_API_TOKEN` | 任意。案件管理システム API のトークン（`projectSource.adapter = http`）。Protected・Masked にする |
 | `GIT_PUSH_TOKEN` | スケジュール実行の取り込み結果を MR にして自動マージするための Project Access Token（**Maintainer** / `write_repository`。Protected・Masked。`main` は直接プッシュ不可のため MR を通す。SPEC §39.4） |
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL（依存込みのパッケージで作ったプロジェクトは不要。[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md) 手順 0） |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
@@ -157,6 +159,26 @@ npm run fetch:members                           # members.csv を更新
 - 人事 API のときは `adapter: "http"`、環境変数 `MEMBER_API_TOKEN`
 - CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `MEMBER_FETCH_ENABLED=1` を設定します（既定は無効）
 
+### 正式な案件の一覧を取り込む（任意。SPEC §98）
+
+案件の顧客名・案件名を、手で推測して入れる代わりに案件管理システムの正式な値にそろえます。期間・金額（`total_amount`）・担当チームは今までどおり `data/contracts.csv` の手入力が正です。
+
+- 設定は `config.json` の `projectSource`（[DATA.md](DATA.md#projectsource正式な案件の一覧の取り込みspec-98)）。ページングに対応しない API は `pagination` を書かない（1 回で全件）。サーバー側で絞れない条件は `filters` で取得後に絞る。API のときは環境変数 `PROJECT_API_TOKEN`
+- `npm run fetch:projects` で `data/projects.csv`（正式な案件の一覧）を置き換え、`contracts.csv` の `project_id` のある行の顧客名・案件名を一覧の値にします。`project_id` の無い行は保留のまま（推測で入れません）
+- データ確認画面の「正式な案件IDの無い案件」（候補 = 案件名が同じ正式な案件）と「マスタに無い正式な案件」（新しい案件の見落とし）で差分を確かめ、`contracts.csv` に `project_id` を入れる・行を足す。担当チーム（`team_id`）は空のまま入れてよく、後でマスタ編集の「案件」か CSV で設定します
+- CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `PROJECT_FETCH_ENABLED=1` を設定します（既定は無効）。1 回だけなら Run pipeline で `PROJECT_FETCH=1`
+
+**今までのデータから移すとき**（初回だけ。結果は MR の差分で確かめる）:
+
+```bash
+npm run fetch:projects -- --dry-run --sample=5                          # 列の対応表と、取り込まれる案件の先頭 5 件
+npm run fetch:projects -- --dry-run --id-from-note "案件ID:(\S+)"        # メモ（note）に書いていた ID を project_id に移す（かっこの中を取り出し、メモから消す）
+npm run fetch:projects -- --dry-run --link-exact                         # 案件名が 1 件だけ同じ正式な案件の ID を入れる（複数あれば入れずに一覧に出す）
+npm run fetch:projects -- --id-from-note "案件ID:(\S+)" --link-exact      # 確かめたら書き込む
+```
+
+`contracts.csv` に `project_id` の列が無ければ `contract_id` の次に足します。正規表現はメモの書き方に合わせて変えてください（PowerShell では `'案件ID:(\S+)'` のように単引用符で囲む）。
+
 ## マスタ編集の設定（GitLab へのマージ方式）
 
 `/masters`（`data/masters/members.csv`・`rates.csv`・`teams.csv`、案件 `data/contracts.csv`（期間・金額・担当チームだけ）、目標 `data/targets.csv`、祝日 `data/holidays.csv`）と `/plan`（`data/assignments.csv`・`data/outside-plans.csv`）は、CSV を画面で編集する画面です（SPEC §19・§24〜§26・§36）。保存は 2 つの画面で共通で、両方の変更が 1 つの MR に入ります。
@@ -210,7 +232,7 @@ Windows は Linux よりプロセスの起動とファイルの読み書きが�
 | `VITEST_MAX_FORKS` | Windows `2`・Linux は CPU の数 - 1。「`[vitest-worker]: Timeout calling …`」が出る・結果が回ごとに変わるなら `1` を登録（導入先の Windows の Runner に、`2` では安定せず `1` で安定した環境があった） | 同時に動かすテストファイルの数（`vitest.config.ts` が読み、Windows の既定を 2 にしている）。Vitest 4 の `VITEST_MAX_WORKERS` と同じ（どちらで登録しても効く。両方あれば `VITEST_MAX_WORKERS`） |
 | `YOJITSU_TEST_TIMEOUT_SCALE` | Windows `3`・Linux `1`。それでもタイムアウトするなら `5` | テストのタイムアウトの倍率（`vitest.config.ts` と結合テストの個別の値に掛かる） |
 
-- Windows の Runner では、まず `VITEST_MAX_FORKS=1` で動かすのが確実です。運用のテストは 9 ファイルだけなので、1 つずつ動かしても長くはかかりません。
+- Windows の Runner では、まず `VITEST_MAX_FORKS=1` で動かすのが確実です。運用のテストは 10 ファイルだけなので、1 つずつ動かしても長くはかかりません。
 - GitLab では Settings > CI/CD > Variables に登録します。PC の Git Bash では `VITEST_MAX_FORKS=1 npm run test` のように前に付けます（`npm run test -- --maxWorkers=1` でも同じ）。
 - ワーカーの方式は `forks` に固定しています（`vitest.config.ts`）。`threads` に変えないでください。
 - テストを CI から外すために `vitest.config.ts` などを社内で変えていたら、新しい版の `update` で止まります。除外は要らなくなったので `--overwrite` で新しい版にしてください（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md#社内で変えたファイルがあるとき)）。

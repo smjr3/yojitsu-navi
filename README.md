@@ -50,7 +50,7 @@ npm run dev                                           # http://localhost:3000（
 | `npm run test:e2e:smoke` | E2E の縮小版（`@smoke` の付いたテストだけ。全画面の表示と主要な操作。数十秒） |
 | `npm run build` | `dist/` に静的サイトを生成し、出力を検証する（`YOJITSU_AS_OF=2026-10-27` で計算基準日を固定。本番は指定せず、画面が開いた人の今日（日本時間）で計算する）。古いキャッシュは自動で捨てる（[docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)） |
 | `npm run app:pack` | 社内へ持ち込むパッケージ `packages/app/yojitsu-navi-<版>.tgz` を作る（`-- --with-deps` で依存込み。使い方は [docs/DEPLOY_GITLAB.md](docs/DEPLOY_GITLAB.md#0-持ち込むもの)） |
-| `npm run fetch` / `npm run fetch:members` | 作業実績・所属を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
+| `npm run fetch` / `npm run fetch:members` / `npm run fetch:projects` | 作業実績・所属・正式な案件の一覧（案件の顧客名・案件名）を取り込み元から取り直す（[docs/OPERATIONS.md](docs/OPERATIONS.md)） |
 
 ビルドは必ず `npm run build` を使います（`npx observable build` を直接使うと、データを直しても古い数字のまま公開されることがあります）。
 
@@ -123,6 +123,7 @@ scripts/
   generate-dummy.ts      ダミーデータ生成（基本シナリオ）。dummy-scale.ts が実運用規模の部分
   fetch-worklogs.ts      作業実績の取得（直近 N か月を書き換え）
   fetch-members.ts       所属・役職の取り込み（members.csv に追記）
+  fetch-projects.ts      正式な案件の一覧の取り込み（projects.csv、contracts.csv の顧客名・案件名）
   validate-data.ts       データ検証（CI）
   gitlab-setup.ts        本番 GitLab プロジェクトの設定の確認・適用（npm run gitlab:setup）
   ci/                    GitLab CI の各ジョブ（Windows・Linux の Runner で動く Node のスクリプト。定期取り込みの MR など）

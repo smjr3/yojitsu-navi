@@ -14,6 +14,7 @@ import { createTaskClassifier, isOutsideWorklog, outsideTypes, unclassifiedTaskW
 import { normalizeName } from "./normalize.js";
 import { customerKey } from "./customers.js";
 import { isTargetKind } from "./targets.js";
+import { validateProjects } from "./projects.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface ValidationIssue {
@@ -461,6 +462,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   validateTaskCodes(dataset, push);
   validateWorkAfterLeft(dataset, push);
   validateAssignmentsAfterLeft(dataset, push);
+  for (const i of validateProjects(dataset)) push(i);
   return issues;
 }
 

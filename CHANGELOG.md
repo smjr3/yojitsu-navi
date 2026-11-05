@@ -23,6 +23,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - CI/CD 変数 `VITEST_MAX_FORKS` を入れてテストを動かしていて、Windows の Runner で結果が安定しないなら `1` にする
 - `upgrade` の 2 番目の手順「設定の互換確認」で止まったら、表示のとおり `config.json` を直してコミットし、もう一度 `upgrade`（必須の項目が無い・型や値が違うものだけがエラー。使わない項目は注意だけ。SPEC §96）
 - 初回の導入で今年度の初めから取り込むときは、Run pipeline で変数 `FETCH_MODE` = `initial`（コマンドは `npm run fetch -- --initial`）。年月を手で入れなくてよい（docs/OPERATIONS.md「取り込む期間の 3 とおり」）
+- 案件の顧客名・案件名を案件管理システムの正式な値にそろえるときは、`config.json` に `projectSource` を足し（下の表）、CI/CD 変数 `PROJECT_API_TOKEN` を登録して `npm run fetch:projects -- --dry-run` で確かめる。`contracts.csv` の `note` に案件 ID を書いていたら `--id-from-note` で `project_id` の列に移す（docs/OPERATIONS.md「正式な案件の一覧を取り込む」。SPEC §98）。使わないなら何もしなくてよい
 - 社内 CA が Windows の証明書ストアに入っているなら、`NODE_EXTRA_CA_CERTS` の代わりに `NODE_USE_SYSTEM_CA=1` も使える（Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」）
 
 ### テスト・CI の前提
@@ -31,6 +32,8 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `npm run validate`（CI の build）が `config.json` の互換確認も行う。必須の項目が無い・型や値が違うと build が止まる（`npm run config:check` で同じ確かめだけをできる。SPEC §96）
 - `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
+- `.gitlab-ci.yml` に `fetch-projects` ジョブが増える。既定は動かない（スケジュール実行かつ CI/CD 変数 `PROJECT_FETCH_ENABLED=1`、または Run pipeline の変数 `PROJECT_FETCH=1` のときだけ）。`projectSource.adapter` が `none` なら何もしない
+- 運用のテストに `tests/integration/project-fetch.test.ts` が増える
 
 ### 変更
 
@@ -42,6 +45,16 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - 取り込む期間の初回モード `--initial`（`FETCH_MODE=initial`）: 今年度の初めから今月まで。メンバーマスタから 50 人ずつ取る方式を本番の標準として docs に明記（SPEC §87・§96）
 - `config.json` の互換確認（`npm run config:check`）。`update`・`upgrade`・`npm run validate` でも行う（SPEC §96）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
+- 案件管理システムの正式な案件の一覧の取り込み `npm run fetch:projects`（`data/projects.csv`）。`contracts.csv` に任意列 `project_id`（正式な案件ID）。`project_id` のある案件の顧客名・案件名は一覧の値、期間・金額・担当チームは手入力のまま。ページングなし・取得後の `filters` に対応。データ確認に「正式な案件IDの無い案件」「マスタに無い正式な案件」（SPEC §98）
+
+### 新しい設定と推奨値
+
+| 項目 | 書かないとき | 推奨 | 理由・いつ |
+|---|---|---|---|
+| `projectSource.adapter` | `none`（取り込まない） | 案件管理システムの API なら `http` | 顧客名・案件名を正式な値にそろえる（SPEC §98） |
+| `projectSource.http.pagination` | なし（ページングなしで 1 回で全件） | ページングに対応しない API はそのまま | 1 回で全件を返す API 向け |
+| `projectSource.columns` | なし（`adapter` が `csv`・`http` なら必須） | API の案件ID・顧客名・案件名の列名 | `projectId`・`customerName`・`projectName` |
+| `projectSource.filters` | なし（全件） | 取り込む案件の条件 | サーバー側で絞り込めない API のため、取得後に絞る |
 
 ## 0.2.1
 

@@ -6,6 +6,7 @@
  *
  *   作業実績: data/worklogs/_meta.json の lastFailure（fetchedAt は前回成功のまま）
  *   人事    : data/masters/_members-meta.json の lastFailure
+ *   正式な案件の一覧（§98）: data/_projects-meta.json の lastFailure（fetchedAt は前回成功のまま）
  *
  * メッセージは長さを切り、トークンを伏せてから書く（リポジトリに残るため）。
  */
@@ -16,6 +17,9 @@ import { writeFileAtomic } from "./atomic.js";
 
 /** 人事の取り込みの記録 */
 export const MEMBERS_META = "data/masters/_members-meta.json";
+
+/** 正式な案件の一覧の取り込みの記録（§98） */
+export const PROJECTS_META = "data/_projects-meta.json";
 
 const MAX_MESSAGE = 300;
 
@@ -68,12 +72,14 @@ export function clearFailure(path: string): boolean {
   return true;
 }
 
-/** 作業実績と人事の失敗の記録をまとめて読む（データ確認画面用） */
+/** 作業実績・人事・正式な案件の一覧の失敗の記録をまとめて読む（データ確認画面用） */
 export function readFetchFailures(rootDir: string, worklogMetaPath: string): FetchFailure[] {
   const out: FetchFailure[] = [];
   const w = readFailure(worklogMetaPath, "worklogs");
   if (w) out.push(w);
   const m = readFailure(join(rootDir, MEMBERS_META), "members");
   if (m) out.push(m);
+  const p = readFailure(join(rootDir, PROJECTS_META), "projects");
+  if (p) out.push(p);
   return out;
 }

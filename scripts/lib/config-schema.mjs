@@ -62,6 +62,8 @@ function httpOptions(isHttp, extra = {}) {
 
 const worklogIsHttp = (root) => root?.worklogSource?.adapter === "http";
 const memberAdapter = (root) => root?.memberSource?.adapter;
+const projectAdapter = (root) => root?.projectSource?.adapter;
+const projectImports = (root) => ["csv", "http"].includes(projectAdapter(root));
 
 /** @type {Node} */
 export const CONFIG_SCHEMA = obj({
@@ -117,6 +119,24 @@ export const CONFIG_SCHEMA = obj({
       section: column(),
     }, { required: (root) => ["csv", "http"].includes(memberAdapter(root)), requiredWhen: "adapter が csv・http のとき" }),
     kindMap: { type: "object", props: {}, additional: oneOf(["employee", "partner"]) },
+    filters: arr(FILTER),
+  }),
+  /** 案件管理システムの正式な案件の一覧（§98） */
+  projectSource: obj({
+    adapter: oneOf(["csv", "http", "none"], { required: true }),
+    csv: obj(
+      { path: str({ required: (root) => projectAdapter(root) === "csv", requiredWhen: "adapter が csv のとき" }), encoding: ENCODING },
+      { required: (root) => projectAdapter(root) === "csv", requiredWhen: "adapter が csv のとき" },
+    ),
+    http: httpOptions((root) => projectAdapter(root) === "http"),
+    columns: obj(
+      {
+        projectId: column({ required: projectImports, requiredWhen: "adapter が csv・http のとき" }),
+        customerName: column({ required: projectImports, requiredWhen: "adapter が csv・http のとき" }),
+        projectName: column({ required: projectImports, requiredWhen: "adapter が csv・http のとき" }),
+      },
+      { required: projectImports, requiredWhen: "adapter が csv・http のとき" },
+    ),
     filters: arr(FILTER),
   }),
   costTypes: arr(obj({ id: str({ required: true }), label: str({ required: true }) }), { required: true }),

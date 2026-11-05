@@ -1,7 +1,7 @@
 /**
  * データ確認ページ用: CSV 読み込み時の問題 ＋ validateDataset の結果（scripts/validate-data.ts と同じ内容）
  */
-import type { ValidationIssue } from "../core/index.js";
+import { checkProjects, type ValidationIssue } from "../core/index.js";
 import { buildStamp, emitJson, loadParsed, resolveAsOf } from "./_shared.js";
 
 emitJson(() => {
@@ -29,6 +29,8 @@ emitJson(() => {
       errors: issues.filter((i) => i.severity === "error").length,
       warnings: issues.filter((i) => i.severity === "warning").length,
     },
+    // 正式な案件の一覧との照合（§98）。一覧が無ければ enabled: false
+    projects: checkProjects(parsed.dataset.contracts, parsed.dataset.projects),
     _build: buildStamp(),
   };
 });

@@ -201,13 +201,13 @@ git push -u origin update-<新しい版>
 
 | 区分 | 置き場 | 中身 |
 |---|---|---|
-| 本番固有 | `config.json` | 作業実績 API の設定（`worklogSource`: 接続先・列名・作業コードの列・ページング `stopWhen`・取得する人 `members`）、人事の取り込み（`memberSource`）、作業コードの点検（`taskCodeCheck`）、計算の設定 |
+| 本番固有 | `config.json` | 作業実績 API の設定（`worklogSource`: 接続先・列名・作業コードの列・ページング `stopWhen`・取得する人 `members`）、人事の取り込み（`memberSource`）、案件管理システムの正式な案件の一覧（`projectSource`）、作業コードの点検（`taskCodeCheck`）、計算の設定 |
 | 本番固有 | `data/masters/members.csv` | メンバーマスタ（作業実績を取得する人もここから作る） |
 | 本番固有 | `data/contracts.csv`・`data/mapping.csv` など `data/` 以下 | 手入力の契約情報（期間・金額・担当チーム）・対応表・計画。取り込んだ作業実績 |
 | 本番固有 | `.gitlab-ci.local.yml` | Runner のタグ・社内だけのジョブ・変数 |
 | 本番固有 | `.npmrc`、CI/CD 変数 `NPM_CONFIG_REGISTRY`・`NPM_AUTH_TOKEN` | 社内の npm レジストリと認証 |
 | 本番固有 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`・`NODE_USE_SYSTEM_CA`（か社内で足した `certs/`） | 社内の証明書 |
-| 本番固有 | CI/CD 変数 `WORKLOG_API_TOKEN`・`MEMBER_API_TOKEN`・`GIT_PUSH_TOKEN` | 各 API・取り込みの MR のトークン |
+| 本番固有 | CI/CD 変数 `WORKLOG_API_TOKEN`・`MEMBER_API_TOKEN`・`PROJECT_API_TOKEN`・`GIT_PUSH_TOKEN`・`MEMBER_FETCH_ENABLED`・`PROJECT_FETCH_ENABLED` | 各 API・取り込みの MR のトークン、定期取り込みの有効化 |
 | パッケージ | 上以外（`.gitlab-ci.yml`・`package.json`・`src/`・`scripts/`・`docs/` など） | `update` が新しい版にする（社内で変えていたら止まる。下の「上書きするファイルと残すファイル」） |
 
 「設定の互換確認」は、新しい版で `config.json` に必須の項目が増えた・型や決まった値が変わったものだけをエラーにします（直すまで `upgrade` も CI の build も止まる）。この版で使わない項目・名前が変わった項目は注意として出すだけで止めません。新しい任意の項目は書かなくても既定値で動きます（推奨値は「新しい設定と推奨値」に出ます）。プロジェクトの中では `npm run config:check` で同じ確かめができ、`npm run validate` も含みます。
@@ -369,7 +369,7 @@ yojitsu-navi reset-data             # 上のとおりに直す（作業実績の
 
 ## 将来: 作業実績の定期取り込み（今は設定しない）
 
-`.gitlab-ci.yml` には、スケジュール実行時だけ動く `fetch-worklogs`（作業実績 API）と `fetch-members`（人事データ、既定は無効）のジョブがすでに入っています。
+`.gitlab-ci.yml` には、スケジュール実行時だけ動く `fetch-worklogs`（作業実績 API）・`fetch-members`（人事データ、既定は無効）・`fetch-projects`（案件管理システムの正式な案件の一覧、既定は無効。CI/CD 変数 `PROJECT_FETCH_ENABLED=1`・`PROJECT_API_TOKEN`。SPEC §98）のジョブがすでに入っています。
 スケジュールを登録しない限り動かないので、今は何もしなくて構いません。
 
 本番 API の仕様（列名・認証）を dry-run で確認したあとに、次を行います。
