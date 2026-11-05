@@ -39,7 +39,7 @@ import { readTextAuto } from "./lib/encoding.js";
 import { clearFailure, safeMessage, writeFailure } from "./lib/fetch-status.js";
 import { parseMemberList, readMemberRecords, targetMemberIds } from "./lib/fetch-targets.js";
 import { listWorklogFiles, loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
-import { enforceTaskCodeGate, inspectTaskCodes, readCodeRules } from "./lib/task-code-gate.js";
+import { enforceTaskCodeGate, inspectTaskCodes, readCodeRules, readProjectMatcher } from "./lib/task-code-gate.js";
 import { taskCodeCheckEnabled } from "../src/core/taskCodes.js";
 import { existsSync } from "node:fs";
 
@@ -184,11 +184,12 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
     return sortWorklogs([...kept, ...fresh]);
   };
   const gateFor = (fresh: ReadonlyMap<YearMonth, Worklog[]>) => {
-    if (!taskCodeCheckEnabled(config.taskCodeCheck)) return null;
+    const projects = readProjectMatcher(opts.rootDir, config);
+    if (!taskCodeCheckEnabled(config.taskCodeCheck) && !projects.enabled) return null;
     const existing = listWorklogFiles(dir).map((f) => ({ month: f.month, rows: readMonthRows(f.path) }));
     const before = existing.flatMap((f) => f.rows);
     const after = [...existing.filter((f) => !fresh.has(f.month)).flatMap((f) => f.rows), ...[...fresh.values()].flat()];
-    return inspectTaskCodes(config, readCodeRules(opts.rootDir), before, after);
+    return inspectTaskCodes(config, readCodeRules(opts.rootDir), before, after, projects);
   };
 
   if (opts.dryRun) {

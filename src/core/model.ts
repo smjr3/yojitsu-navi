@@ -10,6 +10,7 @@ import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
 import { mapWorklogs } from "./mapping.js";
+import { projectMatcherFor } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
@@ -48,19 +49,21 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
 
   // 作業種別の分類（§30）: 契約外は契約の実績に入れない（関連契約だけ調べ、警告は出さない）。
   // 紐付けルールに作業名のキーワードがあれば、合致しない作業も運用保守以外にする（§62）
-  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings);
+  // 作業名から抜き出した案件名での紐付け（§97）
+  const projects = projectMatcherFor(dataset);
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects);
   const inScopeLogs = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
   const outsideLogs = classifier.enabled ? dataset.worklogs.filter((w) => isOutsideWorklog(w, classifier)) : [];
   const excludedContracts = new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason]));
 
   // 紐付け（§4）
-  const mapping = mapWorklogs(inScopeLogs, dataset.mappings, contracts, excludedContracts);
+  const mapping = mapWorklogs(inScopeLogs, dataset.mappings, contracts, excludedContracts, projects);
   warnings.push(...mapping.warnings);
   warnings.push(...unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier));
-  const outsideMapping = outsideLogs.length > 0 ? mapWorklogs(outsideLogs, dataset.mappings, contracts, excludedContracts).mappings : [];
+  const outsideMapping = outsideLogs.length > 0 ? mapWorklogs(outsideLogs, dataset.mappings, contracts, excludedContracts, projects).mappings : [];
   const worklogIndex = indexWorklogs(mapping.assigned);
   // 作業コードの点検（§92）: 未登録・作業名の変更。見つけるだけで案件は決めない
-  const taskCodeFindings = findTaskCodeIssues(dataset.worklogs, dataset.mappings, config.taskCodeCheck);
+  const taskCodeFindings = findTaskCodeIssues(dataset.worklogs, dataset.mappings, config.taskCodeCheck, projects);
   warnings.push(...taskCodeWarnings(taskCodeFindings));
 
   // 原価プロバイダ（§7）

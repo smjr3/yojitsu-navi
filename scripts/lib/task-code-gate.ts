@@ -5,14 +5,17 @@
  * - 作業名の変更は、取り込む前のデータに無かったものだけ（一度取り込んだ変更は毎回止めない）
  * - config.taskCodeCheck の onUnregistered / onChange が stop なら例外で止める（月ファイルは書かない）。
  *   作業名の変更は、確かめた後に FETCH_ACCEPT_TASK_CHANGES=1（--accept-task-changes）で 1 回だけ通せる
+ * - 作業名から案件名を抜き出す設定（§97）があれば、案件名で契約が見つかる作業は未登録に数えない。
+ *   取り込む前に無かった作業コードは「新しい作業コード」として表示だけする（止めない）
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isValidISODate } from "../../src/core/calendar.js";
 import { parseCsvTable } from "../../src/core/csv.js";
 import { normalizeCode, normalizeName } from "../../src/core/normalize.js";
+import { createProjectMatcher, type ProjectMatcher } from "../../src/core/projectFromTask.js";
 import { isMatchChange, findTaskCodeIssues, matchesMaintenance, taskCodeCheckEnabled, taskCodeWarnings, type TaskCodeFindings } from "../../src/core/taskCodes.js";
-import type { Config, ISODate, MappingRule, TaskCodeCheckConfig, TaskCodeChange, Worklog } from "../../src/core/types.js";
+import type { Config, Contract, ISODate, MappingRule, ProjectAlias, TaskCodeCheckConfig, TaskCodeChange, Worklog } from "../../src/core/types.js";
 import { stripBom } from "./csv.js";
 import { readTextAuto } from "./encoding.js";
 
@@ -37,32 +40,65 @@ export function readCodeRules(rootDir: string): MappingRule[] {
   return out;
 }
 
+/** 作業名の案件名の照合（§97）に要る contracts.csv の案件名と別名だけを読む。設定が無ければ使わない */
+export function readProjectMatcher(rootDir: string, config: Config): ProjectMatcher {
+  const read = (name: string) => {
+    const path = join(rootDir, "data", name);
+    if (!existsSync(path)) return [];
+    const body = stripBom(readTextAuto(path));
+    return body.trim() === "" ? [] : parseCsvTable(body).rows;
+  };
+  if (!config.projectFromTask) return createProjectMatcher(undefined, []);
+  const contracts: Contract[] = read("contracts.csv").map((r) => ({ contractId: r.get("contract_id"), customerName: r.get("customer_name"), projectName: r.get("project_name"), teamId: null, startMonth: r.get("start_month"), endMonth: r.get("end_month"), totalAmount: 0 }));
+  const aliases: ProjectAlias[] = read("project-aliases.csv").map((r) => ({ alias: r.get("alias"), projectName: r.get("project_name") }));
+  return createProjectMatcher(config.projectFromTask, contracts, aliases);
+}
+
 const changeKey = (c: TaskCodeChange): string => `${normalizeCode(c.taskCode)}\u0000${normalizeName(c.before)}\u0000${normalizeName(c.after)}`;
 
 export interface TaskCodeGateResult {
   findings: TaskCodeFindings;
   /** 取り込む前に無かった作業名の変更 */
   newChanges: TaskCodeChange[];
+  /** 取り込む前に無かった作業コード（§97。表示だけ） */
+  newCodes: string[];
   /** 表示用の 1 行ずつ（警告の文言） */
   lines: string[];
 }
 
 /** 点検する（止めない）。設定が無ければ null */
-export function inspectTaskCodes(config: Config, rules: readonly MappingRule[], before: readonly Worklog[], after: readonly Worklog[]): TaskCodeGateResult | null {
+export function inspectTaskCodes(config: Config, rules: readonly MappingRule[], before: readonly Worklog[], after: readonly Worklog[], projects?: ProjectMatcher): TaskCodeGateResult | null {
   const check = config.taskCodeCheck;
-  if (!check || !taskCodeCheckEnabled(check)) return null;
-  const findings = findTaskCodeIssues(after, rules, check);
-  const known = new Set(findTaskCodeIssues(before, rules, check).changes.map(changeKey));
+  const checking = !!check && taskCodeCheckEnabled(check);
+  // 作業名の案件名（§97）だけを使うときも、新しい作業コードは知らせる
+  if (!checking && !projects?.enabled) return null;
+  const findings: TaskCodeFindings = checking ? findTaskCodeIssues(after, rules, check, projects) : { unregistered: [], changes: [] };
+  const known = new Set(checking ? findTaskCodeIssues(before, rules, check, projects).changes.map(changeKey) : []);
   const seen = new Set<string>();
   const newChanges: TaskCodeChange[] = [];
-  for (const c of [...findings.changes, ...replacedNames(before, after, check)]) {
+  for (const c of [...findings.changes, ...(checking ? replacedNames(before, after, check) : [])]) {
     const k = changeKey(c);
     if (known.has(k) || seen.has(k)) continue;
     seen.add(k);
     newChanges.push(c);
   }
   const lines = taskCodeWarnings({ unregistered: findings.unregistered, changes: newChanges }).map((w) => w.message);
-  return { findings, newChanges, lines };
+  // 新しい作業コード（§97）: 案件の判定には使わず、発生を知らせるだけ
+  const newCodes: string[] = [];
+  if (projects?.enabled) {
+    const prev = namesByCode(before);
+    for (const [code, names] of namesByCode(after)) {
+      if (prev.has(code)) continue;
+      const first = [...names.values()].reduce((a, b) => (b.firstDate < a.firstDate ? b : a));
+      newCodes.push(`${code}（${first.task}、${first.firstDate}〜）`);
+    }
+    newCodes.sort();
+    if (newCodes.length > 0) {
+      const shown = newCodes.slice(0, LIST_MAX).join(" / ");
+      lines.push(`新しい作業コード ${newCodes.length} 件: ${shown}${newCodes.length > LIST_MAX ? ` ほか ${newCodes.length - LIST_MAX} 件` : ""}`);
+    }
+  }
+  return { findings, newChanges, newCodes, lines };
 }
 
 interface NameUse {
@@ -117,7 +153,7 @@ export function enforceTaskCodeGate(config: Config, result: TaskCodeGateResult |
   const check = config.taskCodeCheck;
   const reasons: string[] = [];
   if (check?.onUnregistered === "stop" && result.findings.unregistered.length > 0) {
-    reasons.push(`運用保守のキーワードに合う未登録の作業コードが ${result.findings.unregistered.length} 件あります。mapping.csv に task_code の行を足してください`);
+    reasons.push(`運用保守のキーワードに合う未登録の作業コードが ${result.findings.unregistered.length} 件あります。${config.projectFromTask ? "作業名の案件名を contracts.csv・project-aliases.csv に合わせるか、" : ""}mapping.csv に task_code の行を足してください`);
   }
   if (check?.onChange === "stop" && !acceptChanges && result.newChanges.length > 0) {
     const matchChanged = result.newChanges.filter(isMatchChange).length;
