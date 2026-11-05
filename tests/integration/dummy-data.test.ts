@@ -361,3 +361,20 @@ describe("月の状態・年度（asOf = 2026-10-27）", () => {
     expect(model.meta.hasPriorYearData).toBe(true);
   });
 });
+
+describe("正式な案件の一覧（SPEC §98）", () => {
+  it("同じ顧客名・案件名は同じ正式な案件ID。C009・C021 は保留、一覧にだけある案件が 3 件、警告なし", async () => {
+    const { checkProjects } = await import("../../src/core/projects.js");
+    const ds = loadDataset(REPO).dataset;
+    const r = checkProjects(ds.contracts, ds.projects);
+    expect(r.enabled).toBe(true);
+    expect(r.unlinked.map((u) => u.contractId)).toEqual(["C009", "C021"]);
+    expect(r.unlinked[0]?.candidates).toHaveLength(1);
+    expect(r.unlinked[1]?.candidates).toEqual([]);
+    expect(r.unregistered.map((p) => p.projectName).sort()).toEqual(["倉庫連携システム保守", "監視基盤更改", "電子カルテ連携保守"].sort());
+    expect([r.unknown, r.mismatched]).toEqual([[], []]);
+    const byId = new Map(ds.contracts.map((c) => [c.contractId, c.projectId]));
+    expect(byId.get("C001")).toBe(byId.get("C002"));
+    expect(byId.get("C001")).not.toBe(byId.get("C003"));
+  });
+});

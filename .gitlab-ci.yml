@@ -20,6 +20,8 @@
 #   WORKLOG_API_TOKEN   作業実績 API の認証トークン（http アダプタが使う。ログには出ない）
 #   MEMBER_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-members（所属・役職の取り込み）も動く。既定は無効
 #   MEMBER_API_TOKEN    （任意）人事 API の認証トークン（memberSource.adapter = http のとき）
+#   PROJECT_FETCH_ENABLED（任意）"1" にするとスケジュール実行で fetch-projects（正式な案件の一覧の取り込み。§98）も動く。既定は無効
+#   PROJECT_API_TOKEN   （任意）SI 案件管理システム API の認証トークン（projectSource.adapter = http のとき）
 #   FETCH_FROM / FETCH_TO / FETCH_MEMBERS（任意。Run pipeline で入れる。CI/CD 変数には登録しない）過去の作業実績の取り直し（§87）
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
@@ -209,3 +211,21 @@ fetch-members:
   script:
     # fetch:members → 検証 → fetch-worklogs とは別の MR（data/members-<日時>）。触るファイルが違うので互いに競合しない
     - node scripts/ci/fetch-data.mjs members
+
+# --------------------------------------------------------------------------
+# fetch-projects: SI 案件管理システムから正式な案件の一覧（data/projects.csv）を取り込み、
+#   案件ID（project_id）のある契約の顧客名・案件名を data/contracts.csv に書き戻す（期間・金額・担当チームは触らない。§98）
+#   既定は無効。スケジュール実行 かつ CI/CD 変数 PROJECT_FETCH_ENABLED=1 のとき、または Run pipeline で PROJECT_FETCH=1 を入れたときだけ動く。
+#   config.json の projectSource.adapter が none のままなら何もしない（変更なし）
+# --------------------------------------------------------------------------
+fetch-projects:
+  stage: validate
+  resource_group: data-writeback
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PROJECT_FETCH_ENABLED == "1"
+    - if: $CI_PIPELINE_SOURCE == "web" && $PROJECT_FETCH == "1"
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    # fetch:projects → 検証 → 別の MR（data/projects-<日時>）。失敗したら CSV は書き換えず、失敗の記録だけを MR にする
+    - node scripts/ci/fetch-data.mjs projects

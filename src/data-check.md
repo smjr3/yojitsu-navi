@@ -162,6 +162,45 @@ if (model && (model.taskCodeChanges ?? []).length > 0) {
 ```
 
 ```js
+// 正式な案件の一覧（案件管理システム）との照合（§98）。一覧を取り込んでいない・見つからないときは出さない
+const projectCheck = issuesData?.projects;
+if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
+  display(sectionTitle(T.dataCheck.unlinkedContractsTitle, T.dataCheck.unlinkedContractsHint));
+  display(
+    dataTable({
+      columns: [
+        { key: "contractId", label: T.dataCheck.colContractId, type: "text" },
+        { key: "customerName", label: T.dataCheck.colCustomer, type: "text", hideOnPhone: true },
+        { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+        { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true },
+        { key: "candidateText", label: T.dataCheck.colCandidates, type: "text", empty: T.dataCheck.noCandidate },
+      ],
+      rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.join(", ") })),
+      caption: T.dataCheck.unlinkedContractsTitle,
+      exportName: "contracts_without_project_id",
+      sort: { key: "contractId", dir: "asc" },
+    }),
+  );
+}
+if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
+  display(sectionTitle(T.dataCheck.unregisteredProjectsTitle, T.dataCheck.unregisteredProjectsHint));
+  display(
+    dataTable({
+      columns: [
+        { key: "projectId", label: T.dataCheck.colProjectId, type: "text" },
+        { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
+        { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+      ],
+      rows: projectCheck.unregistered.map((p, i) => ({ key: i, ...p })),
+      caption: T.dataCheck.unregisteredProjectsTitle,
+      exportName: "projects_without_contract",
+      sort: { key: "projectId", dir: "asc" },
+    }),
+  );
+}
+```
+
+```js
 if (model) {
   display(sectionTitle(T.dataCheck.rateMissingTitle, T.dataCheck.rateMissingHint));
   const rows = model.warnings

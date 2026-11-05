@@ -37,7 +37,7 @@
 
 ## 4. ファイルは一時ファイルに書いてから置き換える（`scripts/lib/atomic.ts`）
 
-`npm run fetch`・`npm run fetch:members` など `data/` を書き換えるスクリプトは `writeFileAtomic` / `writeFilesAtomic` を使います。
+`npm run fetch`・`npm run fetch:members`・`npm run fetch:projects` など `data/` を書き換えるスクリプトは `writeFileAtomic` / `writeFilesAtomic` を使います。
 一時ファイル（`<名前>.tmp-<pid>-<乱数>`）に書いて fsync し、**全部書けてから** 名前を置き換えるので、途中で落ちても元のファイルは壊れません。
 
 ## 5. 作業ログのローダ（`src/data/worklogs/[contractId].json.js`）

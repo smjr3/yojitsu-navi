@@ -29,6 +29,8 @@ export interface MasterColumnDef {
   /** 入力の種類（画面のフォーム部品を決める） */
   input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date";
   required: boolean;
+  /** true: CSV に列があるときだけ扱う（無いファイルに見出しを足さない。§98 の project_id） */
+  onlyIfPresent?: boolean;
 }
 
 export interface MasterFileDef {
@@ -125,6 +127,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
       { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
       { name: "project_name", label: T.masterFiles.colProjectName, input: "text", required: true },
+      // 正式な案件ID（§98）。列があるときだけ出す。画面では変えない（contracts.csv で入れる）
+      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },
@@ -339,7 +343,7 @@ export function parseMasterDoc(fileId: MasterFileId, text: string): MasterDoc {
   const header = first ? first.cells.map((h) => h.trim()) : [];
   let headerRaw: string | null = first ? first.raw : null;
   for (const c of def.columns) {
-    if (!header.includes(c.name)) {
+    if (!header.includes(c.name) && !c.onlyIfPresent) {
       header.push(c.name);
       headerRaw = null;
     }

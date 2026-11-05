@@ -101,12 +101,16 @@ export function gitlabFromRemote(remote) {
 
 /** config.json の masterEdit.gitlab の apiBaseUrl・projectId だけを書き換える（ほかの書式は変えない） */
 export function applyGitlabTarget(configText, gitlab) {
-  let text = configText;
+  // 同じ名前の項目がほかの設定にもある（projectSource.columns.projectId など。§98）ので、masterEdit より後ろだけを書き換える
+  const at = Math.max(0, configText.search(/"masterEdit"\s*:/));
+  const head = configText.slice(0, at);
+  let text = configText.slice(at);
   for (const [key, value] of [["apiBaseUrl", gitlab.apiBaseUrl], ["projectId", gitlab.projectId]]) {
     const re = new RegExp(`("${key}"\\s*:\\s*)"(?:[^"\\\\]|\\\\.)*"`);
     if (!re.test(text)) throw new CliError(`config.json に masterEdit.gitlab.${key} がありません`);
     text = text.replace(re, `$1${JSON.stringify(value)}`);
   }
+  text = head + text;
   const g = JSON.parse(text).masterEdit?.gitlab;
   if (g?.apiBaseUrl !== gitlab.apiBaseUrl || g?.projectId !== gitlab.projectId) throw new CliError("config.json の接続先を書き換えられませんでした");
   return text;

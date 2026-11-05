@@ -40,6 +40,12 @@ export function testConfig(): Record<string, any> {
       csv: { path: "data/hr/members.csv" },
       columns: { memberId: "member_id", name: "name", kind: "kind", title: "title" },
     },
+    projectSource: {
+      adapter: "none",
+      http: { url: "", authHeader: "Authorization" },
+      columns: { projectId: "project_id", customerName: "customer_name", projectName: "project_name" },
+      filters: [],
+    },
     taskCodeCheck: { include: ["_保守対応"], exclude: [], onUnregistered: "warn", onChange: "warn" },
     costTypes: [{ id: "labor", label: "工数" }],
     masterEdit: { mode: "gitlab", gitlab: { apiBaseUrl: "", projectId: "", targetBranch: "main", commitMode: "mr", tokenUrl: "" } },

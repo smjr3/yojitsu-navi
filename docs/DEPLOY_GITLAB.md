@@ -351,7 +351,7 @@ yojitsu-navi reset-data             # 上のとおりに直す（作業実績の
 
 ## 将来: 作業実績の定期取り込み（今は設定しない）
 
-`.gitlab-ci.yml` には、スケジュール実行時だけ動く `fetch-worklogs`（作業実績 API）と `fetch-members`（人事データ、既定は無効）のジョブがすでに入っています。
+`.gitlab-ci.yml` には、スケジュール実行時だけ動く `fetch-worklogs`（作業実績 API）・`fetch-members`（人事データ、既定は無効）・`fetch-projects`（案件管理システムの正式な案件の一覧、既定は無効。CI/CD 変数 `PROJECT_FETCH_ENABLED=1`・`PROJECT_API_TOKEN`。SPEC §98）のジョブがすでに入っています。
 スケジュールを登録しない限り動かないので、今は何もしなくて構いません。
 
 本番 API の仕様（列名・認証）を dry-run で確認したあとに、次を行います。
