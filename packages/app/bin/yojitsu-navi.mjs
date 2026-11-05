@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // 予実ナビを社内 GitLab に持ち込むコマンド（SPEC §44）。外部の依存なし・ネットワーク接続なしで動く（gitlab-setup だけ社内 GitLab に接続する）
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, check, gitlabFromRemote, init, migrateCiCommand, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
+import { CliError, LOG_DIR, backupStamp, check, gitlabFromRemote, init, migrateCiCommand, normalizeGitlab, readGitlabTarget, resetData, update } from "../lib/project.mjs";
+import { createOutput } from "../lib/output.mjs";
+import { upgrade } from "../lib/upgrade.mjs";
 
 const PKG_DIR = fileURLToPath(new URL("..", import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
@@ -17,18 +19,29 @@ const HELP = `予実ナビ ${VERSION}
       新しいプロジェクトのフォルダを作る（既定 yojitsu-navi）。接続先を config.json と git remote に入れる
       data/ は空（見出しの行だけ）で作る
         --sample      試す用のサンプルのデータ（架空の会社。作業実績 約 13MB）を data/ に入れる（本番には使わない）
-  yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--force]
-      今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> にコミットする
+  yojitsu-navi upgrade [フォルダ] [--overwrite | --keep-local] [--no-commit] [--force] [--test] [--log <ファイル>]
+      版を上げる作業を 1 回で行う: update → 依存を入れる（npm ci）→ check → データ検証 → テスト（既定は飛ばす）→ ビルド
+      失敗したところで止まり、最後に結果の要約を出す。全部の出力は ${LOG_DIR}/upgrade-<日時>.log（UTF-8）に残す
+        --test        テストも動かす（CI/CD 変数と同じく環境変数 YOJITSU_RUN_TESTS=1 でもよい）
+        ほかのオプションは update と同じ
+  yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--no-commit] [--force] [--summary] [--log <ファイル>]
+      今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> を作って自動でコミットする
       上書き・削除するファイルを社内で変えていたら、何も変えずに止まる。前のファイルは .yojitsu-navi-backup/<日時>/ に写す
-      data/ にサンプルのまま残っているファイルがあれば一覧を出す（消さない）
+      data/ にサンプルのまま残っているファイル・パッケージに無いファイル（社内で足したもの）があれば一覧を出す（消さない）
         --dry-run     何も変えずに、変わるファイルと社内で変えたファイルの差分を出す
         --overwrite   社内で変えたファイルも新しい版にする
         --keep-local  社内で変えたファイルは社内の版のまま残す（次の update でも残す）
+        --no-commit   ブランチを作らず、コミットもしない（git add まで）
         --force       コミットしていない変更・古い版・依存込みの確認を飛ばす
-  yojitsu-navi check [フォルダ]
+        --summary     画面には件数と要るものだけを出す（ファイルの一覧・差分・変更履歴は --log のファイルに）
+        --log <ファイル>  出力をファイルにも書く（UTF-8。PowerShell で日本語が化けるときはこのファイルを開く）
+  yojitsu-navi reset-data [フォルダ] [--dry-run] [--log <ファイル>]
+      data/ にサンプルのまま残っているファイルを空にする（作業実績の月のファイルは消し、ほかの CSV は見出しの行だけにする）
+      サンプルと中身が同じファイルだけを変える。前のものは .yojitsu-navi-backup/<日時>/ に写す。コミットはしない
+  yojitsu-navi check [フォルダ] [--log <ファイル>]
       CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか、GitLab が受け付けない書き方（中身の無いジョブなど）が無いか確かめる
       （init・update の最後にも確かめる。プロジェクトの中では npm run ci:check でも同じことができる）
-  yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]
+  yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force] [--log <ファイル>]
       社内で .gitlab-ci.yml に書いたランナーのタグ・変数・社内だけのジョブを .gitlab-ci.local.yml に移す（.gitlab-ci.yml は変えない）。
       移し終えると、次の update は .gitlab-ci.yml で止まらずに新しい版にする
         --dry-run     何も変えずに、移すものと自動で移せないものを出す
@@ -91,9 +104,24 @@ function askSecret(question) {
   });
 }
 
+/** 今のコマンドの出力（エラーもログのファイルに書くため） */
+let out = createOutput();
+
+/** 知らないオプションがあれば止める（withValue は値を取るオプション） */
+function assertKnown(rest, known, withValue = []) {
+  const unknown = rest.filter((a, i) => a.startsWith("--") && !known.includes(a) && !withValue.includes(a) && !withValue.includes(rest[i - 1]));
+  if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
+  for (const w of withValue) if (rest.includes(w) && !opt(rest, w.slice(2))) throw new CliError(`${w} のあとにファイルの名前を書いてください`);
+}
+
+/** update・upgrade に共通のオプション */
+function updateOptions(rest) {
+  return { force: rest.includes("--force"), overwrite: rest.includes("--overwrite"), keepLocal: rest.includes("--keep-local"), commit: !rest.includes("--no-commit") };
+}
+
 async function main(argv) {
   const [cmd, ...rest] = argv;
-  const log = (s) => console.log(s);
+  const log = (s) => out.log(s);
   if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
     log(HELP);
     return 0;
@@ -118,22 +146,40 @@ async function main(argv) {
     return 0;
   }
   if (cmd === "update") {
-    const dir = resolve(positional(rest, [])[0] ?? ".");
-    const known = ["--force", "--dry-run", "--overwrite", "--keep-local"];
-    const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
-    if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
-    update({ pkgDir: PKG_DIR, version: VERSION, dir, force: rest.includes("--force"), dryRun: rest.includes("--dry-run"), overwrite: rest.includes("--overwrite"), keepLocal: rest.includes("--keep-local"), log });
+    assertKnown(rest, ["--force", "--dry-run", "--overwrite", "--keep-local", "--no-commit", "--summary"], ["--log"]);
+    const dir = resolve(positional(rest, ["--log"])[0] ?? ".");
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")), summary: rest.includes("--summary") });
+    update({ pkgDir: PKG_DIR, version: VERSION, dir, ...updateOptions(rest), dryRun: rest.includes("--dry-run"), log: out.log, detail: out.detail, exclude: out.file ? [out.file] : [] });
+    if (out.file) out.log(`出力を ${out.file} に書きました（UTF-8）`);
+    else if (rest.includes("--summary")) out.log("（ファイルの一覧・差分・変更履歴は --log <ファイル> で書き出せます）");
+    return 0;
+  }
+  if (cmd === "upgrade") {
+    assertKnown(rest, ["--force", "--overwrite", "--keep-local", "--no-commit", "--test"], ["--log"]);
+    const dir = resolve(positional(rest, ["--log"])[0] ?? ".");
+    if (!existsSync(join(dir, ".yojitsu-navi.json"))) throw new CliError(`${dir} に .yojitsu-navi.json がありません。yojitsu-navi init で作ったプロジェクトのフォルダで実行してください`);
+    // 画面には要約、ログのファイルには全部（update のファイルの一覧・変更履歴、npm の出力）
+    out = createOutput({ file: opt(rest, "log") ? resolve(opt(rest, "log")) : join(dir, LOG_DIR, `upgrade-${backupStamp()}.log`), summary: true });
+    out.log(`予実ナビ ${VERSION} への版上げ（${dir}）`);
+    const r = await upgrade({ pkgDir: PKG_DIR, version: VERSION, dir, out, update: updateOptions(rest), test: rest.includes("--test") || undefined });
+    return r.code;
+  }
+  if (cmd === "reset-data") {
+    assertKnown(rest, ["--dry-run"], ["--log"]);
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
+    resetData({ pkgDir: PKG_DIR, dir: resolve(positional(rest, ["--log"])[0] ?? "."), dryRun: rest.includes("--dry-run"), log: out.log });
     return 0;
   }
   if (cmd === "check") {
-    check({ dir: resolve(positional(rest, [])[0] ?? "."), log });
+    assertKnown(rest, [], ["--log"]);
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
+    check({ dir: resolve(positional(rest, ["--log"])[0] ?? "."), log: out.log });
     return 0;
   }
   if (cmd === "migrate-ci") {
-    const known = ["--dry-run", "--force"];
-    const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
-    if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
-    migrateCiCommand({ pkgDir: PKG_DIR, dir: resolve(positional(rest, [])[0] ?? "."), dryRun: rest.includes("--dry-run"), force: rest.includes("--force"), log });
+    assertKnown(rest, ["--dry-run", "--force"], ["--log"]);
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
+    migrateCiCommand({ pkgDir: PKG_DIR, dir: resolve(positional(rest, ["--log"])[0] ?? "."), dryRun: rest.includes("--dry-run"), force: rest.includes("--force"), log: out.log });
     return 0;
   }
   if (cmd === "gitlab-setup") {
@@ -157,7 +203,8 @@ async function main(argv) {
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
   (e) => {
-    console.error(e instanceof CliError ? e.message : e);
+    out.error(e instanceof CliError ? e.message : String(e?.stack ?? e));
+    if (out.file) out.error(`（出力は ${out.file} にもあります。UTF-8）`);
     process.exit(e instanceof CliError ? 2 : 1);
   },
 );

@@ -17,7 +17,7 @@ npx yojitsu-navi init yojitsu-navi --gitlab https://<社内GitLab> --project yoj
 npx --yes ./yojitsu-navi-<版>.tgz init yojitsu-navi --gitlab https://<社内GitLab> --project yojitsu-navi/yojitsu-navi
 ```
 
-新しい版にするときは `yojitsu-navi update`（`data/` と `config.json` は変えない）。CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかは `init`・`update` の最後に確かめ、`yojitsu-navi check`（プロジェクトの中では `npm run ci:check`）でも確かめられます。
+新しい版にするときは `yojitsu-navi upgrade`（`update` → 依存 → `check` → データ検証 → ビルドを 1 回で行い、要約とログを残す。`update` だけでもよい。`data/` と `config.json` は変えない）。サンプルのまま残ったデータは `yojitsu-navi reset-data` で空にできます。CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかは `init`・`update` の最後に確かめ、`yojitsu-navi check`（プロジェクトの中では `npm run ci:check`）でも確かめられます。
 
 手順の全体は、できたフォルダの `docs/DEPLOY_GITLAB.md` にあります。
 
