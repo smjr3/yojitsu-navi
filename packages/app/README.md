@@ -17,11 +17,11 @@ npx yojitsu-navi init yojitsu-navi --gitlab https://<社内GitLab> --project yoj
 npx --yes ./yojitsu-navi-<版>.tgz init yojitsu-navi --gitlab https://<社内GitLab> --project yojitsu-navi/yojitsu-navi
 ```
 
-新しい版にするときは `yojitsu-navi update`（`data/` と `config.json` は変えない）。CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかは `init`・`update` の最後に確かめ、`yojitsu-navi check` でも確かめられます。
+新しい版にするときは `yojitsu-navi update`（`data/` と `config.json` は変えない）。CI（`.gitlab-ci.yml`）が使うファイルがそろってコミットされているかは `init`・`update` の最後に確かめ、`yojitsu-navi check`（プロジェクトの中では `npm run ci:check`）でも確かめられます。
 
 手順の全体は、できたフォルダの `docs/DEPLOY_GITLAB.md` にあります。
 
-新しい版にするときは、プロジェクトのフォルダで `npx yojitsu-navi@<版> update`（先に `--dry-run` で確かめられます）。`config.json` と `data/` は変えません。社内で変えたファイルがあると上書きの前に止まります（`--overwrite` か `--keep-local` を選ぶ）。上書き・削除する前のファイルは `.yojitsu-navi-backup/<日時>/` に残ります。社内向けの CI の設定は `.gitlab-ci.local.yml`・`.npmrc`・CI/CD 変数に書けば上書きされません。更新のあとに、今の版から新しい版までに導入先で行うこと・前提が変わることを 変更履歴（できたフォルダの `CHANGELOG.md`）から出します。
+新しい版にするときは、`npm install -g yojitsu-navi@<版>` のあとプロジェクトのフォルダで `yojitsu-navi update`（先に `--dry-run` で確かめられます。0.2.1 までのプロジェクトは名前がコマンドと同じなので、プロジェクトの中の `npx yojitsu-navi` は動きません）。`config.json` と `data/` は変えません。社内で変えたファイルがあると上書きの前に止まります（`--overwrite` か `--keep-local` を選ぶ）。上書き・削除する前のファイルは `.yojitsu-navi-backup/<日時>/` に残ります。社内向けの CI の設定は `.gitlab-ci.local.yml`・`.npmrc`・CI/CD 変数に書けば上書きされません（`.gitlab-ci.yml` に書いていたものは `yojitsu-navi migrate-ci` で移せます）。更新のあとに、今の版から新しい版までに導入先で行うこと・前提が変わることを 変更履歴（できたフォルダの `CHANGELOG.md`）から出します。
 
 ## 計算コアを使う
 

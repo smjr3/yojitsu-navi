@@ -6,9 +6,28 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ## 次の版
 
+### 更新後に行うこと
+
+- 社内で手を加えたプロジェクトは、次の順に進める（`.gitlab-ci.local.yml` などの社内の設定を作る・直すのは手順 3 から。手順 2 より前に作ると「コミットしていない変更」で止まる）:
+  1. `npm install -g yojitsu-navi@<新しい版>`（PowerShell で「スクリプトの実行が無効」と出たら、以降の `yojitsu-navi` を `yojitsu-navi.cmd` にする）
+  2. `git switch main && git pull`。`git status` で変更が無いことを確かめる
+  3. `.gitlab-ci.yml` にランナーのタグ・変数・社内だけのジョブを書いていたら、`yojitsu-navi migrate-ci --dry-run` で移すものを確かめ、`yojitsu-navi migrate-ci` で `.gitlab-ci.local.yml` に移してコミットする。「自動で移せないもの」は表示のとおり CI/CD 変数などに移す（SPEC §91.4）
+  4. `yojitsu-navi update --dry-run` で確かめ、`yojitsu-navi update`。`.gitlab-ci.yml` は止まらずに新しい版になる（前のものは `.yojitsu-navi-backup/`）
+  5. 表示された「更新後に行うこと」「新しい設定と推奨値」を、できたブランチ `update-<版>` の中で `config.json`・CI/CD 変数に入れてコミットする
+  6. `npm run ci:check` で CI の設定を確かめ、`git push -u origin update-<版>` → MR → パイプラインが緑になったらマージ
+- 0.2.0・0.2.1 で作った `.gitlab-ci.local.yml` のひな形（`.yojitsu-navi-local: {}`）は GitLab が「`jobs:.yojitsu-navi-local config can't be blank`」で失敗にする。`update` がその行だけを中身のある形に直す（ほかの行は変えない。SPEC §91.3）。手で直していたらそのままでよい
+- プロジェクトの名前（`package.json`・`package-lock.json` の `name`）が `yojitsu-navi-site` になる。プロジェクトの中で `npx yojitsu-navi@<版> …` が「could not determine executable to run」で動かなかったのは、名前がコマンドと同じだったため（この版に上げるまでは `npm install -g` で入れたコマンドを使う）
+
+### テスト・CI の前提
+
+- `npm run ci:check` を足した（`yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC でもプロジェクトの中から動かせる）。CI が使うファイルに加え、`.gitlab-ci.yml`・`.gitlab-ci.local.yml` の GitLab が受け付けない書き方（中身の無いジョブ・空のファイル）も見つける。`init`・`update` の最後の確かめも同じ（SPEC §91.3）
+
 ### 変更
 
 - ファビコンを画像ファイル（`src/icons/`）にした。0.2.0・0.2.1 の埋め込み（data URI）は社内の配信先でタブに出なかったため（SPEC §89）
+- `.gitlab-ci.local.yml` のひな形を GitLab が受け付ける形にし、`update` が古いひな形を直す。`check`・`npm run ci:check` が中身の無いジョブ・空のファイルを見つける（SPEC §91.3）
+- `yojitsu-navi migrate-ci`: 社内で `.gitlab-ci.yml` に書いたランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移す。移したあとの `update` は `.gitlab-ci.yml` で止まらない（SPEC §91.4）
+- プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 
 ## 0.2.1
 

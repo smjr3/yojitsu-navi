@@ -446,26 +446,26 @@ describe("update", () => {
 
   it("--keep-local は社内の版を残し、次の update でも止まらずに残す（--overwrite で新しい版に戻せる）", () => {
     const dir = project("upd-keep");
-    writeFileSync(join(dir, ".gitlab-ci.yml"), "社内の CI");
+    writeFileSync(join(dir, ".gitlab-ci.yml"), "社内:\n  script: [a]\n");
     git(dir, "add", "-A");
     git(dir, "commit", "-qm", "社内の変更");
     // 記録に無いファイルを同じ名前で作っていた → 社内で作成
-    const r = app.update({ pkgDir: fakePackage("upd-keep-v2", "1.1.0", { ...v2, ".gitlab-ci.yml": "ci2" }), version: "1.1.0", dir, log, keepLocal: true });
+    const r = app.update({ pkgDir: fakePackage("upd-keep-v2", "1.1.0", { ...v2, ".gitlab-ci.yml": "ci2:\n  script: [a]\n" }), version: "1.1.0", dir, log, keepLocal: true });
     expect(r.kept).toEqual([".gitlab-ci.yml"]);
-    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内の CI");
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内:\n  script: [a]\n");
     expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).kept).toEqual([".gitlab-ci.yml"]);
     git(dir, "switch", "-q", "main");
     git(dir, "merge", "-q", "update-1.1.0");
     logs.length = 0;
-    const r2 = app.update({ pkgDir: fakePackage("upd-keep-v3", "1.2.0", { ...v2, ".gitlab-ci.yml": "ci3" }), version: "1.2.0", dir, log });
+    const r2 = app.update({ pkgDir: fakePackage("upd-keep-v3", "1.2.0", { ...v2, ".gitlab-ci.yml": "ci3:\n  script: [a]\n" }), version: "1.2.0", dir, log });
     expect(r2.kept).toEqual([".gitlab-ci.yml"]);
-    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内の CI");
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("社内:\n  script: [a]\n");
     expect(logs.join("\n")).toContain("社内の版のまま残したファイル");
     git(dir, "switch", "-q", "main");
     git(dir, "merge", "-q", "update-1.2.0");
     const r3 = app.update({ pkgDir: join(work, "upd-keep-v3"), version: "1.2.0", dir, log, overwrite: true });
     expect(r3.overwritten).toEqual([".gitlab-ci.yml"]);
-    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("ci3");
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe("ci3:\n  script: [a]\n");
     expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).kept).toBeUndefined();
     expect(() => app.update({ pkgDir: join(work, "upd-keep-v3"), version: "1.2.0", dir, log, overwrite: true, keepLocal: true })).toThrow(/どちらか/);
   }, scaled(60_000));
@@ -559,6 +559,71 @@ describe("update", () => {
     const r4 = app.update({ pkgDir: fakePackage("upd-local-v4", "1.3.0", v4), version: "1.3.0", dir, log });
     expect([r4.conflicts, r4.removed]).toEqual([[], []]);
     expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe("default:\n  tags: [windows]\n");
+  }, scaled(60_000));
+
+  it("update は 0.2.0〜0.2.1 のひな形の中身の無い項目（GitLab の config can't be blank）を直し、check はそれを見つける（SPEC §91.3）", () => {
+    const placeholder = '.yojitsu-navi-local:\n  variables:\n    YOJITSU_NAVI_LOCAL: "1"';
+    const ci = "include:\n  - local: .gitlab-ci.local.yml\nbuild:\n  script:\n    - echo build\n";
+    const w = { ...v1, ".gitlab-ci.yml": ci, ".gitlab-ci.local.yml": `# ひな形\n${placeholder}\n` };
+    const dir = join(work, "upd-blank");
+    app.init({ pkgDir: fakePackage("upd-blank-v1", "1.0.0", w), version: "1.0.0", dir, log });
+    // 前の版のひな形のまま、社内でタグを書き足した
+    writeFileSync(join(dir, ".gitlab-ci.local.yml"), "# ひな形\n.yojitsu-navi-local: {}\ndefault:\n  tags: [windows]\n");
+    git(dir, "commit", "-qam", "ランナーのタグ");
+    expect(() => app.check({ dir, log })).toThrow(/jobs:\.yojitsu-navi-local config can't be blank/);
+    const r = app.update({ pkgDir: fakePackage("upd-blank-v2", "1.1.0", { ...v2, ".gitlab-ci.yml": ci, ".gitlab-ci.local.yml": w[".gitlab-ci.local.yml"] }), version: "1.1.0", dir, log });
+    expect([r.conflicts, r.repairedLocal]).toEqual([[], true]);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe(`# ひな形\n${placeholder}\ndefault:\n  tags: [windows]\n`);
+    expect(readFileSync(join(dir, r.backup, ".gitlab-ci.local.yml"), "utf-8")).toContain(".yojitsu-navi-local: {}");
+    expect(() => app.check({ dir, log })).not.toThrow();
+  }, scaled(60_000));
+
+  it("migrate-ci は社内で .gitlab-ci.yml に書いたタグ・変数・ジョブを .gitlab-ci.local.yml に移し、次の update は .gitlab-ci.yml を止めずに新しい版にする（SPEC §91.4）", () => {
+    const placeholder = '.yojitsu-navi-local:\n  variables:\n    YOJITSU_NAVI_LOCAL: "1"';
+    const ci1 = 'include:\n  - local: .gitlab-ci.local.yml\nvariables:\n  A: "1"\ndefault:\n  before_script:\n    - echo a\nbuild:\n  script:\n    - echo build\n';
+    const ci2 = `${ci1}pages:\n  script:\n    - echo pages\n`;
+    const local = `# ひな形\n${placeholder}\n`;
+    const dir = join(work, "mig");
+    const pkg1 = fakePackage("mig-v1", "1.0.0", { ...v1, ".gitlab-ci.yml": ci1, ".gitlab-ci.local.yml": local });
+    app.init({ pkgDir: pkg1, version: "1.0.0", dir, log });
+    // 前の版のひな形（中身の無い項目）のまま、.gitlab-ci.yml にタグ・変数・社内だけのジョブを書いた
+    writeFileSync(join(dir, ".gitlab-ci.local.yml"), "# ひな形\n.yojitsu-navi-local: {}\n");
+    const custom = ci1.replace("default:\n", "default:\n  tags: [windows]\n").replace('  A: "1"\n', '  A: "1"\n  B: "2"\n').concat("internal:\n  script:\n    - echo internal\n");
+    writeFileSync(join(dir, ".gitlab-ci.yml"), custom);
+    git(dir, "commit", "-qam", "社内の CI 設定");
+    // 新しい版（パッケージが新しくなったあと）: もとの版は git の履歴から探す
+    const pkg2 = fakePackage("mig-v2", "1.1.0", { ...v2, ".gitlab-ci.yml": ci2, ".gitlab-ci.local.yml": local });
+    expect(() => app.update({ pkgDir: pkg2, version: "1.1.0", dir, log })).toThrow(/migrate-ci/);
+
+    logs.length = 0;
+    const dry = app.migrateCiCommand({ pkgDir: pkg2, dir, dryRun: true, log });
+    expect([dry.written, dry.base, dry.moved, dry.manual]).toEqual([false, "original", ["変数 B", "default のタグ", "ジョブ internal"], []]);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe("# ひな形\n.yojitsu-navi-local: {}\n");
+
+    const r = app.migrateCiCommand({ pkgDir: pkg2, dir, log });
+    expect(r.written).toBe(true);
+    const moved = readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8");
+    expect(moved).toContain(placeholder);
+    expect(moved).toContain("default:\n  tags: [windows]");
+    expect(moved).toContain('variables:\n  B: "2"');
+    expect(moved).toContain("internal:\n  script:\n    - echo internal");
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe(custom);
+    git(dir, "commit", "-qam", "社内の CI 設定を移す");
+
+    // 移したあとに .gitlab-ci.yml をまた変えたら、印と合わないので止まる
+    writeFileSync(join(dir, ".gitlab-ci.yml"), `${custom}# また変えた\n`);
+    git(dir, "commit", "-qam", "また変えた");
+    expect(() => app.update({ pkgDir: pkg2, version: "1.1.0", dir, log })).toThrow(/社内で変えたファイル/);
+    git(dir, "revert", "--no-edit", "HEAD");
+
+    const u = app.update({ pkgDir: pkg2, version: "1.1.0", dir, log });
+    expect([u.conflicts, u.migratedCi, u.changed]).toEqual([[], true, expect.arrayContaining([".gitlab-ci.yml"])]);
+    expect(readFileSync(join(dir, ".gitlab-ci.yml"), "utf-8")).toBe(ci2);
+    expect(readFileSync(join(dir, u.backup, ".gitlab-ci.yml"), "utf-8")).toBe(custom);
+    expect(readFileSync(join(dir, ".gitlab-ci.local.yml"), "utf-8")).toBe(moved);
+    expect(() => app.check({ dir, log })).not.toThrow();
+    // 社内で変えていなければ移すものは無い
+    expect(app.migrateCiCommand({ pkgDir: pkg2, dir, log }).moved).toEqual([]);
   }, scaled(60_000));
 
   it("更新後に、今の版から新しい版までの変更履歴の「更新後に行うこと」などを今の設定の値つきで出す（SPEC §91.2）", () => {

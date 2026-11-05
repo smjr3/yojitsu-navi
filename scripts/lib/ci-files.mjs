@@ -4,10 +4,13 @@
 //   - 上のファイルが相対パスで import しているファイル（scripts/ci/install.mjs → scripts/lib/npm.mjs など）を辿った先すべて
 //   - npm ci が読む package.json・package-lock.json
 //   - include: の local で読み込むファイル（.gitlab-ci.local.yml）と、その中のコマンドが使うファイル
-// init・update・npm run app:build がこれで確かめ、足りなければ止める（CI が「ファイルが無い」で落ちるのを持ち込む前に見つける）
+//   - CI 定義と include 先の、GitLab が受け付けない書き方（中身の無いジョブ・空のファイル。scripts/lib/ci-local.mjs、SPEC §91.3）
+// init・update・npm run app:build・yojitsu-navi check・npm run ci:check がこれで確かめ、足りなければ止める（CI が「ファイルが無い」で落ちるのを持ち込む前に見つける）
+// プロジェクトにも入る（scripts/ci/check.mjs が使う）。yojitsu-navi コマンドには npm run app:build が packages/app/lib に写す
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, normalize, sep } from "node:path";
+import { lintCiYaml } from "./ci-local.mjs";
 
 export const CI_FILE = ".gitlab-ci.yml";
 
@@ -85,7 +88,7 @@ function isFile(p) {
 
 /**
  * CI が動くのに要るファイル（プロジェクトからの相対パス、/ 区切り）。
- * 返す: { files: 要るファイル（並べ替え済み）, missingScripts: CI が npm run するのに package.json に無いスクリプト名 }
+ * 返す: { files: 要るファイル（並べ替え済み）, missingScripts: CI が npm run するのに package.json に無いスクリプト名, definitions: CI 定義のファイル（.gitlab-ci.yml と include 先） }
  */
 export function ciRequiredFiles(projectDir) {
   const files = new Set([CI_FILE]);
@@ -149,7 +152,7 @@ export function ciRequiredFiles(projectDir) {
       }
     }
   }
-  return { files: [...files].sort(), missingScripts: [...missingScripts].sort() };
+  return { files: [...files].sort(), missingScripts: [...missingScripts].sort(), definitions: [...seenInc] };
 }
 
 /** 今のコミット（HEAD）に入っているファイル（プロジェクトからの相対パス、/ 区切り）。git のリポジトリでない・コミットが無いなら null。
@@ -163,18 +166,20 @@ function gitCommitted(projectDir) {
 
 /**
  * CI 定義と、プロジェクトのファイルが揃っているか。
- * 返す: { required, missing: フォルダに無い, untracked: フォルダにはあるが git にコミットされていない（push しても CI から見えない）, missingScripts }
+ * 返す: { required, missing: フォルダに無い, untracked: フォルダにはあるが git にコミットされていない（push しても CI から見えない）, missingScripts,
+ *   invalid: CI 定義（.gitlab-ci.yml と include 先の .yml）の GitLab が受け付けない書き方 }
  * @param {{ git?: boolean }} [o] git: false なら git の管理は見ない
  */
 export function checkCiFiles(projectDir, o = {}) {
-  const { files, missingScripts } = ciRequiredFiles(projectDir);
+  const { files, missingScripts, definitions } = ciRequiredFiles(projectDir);
   const missing = files.filter((f) => !isFile(join(projectDir, f)));
   let untracked = [];
   if (o.git !== false) {
     const committed = gitCommitted(projectDir);
     if (committed) untracked = files.filter((f) => !missing.includes(f) && !committed.has(f));
   }
-  return { required: files, missing, untracked, missingScripts };
+  const invalid = definitions.filter((f) => isFile(join(projectDir, f))).flatMap((f) => lintCiYaml(readFileSync(join(projectDir, f), "utf-8"), f));
+  return { required: files, missing, untracked, missingScripts, invalid };
 }
 
 /** checkCiFiles の結果を、足りないものだけの文章にする（揃っていれば ""） */
@@ -182,6 +187,7 @@ export function describeCiProblems(r) {
   const parts = [];
   if (r.missing.length) parts.push(`CI（${CI_FILE}）が使うファイルがありません:\n${r.missing.map((f) => `  ${f}`).join("\n")}`);
   if (r.untracked.length) parts.push(`CI（${CI_FILE}）が使うファイルが git にコミットされていません（push しても CI から見えません。git の除外設定を確かめてください）:\n${r.untracked.map((f) => `  ${f}`).join("\n")}`);
+  if (r.invalid?.length) parts.push(`CI の設定に GitLab が受け付けない書き方があります（パイプラインが作られません）:\n${r.invalid.map((s) => `  ${s}`).join("\n")}`);
   if (r.missingScripts.length) parts.push(`CI（${CI_FILE}）が npm run するスクリプトが package.json にありません:\n${r.missingScripts.map((s) => `  ${s}`).join("\n")}`);
   return parts.join("\n");
 }

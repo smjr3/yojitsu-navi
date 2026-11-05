@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, check, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
+import { CliError, check, gitlabFromRemote, init, migrateCiCommand, normalizeGitlab, readGitlabTarget, update } from "../lib/project.mjs";
 
 const PKG_DIR = fileURLToPath(new URL("..", import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
@@ -26,7 +26,13 @@ const HELP = `予実ナビ ${VERSION}
         --keep-local  社内で変えたファイルは社内の版のまま残す（次の update でも残す）
         --force       コミットしていない変更・古い版・依存込みの確認を飛ばす
   yojitsu-navi check [フォルダ]
-      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか確かめる（init・update の最後にも確かめる）
+      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか、GitLab が受け付けない書き方（中身の無いジョブなど）が無いか確かめる
+      （init・update の最後にも確かめる。プロジェクトの中では npm run ci:check でも同じことができる）
+  yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]
+      社内で .gitlab-ci.yml に書いたランナーのタグ・変数・社内だけのジョブを .gitlab-ci.local.yml に移す（.gitlab-ci.yml は変えない）。
+      移し終えると、次の update は .gitlab-ci.yml で止まらずに新しい版にする
+        --dry-run     何も変えずに、移すものと自動で移せないものを出す
+        --force       自動で移せないものが残っていても、次の update で .gitlab-ci.yml を新しい版にする（前のものはバックアップに残る）
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -121,6 +127,13 @@ async function main(argv) {
   }
   if (cmd === "check") {
     check({ dir: resolve(positional(rest, [])[0] ?? "."), log });
+    return 0;
+  }
+  if (cmd === "migrate-ci") {
+    const known = ["--dry-run", "--force"];
+    const unknown = rest.filter((a) => a.startsWith("--") && !known.includes(a));
+    if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
+    migrateCiCommand({ pkgDir: PKG_DIR, dir: resolve(positional(rest, [])[0] ?? "."), dryRun: rest.includes("--dry-run"), force: rest.includes("--force"), log });
     return 0;
   }
   if (cmd === "gitlab-setup") {

@@ -50,6 +50,7 @@
 image: $NODE_IMAGE
 
 # 社内向けの設定（ランナーのタグ・社内だけのジョブなど）は .gitlab-ci.local.yml に書く。update はそのファイルを上書きしない（SPEC §91.1）。
+# このファイルに書いてしまった社内の設定は yojitsu-navi migrate-ci で移せる。書いたら npm run ci:check で確かめる（SPEC §91.3・§91.4）
 # レジストリ・証明書・イメージは CI/CD 変数（NPM_CONFIG_REGISTRY・NODE_EXTRA_CA_CERTS・NODE_IMAGE）か .npmrc で渡す
 include:
   - local: .gitlab-ci.local.yml

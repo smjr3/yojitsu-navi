@@ -96,9 +96,24 @@ export function starterData(path, buf) {
   return Buffer.from(end < 0 ? `${text}\n` : text.slice(0, end + 1), "utf-8");
 }
 
-/** 利用環境の package.json（開発元だけの scripts を外す。書式は 2 文字下げ＋最後に改行） */
+/**
+ * 利用環境のプロジェクトの名前（package.json・package-lock.json の name）。コマンドのパッケージ名 yojitsu-navi と同じにすると、
+ * プロジェクトの中の npx yojitsu-navi が自分自身（bin が無い）を指して「could not determine executable to run」で動かない（SPEC §91.3）
+ */
+export const PROJECT_PACKAGE_NAME = "yojitsu-navi-site";
+
+/** 利用環境の package.json（開発元だけの scripts を外し、名前を PROJECT_PACKAGE_NAME にする。書式は 2 文字下げ＋最後に改行） */
 export function userPackageJson(text) {
   const pkg = JSON.parse(text);
   for (const s of DEV_SCRIPTS) delete pkg.scripts?.[s];
+  pkg.name = PROJECT_PACKAGE_NAME;
   return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
+/** 利用環境の package-lock.json（名前を package.json に合わせる。ほかは変えない） */
+export function userPackageLock(text) {
+  const lock = JSON.parse(text);
+  lock.name = PROJECT_PACKAGE_NAME;
+  if (lock.packages?.[""]) lock.packages[""].name = PROJECT_PACKAGE_NAME;
+  return `${JSON.stringify(lock, null, 2)}\n`;
 }
