@@ -168,7 +168,7 @@ describe("fetch:projects（§98）", () => {
     expect(loadDataset(root).issues.find((i) => i.code === "PROJECT_FETCH_FAILED")?.severity).toBe("warning");
 
     // filters に 1 件も合わない（設定の誤り）も失敗にして、今の一覧を消さない
-    vi.stubGlobal("fetch", api(API_ROWS.filter((r) => r.attrs.category === 0)));
+    vi.stubGlobal("fetch", api(API_ROWS.filter((r) => r.attrs.category === "構築")));
     await expect(fetchProjects({ rootDir: root }, ENV)).rejects.toThrow(/0 件/);
     expect(readFileSync(join(root, "data/projects.csv"), "utf-8")).toBe(before);
 
