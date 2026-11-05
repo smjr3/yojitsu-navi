@@ -115,6 +115,20 @@ describe("fetch:projects（§98）", () => {
     expect(again.written).toEqual([]);
   });
 
+  it("見出しの前後に空白があっても、データの読み込みと同じ列として扱う", async () => {
+    useHttp();
+    const text = readFileSync(contractsPath(), "utf-8")
+      .replace("contract_id,customer_name,project_name,", "contract_id, project_id , customer_name , project_name ,")
+      .replace(/\n(C001|C002),/g, (_m, id: string) => `\n${id},EX-1,`)
+      .replace(/\n(C(?!001|002)\d+),/g, (_m, id: string) => `\n${id},,`);
+    writeFileSync(contractsPath(), text);
+    vi.stubGlobal("fetch", api(API_ROWS));
+    await fetchProjects({ rootDir: root }, ENV);
+    expect(readContracts().columns.slice(0, 4)).toEqual(["contract_id", "project_id", "customer_name", "project_name"]);
+    expect(contract("C001")).toMatchObject({ project_id: "EX-1", customer_name: "青葉物流株式会社", project_name: "倉庫管理システム保守（正式名）" });
+    expect(loadDataset(root).issues.some((i) => i.severity === "error")).toBe(false);
+  });
+
   it("--link-exact は案件名が 1 件だけ同じときだけ案件ID を入れ、複数・なしは保留にする", async () => {
     useHttp();
     vi.stubGlobal("fetch", api(API_ROWS));

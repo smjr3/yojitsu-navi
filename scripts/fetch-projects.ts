@@ -69,8 +69,12 @@ function readContracts(path: string): { rows: ContractCsvRow[]; headers: string[
   const text = readText(path);
   if (text.trim() === "") throw new Error(`${DATA_FILES.contracts} がありません（見出しの行も無い）`);
   const parsed = csvParse(text);
-  const rows = (parsed as unknown as ContractCsvRow[]).filter((r) => Object.values(r).some((v) => (v ?? "").trim() !== ""));
-  return { rows: rows.map((r) => ({ ...r })), headers: parsed.columns };
+  // 見出しの前後の空白は、データの読み込み（parseCsvTable）と同じく除いて扱う（書き出す見出しも除いた名前にそろう）
+  const headers = parsed.columns.map((h) => h.trim());
+  const rows = (parsed as unknown as ContractCsvRow[])
+    .filter((r) => Object.values(r).some((v) => (v ?? "").trim() !== ""))
+    .map((r) => Object.fromEntries(parsed.columns.map((h, i) => [headers[i] as string, r[h] ?? ""])));
+  return { rows, headers };
 }
 
 function compileNotePattern(src: string | undefined): RegExp | undefined {
