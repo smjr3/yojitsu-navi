@@ -697,7 +697,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - `init`・`update` の最後に、CI 定義が使うファイルがそろいコミットされているかを確かめる（§85。`yojitsu-navi check` でも確かめられる）。
 - `yojitsu-navi gitlab-setup [--apply]`: §39.2 と同じ。接続先は `config.json`、空なら `git remote` の `origin`（https）から読む。トークンは `GITLAB_TOKEN`、無ければ画面に出さずにその場で聞く（Windows のコマンドプロンプトでも使えるように。引数では受け取らない）。
 - 手順は `docs/DEPLOY_GITLAB.md`（手順 0〜2、「新しい版にする」）。
-- **画像を入れない**（2026-10-31 要望「画像はリポジトリにどうしても必要な場合を除いて不要。npm 化で無駄に大きくなる」）: リポジトリに画像を置かない（favicon・アイコンも置かない。ファビコンは SVG の文字列を埋め込む §89。フォントは画像ではないので対象外）ので template にも入らない。`npm run app:pack`・`core:pack` は中身に画像があると止まる（依存込み版の `deps/` は外部の npm パッケージなので見ない）。リポジトリ全体の検査は `tests/unit/docs-links.test.ts`（拡張子と先頭のバイト。どうしても必要なものだけ `IMAGE_ALLOWLIST` に理由つきで足す）。
+- **画像を入れない**（2026-10-31 要望「画像はリポジトリにどうしても必要な場合を除いて不要。npm 化で無駄に大きくなる」）: リポジトリに画像を置かない（例外はファビコンの `src/icons/` だけ §89。フォントは画像ではないので対象外）ので template にも入らない。`npm run app:pack`・`core:pack` は中身に画像があると止まる（依存込み版の `deps/` は外部の npm パッケージなので見ない）。リポジトリ全体の検査は `tests/unit/docs-links.test.ts`（拡張子と先頭のバイト）。置いてよい画像は `scripts/lib/image-detect.mjs` の `IMAGE_ALLOWLIST` に理由つきで書き、リポジトリの検査と npm パッケージの検査が同じものを使う。
 - 再発防止: `tests/integration/app-package.test.ts`（依存なし・入るファイル・リポジトリ一式が揃う・個人の情報と接続先が無い（個人名は `YOJITSU_PRIVATE_WORDS` で渡して検査）・gitlab-setup の JS が動く・init と update の各ケース・CI のオフライン対応）。
 
 ## 45. ヘッダーの並び（2026-10-29 要望）
@@ -1289,9 +1289,10 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ## 89. ファビコン（2026-11-03 依頼者）
 「ファビコンを追加してほしい」への対応。ブラウザのタブ・ブックマークで既定のアイコン（空白）になっていた。
 - 図柄は角丸の四角に「右へ伸びる 3 本の棒」（予実の推移）。色はテーマカラーの既定（Blue、`--yn-accent`）。OS がダーク表示なら SVG 内の `prefers-color-scheme` でダーク側の色にする（アプリの表示モード・テーマカラーの選択には合わせない。ブラウザがファビコンにページの状態を渡さないため）。
-- 画像ファイルを置かない（§44）ので、`src/components/favicon.js` の SVG を data URI にして `observablehq.config.js` の `head` から全ページに入れる。外部への読み込みは増えない。
-- iPhone のホーム画面アイコン（`apple-touch-icon`）は PNG しか使えないので入れない（画像ファイルが要る）。
-- 再発防止: `tests/unit/favicon.test.ts`（data URI が SVG に戻る・色が `style.css` の既定と同じ）、`tests/e2e/smoke.spec.ts`（全ページにファビコンが 1 つ）。
+- **ファイルで置く**（2026-11-04 依頼者「GitLab Pages だから SVG 苦手とかある？別に画像置いてもいいよ」）: 当初は画像ファイルを置かない（§44）ため SVG を data URI で `head` に埋め込んだが、社内の配信先で最新のブラウザでもタブに出なかった。配信先の `Content-Security-Policy` の `img-src` が `data:` を許していないなどが考えられる（社内で未確認）。ファイルなら同じ配信元から読むので、この影響を受けない。
+- 置き場は `src/icons/`: `favicon.svg`（`src/components/favicon.js` の `FAVICON_SVG` と同じ中身）、`favicon-32.png`（SVG のファビコンを使わないブラウザ向け。ライトの色）、`apple-touch-icon.png`（180px。iPhone のホーム画面。角は OS が丸めるので塗りつぶし）。§44 の画像の許可リストに入れる。`observablehq.config.js` の `head` が `./icons/…` を参照し、Framework が `dist/_file/icons/` にハッシュ付きの名前で出す（名前が変わるのでブラウザの古いアイコンが残りにくい）。
+- 図柄・色を変えたら `src/components/favicon.js` を直して `node scripts/make-favicons.mjs` で 3 ファイルを作り直す（開発元だけ。利用環境には配らない）。
+- 再発防止: `tests/unit/favicon.test.ts`（リンク先が許可リストのファイル・`favicon.svg` が `FAVICON_SVG` と同じ・PNG の大きさ・色が `style.css` の既定と同じ）、`tests/e2e/smoke.spec.ts`（全ページにアイコンのリンクが 3 つあり、どれも画像として読める）。
 
 ## 90. ページングを連携先 API に合わせる（2026-11-03 依頼者）
 連携先 API の実測: ページ番号だけを受け付け、件数のパラメータを付けると HTTP 400。終わりは空配列が返るまで。§20.1 の `page` は件数を必ず付け、設定件数未満で終わるため取得できなかった。作業実績・人事（`memberSource.http`）の両方に効く（同じ取得処理）。

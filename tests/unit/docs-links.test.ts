@@ -3,7 +3,7 @@
  *   - README・CONTRIBUTING・docs/*.md・tests/e2e/README.md の相対リンクの参照先が存在する
  *   - 文書に画像（スクリーンショット・バッジ）を載せない。リポジトリに画像ファイルを置かない
  *     （画面を変えるたびに古くなり、npm パッケージも無駄に大きくなるため）。拡張子と中身（先頭のバイト）の両方で調べ、
- *     どうしても必要なものだけ IMAGE_ALLOWLIST に理由つきで足す（今は 0 件）
+ *     どうしても必要なものだけ IMAGE_ALLOWLIST（scripts/lib/image-detect.mjs）に理由つきで足す（今はファビコンだけ）
  *   - npm run の名前が package.json にある
  */
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 // @ts-expect-error 型定義の無い .mjs（scripts/build-app.mjs と共通）
-import { isImage } from "../../scripts/lib/image-detect.mjs";
+import { IMAGE_ALLOWLIST as ALLOW, isImage } from "../../scripts/lib/image-detect.mjs";
 
 const ROOT = join(__dirname, "..", "..");
 const DOCS = ["README.md", "CONTRIBUTING.md", "tests/e2e/README.md", ...readdirSync(join(ROOT, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`)];
@@ -51,10 +51,10 @@ const repoFiles = () =>
     .filter((f) => f && existsSync(join(ROOT, f)));
 
 /**
- * リポジトリに置いてよい画像（パス → 理由）。どうしても必要なときだけ理由つきで足す。
- * favicon・アイコンも置かない（ファビコンは src/components/favicon.js の SVG を埋め込む。SPEC §89。フォントは画像ではない）
+ * リポジトリに置いてよい画像（パス → 理由）。どうしても必要なときだけ理由つきで足す。npm パッケージの検査と共通。
+ * 今はファビコン（src/icons/。SPEC §89）だけ。フォントは画像ではない
  */
-const IMAGE_ALLOWLIST: Record<string, string> = {};
+const IMAGE_ALLOWLIST = ALLOW as Record<string, string>;
 
 it("リポジトリに画像ファイルを置いていない（拡張子・中身の両方。許可リスト以外）", () => {
   const images = repoFiles().filter((f) => !(f in IMAGE_ALLOWLIST) && isImage(f, join(ROOT, f)));
