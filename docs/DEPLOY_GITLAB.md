@@ -192,7 +192,7 @@ git push -u origin update-<新しい版>
 結果はブランチ `update-<版>` にコミットされ、「【自動でコミットしました】ブランチ … に …」と出ます（同じ名前のブランチがあれば `update-<版>-2`）。MR を作り、パイプラインが緑になったらリーダーがマージします。コミットしたくないときは `--no-commit`（ブランチを作らず、`git add` までにします。MR にする手順を表示します）。
 
 - PowerShell で「このシステムではスクリプトの実行が無効」と出たら、`yojitsu-navi` の代わりに `yojitsu-navi.cmd` と打ちます（npm が入れた `.ps1` が実行ポリシーで止まるため）。
-- プロジェクトの中の `npx yojitsu-navi@<版> …` は 0.2.1 までのプロジェクトでは動きません（プロジェクトの名前がコマンドと同じ `yojitsu-navi` だったため「could not determine executable to run」。次の版から `yojitsu-navi-site`）。`npm install -g` で入れたコマンドを使います。
+- プロジェクトの中の `npx yojitsu-navi@<版> …` は 0.2.1 までのプロジェクトでは動きません（プロジェクトの名前がコマンドと同じ `yojitsu-navi` だったため「could not determine executable to run」。0.2.2 から `yojitsu-navi-site`）。`npm install -g` で入れたコマンドを使います。
 - CI の設定だけを確かめるときは、プロジェクトの中で `npm run ci:check`（`yojitsu-navi check` と同じ。コマンドを入れていない PC でも動く）。
 
 ### 本番固有の部分とパッケージの部分
@@ -347,7 +347,7 @@ yojitsu-navi reset-data             # 上のとおりに直す（作業実績の
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
 | `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
 | パイプラインが作られず「`jobs:.yojitsu-navi-local config can't be blank`」などと出る | `.gitlab-ci.local.yml`（か `.gitlab-ci.yml`）に中身の無い項目がある。0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}` が原因。`yojitsu-navi update`（か `migrate-ci`）が直す。手で直すなら `{}` を消して次の行に `  variables:`、その次に `    YOJITSU_NAVI_LOCAL: "1"` を書く。`npm run ci:check` で確かめられる |
-| プロジェクトの中で `npx yojitsu-navi …` が「could not determine executable to run」 | 0.2.1 までのプロジェクトは名前がコマンドと同じ。`npm install -g` で入れた `yojitsu-navi` を使う（次の版から直る） |
+| プロジェクトの中で `npx yojitsu-navi …` が「could not determine executable to run」 | 0.2.1 までのプロジェクトは名前がコマンドと同じ。`npm install -g` で入れた `yojitsu-navi` を使う（0.2.2 から直る） |
 | `yojitsu-navi update` が「コミットしていない変更があります」 | 一覧のファイルをコミットするか取り消す（`.gitlab-ci.local.yml` は止まらない。`.npmrc` は止まる）。`--force` でも続けられるが、MR の差分に社内の変更が混ざる |
 | `yojitsu-navi upgrade` が「… で止まりました」 | 要約の「失敗」の手順を直してから、もう一度 `upgrade`。手順の全部の出力は要約の下に出る `.yojitsu-navi-log/upgrade-<日時>.log` にある |
 | PowerShell で日本語が化ける | `--log <ファイル>` で書いた UTF-8 のファイルを開くか、`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` を実行してから動かす（「出力が長いとき・文字化けするとき」） |
