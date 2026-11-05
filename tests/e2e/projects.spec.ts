@@ -29,10 +29,14 @@ test("正式な案件IDの無い案件（候補つき）とマスタに無い正
   expect(names).toContain("電子カルテ連携保守");
 });
 
-test("マスタ編集の案件に正式な案件IDの列が出る", async ({ page }) => {
+test("マスタ編集の案件: 正式な案件IDは修正のダイアログに値だけ出る（一覧の列にはしない）", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
-  await expect(page.getByRole("columnheader", { name: /正式な案件ID/ }).first()).toBeVisible();
-  await expect(page.getByRole("cell", { name: "PJ-0001" }).first()).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /正式な案件ID/ })).toHaveCount(0);
+  const first = page.locator("table.yn-me-table tbody tr.yn-me-group").first();
+  await first.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await expect(d.locator("#yn-me-f-project_id")).toHaveCount(0);
+  await expect(d.locator(".yn-me-fixed")).toContainText(/PJ-\d{4}/);
 });
 
 for (const [width, dark] of [[390, false], [768, true], [1024, false], [1280, true]] as const) {

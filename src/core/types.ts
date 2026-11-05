@@ -208,7 +208,7 @@ export interface ProjectSourceConfig {
   http?: HttpSourceOptions;
   /** 取得元の列名。3 つとも必須 */
   columns?: Partial<Record<ProjectImportField, ColumnSpec>>;
-  /** 任意: 取得した後で取り込む案件を絞る条件（保守の属性・受注済みなど。すべてに合う行だけ） */
+  /** 任意: 取得した後で取り込む案件を絞る条件（案件の種類・状態など。すべてに合う行だけ） */
   filters?: SourceFilter[];
 }
 

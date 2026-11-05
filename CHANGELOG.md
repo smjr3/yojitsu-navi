@@ -47,9 +47,9 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 | 項目 | 書かないとき | 推奨 | 理由・いつ |
 |---|---|---|---|
 | `projectSource.adapter` | `none`（取り込まない） | 案件管理システムの API なら `http` | 顧客名・案件名を正式な値にそろえる（SPEC §98） |
-| `projectSource.http.pagination` | なし（ページングなしで 1 回で全件） | ページングを付けると失敗する API はそのまま | `page`・`per_page` で HTTP 500 になる API がある |
+| `projectSource.http.pagination` | なし（ページングなしで 1 回で全件） | ページングに対応しない API はそのまま | 1 回で全件を返す API 向け |
 | `projectSource.columns` | なし（`adapter` が `csv`・`http` なら必須） | API の案件ID・顧客名・案件名の列名 | `projectId`・`customerName`・`projectName` |
-| `projectSource.filters` | なし（全件） | 保守の属性・受注済みの条件 | サーバー側の絞り込みが効かない API のため、取得後に絞る |
+| `projectSource.filters` | なし（全件） | 取り込む案件の条件 | サーバー側で絞り込めない API のため、取得後に絞る |
 
 ## 0.2.1
 

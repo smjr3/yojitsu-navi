@@ -3,7 +3,7 @@
  *
  *   npm run fetch:projects
  *   npm run fetch:projects -- --dry-run --sample=5          # ファイルを書かず、列の対応表と変更内容を表示
- *   npm run fetch:projects -- --id-from-note "SI:(\S+)"     # 移行: メモに書いていた案件IDを project_id に移す
+ *   npm run fetch:projects -- --id-from-note "ID:(\S+)"       # 移行: メモに書いていた案件IDを project_id に移す
  *   npm run fetch:projects -- --link-exact                   # 移行: 案件名が 1 件だけ同じ案件の ID を入れる
  *
  * - config.projectSource.adapter が none（既定）のときは何もしない。

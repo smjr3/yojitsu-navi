@@ -149,9 +149,9 @@ npm run fetch:members                           # members.csv を更新
 
 ### 正式な案件の一覧を取り込む（任意。SPEC §98）
 
-案件の顧客名・案件名を、手で推測して入れる代わりに案件管理システムの正式な値にそろえます。期間・金額（社内原価など、`total_amount` に入れる値）・担当チームは今までどおり `data/contracts.csv` の手入力が正です。
+案件の顧客名・案件名を、手で推測して入れる代わりに案件管理システムの正式な値にそろえます。期間・金額（`total_amount`）・担当チームは今までどおり `data/contracts.csv` の手入力が正です。
 
-- 設定は `config.json` の `projectSource`（[DATA.md](DATA.md#projectsource正式な案件の一覧の取り込みspec-98)）。ページングを付けると失敗する API は `pagination` を書かない（1 回で全件）。サーバー側で絞れない属性（保守・受注済みなど）は `filters` で取得後に絞る。API のときは環境変数 `PROJECT_API_TOKEN`
+- 設定は `config.json` の `projectSource`（[DATA.md](DATA.md#projectsource正式な案件の一覧の取り込みspec-98)）。ページングに対応しない API は `pagination` を書かない（1 回で全件）。サーバー側で絞れない条件は `filters` で取得後に絞る。API のときは環境変数 `PROJECT_API_TOKEN`
 - `npm run fetch:projects` で `data/projects.csv`（正式な案件の一覧）を置き換え、`contracts.csv` の `project_id` のある行の顧客名・案件名を一覧の値にします。`project_id` の無い行は保留のまま（推測で入れません）
 - データ確認画面の「正式な案件IDの無い案件」（候補 = 案件名が同じ正式な案件）と「マスタに無い正式な案件」（新しい案件の見落とし）で差分を確かめ、`contracts.csv` に `project_id` を入れる・行を足す。担当チーム（`team_id`）は空のまま入れてよく、後でマスタ編集の「案件」か CSV で設定します
 - CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `PROJECT_FETCH_ENABLED=1` を設定します（既定は無効）。1 回だけなら Run pipeline で `PROJECT_FETCH=1`

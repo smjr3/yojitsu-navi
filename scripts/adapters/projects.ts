@@ -7,7 +7,7 @@
  *   adapter "http"  API。projectSource.http は worklogSource.http と同じ設定項目。pagination を省略するとページングなし（1 回で全件）
  *   adapter "none"  取り込まない（既定）
  *
- * サーバー側の絞り込みが効かない API のために、取得した後で projectSource.filters（保守の属性・受注済みなど）で絞る。
+ * サーバー側の絞り込みが効かない API のために、取得した後で projectSource.filters（案件の種類・状態など）で絞る。
  *
  * 環境変数: PROJECT_API_TOKEN（http のみ。ログ・例外には出さない）
  */

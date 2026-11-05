@@ -36,14 +36,14 @@ const contract = (id: string) => readContracts().find((r) => r.contract_id === i
 
 /** 取得元の API の行（入れ子の属性で保守・受注を持つ） */
 const API_ROWS = [
-  { id: "SI-1", customer: { name: "青葉物流株式会社" }, name: "倉庫管理システム保守（正式名）", attrs: { maintenance: 1, ordered: true } },
-  { id: "SI-2", customer: { name: "みなと銀行" }, name: "勘定系周辺システム保守", attrs: { maintenance: 1, ordered: true } },
-  { id: "SI-3", customer: { name: "さくら製菓" }, name: "ECサイト保守", attrs: { maintenance: 1, ordered: true } },
-  { id: "SI-4", customer: { name: "さくら製菓" }, name: "ECサイト保守", attrs: { maintenance: 1, ordered: true } },
+  { id: "EX-1", customer: { name: "青葉物流株式会社" }, name: "倉庫管理システム保守（正式名）", attrs: { category: "保守", active: true } },
+  { id: "EX-2", customer: { name: "みなと銀行" }, name: "勘定系周辺システム保守", attrs: { category: "保守", active: true } },
+  { id: "EX-3", customer: { name: "さくら製菓" }, name: "ECサイト保守", attrs: { category: "保守", active: true } },
+  { id: "EX-4", customer: { name: "さくら製菓" }, name: "ECサイト保守", attrs: { category: "保守", active: true } },
   // サーバー側で絞れず返ってくる、保守でない・受注していない案件
-  { id: "SI-8", customer: { name: "北斗建設" }, name: "基幹システム構築", attrs: { maintenance: 0, ordered: true } },
-  { id: "SI-9", customer: { name: "北斗建設" }, name: "クラウド基盤運用", attrs: { maintenance: 1, ordered: false } },
-  { id: "SI-5", customer: { name: "やまびこ通信" }, name: "監視基盤更改", attrs: { maintenance: "1", ordered: "true" } },
+  { id: "EX-8", customer: { name: "北斗建設" }, name: "基幹システム構築", attrs: { category: "構築", active: true } },
+  { id: "EX-9", customer: { name: "北斗建設" }, name: "クラウド基盤運用", attrs: { category: "保守", active: false } },
+  { id: "EX-5", customer: { name: "やまびこ通信" }, name: "監視基盤更改", attrs: { category: "保守", active: "true" } },
 ];
 
 function useHttp(extra: (ps: Record<string, any>) => void = () => {}) {
@@ -53,8 +53,8 @@ function useHttp(extra: (ps: Record<string, any>) => void = () => {}) {
       http: { url: URL_BASE, authHeader: "Authorization", dataPath: "data" },
       columns: { projectId: "id", customerName: "customer.name", projectName: "name" },
       filters: [
-        { column: "attrs.maintenance", in: [1, "1"] },
-        { column: "attrs.ordered", equals: true },
+        { column: "attrs.category", equals: "保守" },
+        { column: "attrs.active", equals: true },
       ],
     };
     extra(c.projectSource);
@@ -81,7 +81,7 @@ describe("fetch:projects（§98）", () => {
     expect(r.imported).toBe(5);
     const projects = csvParse(readFileSync(join(root, "data/projects.csv"), "utf-8"));
     expect(projects.columns).toEqual(["project_id", "customer_name", "project_name"]);
-    expect(projects.map((p) => p.project_id)).toEqual(["SI-1", "SI-2", "SI-3", "SI-4", "SI-5"]);
+    expect(projects.map((p) => p.project_id)).toEqual(["EX-1", "EX-2", "EX-3", "EX-4", "EX-5"]);
     // 案件ID の無い契約（今のデータはすべて）は触らない。列も足さない
     expect(r.sync?.changes).toEqual([]);
     expect(readContracts().columns).not.toContain("project_id");
@@ -92,7 +92,7 @@ describe("fetch:projects（§98）", () => {
     useHttp();
     const text = readFileSync(contractsPath(), "utf-8")
       .replace("contract_id,customer_name", "contract_id,project_id,customer_name")
-      .replace(/\n(C\d+),/g, (_m, id: string) => `\n${id},${id === "C001" || id === "C002" ? "SI-1" : id === "C003" ? "SI-404" : ""},`);
+      .replace(/\n(C\d+),/g, (_m, id: string) => `\n${id},${id === "C001" || id === "C002" ? "EX-1" : id === "C003" ? "EX-404" : ""},`);
     writeFileSync(contractsPath(), text);
     const before = contract("C001");
     vi.stubGlobal("fetch", api(API_ROWS));
@@ -120,10 +120,10 @@ describe("fetch:projects（§98）", () => {
     vi.stubGlobal("fetch", api(API_ROWS));
     const r = await fetchProjects({ rootDir: root, linkExact: true }, ENV);
     expect(readContracts().columns.slice(0, 2)).toEqual(["contract_id", "project_id"]);
-    expect(contract("C003").project_id).toBe("SI-2");
-    // 案件名が同じ案件が 2 件（SI-3・SI-4）→ 入れない
+    expect(contract("C003").project_id).toBe("EX-2");
+    // 案件名が同じ案件が 2 件（EX-3・EX-4）→ 入れない
     expect(contract("C005").project_id).toBe("");
-    expect(r.sync?.ambiguous.find((a) => a.contractId === "C005")?.candidates).toEqual(["SI-3", "SI-4"]);
+    expect(r.sync?.ambiguous.find((a) => a.contractId === "C005")?.candidates).toEqual(["EX-3", "EX-4"]);
     // 正式名と違う案件名（倉庫管理システム保守）は照合しない
     expect(contract("C001").project_id).toBe("");
     expect(summaryLines(r).join("\n")).toContain("同じ案件名の案件が複数あるため入れていません");
@@ -131,10 +131,10 @@ describe("fetch:projects（§98）", () => {
 
   it("--id-from-note はメモの案件ID を project_id に移し、メモから消す", async () => {
     useHttp();
-    writeFileSync(contractsPath(), readFileSync(contractsPath(), "utf-8").replace("C001,青葉物流,倉庫管理システム保守,T111,2025-04,2026-03,48000000,FY2025", "C001,青葉物流,倉庫管理システム保守,T111,2025-04,2026-03,48000000,FY2025 SI:SI-1"));
+    writeFileSync(contractsPath(), readFileSync(contractsPath(), "utf-8").replace("C001,青葉物流,倉庫管理システム保守,T111,2025-04,2026-03,48000000,FY2025", "C001,青葉物流,倉庫管理システム保守,T111,2025-04,2026-03,48000000,FY2025 ID:EX-1"));
     vi.stubGlobal("fetch", api(API_ROWS));
-    const r = await fetchProjects({ rootDir: root, idFromNote: "SI:(\\S+)" }, ENV);
-    expect(contract("C001").project_id).toBe("SI-1");
+    const r = await fetchProjects({ rootDir: root, idFromNote: "ID:(\\S+)" }, ENV);
+    expect(contract("C001").project_id).toBe("EX-1");
     expect(contract("C001").note).toBe("FY2025");
     expect(contract("C001").project_name).toBe("倉庫管理システム保守（正式名）");
     expect(r.sync?.changes.map((c) => c.kind)).toEqual(["linkedFromNote", "renamed"]);
@@ -155,7 +155,7 @@ describe("fetch:projects（§98）", () => {
 
   it("失敗・0 件のときは CSV を書き換えず記録し、次に成功すると消える", async () => {
     useHttp();
-    writeFileSync(join(root, "data/projects.csv"), "project_id,customer_name,project_name\nSI-1,青葉物流,倉庫管理システム保守\n");
+    writeFileSync(join(root, "data/projects.csv"), "project_id,customer_name,project_name\nEX-1,青葉物流,倉庫管理システム保守\n");
     const before = readFileSync(join(root, "data/projects.csv"), "utf-8");
     const contractsBefore = readFileSync(contractsPath(), "utf-8");
     const adapter = createProjectHttpAdapter({ sleep: async () => {} });
@@ -168,7 +168,7 @@ describe("fetch:projects（§98）", () => {
     expect(loadDataset(root).issues.find((i) => i.code === "PROJECT_FETCH_FAILED")?.severity).toBe("warning");
 
     // filters に 1 件も合わない（設定の誤り）も失敗にして、今の一覧を消さない
-    vi.stubGlobal("fetch", api(API_ROWS.filter((r) => r.attrs.maintenance === 0)));
+    vi.stubGlobal("fetch", api(API_ROWS.filter((r) => r.attrs.category === 0)));
     await expect(fetchProjects({ rootDir: root }, ENV)).rejects.toThrow(/0 件/);
     expect(readFileSync(join(root, "data/projects.csv"), "utf-8")).toBe(before);
 
@@ -197,7 +197,7 @@ describe("fetch:projects（§98）", () => {
   });
 
   it("引数", () => {
-    expect(parseArgs(["--dry-run", "--link-exact", "--id-from-note", "SI:(\\S+)", "--sample=3"])).toMatchObject({ dryRun: true, linkExact: true, idFromNote: "SI:(\\S+)", sample: 3 });
+    expect(parseArgs(["--dry-run", "--link-exact", "--id-from-note", "ID:(\\S+)", "--sample=3"])).toMatchObject({ dryRun: true, linkExact: true, idFromNote: "ID:(\\S+)", sample: 3 });
     expect(parseArgs(["--id-from-note=X(\\d+)"]).idFromNote).toBe("X(\\d+)");
     expect(() => parseArgs(["--unknown"])).toThrow(/知らないオプション/);
   });

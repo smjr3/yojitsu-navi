@@ -68,9 +68,9 @@
 |---|---|
 | `adapter` | `none`（既定。取り込まない）/ `csv`（書き出した CSV を置く）/ `http` |
 | `csv.path`, `csv.encoding` | `adapter: "csv"` の CSV のパスと文字コード |
-| `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ）。`pagination` を書かなければページングなし（1 回で全件。`page`・`per_page` などを付けると HTTP 500 になる API 向け） |
+| `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ）。`pagination` を書かなければページングなし（1 回で全件。ページングに対応しない API 向け） |
 | `columns` | `projectId`（正式な案件ID）・`customerName`・`projectName` の取得元の列名。3 つとも必須。入れ子・複数候補は上と同じ |
-| `filters` | 取得した後で取り込む案件を絞る条件（すべてに合う行だけ）。サーバー側の絞り込み（`maintenance=1` など）が効かない API で、保守の属性・受注済みで絞る。例 `[{ "column": "attributes.maintenance", "in": [1, "1", true] }, { "column": "status", "equals": "受注" }]` |
+| `filters` | 取得した後で取り込む案件を絞る条件（すべてに合う行だけ）。サーバー側で絞り込めない API で、案件の種類・状態などで絞る。例 `[{ "column": "category", "equals": "保守" }, { "column": "active", "in": [1, "1", true] }]` |
 
 `npm run fetch:projects` で `data/projects.csv` を置き換え、`project_id` のある契約の `customer_name`・`project_name` だけを一覧の値にする（期間・金額・担当チーム・メモは触らない。行は増やさない・消さない）。0 件・失敗のときはどちらのファイルも書き換えない。`--dry-run --sample=5` で列の対応表と変更内容だけを出す。移行用に `--id-from-note "<正規表現>"`（メモに書いていた案件 ID を project_id に移す）と `--link-exact`（案件名が 1 件だけ同じ案件の ID を入れる）がある（[OPERATIONS.md](OPERATIONS.md)「正式な案件の一覧を取り込む」）。
 

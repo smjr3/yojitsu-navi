@@ -31,6 +31,8 @@ export interface MasterColumnDef {
   required: boolean;
   /** true: CSV に列があるときだけ扱う（無いファイルに見出しを足さない。§98 の project_id） */
   onlyIfPresent?: boolean;
+  /** true: 台帳の一覧の列には出さない（修正のダイアログには出す。§98 の project_id。表を横に広げないため） */
+  listHidden?: boolean;
 }
 
 export interface MasterFileDef {
@@ -128,7 +130,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
       { name: "project_name", label: T.masterFiles.colProjectName, input: "text", required: true },
       // 正式な案件ID（§98）。列があるときだけ出す。画面では変えない（contracts.csv で入れる）
-      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true },
+      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true, listHidden: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },
