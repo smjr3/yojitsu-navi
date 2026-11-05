@@ -346,7 +346,9 @@ export function update(o) {
   if (compareVersion(version, manifest.version) < 0 && !o.force && !dry) throw new CliError(`今のプロジェクト（${manifest.version}）より古い版（${version}）です。戻すときは --force`);
   const useGit = o.git !== false && isGitRepo(dir);
   // バックアップの置き場は git の外（.gitignore が古い版でも「コミットしていない変更」にしない）
-  const outsideBackup = ["--", ".", `:(exclude)${BACKUP_DIR}`, `:(exclude)${LOG_DIR}`];
+  // --log で指定したプロジェクトの中のファイル（先に書き始めるので、変更・コミットに数えない）
+  const excludeExtra = (o.exclude ?? []).map((p) => posix(relative(dir, p))).filter((p) => p && !p.startsWith("..") && !/^[A-Za-z]:/.test(p));
+  const outsideBackup = ["--", ".", `:(exclude)${BACKUP_DIR}`, `:(exclude)${LOG_DIR}`, ...excludeExtra.map((p) => `:(exclude,literal)${p}`)];
   if (useGit && !dry && !o.force) {
     // .gitlab-ci.local.yml だけは、変更履歴の手順どおり update の前に作った・直したものとして止めない（update のコミットに入る）。
     // .npmrc は社内レジストリのトークンが入ることがあるので、コミットに入れないよう止める（SPEC §94）
@@ -435,7 +437,7 @@ export function update(o) {
   // サンプルのまま残っているデータ（本番のデータと混ざって集計を誤らないよう知らせる。消すのは yojitsu-navi reset-data か社内で）
   const sampleLeft = sampleLeftovers(pkgDir, dir, template);
   // パッケージに無いファイル（社内で足したもの。触らないが、使われないまま残ったテスト用のデータなどに気づけるよう知らせる。SPEC §94）
-  const extras = localExtras(dir, template, old, useGit);
+  const extras = localExtras(dir, template, old, useGit).filter((f) => !excludeExtra.includes(f));
   // 今の版から新しい版までの変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」（SPEC §91.2）
   const notes = template.has(CHANGELOG) ? updateNotes(readFileSync(template.get(CHANGELOG), "utf-8"), manifest.version, version, localConfig) : [];
   const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras };
@@ -540,6 +542,7 @@ export function update(o) {
   let branch = "";
   let committed = false;
   let commit = null;
+  let commitError = "";
   const commitIt = o.commit !== false;
   if (useGit) {
     // git の除外設定に当たるパッケージのファイルも入れる（前の版で入らなかったものもここで入る）
@@ -564,7 +567,8 @@ export function update(o) {
       const c = git(dir, ["commit", "-q", "-m", `予実ナビを ${version} に更新`]);
       committed = c.ok;
       if (!c.ok) {
-        log(`git commit できませんでした（${c.err.split("\n")[0]}）。変更はフォルダに入っています`);
+        commitError = c.err.split("\n")[0] || "git commit が失敗しました";
+        log(`git commit できませんでした（${commitError}）。変更はフォルダに入っています`);
         branch = currentBranch(dir) === branch ? branch : "";
       } else {
         const hash = git(dir, ["rev-parse", "--short", "HEAD"]).out;
@@ -580,7 +584,7 @@ export function update(o) {
     }
   }
   assertCiFiles(dir, template, committed);
-  return { ...base, dryRun: false, backup, branch: commit ? branch : "", commit, vendorUpdated };
+  return { ...base, dryRun: false, backup, branch: commit ? branch : "", commit, commitError, vendorUpdated };
 }
 
 /** 今のブランチの名前（ブランチに居ないときは空） */

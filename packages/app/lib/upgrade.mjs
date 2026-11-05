@@ -2,6 +2,7 @@
 // update → 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト（既定は飛ばす）→ ビルド。
 // 失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CliError, check, update } from "./project.mjs";
@@ -19,12 +20,30 @@ export function npmCommand(args, env = process.env, execPath = process.execPath)
 function run(cmd, args, o) {
   return new Promise((done) => {
     const tail = [];
-    const keep = (chunk) => {
-      const text = chunk.toString("utf-8");
-      o.out.fileOnly(text.replace(/\n$/, ""));
-      for (const line of text.split(/\r?\n/)) if (line) tail.push(line);
+    const addLine = (line) => {
+      o.out.fileOnly(line);
+      if (line) tail.push(line);
       if (tail.length > 40) tail.splice(0, tail.length - 40);
     };
+    // 出力は区切りの途中で届く（日本語の 1 文字・1 行が 2 つに分かれる）ので、流れごとに文字と行をつなぎ直す
+    const reader = () => {
+      const decoder = new StringDecoder("utf8");
+      let rest = "";
+      return {
+        push(chunk) {
+          const lines = (rest + decoder.write(chunk)).split(/\r?\n/);
+          rest = lines.pop() ?? "";
+          for (const l of lines) addLine(l);
+        },
+        end() {
+          const last = rest + decoder.end();
+          rest = "";
+          if (last) addLine(last);
+        },
+      };
+    };
+    const outR = reader();
+    const errR = reader();
     let child;
     try {
       child = spawn(cmd, args, { cwd: o.cwd, env: o.env, shell: o.shell ?? false, windowsHide: true });
@@ -32,10 +51,14 @@ function run(cmd, args, o) {
       done({ ok: false, tail: [String(e)] });
       return;
     }
-    child.stdout.on("data", keep);
-    child.stderr.on("data", keep);
+    child.stdout.on("data", (c) => outR.push(c));
+    child.stderr.on("data", (c) => errR.push(c));
     child.on("error", (e) => done({ ok: false, tail: [...tail, String(e)] }));
-    child.on("close", (code) => done({ ok: code === 0, tail }));
+    child.on("close", (code) => {
+      outR.end();
+      errR.end();
+      done({ ok: code === 0, tail });
+    });
   });
 }
 
@@ -63,7 +86,9 @@ export async function upgrade(o) {
       name: "update",
       title: "ファイルを新しい版にする（update）",
       run: () => {
-        const r = update({ ...o.update, pkgDir: o.pkgDir, version: o.version, dir, log: out.log, detail: out.detail });
+        const r = update({ ...o.update, pkgDir: o.pkgDir, version: o.version, dir, log: out.log, detail: out.detail, exclude: out.file ? [out.file] : [] });
+        // 自動のコミットに失敗した（フックに断られたなど）ときは、--no-commit と違って止める（コミットの無いまま先へ進めない）
+        if (r.commitError) return { ok: false, tail: [`git commit できませんでした: ${r.commitError}`, "変更は git add してあります。直してから git commit するか、--no-commit で進めてください"] };
         committed = Boolean(r.commit) || (!r.changed.length && !r.added.length && !r.removed.length && o.update?.commit !== false);
         branch = r.commit?.branch ?? "";
         notes = r.notes.length;

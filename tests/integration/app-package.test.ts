@@ -831,6 +831,31 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(again.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "ok"]);
     }, scaled(120_000));
 
+    it("自動のコミットに失敗したら（フックに断られたなど）update の手順で止まる。--no-commit なら進む", async () => {
+      const { dir, up, pkg } = await setup("v94-up-hook");
+      writeFileSync(join(dir, ".git", "hooks", "pre-commit"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const o = out.createOutput({ screen: () => {}, errScreen: () => {} });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["failed", "notRun", "notRun", "notRun", "notRun", "notRun"]);
+      expect(r.code).toBe(1);
+    }, scaled(60_000));
+
+    it("--log でプロジェクトの中のファイルを選んでも、update を止めずコミットにも入れない。子の出力は区切りの途中で分かれても化けない", async () => {
+      const { dir, up } = await setup("v94-up-log");
+      // 「日本語の診断」を 1 文字の途中で 2 回に分けて出す
+      const split = "const b = Buffer.from('日本語の診断\\n'); process.stdout.write(b.subarray(0, 4)); setTimeout(() => process.stdout.write(b.subarray(4)), 50);\n";
+      const pkg = fakePackage("v94-up-log-v2", "1.1.0", { ...files("1.1.0"), "scripts/ci/install.mjs": split });
+      const file = join(dir, "output.txt");
+      const o = out.createOutput({ file, summary: true, screen: () => {}, errScreen: () => {} });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.code).toBe(0);
+      expect(git(dir, "ls-files", "output.txt")).toBe("");
+      const text = readFileSync(file, "utf-8");
+      expect(text).toContain("日本語の診断");
+      expect(text).not.toContain("\uFFFD");
+      expect(r.steps[0].note).not.toContain("パッケージに無いファイル");
+    }, scaled(120_000));
+
     it("社内で変えたファイルで update が止まれば、終了コード 2 で止まる", async () => {
       const { dir, up, pkg } = await setup("v94-up-conflict");
       writeFileSync(join(dir, "src", "a.js"), "社内");

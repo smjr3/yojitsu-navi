@@ -143,7 +143,7 @@ async function main(argv) {
     assertKnown(rest, ["--force", "--dry-run", "--overwrite", "--keep-local", "--no-commit", "--summary"], ["--log"]);
     const dir = resolve(positional(rest, ["--log"])[0] ?? ".");
     out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")), summary: rest.includes("--summary") });
-    update({ pkgDir: PKG_DIR, version: VERSION, dir, ...updateOptions(rest), dryRun: rest.includes("--dry-run"), log: out.log, detail: out.detail });
+    update({ pkgDir: PKG_DIR, version: VERSION, dir, ...updateOptions(rest), dryRun: rest.includes("--dry-run"), log: out.log, detail: out.detail, exclude: out.file ? [out.file] : [] });
     if (out.file) out.log(`出力を ${out.file} に書きました（UTF-8）`);
     else if (rest.includes("--summary")) out.log("（ファイルの一覧・差分・変更履歴は --log <ファイル> で書き出せます）");
     return 0;
