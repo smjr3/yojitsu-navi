@@ -27,8 +27,9 @@
 #   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・運用のテスト）も動く。既定は動かさない
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
 #   NODE_EXTRA_CA_CERTS （任意）社内の証明書（PEM）。種類を File にして中身を貼る（npm・Node がこの証明書も信頼する）
+#   NODE_USE_SYSTEM_CA  （任意）"1" で OS の証明書ストア（Windows の証明書ストアなど）も信頼する。Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」
 #   以下 2 つは YOJITSU_RUN_TESTS=1 のときだけ使う
-#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows でワーカーのタイムアウトが出るとき 1
+#   VITEST_MAX_FORKS    （任意）テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows の Runner で安定しないとき 1
 #   YOJITSU_TEST_TIMEOUT_SCALE（任意）テストのタイムアウトの倍率（既定 Windows 3・Linux 1）。手順は docs/OPERATIONS.md
 #
 # 外部ネットワーク:
@@ -50,7 +51,7 @@
 image: $NODE_IMAGE
 
 # 社内向けの設定（ランナーのタグ・社内だけのジョブなど）は .gitlab-ci.local.yml に書く。update はそのファイルを上書きしない（SPEC §91.1）。
-# レジストリ・証明書・イメージは CI/CD 変数（NPM_CONFIG_REGISTRY・NODE_EXTRA_CA_CERTS・NODE_IMAGE）か .npmrc で渡す
+# レジストリ・証明書・イメージは CI/CD 変数（NPM_CONFIG_REGISTRY・NODE_EXTRA_CA_CERTS・NODE_USE_SYSTEM_CA・NODE_IMAGE）か .npmrc で渡す
 include:
   - local: .gitlab-ci.local.yml
 
