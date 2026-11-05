@@ -155,6 +155,7 @@ export default {
     RULE_OUT_OF_PERIOD: "対応表の期間外",
     UNKNOWN_CONTRACT: "契約IDが存在しない",
     EXCLUDED_CONTRACT: "不備で除外中の案件",
+    UNREGISTERED_PROJECT: "未登録の案件",
   },
 
   // ── 表示条件（フィルタバー） ─────────────────────────────
@@ -342,6 +343,10 @@ export default {
     targetPeriodInverted: "{file} {row} 行目: 開始月 {from} が終了月 {to} より後です",
     targetRateInvalid: "{file} {row} 行目: remaining_rate は 100 以下の数値（%）にしてください: {value}",
     targetDuplicate: "{file}: {kind}「{id}」の終了月 {month} の目標が複数の行（{rows}）にあります。1 行にしてください",
+    aliasEmpty: "{file} {row} 行目: alias と project_name の両方を書いてください",
+    aliasDuplicate: "{file}: 別名「{alias}」が複数の案件名（{targets}）を指しています（行 {rows}）。1 つにしてください",
+    aliasUnknownProject: "{file} {row} 行目: 別名「{alias}」の案件名「{project}」は contracts.csv にありません（この行は使われません）",
+    aliasShadowed: "{file} {row} 行目: 別名「{alias}」は contracts.csv の案件名と同じため使われません（案件名の一致が先）",
   },
 
   // ── 計算時の警告（データ確認画面） ─────────────────────────
@@ -368,6 +373,7 @@ export default {
     taskCodeMatchGained: "作業コード {code} の作業名が {date} から「{before}」→「{after}」に変わり、運用保守のキーワードに合うようになりました",
     reasonUnknownContract: "存在しない契約ID",
     reasonExcludedContract: "不備で除外中の案件",
+    reasonUnregisteredProject: "未登録の案件",
     mappingExcludedContract: "マッピング {row} 行目（{customer} / {project}）の案件 {contractId} は不備のため集計から除外しています（{reason}）。案件の不備を直すと紐付きます",
     contractStartMonthInvalid: "開始月の形式が不正です: {value}",
     contractEndMonthInvalid: "終了月の形式が不正です: {value}",
@@ -1258,7 +1264,7 @@ export default {
     blocksPublish: "CI で公開が止まります",
     publishable: "公開可能",
     unmappedTitle: "未紐付けの作業実績",
-    unmappedHint: "紐付けルールが無い、または契約期間に入らない作業実績。(顧客名, 案件名) ごとにまとめています。mapping.csv にルールを足すか、契約期間を確認してください。",
+    unmappedHint: "紐付けルールが無い、または契約期間に入らない作業実績。(顧客名, 案件名) ごとにまとめています。mapping.csv にルールを足すか、契約期間を確認してください。理由が「未登録の案件」のものは、作業名から抜き出した案件名が contracts.csv に無いものです（案件名の欄は抜き出した名前）。表記の違いだけなら project-aliases.csv に別名を足してください。",
     unmappedEmpty: "未紐付けの作業実績はありません",
     colWorklogCustomer: "顧客名（作業実績側）",
     empty: "（空）",
@@ -1273,7 +1279,7 @@ export default {
     colTask: "作業名",
     colType: "扱い",
     taskCodeTitle: "未登録の作業コード",
-    taskCodeHint: "作業名が運用保守のキーワード（config.json の taskCodeCheck）に合うのに、mapping.csv に行が無い・行の期間に入らない作業コード。案件を確かめて mapping.csv に task_code の行を足してください。",
+    taskCodeHint: "作業名が運用保守のキーワード（config.json の taskCodeCheck）に合うのに、mapping.csv に行が無い・行の期間に入らない作業コード。作業名から抜き出した案件名で紐付いた作業は含みません。案件を確かめて mapping.csv に task_code の行を足してください。",
     taskCodeChangesTitle: "作業名が変わった作業コード",
     taskCodeChangesHint: "同じ作業コードで作業名が変わったもの。キーワードに合わなくなった・合うようになったものは運用保守かどうかを確かめてください。",
     colTaskCode: "作業コード",

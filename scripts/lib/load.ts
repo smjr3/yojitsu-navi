@@ -25,6 +25,7 @@ export const DATA_FILES = {
   taskTypes: "data/task-types.csv",
   outsidePlans: "data/outside-plans.csv",
   targets: "data/targets.csv",
+  projectAliases: "data/project-aliases.csv",
   projects: "data/projects.csv",
 } as const;
 
@@ -100,6 +101,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     outsidePlans: readOrEmpty(join(rootDir, DATA_FILES.outsidePlans)),
     // 省略可（§63）。無ければ空 = 目標なし
     targets: readOrEmpty(join(rootDir, DATA_FILES.targets)),
+    // 省略可（§97）。無ければ空 = 別名なし
+    projectAliases: readOrEmpty(join(rootDir, DATA_FILES.projectAliases)),
     // 省略可（§98）。無ければ空 = 正式な案件の一覧を取り込んでいない
     projects: readOrEmpty(join(rootDir, DATA_FILES.projects)),
     worklogs,
