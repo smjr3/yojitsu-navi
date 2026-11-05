@@ -16,7 +16,8 @@ Settings > CI/CD > Variables に登録します。
 | `NPM_CONFIG_REGISTRY` | 任意。社内 npm ミラーの URL（依存込みのパッケージで作ったプロジェクトは不要。[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md) 手順 0） |
 | `NODE_IMAGE` | 任意。Node のイメージ（既定 `node:22`）。Docker Hub に出られないときは社内レジストリのもの |
 | `YOJITSU_RUN_TESTS` | 任意。`1` で `test` ジョブ（型チェック・運用のテスト）も動く。既定は動かさない（[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc)） |
-| `VITEST_MAX_FORKS` | 任意（テストを動かすときだけ）。テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows でワーカーのタイムアウトが出るとき `1`。[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc) |
+| `VITEST_MAX_FORKS` | 任意（テストを動かすときだけ）。テストを同時に動かす数（既定 Windows 2・Linux は CPU の数 - 1）。Windows の Runner では `1` でないと安定しない環境がある。[テストを Windows で動かす](#テストを-windows-で動かすrunnerpc) |
+| `NODE_EXTRA_CA_CERTS`・`NODE_USE_SYSTEM_CA` | 任意。社内の証明書で `npm ci` などが `SELF_SIGNED_CERT_IN_CHAIN` になるとき。どちらを使うかは [DEPLOY_GITLAB.md](DEPLOY_GITLAB.md#社内の証明書) |
 | `YOJITSU_TEST_TIMEOUT_SCALE` | 任意（テストを動かすときだけ）。テストのタイムアウトの倍率（既定 Windows 3・Linux 1） |
 
 スケジュール（Settings > CI/CD > Schedules、例: 平日 06:00）を登録すると `fetch-worklogs` ジョブが
@@ -194,9 +195,10 @@ Windows は Linux よりプロセスの起動とファイルの読み書きが�
 
 | 設定 | 既定 | 内容 |
 |---|---|---|
-| `VITEST_MAX_FORKS` | Windows `2`・Linux は CPU の数 - 1。「`[vitest-worker]: Timeout calling …`」が出るなら `1` を登録 | 同時に動かすテストファイルの数（`vitest.config.ts` が読み、Windows の既定を 2 にしている）。Vitest 4 の `VITEST_MAX_WORKERS` と同じ（どちらで登録しても効く。両方あれば `VITEST_MAX_WORKERS`） |
+| `VITEST_MAX_FORKS` | Windows `2`・Linux は CPU の数 - 1。「`[vitest-worker]: Timeout calling …`」が出る・結果が回ごとに変わるなら `1` を登録（導入先の Windows の Runner に、`2` では安定せず `1` で安定した環境があった） | 同時に動かすテストファイルの数（`vitest.config.ts` が読み、Windows の既定を 2 にしている）。Vitest 4 の `VITEST_MAX_WORKERS` と同じ（どちらで登録しても効く。両方あれば `VITEST_MAX_WORKERS`） |
 | `YOJITSU_TEST_TIMEOUT_SCALE` | Windows `3`・Linux `1`。それでもタイムアウトするなら `5` | テストのタイムアウトの倍率（`vitest.config.ts` と結合テストの個別の値に掛かる） |
 
+- Windows の Runner では、まず `VITEST_MAX_FORKS=1` で動かすのが確実です。運用のテストは 9 ファイルだけなので、1 つずつ動かしても長くはかかりません。
 - GitLab では Settings > CI/CD > Variables に登録します。PC の Git Bash では `VITEST_MAX_FORKS=1 npm run test` のように前に付けます（`npm run test -- --maxWorkers=1` でも同じ）。
 - ワーカーの方式は `forks` に固定しています（`vitest.config.ts`）。`threads` に変えないでください。
 - テストを CI から外すために `vitest.config.ts` などを社内で変えていたら、新しい版の `update` で止まります。除外は要らなくなったので `--overwrite` で新しい版にしてください（[DEPLOY_GITLAB.md](DEPLOY_GITLAB.md#社内で変えたファイルがあるとき)）。
