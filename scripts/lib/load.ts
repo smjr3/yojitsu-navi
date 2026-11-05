@@ -4,7 +4,7 @@
  * - 文字コードは自動判定（UTF-8 / UTF-8 BOM / Shift_JIS）
  * - data/worklogs/ が無い・空でも落とさず、作業実績 0 件として扱う
  * - data/worklogs/_meta.json の fetchedAt を worklogFetchedAt に入れる
- * - 取り込みの失敗の記録（_meta.json・_members-meta.json の lastFailure。§87）を fetchFailures に入れる
+ * - 取り込みの失敗の記録（_meta.json・_members-meta.json・_projects-meta.json の lastFailure。§87・§98）を fetchFailures に入れる
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,6 +26,7 @@ export const DATA_FILES = {
   outsidePlans: "data/outside-plans.csv",
   targets: "data/targets.csv",
   projectAliases: "data/project-aliases.csv",
+  projects: "data/projects.csv",
 } as const;
 
 export interface WorklogMeta {
@@ -102,6 +103,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     targets: readOrEmpty(join(rootDir, DATA_FILES.targets)),
     // 省略可（§97）。無ければ空 = 別名なし
     projectAliases: readOrEmpty(join(rootDir, DATA_FILES.projectAliases)),
+    // 省略可（§98）。無ければ空 = 正式な案件の一覧を取り込んでいない
+    projects: readOrEmpty(join(rootDir, DATA_FILES.projects)),
     worklogs,
     worklogNames: listed.map((f) => f.name),
     skippedWorklogFiles: skippedWorklogFiles(dir),

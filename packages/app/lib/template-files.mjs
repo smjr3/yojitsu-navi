@@ -16,6 +16,7 @@ export const USER_TESTS = [
   "tests/integration/encoding.test.ts",
   "tests/integration/http-adapter.test.ts",
   "tests/integration/member-targets.test.ts",
+  "tests/integration/project-fetch.test.ts",
   "tests/integration/task-code-fetch.test.ts",
 ];
 

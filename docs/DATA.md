@@ -5,7 +5,8 @@
 
 | ファイル | 列 |
 |---|---|
-| `data/contracts.csv` | `contract_id, customer_name, project_name, team_id, start_month, end_month, total_amount, note[, updated_by, updated_at]` （updated_by・updated_at は assignments.csv と同じ（マスタ編集の「案件」で保存した人と保存日）。計算には使わない。顧客名・案件名は他システムから取り込む予定で、マスタ編集で直せるのは start_month・end_month・total_amount・team_id だけ。SPEC §80） |
+| `data/contracts.csv` | `contract_id[, project_id], customer_name, project_name, team_id, start_month, end_month, total_amount, note[, updated_by, updated_at]` （updated_by・updated_at は assignments.csv と同じ（マスタ編集の「案件」で保存した人と保存日）。計算には使わない。project_id = 案件管理システムの正式な案件ID（省略可・空 = 未照合で保留。更新の前後の行は同じ ID でよい）。project_id のある行の顧客名・案件名は `npm run fetch:projects` が正式な案件の一覧の値に書き換える。期間・金額・担当チームは手入力が正（team_id は空でよい）。マスタ編集で直せるのは start_month・end_month・total_amount・team_id だけ。SPEC §80・§98） |
+| `data/projects.csv` | `project_id, customer_name, project_name` （案件管理システムの正式な案件の一覧。省略可。`npm run fetch:projects` が取り込んだ一覧で置き換える（手で直さない）。あるときだけ contracts.csv と照合し、データ確認に「正式な案件IDの無い案件」「マスタに無い正式な案件」を出す。SPEC §98） |
 | `data/mapping.csv` | `worklog_customer_name, worklog_project_name, contract_id[, task_include, task_exclude, task_code, start_month, end_month]` （案件名が空 = その顧客の全工数。task_code = 作業コード（書いた行は顧客名・案件名・キーワードを使わずコードで紐付ける。空の顧客名・案件名でよい）、start_month / end_month = その行を使う期間（作業日の月。片方だけ・省略可。省略 = 全期間）。同じ作業コードを契約の更新後も使うときは、新しい契約IDの行を足して期間で分ける（SPEC §92）。task_include / task_exclude = 作業名に含む／含むと除くキーワード、`\|` 区切りで複数、省略可。指定した案件では合致した作業だけが運用保守、合致しない作業は運用保守以外。SPEC §62。紐付けの判定の順序と契約の更新のときの書き方は SPEC §86） |
 | `data/assignments.csv` | `member_id, contract_id, start_month, end_month, allocation[, updated_by, updated_at]` （人 × 契約 × 期間の配分人月。updated_by・updated_at は保存した人の GitLab ユーザー名と保存日（YYYY-MM-DD）。画面が保存時に追加・変更した行へ書く。列なし・空欄 = 記録なし。SPEC §56。画面はリソース計画 `/plan`。途中で人月が変わるときは期間を分けた行になる。SPEC §36.3） |
 | `data/outside-plans.csv` | `member_id, type, start_month, end_month, person_months, note[, updated_by, updated_at]` （運用保守以外の予定 = 提案・設計・会社業務など運用保守以外で使う見込みの人月。省略可。type = 運用保守以外の種別（task-types.csv の group。空・列なし = 種別なし）、note 省略可。updated_by・updated_at は assignments.csv と同じ。同じ人・同じ種別の同じ月に重なる行はエラー、一覧に無い種別は警告。予算・着地見込みには入らない。メンバー別で「運用保守以外を含む」にしたときの計画に入る。SPEC §36.4・§50） |
@@ -19,6 +20,7 @@
 | `data/worklogs/*.csv` | `date, member_id, member_name, customer_name, project_name, task, hours[, task_code]` （月ごとに `YYYY-MM.csv`。アダプタが生成。task_code = 作業コード。その月に作業コードのある行があるときだけ付く。SPEC §92） |
 | `data/worklogs/_meta.json` | `{ "fetchedAt": "ISO 8601", "adapter": "csv|http|dummy" }`。取得に失敗したときだけ `lastFailure: { at, message }`（SPEC §87） |
 | `data/masters/_members-meta.json` | 人事の取り込みに失敗したときだけできる `{ "lastFailure": { at, message } }`。次に成功すると消える（SPEC §87） |
+| `data/_projects-meta.json` | 正式な案件の一覧の取り込みに失敗したときだけできる `{ "lastFailure": { at, message } }`。次に成功すると消える（SPEC §98） |
 
 `config.json` の項目は `src/core/types.ts` の `Config` を参照。
 
@@ -26,9 +28,9 @@
 
 `projectFromTask`（作業名から案件名を抜き出して紐付ける。省略 = 使わない。SPEC §97）: `marker`（運用保守の目印。作業名の最初の目印より前を案件名とし、contracts.csv の `project_name` と完全一致する案件へ紐付ける。全角半角・空白は区別しない）、`enabled`（`false` で止める。既定 `true`）。mapping.csv の行がある作業はそちらが先。目印も mapping.csv の行も無い作業は運用保守以外。表記揺れは `data/project-aliases.csv` に別名を登録する（曖昧一致はしない）。
 
-## 取り込み元の設定（config.json の `worklogSource.http` と `memberSource`）
+## 取り込み元の設定（config.json の `worklogSource.http`・`memberSource`・`projectSource`）
 
-コードを変えずに本番 API の列名・形式へ合わせるための設定。手順は [OPERATIONS.md](OPERATIONS.md)「本番 API への合わせ方」。トークンは環境変数だけ（`WORKLOG_API_TOKEN`、メンバーは `MEMBER_API_TOKEN`）。
+コードを変えずに本番 API の列名・形式へ合わせるための設定。手順は [OPERATIONS.md](OPERATIONS.md)「本番 API への合わせ方」。トークンは環境変数だけ（`WORKLOG_API_TOKEN`、メンバーは `MEMBER_API_TOKEN`、正式な案件の一覧は `PROJECT_API_TOKEN`）。
 
 ### `worklogSource.http`
 
@@ -62,3 +64,16 @@
 取り込みに失敗したときは CSV を書き換えず、失敗だけを `data/worklogs/_meta.json`（作業実績）・`data/masters/_members-meta.json`（人事）の `lastFailure` に書く。データ確認画面に警告で出て、次に成功すると消える（SPEC §87）。
 
 `npm run fetch:members` で `data/masters/members.csv` を更新する。`team_id` は取り込まない。運用保守の案件をスポットで手伝う他部署（導入・設計・構築など）の人も取り込み対象に含める（`filters` で外さない）と、役職単価で実績に入り、`team_id` 空のまま「ヘルプ」として区別される（SPEC §72）。マスタに無い人の作業は単価 0 円で、データ確認に `UNKNOWN_MEMBER` が出る。変化した人だけ `effective_from = 実行月` の行を追加（`team_id` は引き継ぎ）、取り込み元に無い人は削除しない。何度流しても同じ結果。
+
+### `projectSource`（正式な案件の一覧の取り込み。SPEC §98）
+
+| 項目 | 意味 |
+|---|---|
+| `adapter` | `none`（既定。取り込まない）/ `csv`（書き出した CSV を置く）/ `http` |
+| `csv.path`, `csv.encoding` | `adapter: "csv"` の CSV のパスと文字コード |
+| `http` | `adapter: "http"` の接続設定（`url, authHeader, authScheme, method, dataPath, pagination, query, encoding`。`worklogSource.http` と同じ）。`pagination` を書かなければページングなし（1 回で全件。ページングに対応しない API 向け） |
+| `columns` | `projectId`（正式な案件ID）・`customerName`・`projectName` の取得元の列名。3 つとも必須。入れ子・複数候補は上と同じ |
+| `filters` | 取得した後で取り込む案件を絞る条件（すべてに合う行だけ）。サーバー側で絞り込めない API で、案件の種類・状態などで絞る。例 `[{ "column": "category", "equals": "保守" }, { "column": "active", "in": [1, "1", true] }]` |
+
+`npm run fetch:projects` で `data/projects.csv` を置き換え、`project_id` のある契約の `customer_name`・`project_name` だけを一覧の値にする（期間・金額・担当チーム・メモは触らない。行は増やさない・消さない）。0 件・失敗のときはどちらのファイルも書き換えない。`--dry-run --sample=5` で列の対応表と変更内容だけを出す。移行用に `--id-from-note "<正規表現>"`（メモに書いていた案件 ID を project_id に移す）と `--link-exact`（案件名が 1 件だけ同じ案件の ID を入れる）がある（[OPERATIONS.md](OPERATIONS.md)「正式な案件の一覧を取り込む」）。
+

@@ -42,6 +42,19 @@
       "title": "title"
     }
   },
+  "projectSource": {
+    "adapter": "none",
+    "http": {
+      "url": "",
+      "authHeader": "Authorization"
+    },
+    "columns": {
+      "projectId": "project_id",
+      "customerName": "customer_name",
+      "projectName": "project_name"
+    },
+    "filters": []
+  },
   "taskCodeCheck": {
     "include": ["_保守対応"],
     "exclude": [],
