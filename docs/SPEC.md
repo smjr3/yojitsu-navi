@@ -1131,7 +1131,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 79.1 テストの実行環境の差（2026-11-03 依頼者）
 社内の Windows（Git Bash）で、結合テストの失敗・Vitest のワーカーのタイムアウト・性能テストの時間超過が出た（導入先は並列数とタイムアウトを変え、`tests/integration/app-package.test.ts` を一時的に外していた）。テストを外さずに通すため、次のようにする。手順と推奨値は `docs/OPERATIONS.md`「テストを Windows で動かす」。
-- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は `VITEST_MAX_FORKS` で減らせる（Vitest 4 の名前は `VITEST_MAX_WORKERS`。§84.2 で Vitest 4 に上げたので、設定済みの `VITEST_MAX_FORKS` は `vitest.config.ts` が `defaultMaxWorkers()` で読んで同じ意味にする。両方あれば `VITEST_MAX_WORKERS`）。Windows では既定で 2（`tests/test-env.ts` の `defaultMaxWorkers()`。`VITEST_MAX_FORKS` を設定すればそちら。2026-11-04、導入先で並列実行時にワーカーのタイムアウトが出たため）。
+- タイムアウトは `tests/test-env.ts` の `scaled()` で倍率を掛ける。倍率は `YOJITSU_TEST_TIMEOUT_SCALE`、既定は Windows で 3、それ以外は 1。`vitest.config.ts` と、テストごとの個別のタイムアウトの両方に使う。ワーカーは `forks` に固定し、同時に動かす数は `VITEST_MAX_FORKS` で減らせる（Vitest 4 の名前は `VITEST_MAX_WORKERS`。§84.2 で Vitest 4 に上げたので、設定済みの `VITEST_MAX_FORKS` は `vitest.config.ts` が `defaultMaxWorkers()` で読んで同じ意味にする。両方あれば `VITEST_MAX_WORKERS`）。Windows では既定で 2（`tests/test-env.ts` の `defaultMaxWorkers()`。`VITEST_MAX_FORKS` を設定すればそちら。2026-11-04、導入先で並列実行時にワーカーのタイムアウトが出たため）。導入先の Windows の Runner には `2` でも安定せず `1` で安定した環境があった（2026-11-05）ので、docs/OPERATIONS.md で Windows の Runner は `1` を勧める。
 - 別プロセスを長く待つテストは `runAsync`（`tests/test-env.ts`）で待つ。`spawnSync`・`execFileSync` で数十秒止めると、その間ワーカーが Vitest の本体と通信できず「`[vitest-worker]: Timeout calling …`」で落ちるため。結合テストのパッケージの組み立て・`npm pack`（1 回だけ作って使い回す）・一式の `init`（コマンドで実行）・`tsc`・データローダが対象。
 - 結合テストが作る一時の git は、PC の設定に左右されないよう `core.autocrlf=false`・`core.longpaths=true`・`commit.gpgsign=false` を環境変数で渡す。一時フォルダは消せるまで何度か試す（Windows でファイルが一時的に使用中になるため）。
 - 作業ログ明細の作り置き（`src/data/_shared.ts`、docs/DATA_LOADERS.md §5）は、一時フォルダを書き終えてから名前を変える。名前の変更に失敗しても無視してよいのは、別のプロセスが同じ指紋の作り置きを置き終えていた（`.complete` がある）ときだけで、それ以外は止める（2026-11-04 導入先のレビュー指摘。黙って続けて `.complete` の無いまま進み、全体テストが 1 回落ちた）。Windows でウイルス対策や別プロセスがファイルを掴んで起きる一時的な失敗（`EPERM`・`EACCES`・`EBUSY`）は、少し待って 6 回までやり直す（`renameWithRetry`、`scripts/lib/atomic.ts`。`writeFileAtomic` も同じ）。`tests/unit/memo-publish.test.ts`。
@@ -1212,15 +1212,23 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ### 84.2 依存の脆弱性（2026-11-04 導入先のレビュー指摘）
 導入先の `npm ci` で 18 件（critical 2・high 1）と非推奨の警告が出た。更新できるものは更新し、残るものは理由を書いて残す。確かめ方は `npm audit`（開発元・利用環境どちらでも）。
 - 更新・削除したもの: `vitest` 3 → 4（critical 2 件の `tinypool` と `@vitest/mocker` を解消。Vitest 4 は `VITEST_MAX_FORKS` を読まないので §79.1 のとおり `vitest.config.ts` で読む）。`exceljs` は使っていなかったので削除（`archiver`・`uuid`・古い `glob`・`rimraf`・`fstream` などの警告が消える）。結果は 8 件（high 1・moderate 4・low 3）。
-- 残すもの（2026-11-04 時点。どれも画面を見る人の操作や外から来るデータが届かない）:
+- 2026-11-05（導入先の `npm ci` で 7 件と非推奨の警告、への対応）: Framework 1.13 が要求する版のまま残っていた `esbuild`（0.27 → 0.28）と `glob`（10 → 14。中の `minimatch` も 11 に）を、`package.json` の `overrides` で修正済みの版にした。Framework が `glob` で使うのは `globSync` だけで 14 でも同じ。`@rollup/plugin-commonjs`（Framework 経由）は `glob` 8 の書き方なので `glob` 8 のまま（overrides の中で除外）。ビルド・全テスト・E2E で確かめた。結果は 4 件（high 1・low 3）。
+- 残すもの（2026-11-05 時点。どれも画面を見る人の操作や外から来るデータが届かない）:
 
-| パッケージ | 内容 | 残す理由 |
-|---|---|---|
-| `xlsx`（high） | 細工した Excel ファイルを**読む**ときのプロトタイプ汚染・ReDoS | 画面の Excel 出力（書くだけ）と E2E テスト（自分で出したファイルを読む）でしか使わない。npm に修正版が無い（配布元の CDN にはあるが、社内のミラーで取れない恐れがある） |
-| `esbuild`（Framework 経由） | Windows で esbuild の開発サーバーを動かしたときのファイル読み出し | esbuild の開発サーバーは使わない（`npm run dev` は Framework 自身のサーバー）。Framework 1.13 が `esbuild` 0.27 を要求する |
-| `glob`・`minimatch`・`deepmerge`（Framework 経由） | 検索パターンの ReDoS・中断の無視・オブジェクトのマージ | ビルドのときにリポジトリ内のファイルを探すだけで、外からの入力を渡さない。`npm audit fix --force` は Framework を 1.10 に**下げる**ので採らない |
+| パッケージ | 内容 | 残す理由 | 予定 |
+|---|---|---|---|
+| `xlsx`（high・本体の依存） | 細工した Excel ファイルを**読む**ときのプロトタイプ汚染・ReDoS | 画面の Excel 出力（書くだけ）と E2E テスト（自分で出したファイルを読む）でしか使わない。npm に修正版が無い（配布元の CDN にはあるが、社内のミラーで取れない恐れがある） | 社内のミラーから配布元の版が取れると分かれば差し替える |
+| `deepmerge`（low・Framework 経由。`@rollup/plugin-node-resolve`・Framework も同じ 1 件として数えられて 3 件） | マージ結果のオブジェクトのプロトタイプ汚染 | ビルドのときに Framework が自分の設定を合わせるだけで、外からの入力を渡さない。修正版がまだ無い。`npm audit fix --force` は Framework を 1.10 に**下げる**ので採らない | 修正版か Framework の新しい版が出たら上げる |
 
-- Framework の新しい版で解消したら上げる。`npm audit fix --force` は使わない（上の理由）。
+- 非推奨の警告（`npm warn deprecated`。脆弱性ではない）: `inflight`・`glob@8`（`@rollup/plugin-commonjs` 25 経由）、`whatwg-encoding`（`jsdom` 23 経由）。どちらも Framework 1.13 が版を決めていて、上げると Framework の作りが変わる（commonjs は 29 で `glob` を使わなくなったが、Rollup の設定の互換を確かめていない）。動きには影響しないので Framework の新しい版を待つ。
+- 確かめ方: 開発元・利用環境どちらでも `npm audit`・`npm ls <パッケージ>`。`npm audit fix --force` は使わない（上の理由）。利用環境で `overrides` を消すと 7 件に戻る。
+
+### 84.3 依存のインストールスクリプト（2026-11-05 導入先のレビュー指摘）
+npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.json` の `allowScripts` で許可したものだけが動き、ほかは止めて `install scripts blocked because they are not covered by allowScripts` と知らせる。依存の中でスクリプトがあるのは `esbuild`（`postinstall: node install.js`）だけ。
+- `esbuild` の `postinstall` は、OS ごとの本体（`@esbuild/win32-x64` など。`optionalDependencies` で入る）が入っているかを確かめ、速く起動できるよう置き換えるだけ。止めても本体は入るのでビルドは動く（npm 12 で止めた状態でビルドできることを確かめた）。
+- 推奨: `package.json` に `"allowScripts": { "esbuild": true }`（版を付けない書き方。`npm install-scripts approve esbuild` は版を付けて書くので、`esbuild` を上げるたびに書き直しが要る）。npm 11 以前は `allowScripts` を読まず、これまでどおりすべて動く。`package.json` は `update` で新しい版になるので、社内で書き足さない。
+- 社内の `.npmrc` で `ignore-scripts=true` にしているなら、`allowScripts` に関わらずスクリプトは動かない（それでもビルドは通る）。依存込みのパッケージ（`vendor/npm-cache`）は組み立てのときにスクリプトを動かさずに作る。
+- 依存を足して新しくスクリプトがある部品が入ったら、中身を確かめてから `allowScripts` に足す（`npm install-scripts ls` で一覧）。
 
 ## 85. 初期化・更新で CI のファイルを欠かさない（2026-11-03 依頼者）
 社内で `init` したプロジェクトの CI が「`scripts/ci/install.mjs` が無い」で失敗した、への対応。CI 定義（`.gitlab-ci.yml`）が使うファイルを、組み立て・`init`・`update` のたびに確かめる。

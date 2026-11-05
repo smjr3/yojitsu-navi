@@ -114,7 +114,7 @@ yojitsu-navi gitlab-setup --apply
 - 1 回目（`--apply` なし）は何も変えず、推奨構成との違いを ✓／✗ で出します。
 - `--apply` で、プロジェクトの設定と保護ブランチを推奨値に直し、もう一度確かめて結果を出します。何度実行しても同じ結果です。
 - `→` の付いた ✗（メンバー・CI/CD 変数）は手で直します。直し方が `→` の後ろに出ます。
-- 社内の証明書でエラーになるときは `NODE_EXTRA_CA_CERTS=<社内CAのPEM>` を付けて実行します。
+- 社内の証明書でエラーになるときは `NODE_EXTRA_CA_CERTS=<社内CAのPEM>` か `NODE_USE_SYSTEM_CA=1` を付けて実行します（[社内の証明書](#社内の証明書)）。
 - `npm ci` 済みのフォルダなら `npm run gitlab:setup -- …` でも同じです。Node.js を使えない場合は、上の「プロジェクトの設定」の表どおりに GitLab の画面（Settings > General、Settings > Repository > Protected branches、Settings > Merge requests）で設定してください。
 
 ### 3. メンバーを追加する
@@ -137,9 +137,24 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 |---|---|---|
 | `NPM_CONFIG_REGISTRY` | `npm ci` が registry.npmjs.org に接続できない | `https://nexus.example.local/repository/npm/` |
 | `NODE_IMAGE` | Runner が Docker Hub から `node:22` を取れない | `registry.example.local/mirror/node:22` |
-| `NODE_EXTRA_CA_CERTS` | 社内の証明書で `npm ci` が `SELF_SIGNED_CERT_IN_CHAIN` などになる | 種類 **File** にして社内 CA の PEM を貼る |
+| `NODE_EXTRA_CA_CERTS` | 社内の証明書で `npm ci` が `SELF_SIGNED_CERT_IN_CHAIN` などになる | 種類 **File** にして社内 CA の PEM を貼る（下の「社内の証明書」） |
+| `NODE_USE_SYSTEM_CA` | 同上。Windows の shell executor で、社内 CA が Windows の証明書ストアに入っている | `1`（下の「社内の証明書」） |
 
 作業実績 API 用の変数（`WORKLOG_API_TOKEN`・`GIT_PUSH_TOKEN` など）は、本番 API の確認が済むまで不要です（下の「将来」）。
+
+#### 社内の証明書
+
+社内のプロキシ・ミラーが社内 CA の証明書を使っていると、`npm ci`・取り込み・`gitlab-setup` が `SELF_SIGNED_CERT_IN_CHAIN`・`UNABLE_TO_GET_ISSUER_CERT_LOCALLY` で失敗します。Node（npm も Node で動く）に社内 CA を信頼させる方法は 2 つで、両方を一緒に使っても構いません（Node 同梱の CA に足されます）。
+
+| 方法 | 向いている環境 | 設定 |
+|---|---|---|
+| `NODE_EXTRA_CA_CERTS` | どこでも（Docker の Runner・Linux・Windows） | 社内 CA の PEM ファイルのパス。CI/CD 変数なら種類 **File** にして PEM の中身を貼る |
+| `NODE_USE_SYSTEM_CA=1` | Windows の shell executor の Runner と社内の PC（社内 CA が Windows の証明書ストアに配られている） | `1`。PEM を用意しなくてよく、社内 CA が入れ替わっても OS の配布に任せられる |
+
+- `NODE_USE_SYSTEM_CA` は Node 22.19 以降（24 系は 24.6 以降）で使えます。古い Node では何も起きないので、`node --version` を確かめてください。
+- Windows では Windows の証明書ストア、Linux では OpenSSL の既定の場所（`/etc/ssl/certs/` など）を読みます。Docker の Runner はコンテナの中の証明書を見るので、社内 CA が入ったイメージでなければ `NODE_EXTRA_CA_CERTS` を使います。
+- PC の Git Bash では `NODE_USE_SYSTEM_CA=1 npm ci` のように前に付けるか、ユーザーの環境変数に登録します。PowerShell では `$env:NODE_USE_SYSTEM_CA = "1"` を実行してから `npm ci`。
+- 効いたかは `npm ping`（レジストリに届くか）で確かめます。
 
 ### 5. 公開と接続を確認する
 
@@ -187,7 +202,7 @@ git push -u origin update-<新しい版>
 | ジョブごとのタグ・社内だけのジョブ・新しい変数 | `.gitlab-ci.local.yml`（例 `build:` → `tags: [large]`） |
 | npm の社内レジストリ（Nexus・JFrog Artifactory など） | CI/CD 変数 `NPM_CONFIG_REGISTRY`、または `.npmrc` に `registry=https://…` |
 | レジストリの認証 | `.npmrc` に `//<レジストリのホスト>/<パス>/:_authToken=${NPM_AUTH_TOKEN}`、値は CI/CD 変数 `NPM_AUTH_TOKEN`（Masked）。トークンそのものは書かない |
-| 社内の証明書 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`（種類 File）。リポジトリに置くなら `certs/` などに置き、`.gitlab-ci.local.yml` の `variables:` で `NODE_EXTRA_CA_CERTS: "$CI_PROJECT_DIR/certs/ca.pem"` |
+| 社内の証明書 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`（種類 File）か `NODE_USE_SYSTEM_CA=1`（Windows の証明書ストア。[社内の証明書](#社内の証明書)）。リポジトリに置くなら `certs/` などに置き、`.gitlab-ci.local.yml` の `variables:` で `NODE_EXTRA_CA_CERTS: "$CI_PROJECT_DIR/certs/ca.pem"` |
 | Node のイメージ | CI/CD 変数 `NODE_IMAGE` |
 | テストを動かす・並列数 | CI/CD 変数 `YOJITSU_RUN_TESTS`・`VITEST_MAX_FORKS` |
 
@@ -279,7 +294,9 @@ yojitsu-navi update --keep-local   # 社内で変えたファイルは社内の�
 | パイプラインが作られず「`jobs:.yojitsu-navi-local config can't be blank`」などと出る | `.gitlab-ci.local.yml`（か `.gitlab-ci.yml`）に中身の無い項目がある。0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}` が原因。`yojitsu-navi update`（か `migrate-ci`）が直す。手で直すなら `{}` を消して次の行に `  variables:`、その次に `    YOJITSU_NAVI_LOCAL: "1"` を書く。`npm run ci:check` で確かめられる |
 | プロジェクトの中で `npx yojitsu-navi …` が「could not determine executable to run」 | 0.2.1 までのプロジェクトは名前がコマンドと同じ。`npm install -g` で入れた `yojitsu-navi` を使う（次の版から直る） |
 | CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check`（`npm run ci:check`）で足りないファイルが一覧で出る |
-| `npm ci` が `… vulnerabilities` と出る | 依存の脆弱性の報告。残っているものは使い方の上で影響しないことを確かめてある（一覧と理由は [SPEC.md](SPEC.md) §84.2）。`npm audit fix --force` は Framework を古い版に下げるので実行しない |
+| `npm ci` が `… vulnerabilities` と出る | 依存の脆弱性の報告。残っているもの（`xlsx` と Framework 経由の `deepmerge`）は使い方の上で影響しないことを確かめてある（一覧・理由・予定は [SPEC.md](SPEC.md) §84.2）。`npm audit fix --force` は Framework を古い版に下げるので実行しない |
+| `npm ci` が `npm warn deprecated …`（`inflight`・`glob@8`・`whatwg-encoding`）と出る | Framework が使う部品の古い版の知らせ。動きには影響しない。Framework の新しい版で消える（[SPEC.md](SPEC.md) §84.2） |
+| `npm ci` が `install scripts blocked because they are not covered by allowScripts`（`esbuild`） | npm 12 から、依存のインストールスクリプトは `package.json` の `allowScripts` で許可したものだけ動く。この版から `esbuild` を許可済み（`update` で入る）。前の版のままでも、`esbuild` はスクリプトなしで動くのでビルドは通る（[SPEC.md](SPEC.md) §84.3） |
 | `yojitsu-navi init` が「空ではありません」 | 同じ名前のフォルダがある。別の名前にするか、今あるプロジェクトなら `update` |
 | ジョブが `pull access denied` / イメージ取得で失敗 | Docker Hub に出られない。`NODE_IMAGE` に社内レジストリのイメージを設定 |
 | ジョブが `pending` のまま | 使える Runner が無い。Settings > CI/CD > Runners を確認し、管理者に依頼 |
