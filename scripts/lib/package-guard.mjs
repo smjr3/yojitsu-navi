@@ -3,9 +3,9 @@
 // 含むファイルがそのままパッケージに入るので、組み立てる前に止める。
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { MANIFEST as PROJECT_MANIFEST } from "../../packages/app/lib/project.mjs";
 
-export { PROJECT_MANIFEST };
+/** 利用環境の記録（packages/app/lib/project.mjs の MANIFEST と同じ。project.mjs は組み立てで写すファイルを読むので、組み立て前のここでは読み込まない） */
+export const PROJECT_MANIFEST = ".yojitsu-navi.json";
 
 /** パッケージに入れてはいけないファイル（社内のレジストリ・トークン・証明書・鍵、利用環境の記録・依存・バックアップ） */
 const INTERNAL_PATTERNS = [

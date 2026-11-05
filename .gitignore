@@ -16,5 +16,7 @@ vendor/npm-cache/_logs/
 packages/*/.npmrc
 packages/app/LICENSE
 packages/app/sample/
+packages/app/lib/ci-files.mjs
+packages/app/lib/ci-local.mjs
 .yojitsu-navi-backup/
 .yojitsu-navi-log/

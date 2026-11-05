@@ -8,7 +8,15 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ### 更新後に行うこと
 
-- 次からは `yojitsu-navi upgrade` で版を上げられる（update → 依存 → check → データ検証 → ビルドを 1 回で。結果の要約を出し、全部の出力を `.yojitsu-navi-log/` に残す。docs/DEPLOY_GITLAB.md「新しい版にする」）
+- 社内で手を加えたプロジェクトは、次の順に進める（社内の設定ファイルを作る・直すのは手順 3 から。手順 2 の `git pull` の前に作ったものは `git status` で確かめる）:
+  1. `npm install -g yojitsu-navi@<新しい版>`（PowerShell で「スクリプトの実行が無効」と出たら、以降の `yojitsu-navi` を `yojitsu-navi.cmd` にする）
+  2. `git switch main && git pull`。`git status` で変更が無いことを確かめる（`.gitlab-ci.local.yml` だけは残っていても止まらず、更新のコミットに入る）
+  3. `.gitlab-ci.yml` にランナーのタグ・変数・社内だけのジョブを書いていたら、`yojitsu-navi migrate-ci --dry-run` で移すものを確かめ、`yojitsu-navi migrate-ci` で `.gitlab-ci.local.yml` に移してコミットする。「自動で移せないもの」は表示のとおり CI/CD 変数などに移す（SPEC §91.4）
+  4. `yojitsu-navi upgrade`（または `update` → `npm ci` → `check` → `npm run validate` → `npm run build` を 1 つずつ）。手順 3 で移した `.gitlab-ci.yml` は止まらずに新しい版になる（前のものは `.yojitsu-navi-backup/`）。先に `yojitsu-navi update --dry-run --summary` で確かめてもよい
+  5. 表示された「更新後に行うこと」「新しい設定と推奨値」を、できたブランチ `update-<版>` の中で `config.json`・CI/CD 変数に入れてコミットする
+  6. `git push -u origin update-<版>` → MR → パイプラインが緑になったらマージ
+- 0.2.0・0.2.1 で作った `.gitlab-ci.local.yml` のひな形（`.yojitsu-navi-local: {}`）は GitLab が「`jobs:.yojitsu-navi-local config can't be blank`」で失敗にする。`update` がその行だけを中身のある形に直す（ほかの行は変えない。SPEC §91.3）。手で直していたらそのままでよい
+- プロジェクトの名前（`package.json`・`package-lock.json` の `name`）が `yojitsu-navi-site` になる。プロジェクトの中で `npx yojitsu-navi@<版> …` が「could not determine executable to run」で動かなかったのは、名前がコマンドと同じだったため（この版に上げるまでは `npm install -g` で入れたコマンドを使う）
 - `update` が「パッケージに無いファイル」を出したら、使っていないもの（社内で足したテスト用のデータなど）は消して MR に入れる
 - `update` が「サンプルのまま残っているデータ」を出したら、`yojitsu-navi reset-data --dry-run` で確かめてから `yojitsu-navi reset-data` で空にし、本番のデータを入れる
 - `package-lock.json` は新しい版のものを使う（`esbuild`・`glob` を上げた。`npm audit` は 7 件 → 4 件。残る理由は SPEC §84.2）
@@ -17,12 +25,16 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ### テスト・CI の前提
 
+- `npm run ci:check` を足した（`yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC でもプロジェクトの中から動かせる）。CI が使うファイルに加え、`.gitlab-ci.yml`・`.gitlab-ci.local.yml` の GitLab が受け付けない書き方（中身の無いジョブ・空のファイル）も見つける。`init`・`update` の最後の確かめも同じ（SPEC §91.3）
 - `upgrade` はテストを既定で飛ばす（CI の test ジョブと同じ）。動かすときは `--test` か環境変数 `YOJITSU_RUN_TESTS=1`
 - npm 12 の「`esbuild` のインストールスクリプトを止めた」警告は出なくなる（`package.json` の `allowScripts` で許可。SPEC §84.3）
 
 ### 変更
 
 - ファビコンを画像ファイル（`src/icons/`）にした。0.2.0・0.2.1 の埋め込み（data URI）は社内の配信先でタブに出なかったため（SPEC §89）
+- `.gitlab-ci.local.yml` のひな形を GitLab が受け付ける形にし、`update` が古いひな形を直す。`check`・`npm run ci:check` が中身の無いジョブ・空のファイルを見つける（SPEC §91.3）
+- `yojitsu-navi migrate-ci`: 社内で `.gitlab-ci.yml` に書いたランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移す。移したあとの `update` は `.gitlab-ci.yml` で止まらない（SPEC §91.4）
+- プロジェクトの名前を `yojitsu-navi-site` にし、プロジェクトの中でも `npx yojitsu-navi` が動くようにした（SPEC §91.3）
 - `yojitsu-navi upgrade`（版上げを 1 回で）・`yojitsu-navi reset-data`（サンプルのまま残ったデータを空に）を足した。`update` に `--no-commit`・`--summary`・`--log <ファイル>`（UTF-8。PowerShell で化けるとき用）、`check` に `--log`。自動でコミットしたことをはっきり出し、パッケージに無いファイルを知らせる。`update` の前に作った `.gitlab-ci.local.yml` では止まらない（SPEC §94）
 - 依存の脆弱性を 7 件から 4 件に・npm 12 で `esbuild` のスクリプトを許可・社内証明書と Windows のテスト並列数の説明を足す（SPEC §84.2・§84.3）
 

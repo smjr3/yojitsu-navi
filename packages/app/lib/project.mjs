@@ -7,6 +7,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { cwd } from "node:process";
 import { CHANGELOG, updateNotes } from "./changelog.mjs";
 import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
+import { ciHash, migrateCi, migratedHash, repairLocalPlaceholder } from "./ci-local.mjs";
 import { compareVersion } from "./version.mjs";
 
 export { compareVersion };
@@ -369,11 +370,24 @@ export function update(o) {
   const record = new Map();
   /** 社内の版を残すファイル（--keep-local。前に残すと決めたものは、新しい版と中身が同じになっても次の版のために覚えておく） */
   const kept = [];
+  let repairedLocal = false;
+  let migratedCi = false;
+  /** migrate-ci が社内の設定を .gitlab-ci.local.yml へ移したときの .gitlab-ci.yml の中身（同じなら止めずに新しい版にする。SPEC §91.4） */
+  const migrated = existsSync(join(dir, LOCAL_CI_FILE)) ? migratedHash(readFileSync(join(dir, LOCAL_CI_FILE), "utf-8")) : "";
   for (const [f, abs] of template) {
     const to = join(dir, f);
     if (fileKind(f) !== "package") {
       // .gitlab-ci.local.yml は .gitlab-ci.yml が include するので、無ければひな形を足す（無いと CI が動かない）
       if (f === LOCAL_CI_FILE && !existsSync(to)) writes.push({ f, next: readFileSync(abs), kind: "added" });
+      // 0.2.0〜0.2.1 のひな形の中身の無い項目（GitLab が「config can't be blank」で失敗にする）は、その行だけ直す（SPEC §91.3）
+      else if (f === LOCAL_CI_FILE) {
+        const text = readFileSync(to, "utf-8");
+        const fixed = repairLocalPlaceholder(text);
+        if (fixed !== text) {
+          writes.push({ f, next: Buffer.from(fixed, "utf-8"), kind: "changed" });
+          repairedLocal = true;
+        }
+      }
       else if (fileKind(f) === "keep" && !existsSync(to)) notAdded.push(f);
       continue;
     }
@@ -389,7 +403,10 @@ export function update(o) {
     let type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : null;
     // 前に社内の版を残すと決めたファイルは、記録と中身が同じでも（新しい版と同じだった版を挟んだとき）社内の版として扱う
     if (!type && cur && keptBefore.has(f)) type = "modified";
-    if (type) conflicts.push({ f, type, next, cur });
+    if (type === "modified" && f === CI_FILE && migrated && ciHash(cur.toString("utf-8")) === migrated) {
+      writes.push({ f, next, kind: "changed" });
+      migratedCi = true;
+    } else if (type) conflicts.push({ f, type, next, cur });
     else writes.push({ f, next, kind: cur ? "changed" : "added" });
   }
   for (const f of Object.keys(old)) {
@@ -440,7 +457,14 @@ export function update(o) {
   const extras = localExtras(dir, template, old, useGit).filter((f) => !excludeExtra.includes(f));
   // 今の版から新しい版までの変更履歴の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」（SPEC §91.2）
   const notes = template.has(CHANGELOG) ? updateNotes(readFileSync(template.get(CHANGELOG), "utf-8"), manifest.version, version, localConfig) : [];
-  const base = { changed, added, removed: deletes, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras };
+  const ciNotes = [
+    ...(migratedCi ? [`${CI_FILE}: 社内の設定は migrate-ci で ${LOCAL_CI_FILE} に移してあるので、新しい版にします`] : []),
+    ...(repairedLocal ? [`${LOCAL_CI_FILE}: 中身の無い項目（GitLab が「config can't be blank」で失敗にする）を直します（ほかの行は変えません）`] : []),
+  ];
+  const ciNote = () => {
+    if (ciNotes.length) log(ciNotes.join("\n"));
+  };
+  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras };
   /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */
   const list = (title, items) => {
     if (!items.length) return;
@@ -460,6 +484,7 @@ export function update(o) {
     if (unresolved.length) log(`社内で変えたファイル（このままでは止まります。--overwrite で新しい版に、--keep-local で社内の版のまま）:\n${listConflicts(unresolved)}`);
     if (take.length) log(`社内で変えていたが新しい版にするファイル（前のものは ${BACKUP_DIR}/ に残します）:\n${listConflicts(take)}`);
     if (keptNow.length) log(`社内の版のまま残すファイル:\n${listConflicts(keptNow)}`);
+    ciNote();
     list("新しい版にするファイル", changed);
     list("足すファイル", added);
     list("消すファイル", deletes);
@@ -501,7 +526,7 @@ export function update(o) {
         `新しい版にする（前のものは ${BACKUP_DIR}/ に残す）: yojitsu-navi update --overwrite`,
         "社内の版のまま残す（次の更新でも残す）: yojitsu-navi update --keep-local",
         ...(unresolved.some((c) => c.f === CI_FILE || c.f === "package.json")
-          ? ["", `社内向けの CI の設定（ランナーのタグ・レジストリ・証明書など）は ${LOCAL_CI_FILE}・${NPMRC}・CI/CD 変数に移すと、次からの更新で止まらずに残ります（docs/DEPLOY_GITLAB.md「社内の設定の置き場」）`]
+          ? ["", `社内向けの CI の設定（ランナーのタグ・変数・社内だけのジョブ）は yojitsu-navi migrate-ci で ${LOCAL_CI_FILE} に移せます。移したあとの update は ${CI_FILE} を止まらずに新しい版にします。レジストリ・証明書は ${NPMRC}・CI/CD 変数へ（docs/DEPLOY_GITLAB.md「社内の設定の置き場」）`]
           : []),
       ].join("\n"),
     );
@@ -526,6 +551,7 @@ export function update(o) {
   writeManifest(dir, version, record, kept);
 
   log(`予実ナビ ${manifest.version} → ${version}: 変更 ${changed.length}・追加 ${added.length}・削除 ${deletes.length} ファイル${vendorUpdated ? "・依存を入れ替え" : ""}（data/ と config.json はそのまま）`);
+  ciNote();
   const touched = [...changed.map((f) => `  変更 ${f}`), ...added.map((f) => `  追加 ${f}`), ...deletes.map((f) => `  削除 ${f}`)];
   if (touched.length) detail(touched.join("\n"));
   if (backup) log(`前のファイルは ${backup}/ に写しました（git には入りません。要らなければ消してください）`);
@@ -689,4 +715,76 @@ export function resetData(o) {
   log("次に行うこと: 本番のデータを入れ、npm run validate で確かめてから MR にする（git add data && git commit）");
   if (result.removed.length) log("消した作業実績の月は、取り込みで作り直されます（過去の月は Run pipeline で FETCH_FROM・FETCH_TO を入れて取り直す。docs/OPERATIONS.md）");
   return result;
+}
+
+/**
+ * もとの版の .gitlab-ci.yml（init・update が入れたもの）。記録（.yojitsu-navi.json）のハッシュと同じ中身を、パッケージ・git の履歴から探す。
+ * 見つからなければ null
+ */
+function originalCi(dir, templateCi, hash) {
+  if (!hash) return null;
+  if (templateCi && matchesHash(templateCi, hash)) return templateCi.toString("utf-8");
+  if (!isGitRepo(dir)) return null;
+  const commits = git(dir, ["log", "--format=%H", "-n", "200", "--", CI_FILE]).out.split("\n").filter(Boolean);
+  for (const c of commits) {
+    const r = spawnSync("git", ["show", `${c}:./${CI_FILE}`], { cwd: dir, maxBuffer: 16 * 1024 * 1024 });
+    if (r.status === 0 && matchesHash(r.stdout, hash)) return r.stdout.toString("utf-8");
+  }
+  return null;
+}
+
+/**
+ * 社内で直した .gitlab-ci.yml から、ランナーのタグ・変数・社内だけのジョブを .gitlab-ci.local.yml に移す（yojitsu-navi migrate-ci。SPEC §91.4）。
+ * .gitlab-ci.yml は変えない。移し終えたら .gitlab-ci.local.yml に印を書き、次の update はその .gitlab-ci.yml を止めずに新しい版にする
+ * @param {{ pkgDir: string, dir: string, dryRun?: boolean, force?: boolean, log: (s: string) => void }} o
+ */
+export function migrateCiCommand(o) {
+  const { pkgDir, dir, log } = o;
+  const ciPath = join(dir, CI_FILE);
+  if (!existsSync(ciPath)) throw new CliError(`${dir} に ${CI_FILE} がありません。予実ナビのプロジェクトのフォルダで実行してください`);
+  const current = readFileSync(ciPath, "utf-8");
+  const template = readTemplate(join(pkgDir, "template"));
+  const templateCi = template.has(CI_FILE) ? readFileSync(template.get(CI_FILE)) : null;
+  let manifest = {};
+  try {
+    manifest = JSON.parse(readFileSync(join(dir, MANIFEST), "utf-8"));
+  } catch {
+    // init で作っていないプロジェクトでも、新しい版と比べて移す
+  }
+  const hash = manifest.files?.[CI_FILE] ?? "";
+  const localPath = join(dir, LOCAL_CI_FILE);
+  if (hash && matchesHash(Buffer.from(current, "utf-8"), hash)) {
+    log(`${CI_FILE} は社内で変えていません（移すものはありません）`);
+    // 0.2.0〜0.2.1 のひな形（GitLab が失敗にする）だけは直す（SPEC §91.3）
+    const before = existsSync(localPath) ? readFileSync(localPath, "utf-8") : null;
+    const fixed = before === null ? null : repairLocalPlaceholder(before);
+    const repair = fixed !== null && fixed !== before;
+    if (repair) log(`${LOCAL_CI_FILE} の中身の無い項目（GitLab が「config can't be blank」で失敗にする）を${o.dryRun ? "直します（何も変えていません）" : "直しました。コミットしてください"}`);
+    if (repair && !o.dryRun) writeFileSync(localPath, fixed);
+    return { moved: [], same: [], manual: [], written: repair && !o.dryRun, base: "original" };
+  }
+  const original = originalCi(dir, templateCi, hash);
+  if (!original && !templateCi) throw new CliError("比べるもとの .gitlab-ci.yml が見つかりません");
+  const local = existsSync(localPath) ? readFileSync(localPath, "utf-8") : template.has(LOCAL_CI_FILE) ? readFileSync(template.get(LOCAL_CI_FILE), "utf-8") : "";
+  const r = migrateCi({ current, base: original ?? templateCi.toString("utf-8"), local, force: o.force });
+  const dry = Boolean(o.dryRun);
+  const list = (xs) => xs.map((x) => `  ${x}`).join("\n");
+  log(`${CI_FILE} の社内の変更を${original ? "もとの版" : `この版（${manifest.version ?? "?"} の記録と合うものが見つからないので新しい版）`}と比べました${dry ? "（何も変えていません）" : ""}`);
+  if (r.moved.length) log(`${LOCAL_CI_FILE} に${dry ? "移すもの" : "移したもの"}:\n${list(r.moved)}`);
+  if (r.same.length) log(`${LOCAL_CI_FILE} にもうあるもの:\n${list(r.same)}`);
+  if (r.manual.length) log(`自動で移せないもの（手で直す）:\n${list(r.manual)}`);
+  const written = !dry && r.changed;
+  if (written) writeFileSync(localPath, r.local);
+  log("");
+  if (r.manual.length && !o.force) {
+    log(`自動で移せないものがあるので、update は ${CI_FILE} でまだ止まります。上を直してから、もう一度 yojitsu-navi migrate-ci を実行してください`);
+    log(`（要らない変更なら yojitsu-navi migrate-ci --force。update が ${CI_FILE} を新しい版にし、前のものは ${BACKUP_DIR}/ に残します）`);
+  } else {
+    log("次に行うこと:");
+    if (dry) log("  yojitsu-navi migrate-ci");
+    if (r.changed) log(`  git add ${LOCAL_CI_FILE} && git commit -m "社内の CI の設定を ${LOCAL_CI_FILE} に移す"`);
+    log(`  yojitsu-navi update   （${CI_FILE} を新しい版にします。前のものは ${BACKUP_DIR}/ に残します）`);
+  }
+  if (!original) log("（もとの版が見つからないので新しい版と比べました。新しい版で変わったところも「自動で移せないもの」に出ることがあります）");
+  return { moved: r.moved, same: r.same, manual: r.manual, written, base: original ? "original" : "template" };
 }

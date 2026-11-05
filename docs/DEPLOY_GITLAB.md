@@ -190,6 +190,21 @@ git push -u origin update-<新しい版>
 
 結果はブランチ `update-<版>` にコミットされ、「【自動でコミットしました】ブランチ … に …」と出ます（同じ名前のブランチがあれば `update-<版>-2`）。MR を作り、パイプラインが緑になったらリーダーがマージします。コミットしたくないときは `--no-commit`（ブランチを作らず、`git add` までにします。MR にする手順を表示します）。
 
+- PowerShell で「このシステムではスクリプトの実行が無効」と出たら、`yojitsu-navi` の代わりに `yojitsu-navi.cmd` と打ちます（npm が入れた `.ps1` が実行ポリシーで止まるため）。
+- プロジェクトの中の `npx yojitsu-navi@<版> …` は 0.2.1 までのプロジェクトでは動きません（プロジェクトの名前がコマンドと同じ `yojitsu-navi` だったため「could not determine executable to run」。次の版から `yojitsu-navi-site`）。`npm install -g` で入れたコマンドを使います。
+- CI の設定だけを確かめるときは、プロジェクトの中で `npm run ci:check`（`yojitsu-navi check` と同じ。コマンドを入れていない PC でも動く）。
+
+### 社内で手を加えたプロジェクトの版を上げる順番
+
+`.gitlab-ci.yml` にランナーのタグなどを書いていた、`.gitlab-ci.local.yml`・`config.json` を社内で直している、といったプロジェクトは次の順に進めます。社内の設定ファイルを作る・直すのは手順 3 からにします（`git pull` の前に作ったものは `git status` で確かめます。`.gitlab-ci.local.yml` だけは残っていても止まらず、更新のコミットに入ります）。
+
+1. `npm install -g yojitsu-navi@<新しい版>`（依存込みなら `npm install -g ./yojitsu-navi-<新しい版>-with-deps.tgz`）
+2. `git switch main && git pull`。`git status` で変更が無いことを確かめる
+3. `.gitlab-ci.yml` を社内で直していたら、`yojitsu-navi migrate-ci --dry-run` → `yojitsu-navi migrate-ci` でランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移し、表示のとおりコミットする（下の「社内の設定の置き場」）。「自動で移せないもの」は表示のとおり CI/CD 変数などに移してから、もう一度 `migrate-ci`
+4. `yojitsu-navi upgrade`（または上の表の順に 1 つずつ）。手順 3 で移した `.gitlab-ci.yml` は止まらずに新しい版になる（前のものは `.yojitsu-navi-backup/<日時>/`）。先に `yojitsu-navi update --dry-run --summary` で確かめてもよい
+5. 表示された「更新後に行うこと」「新しい設定と推奨値」を、ブランチ `update-<版>` の中で `config.json`・CI/CD 変数に入れてコミットする
+6. `git push -u origin update-<版>` → MR → パイプラインが緑になったらマージ
+
 最後に、今の版から新しい版までの [CHANGELOG.md](../CHANGELOG.md) の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します。設定は `config.json` の今の値を添えて「項目 今: … / 推奨: …」の形で出るので、要るものを MR の中で `config.json` に書きます（`update` は `config.json` を変えません）。`--dry-run` でも同じものを出します。
 
 `update` はほかに次のものを一覧で知らせます（どれも消しません）。
@@ -222,9 +237,9 @@ yojitsu-navi update --dry-run --summary --log update.log   # 画面には件数�
 | テストを動かす・並列数 | CI/CD 変数 `YOJITSU_RUN_TESTS`・`VITEST_MAX_FORKS` |
 
 - GitLab は include したファイルと `.gitlab-ci.yml` を合わせます。同じ項目は `.gitlab-ci.yml` が勝つので、`.gitlab-ci.yml` にある項目（`variables:` の `NODE_IMAGE`、ジョブの `script:`・`rules:` など）は `.gitlab-ci.local.yml` では変えられません。変数は CI/CD 変数にすれば勝ちます。どうしても `.gitlab-ci.yml` の中身を変えるときは `--keep-local`（下）。
-- `.gitlab-ci.local.yml` は中身が空だと GitLab が失敗にするので、ひな形の `.yojitsu-navi-local: {}` は消さないでください。
+- `.gitlab-ci.local.yml` は中身が空だと GitLab が失敗にするので、ひな形の何もしない項目（`.yojitsu-navi-local:` と、その下の変数 `YOJITSU_NAVI_LOCAL`）は消さないでください。中身の無い項目（`.yojitsu-navi-local: {}`・`build:` だけの行など）も GitLab が「`jobs:<名前> config can't be blank`」で失敗にします。0.2.0・0.2.1 のひな形はこの形だったので、`update` がその行だけ直します（SPEC §91.3）。書いたら `npm run ci:check` で確かめられます。
 - 社内で足したほかのファイル（`certs/` など）も、パッケージに無ければ `update` は触りません。
-- 前の版で `.gitlab-ci.yml` に社内の設定を書いていたら: `yojitsu-navi update --dry-run` で差分を見て、社内の設定を上の置き場に移してから `yojitsu-navi update --overwrite`。
+- 前の版で `.gitlab-ci.yml` に社内の設定を書いていたら: `yojitsu-navi migrate-ci` が、もとの版（前の `init`・`update` が入れたもの。git の履歴から探す）と比べて、ランナーのタグ（`default:`・ジョブの `tags:`）・新しい変数（全体・ジョブの `variables:`）・社内だけのジョブを `.gitlab-ci.local.yml` に移します。`.gitlab-ci.yml` は変えません。`.gitlab-ci.yml` にもともとある変数の値の変更・ジョブの `script:` などの変更・消したジョブは `.gitlab-ci.local.yml` では変えられないので「自動で移せないもの」に出ます（変数は CI/CD 変数にすれば勝ちます）。移し終えると `.gitlab-ci.local.yml` の最後に印（`# yojitsu-navi migrate-ci: …`）が付き、次の `update` はそのときの `.gitlab-ci.yml` を止まらずに新しい版にします（そのあと `.gitlab-ci.yml` をまた変えたら止まります）。自動で移せないものが要らない変更なら `migrate-ci --force`（SPEC §91.4）。
 
 ### 上書きするファイルと残すファイル
 
@@ -313,10 +328,12 @@ yojitsu-navi reset-data             # 上のとおりに直す（作業実績の
 | `npm ci --offline` が `ENOTCACHED` | `package-lock.json` と `vendor/npm-cache/` の版が合っていない（社内で依存を足した・依存込みでないパッケージで update した）。依存込みのパッケージで `yojitsu-navi update` し直す |
 | `yojitsu-navi update` が「依存込みです」で止まる | 依存込みで作ったプロジェクトを依存なしのパッケージで更新しようとした。`-with-deps.tgz` を使う |
 | `yojitsu-navi update` が「社内で変えたファイルがあるので止めました」 | 一覧のファイルを社内で変えていた（何も変わっていない）。`--dry-run` で差分を見て、`--overwrite`（新しい版にする）か `--keep-local`（社内の版を残す）を付けて実行し直す |
+| パイプラインが作られず「`jobs:.yojitsu-navi-local config can't be blank`」などと出る | `.gitlab-ci.local.yml`（か `.gitlab-ci.yml`）に中身の無い項目がある。0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}` が原因。`yojitsu-navi update`（か `migrate-ci`）が直す。手で直すなら `{}` を消して次の行に `  variables:`、その次に `    YOJITSU_NAVI_LOCAL: "1"` を書く。`npm run ci:check` で確かめられる |
+| プロジェクトの中で `npx yojitsu-navi …` が「could not determine executable to run」 | 0.2.1 までのプロジェクトは名前がコマンドと同じ。`npm install -g` で入れた `yojitsu-navi` を使う（次の版から直る） |
 | `yojitsu-navi update` が「コミットしていない変更があります」 | 一覧のファイルをコミットするか取り消す（`.gitlab-ci.local.yml` は止まらない。`.npmrc` は止まる）。`--force` でも続けられるが、MR の差分に社内の変更が混ざる |
 | `yojitsu-navi upgrade` が「… で止まりました」 | 要約の「失敗」の手順を直してから、もう一度 `upgrade`。手順の全部の出力は要約の下に出る `.yojitsu-navi-log/upgrade-<日時>.log` にある |
 | PowerShell で日本語が化ける | `--log <ファイル>` で書いた UTF-8 のファイルを開くか、`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` を実行してから動かす（「出力が長いとき・文字化けするとき」） |
-| CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check` で足りないファイルが一覧で出る |
+| CI が `Cannot find module …scripts/ci/….mjs` などで失敗する・`init`／`update` が「CI（.gitlab-ci.yml）が使うファイル…」で止まる | ファイルがコミットされていない（PC の git の除外設定に当たった）か、古い版で作った。新しい版で `yojitsu-navi update` すると入れ直してコミットする。`yojitsu-navi check`（`npm run ci:check`）で足りないファイルが一覧で出る |
 | `npm ci` が `… vulnerabilities` と出る | 依存の脆弱性の報告。残っているもの（`xlsx` と Framework 経由の `deepmerge`）は使い方の上で影響しないことを確かめてある（一覧・理由・予定は [SPEC.md](SPEC.md) §84.2）。`npm audit fix --force` は Framework を古い版に下げるので実行しない |
 | `npm ci` が `npm warn deprecated …`（`inflight`・`glob@8`・`whatwg-encoding`）と出る | Framework が使う部品の古い版の知らせ。動きには影響しない。Framework の新しい版で消える（[SPEC.md](SPEC.md) §84.2） |
 | `npm ci` が `install scripts blocked because they are not covered by allowScripts`（`esbuild`） | npm 12 から、依存のインストールスクリプトは `package.json` の `allowScripts` で許可したものだけ動く。この版から `esbuild` を許可済み（`update` で入る）。前の版のままでも、`esbuild` はスクリプトなしで動くのでビルドは通る（[SPEC.md](SPEC.md) §84.3） |

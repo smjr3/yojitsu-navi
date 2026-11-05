@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, LOG_DIR, backupStamp, check, gitlabFromRemote, init, normalizeGitlab, readGitlabTarget, resetData, update } from "../lib/project.mjs";
+import { CliError, LOG_DIR, backupStamp, check, gitlabFromRemote, init, migrateCiCommand, normalizeGitlab, readGitlabTarget, resetData, update } from "../lib/project.mjs";
 import { createOutput } from "../lib/output.mjs";
 import { upgrade } from "../lib/upgrade.mjs";
 
@@ -39,7 +39,13 @@ const HELP = `予実ナビ ${VERSION}
       data/ にサンプルのまま残っているファイルを空にする（作業実績の月のファイルは消し、ほかの CSV は見出しの行だけにする）
       サンプルと中身が同じファイルだけを変える。前のものは .yojitsu-navi-backup/<日時>/ に写す。コミットはしない
   yojitsu-navi check [フォルダ] [--log <ファイル>]
-      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか確かめる（init・update の最後にも確かめる）
+      CI（.gitlab-ci.yml）が使うファイルがフォルダにあり、git にコミットされているか、GitLab が受け付けない書き方（中身の無いジョブなど）が無いか確かめる
+      （init・update の最後にも確かめる。プロジェクトの中では npm run ci:check でも同じことができる）
+  yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force] [--log <ファイル>]
+      社内で .gitlab-ci.yml に書いたランナーのタグ・変数・社内だけのジョブを .gitlab-ci.local.yml に移す（.gitlab-ci.yml は変えない）。
+      移し終えると、次の update は .gitlab-ci.yml で止まらずに新しい版にする
+        --dry-run     何も変えずに、移すものと自動で移せないものを出す
+        --force       自動で移せないものが残っていても、次の update で .gitlab-ci.yml を新しい版にする（前のものはバックアップに残る）
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -168,6 +174,12 @@ async function main(argv) {
     assertKnown(rest, [], ["--log"]);
     out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
     check({ dir: resolve(positional(rest, ["--log"])[0] ?? "."), log: out.log });
+    return 0;
+  }
+  if (cmd === "migrate-ci") {
+    assertKnown(rest, ["--dry-run", "--force"], ["--log"]);
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
+    migrateCiCommand({ pkgDir: PKG_DIR, dir: resolve(positional(rest, ["--log"])[0] ?? "."), dryRun: rest.includes("--dry-run"), force: rest.includes("--force"), log: out.log });
     return 0;
   }
   if (cmd === "gitlab-setup") {

@@ -17,4 +17,8 @@
 #   - 社内だけのジョブ
 #
 # 中身が空だと GitLab が include を失敗にするので、下の何もしない項目（. で始まる名前は使われない）を消さないでください。
-.yojitsu-navi-local: {}
+# 中身の無い項目（「.yojitsu-navi-local: {}」など）も GitLab が「config can't be blank」で失敗にするので、変数を 1 つ持たせています。
+# 書いたら npm run ci:check で確かめられます。.gitlab-ci.yml に書いていた社内の設定は yojitsu-navi migrate-ci で移せます。
+.yojitsu-navi-local:
+  variables:
+    YOJITSU_NAVI_LOCAL: "1"

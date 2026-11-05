@@ -22,8 +22,8 @@ import { npm } from "./lib/npm.mjs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { isAllowedImage, isImage } from "./lib/image-detect.mjs";
-import { checkCiFiles, describeCiProblems } from "../packages/app/lib/ci-files.mjs";
-import { isShipped, starterData, testClosure, userPackageJson } from "../packages/app/lib/template-files.mjs";
+import { checkCiFiles, describeCiProblems } from "./lib/ci-files.mjs";
+import { isShipped, starterData, testClosure, userPackageJson, userPackageLock } from "../packages/app/lib/template-files.mjs";
 import { packageGuardProblems } from "./lib/package-guard.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -32,6 +32,8 @@ const TEMPLATE = join(PKG, "template");
 const DIST = join(PKG, "dist");
 const DEPS = join(PKG, "deps");
 const SAMPLE = join(PKG, "sample");
+/** scripts/lib から packages/app/lib に写すもの（yojitsu-navi コマンドが使う） */
+const SHARED_LIB = ["ci-files.mjs", "ci-local.mjs"];
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -61,7 +63,8 @@ if (guardProblems.length) {
 }
 
 // 1. template/: 開発元のファイルを写す。.gitignore は npm pack が別扱いにするので _gitignore にしておく（init で戻す）
-//    data/ はサンプルを除いたもの（見出しの行だけ）を template に、サンプルそのものを sample/ に置く。package.json は開発元だけの scripts を外す
+//    data/ はサンプルを除いたもの（見出しの行だけ）を template に、サンプルそのものを sample/ に置く。package.json は開発元だけの scripts を外す。
+//    package.json・package-lock.json の名前は yojitsu-navi-site にする（コマンドと同じ名前だとプロジェクトの中で npx yojitsu-navi が動かない）
 rmSync(TEMPLATE, { recursive: true, force: true });
 rmSync(SAMPLE, { recursive: true, force: true });
 const put = (to, body) => {
@@ -76,8 +79,12 @@ for (const f of templateFiles(ROOT)) {
     const starter = starterData(f, buf);
     if (starter) put(to, starter);
   } else if (f === "package.json") put(to, userPackageJson(buf.toString("utf-8")));
+  else if (f === "package-lock.json") put(to, userPackageLock(buf.toString("utf-8")));
   else put(to, buf);
 }
+
+// lib/: CI の確かめ・移し替え（scripts/lib/ のもの）を写す。プロジェクトの npm run ci:check と yojitsu-navi コマンドで同じものを使う（git には入れない。.gitignore）
+for (const f of SHARED_LIB) cpSync(join(ROOT, "scripts/lib", f), join(PKG, "lib", f));
 
 // CI 定義（.gitlab-ci.yml）が使うファイル（npm run の中身・読み込み先まで）が template に揃っていなければ止める（SPEC §85）
 const ciProblems = describeCiProblems(checkCiFiles(TEMPLATE, { git: false }));

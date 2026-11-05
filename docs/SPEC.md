@@ -693,8 +693,9 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 - **計算コアとの関係（→ §84 で変更。1 つのパッケージにまとめた）**: `@yojitsu-navi/core`（§43）は別パッケージのまま残す（monorepo の 2 パッケージ）。core はほかのプロジェクトが `import` して使う部品、`yojitsu-navi` は予実ナビのプロジェクトを作る道具で、使う人と更新の仕方が違うため。`yojitsu-navi` の template には `packages/core/` も入るので、社内でも §43 の手順で core を公開できる。
 - **個人・会社の情報を入れない**: 社内 GitLab の URL・グループ名・個人名・アカウント名はパッケージに入れない（`template/config.json` の接続先は空）。接続先は社内で `init --gitlab <URL> --project <グループ/プロジェクト>` のときに入れる（`config.json` の `masterEdit.gitlab` と `git remote` の 2 か所。省くと聞かれ、空でも §39.1 のとおり CI が補う）。利用者が設定画面で入れるのは自分のトークンだけ。
 - `yojitsu-navi init [フォルダ]`: 空のフォルダに一式を写し、`.yojitsu-navi.json`（入れた版と各ファイルの SHA-256）を書き、`git init -b main`・最初のコミットまで行う。push は利用者が行う（外部に出す操作なので）。
-- `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルがあれば、何も変えずに止まる（→ §91）。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。上書きするファイル・残すファイルの区分、差分の確認とバックアップは §91。社内の CI・npm の設定の置き場（`.gitlab-ci.local.yml`・`.npmrc`）は §91.1、更新後に出す導入先で行うこと（`CHANGELOG.md`）は §91.2。
-- `init`・`update` の最後に、CI 定義が使うファイルがそろいコミットされているかを確かめる（§85。`yojitsu-navi check` でも確かめられる）。
+- `yojitsu-navi update [フォルダ]`: `data/` と `config.json` は足しも消しもしない。それ以外は新しい版に入れ替え、前の版の記録にあって新しい版に無いファイルは消す。前の版の記録と中身が違う（社内で手を入れた）ファイルがあれば、何も変えずに止まる（→ §91）。`config.json` に無い新しい設定の項目と、サンプルにだけある新しいデータのファイル（`data/worklogs/` は除く）も知らせる。結果はブランチ `update-<版>` にコミットし、MR でマージする（§39 の保護ブランチのまま）。コミットしていない変更がある・古い版にする・依存込みのプロジェクトを依存なし版で更新する、のときは止まる（`--force` で続ける）。上書きするファイル・残すファイルの区分、差分の確認とバックアップは §91。社内の CI・npm の設定の置き場（`.gitlab-ci.local.yml`・`.npmrc`）は §91.1、更新後に出す導入先で行うこと（`CHANGELOG.md`）は §91.2。利用環境の `package.json` の名前は `yojitsu-navi-site`（§91.3）。
+- `yojitsu-navi migrate-ci [フォルダ]`: 社内で `.gitlab-ci.yml` に書いたランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移す（§91.4）。
+- `init`・`update` の最後に、CI 定義が使うファイルがそろいコミットされているか・GitLab が受け付けない書き方が無いかを確かめる（§85・§91.3。`yojitsu-navi check`、プロジェクトの中では `npm run ci:check` でも確かめられる）。
 - `yojitsu-navi upgrade`（`update` からビルドまでを 1 回で）・`reset-data`（サンプルのまま残ったデータを空に）・`update` の `--no-commit`・`--summary`・`--log` は §94。
 - `yojitsu-navi gitlab-setup [--apply]`: §39.2 と同じ。接続先は `config.json`、空なら `git remote` の `origin`（https）から読む。トークンは `GITLAB_TOKEN`、無ければ画面に出さずにその場で聞く（Windows のコマンドプロンプトでも使えるように。引数では受け取らない）。
 - 手順は `docs/DEPLOY_GITLAB.md`（手順 0〜2、「新しい版にする」）。
@@ -1232,9 +1233,9 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 
 ## 85. 初期化・更新で CI のファイルを欠かさない（2026-11-03 依頼者）
 社内で `init` したプロジェクトの CI が「`scripts/ci/install.mjs` が無い」で失敗した、への対応。CI 定義（`.gitlab-ci.yml`）が使うファイルを、組み立て・`init`・`update` のたびに確かめる。
-- 洗い出し（`packages/app/lib/ci-files.mjs`）: `script`・`before_script`・`after_script` のコマンドに書いたファイル、`npm run X` の `package.json` の中身（`preX`・`postX` も）、`scripts/ci/` のスクリプトが中で `npm run` するもの、それらが相対パスで import する先（`.js` と書いた `.ts` も）を辿ったすべてと、`npm ci` が読む `package.json`・`package-lock.json`。
-- 確かめること: フォルダにある・git にコミットされている（push しても CI から見えないものを出さない）・`npm run` する名前が `package.json` にある。
-- `npm run app:build` は template で足りなければ止まる（壊れたパッケージを作らない）。`init`・`update` は最後に確かめ、足りなければ一覧を出して止まる（終了コード 2）。`yojitsu-navi check [フォルダ]` で今あるプロジェクトも確かめられる。
+- 洗い出し（`scripts/lib/ci-files.mjs`。プロジェクトにも入り、`npm run app:build` が `packages/app/lib` に写す）: `script`・`before_script`・`after_script` のコマンドに書いたファイル、`npm run X` の `package.json` の中身（`preX`・`postX` も）、`scripts/ci/` のスクリプトが中で `npm run` するもの、それらが相対パスで import する先（`.js` と書いた `.ts` も）を辿ったすべてと、`npm ci` が読む `package.json`・`package-lock.json`。
+- 確かめること: フォルダにある・git にコミットされている（push しても CI から見えないものを出さない）・`npm run` する名前が `package.json` にある・CI 定義（`.gitlab-ci.yml` と include 先）に GitLab が受け付けない書き方が無い（§91.3）。
+- `npm run app:build` は template で足りなければ止まる（壊れたパッケージを作らない）。`init`・`update` は最後に確かめ、足りなければ一覧を出して止まる（終了コード 2）。`yojitsu-navi check [フォルダ]`、プロジェクトの中では `npm run ci:check`（`scripts/ci/check.mjs`）で今あるプロジェクトも確かめられる。
 - PC 全体の git の除外設定（`core.excludesFile` で `*.mjs`・`lib/` などを除外）に当たっても入るよう、`init`・`update` はパッケージのファイルを `git add -f` する。前の版で入らなかったファイルも `update` で入る。
 - 再発防止: `tests/integration/app-package.test.ts` の「CI 定義とファイルの整合」（本物のパッケージで init 直後・update 後に全参照が揃いコミットされている、除外設定に当たる PC、欠けたパッケージで止まる）。
 
@@ -1324,7 +1325,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 
 ### 91.1 社内の CI・npm の設定を残す（2026-11-04 依頼者。導入先のレビュー指摘）
 「上書きで社内向けの CI 設定（社内レジストリ・`.npmrc` の参照先・システム証明書・ランナーのタグ）が消える。CI/CD 変数や別ファイルで社内設定を上書きできる仕組みが欲しい」への対応。
-- `.gitlab-ci.yml` は `include: - local: .gitlab-ci.local.yml` で社内の設定ファイルを読む。パッケージには何もしないひな形（`.yojitsu-navi-local: {}`。空だと GitLab が include を失敗にする）を入れる。
+- `.gitlab-ci.yml` は `include: - local: .gitlab-ci.local.yml` で社内の設定ファイルを読む。パッケージには何もしない項目だけのひな形（空だと GitLab が include を失敗にする）を入れる。項目の形は §91.3。
 - `.gitlab-ci.local.yml` と `.npmrc` は区分「残す」（`isUserOwned`）。`update` は上書き・削除しない。`.gitlab-ci.local.yml` が無いとき（前の版からの更新）だけひな形を足す（無いとパイプラインが作られないため）。`.npmrc` はパッケージに入れない。
 - CI のファイルの確認（§85）は `include:` の `local` のファイルも要るファイルにし、その中の `script` が使うファイルも辿る。
 - 置き場の表（Runner のタグ＝`.gitlab-ci.local.yml`、社内レジストリ＝CI/CD 変数 `NPM_CONFIG_REGISTRY` か `.npmrc`、認証＝`.npmrc` の `${変数}`、証明書＝File 型の CI/CD 変数 `NODE_EXTRA_CA_CERTS`、イメージ＝`NODE_IMAGE`）は `docs/DEPLOY_GITLAB.md`「社内の設定の置き場」。GitLab の include は同じ項目で `.gitlab-ci.yml` が勝つので、`.gitlab-ci.yml` にある変数は CI/CD 変数で変える。
@@ -1337,6 +1338,26 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - `update`（`--dry-run` も）は、今の版より新しく新しい版以下の各版の上の 3 つを出す。設定の表は導入先の `config.json` の今の値（無ければ「未設定（書かないとき: 既定）」）と推奨を並べる。`config.json` には書かない（§91 のとおり触らない）。従来の「`config.json` に無い新しい設定」の一覧（template の `config.json` に無い項目は出ない）も残す。実装は `packages/app/lib/changelog.mjs`。
 - 公開前の確認（`scripts/check-publish.mjs`）は、`CHANGELOG.md` にその版の見出しが無ければ止める。導入先に届く変更の PR は同じ PR で `## 次の版` に書く（`CONTRIBUTING.md`）。
 - 再発防止: `tests/unit/changelog.test.ts`（読み取り・版の範囲・今の値・リポジトリの CHANGELOG.md に今の版がある）、`tests/integration/app-package.test.ts`「更新後に行うこと」。
+
+### 91.3 GitLab が受け付ける CI の設定にする・プロジェクトの中から確かめる（2026-11-05 依頼者。導入先のレビュー指摘）
+「`.gitlab-ci.local.yml` で GitLab が `jobs:.yojitsu-navi-local config can't be blank` になる。空にならない書き方にし、複数の GitLab の版で動くか確かめてほしい」「`npm run check` のように、プロジェクトの中から確実に呼べる方法が欲しい（プロジェクトの名前がパッケージと同じ `yojitsu-navi` なのが原因と思われる）」への対応。
+- 原因: 0.2.0・0.2.1 のひな形 `.yojitsu-navi-local: {}`。GitLab はジョブ（`.` で始まる隠しジョブも）の設定が空でないことを求め、`{}` を「can't be blank」で失敗にする。プロジェクトの名前は関係ない。
+- ひな形は `.yojitsu-navi-local:` の下に使われない変数 `YOJITSU_NAVI_LOCAL: "1"` を持たせる（隠しジョブは中身が空でなければ中を見られないので、GitLab の版によらず通る）。
+- `update` は `.gitlab-ci.local.yml`（区分「残す」）のうち、0.2.0・0.2.1 のひな形の中身の無い行だけを上の形に直す（ほかの行・改行は変えない。前のファイルはバックアップ）。
+- 点検（`scripts/lib/ci-local.mjs` の `lintCiYaml`）: CI 定義（`.gitlab-ci.yml` と include 先）に、項目が 1 つも無いファイル・中身の無いジョブ（空・`{}`・`null`）・中身の無い全体の設定（`variables:` だけなど）があれば、行番号つきで知らせる。§85 の確かめ（`init`・`update`・`npm run app:build`・`yojitsu-navi check`）に入れる。GitLab と同じく合わせた結果で見る（ほかの CI 定義が中身つきで書いた項目は、空の `build: {}` などでも知らせない。ただし `.gitlab-ci.yml` の `null`・空の項目は include の中身を消すので知らせる）。
+- `npm run ci:check`（`scripts/ci/check.mjs`）: `yojitsu-navi check` と同じ確かめを、コマンドを入れていない PC・Runner でもプロジェクトの中から動かせる。
+- `npx yojitsu-navi` がプロジェクトの中で「could not determine executable to run」になるのは、プロジェクトの `package.json` の名前がコマンドのパッケージと同じ `yojitsu-navi` だったため（npm が自分自身を指す）。利用環境の `package.json`・`package-lock.json` の `name` を `yojitsu-navi-site` にする（`packages/app/lib/template-files.mjs`。開発元のリポジトリは `yojitsu-navi` のまま）。
+- 再発防止: `tests/unit/ci-local.test.ts`（GitLab の CI Lint の代わりに、YAML として読んで GitLab と同じく合わせ、空のファイル・中身の無いジョブ・`script` の無いジョブが無いこと。古いひな形を見つけて直す）、`tests/integration/app-package.test.ts`「config can't be blank」。GitLab の実機の CI Lint は導入先で確かめる（CI/CD > エディタ > 検証）。
+
+### 91.4 社内で直した .gitlab-ci.yml の設定を移す（2026-11-05 依頼者。導入先のレビュー指摘）
+「社内で `.gitlab-ci.yml` を直していた場合に、ランナーのタグや変数を `.gitlab-ci.local.yml` へ自動で移す機能が欲しい（今回は手作業で移した）」への対応。
+- `yojitsu-navi migrate-ci [フォルダ] [--dry-run] [--force]`。`.gitlab-ci.yml` は変えず、`.gitlab-ci.local.yml` だけを書く（無ければひな形から作り、古いひな形は §91.3 のとおり直す。`.gitlab-ci.yml` を社内で変えていなくても古いひな形は直す）。
+- 比べる相手（もとの版）: 記録（`.yojitsu-navi.json`）のハッシュと同じ中身の `.gitlab-ci.yml` を、インストールしたパッケージ・git の履歴（直近 200 コミット）から探す。見つからなければインストールしたパッケージの版と比べる（そのときは新しい版での変更も「自動で移せないもの」に出ることがあると添える）。
+- 移すもの: `default:` とジョブの `tags:`、全体・ジョブの `variables:` のうちもとの版に無いもの、もとの版に無いジョブ・項目（社内だけのジョブ）、もとの版のジョブに無い項目。`.gitlab-ci.local.yml` に同じ項目があれば中へ足し、同じものがあれば何もしない。
+- 自動で移せないもの（一覧に出す）: もとの版にある変数の値の変更・消した変数（include は `.gitlab-ci.yml` が勝つので CI/CD 変数で変える）、1 行で書いた `variables: { … }`（読めない）、ほかで定義したアンカーを使う（`*名前`）項目（アンカーはファイルをまたげない）、`<<: *名前` で受け継ぐ項目の追加（`.gitlab-ci.yml` が勝つ）、ジョブの `script:` などの変更、消したジョブ・項目、`include:` の追加、`.gitlab-ci.local.yml` に同じ名前で違う中身があるもの。
+- 自動で移せないものが無ければ（か `--force`）、`.gitlab-ci.local.yml` の最後に印 `# yojitsu-navi migrate-ci: .gitlab-ci.yml sha256=<そのときの .gitlab-ci.yml>` を書く。`update` は `.gitlab-ci.yml` が社内で変わっていても、中身（改行の違いは見ない）が印と同じなら止めずに新しい版にする（前のものはバックアップ）。印のあとでまた変えたら従来どおり止まる。
+- 字下げで読む簡単な YAML の解釈（アンカー・フロー形式の中は見ない）。読めないものは自動で移さず一覧に出す。移す項目の行はそのまま写す（値の中の「 #」・複数行の文字列を変えない）。比べるときだけコメントの行・空行を除く。
+- 再発防止: `tests/unit/ci-local.test.ts`「migrate-ci」（移したものと新しい版を GitLab と同じく合わせると社内の `.gitlab-ci.yml` と同じ設定になる・2 回目は変わらない・既存の項目に足す・手で移すもの）、`tests/integration/app-package.test.ts`「migrate-ci」（git の履歴からもとの版を探す・`--dry-run` は変えない・移したあとの `update` が止まらない・また変えたら止まる）。
 
 ## 92. 作業コードでの紐付けと、未登録の作業コードの検出（2026-11-03 依頼者。導入先のレビュー指摘）
 「契約の増減で作業コードの追加・作業名の変更が頻繁に起きる。キーワードに合うのに mapping.csv に無い作業コードを、作業名・初回日・最終日・工数とともに見たい。作業名の変更・キーワードの一致状況の変化も見つけたい。見つけたときに警告か処理停止かを選びたい」「契約の更新後も同じ作業コードを使い続けるとき、期間の違う案件に対応付けたい。重なり・一意に決まらないときは検証と警告。終わった案件・過去の対応を残したまま新しい案件を足したい」への対応。案件の割り当ては人が行う（キーワードで自動で決めない）。本番の作業実績には作業コードの列がある（依頼者）。
