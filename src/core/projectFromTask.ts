@@ -53,7 +53,11 @@ export function createProjectMatcher(cfg: ProjectFromTaskConfig | undefined, con
   if (!projectFromTaskEnabled(cfg)) return DISABLED;
   const marker = cfg.marker;
   const byName = new Map<string, string[]>();
+  // 同じ契約IDの 2 行目以降は計算から外れる（§2）ので、別の案件名を持ち込ませない
+  const seenIds = new Set<string>();
   for (const c of contracts) {
+    if (seenIds.has(c.contractId)) continue;
+    seenIds.add(c.contractId);
     const key = normalizeName(c.projectName);
     if (key === "") continue;
     const list = byName.get(key);

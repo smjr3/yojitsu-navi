@@ -69,12 +69,14 @@ export interface TaskCodeGateResult {
 /** 点検する（止めない）。設定が無ければ null */
 export function inspectTaskCodes(config: Config, rules: readonly MappingRule[], before: readonly Worklog[], after: readonly Worklog[], projects?: ProjectMatcher): TaskCodeGateResult | null {
   const check = config.taskCodeCheck;
-  if (!check || !taskCodeCheckEnabled(check)) return null;
-  const findings = findTaskCodeIssues(after, rules, check, projects);
-  const known = new Set(findTaskCodeIssues(before, rules, check, projects).changes.map(changeKey));
+  const checking = !!check && taskCodeCheckEnabled(check);
+  // 作業名の案件名（§97）だけを使うときも、新しい作業コードは知らせる
+  if (!checking && !projects?.enabled) return null;
+  const findings: TaskCodeFindings = checking ? findTaskCodeIssues(after, rules, check, projects) : { unregistered: [], changes: [] };
+  const known = new Set(checking ? findTaskCodeIssues(before, rules, check, projects).changes.map(changeKey) : []);
   const seen = new Set<string>();
   const newChanges: TaskCodeChange[] = [];
-  for (const c of [...findings.changes, ...replacedNames(before, after, check)]) {
+  for (const c of [...findings.changes, ...(checking ? replacedNames(before, after, check) : [])]) {
     const k = changeKey(c);
     if (known.has(k) || seen.has(k)) continue;
     seen.add(k);

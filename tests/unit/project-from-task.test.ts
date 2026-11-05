@@ -177,6 +177,13 @@ describe("Model・検証", () => {
     ]);
   });
 
+  it("同じ契約IDの 2 行目以降の案件名では紐付けない（計算から外れる行のため）", () => {
+    const dup = contract({ contractId: "C3", projectName: "見本 別名の行" });
+    const projects = createProjectMatcher(CFG, [...CONTRACTS, dup]);
+    expect(projects.contractIdsFor("見本 別名の行")).toBeNull();
+    expect(projects.contractIdsFor("見本 生産管理保守")).toEqual(["C3"]);
+  });
+
   it("validateProjectAliases: 複数の案件名を指す別名は照合に使わない", () => {
     const aliases = [
       { alias: "見本", projectName: "見本 生産管理保守" },

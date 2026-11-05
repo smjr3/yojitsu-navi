@@ -165,6 +165,18 @@ describe("作業名の案件名で紐付けるとき（projectFromTask、§97）
     expect(r.taskCodeWarnings).toEqual(["新しい作業コード 1 件: W-09（見本 監視保守_保守対応（夜間）、2026-10-01〜）"]);
   });
 
+  it("taskCodeCheck が無くても新しい作業コードは知らせる", async () => {
+    quiet();
+    setConfig((c) => {
+      delete c.taskCodeCheck;
+      c.projectFromTask = { marker: "_保守対応" };
+    });
+    writeFileSync(join(root, "data", "contracts.csv"), "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\nC1,ABC,見本 監視保守,,2026-04,2027-03,1200000\n");
+    api([row("2026-10-01", "見本 監視保守_保守対応", "W-09")]);
+    const r = await fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV);
+    expect(r.taskCodeWarnings).toEqual(["新しい作業コード 1 件: W-09（見本 監視保守_保守対応、2026-10-01〜）"]);
+  });
+
   it("案件名が contracts.csv に無ければ従来どおり止める", async () => {
     quiet();
     setConfig((c) => {
