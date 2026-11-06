@@ -10,9 +10,9 @@ import { addMonths } from "../../src/core/calendar.js";
 const asOfMonth = AS_OF.slice(0, 7);
 const ja = (m: string) => `${Number(m.slice(0, 4))}年${Number(m.slice(5))}月`;
 /** 月の列の見出し（年の補足を除いた「n月」） */
-const monthHeads = (page: Page) => page.locator(".yn-me-plan-table thead th.num").evaluateAll((ths) => ths.map((t) => t.firstChild?.textContent ?? "").filter((t) => /^\d+月$/.test(t)));
+const monthHeads = (page: Page) => page.locator(".yn-me-plan-table thead th.num").evaluateAll((ths) => ths.map((t) => t.querySelector(".yn-me-th")?.textContent ?? "").filter((t) => /^\d+月$/.test(t)));
 /** 年の補足が付いた列（最初の月と 1 月） */
-const yearSubs = (page: Page) => page.locator(".yn-me-plan-table thead th.num").evaluateAll((ths) => ths.map((t) => [t.firstChild?.textContent ?? "", t.querySelector(".yn-th-sub")?.textContent ?? ""]).filter(([m, y]) => /^\d+月$/.test(m ?? "") && y));
+const yearSubs = (page: Page) => page.locator(".yn-me-plan-table thead th.num").evaluateAll((ths) => ths.map((t) => [t.querySelector(".yn-me-th")?.textContent ?? "", t.querySelector(".yn-th-sub")?.textContent ?? ""]).filter(([m, y]) => /^\d+月$/.test(m ?? "") && y));
 const from = (page: Page) => page.locator("#yn-me-plan-from");
 const to = (page: Page) => page.locator("#yn-me-plan-to");
 const mLabel = (m: string) => `${Number(m.slice(5))}月`;

@@ -7,7 +7,8 @@
  *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す）,
  *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
- *               filter?: "values"|"range"|false（見出しの絞り込み。既定は数値列 range・それ以外 values）, filterValue?(row) -> string|string[] }],
+ *               filter?: "values"|"range"|false（見出しの絞り込み。既定は数値列 range・それ以外 values）, filterValue?(row) -> string|string[],
+ *               rangeUnit?: 範囲の絞り込みの単位の表示（既定は型から。リソース計画の「人月」など） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
  *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
@@ -131,6 +132,7 @@ function rangeFactor(col, unit) {
 }
 
 function rangeUnitLabel(col, unit) {
+  if (col.rangeUnit) return col.rangeUnit;
   if (col.type === "money") return T.format.units[unit] ?? T.format.units.yen;
   if (col.type === "moneyYen") return T.format.units.yen;
   if (col.type === "percent") return "%";

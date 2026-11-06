@@ -1753,6 +1753,7 @@ export default {
     unknownMember: "（存在しないメンバー）",
     unitNote: "・ リーダー: {leader}",
     unitHelp: "組織を選ぶと、配下の組織とメンバーを含めて表示します（他の組織から、この組織の案件に入る人は「応援」）。",
+    sortFilterHelp: "見出しを押すと並べ替え、漏斗で列ごとに絞り込めます（月・期間計は人月の範囲。例: 下限 1.01 で 1.0 超の人、上限 0.99 で空きのある人）。",
     rangeLabel: "{first}〜{last}（{n}か月）",
     rangeFrom: "表示する最初の月",
     rangeTo: "表示する最後の月",
