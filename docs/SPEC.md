@@ -1508,3 +1508,15 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 実装: `src/core/projects.ts`（`checkProjects`・`validateProjects`）、`scripts/adapters/projects.ts`、`scripts/lib/projects-merge.ts`（`syncContracts`）、`scripts/fetch-projects.ts`、`src/data-check.md`。`packages/app/lib/project.mjs` の `applyGitlabTarget` は `masterEdit` より後ろだけを書き換える（`projectSource.columns.projectId` と名前が同じため）。
 - 再発防止: `tests/unit/projects.test.ts`、`tests/integration/project-fetch.test.ts`（利用環境にも配る）、`tests/e2e/projects.spec.ts`。
 
+## 99. リソース計画の表の並べ替え・列ごとの絞り込み（2026-11-06 依頼者）
+
+「リソース計画のリストも並べ替えやフィルタが欲しい」への対応。一覧表（§70）・マスタ編集の表（§73.1）と同じ部品・見た目で、リソース計画の人の表にも付ける。
+
+- 見出しを押すと並べ替え（数値の列は最初に多い順、文字の列は昇順。押すたびに向きを変える。同じ値は元の並び）。見出しの漏斗で列ごとに絞り込み。部品は `sortFilterHead`（マスタ編集と共通）・`createFilterPopover`・`matchesFilter`。
+- 対象は人の行（その人の月の合計 = 保守の配分＋運用保守以外の予定）。開いた明細（案件・運用保守以外の行）と変更の履歴は人の行といっしょに出し入れし、並べ替えでも人の行の直後に付いたまま。明細の行の並びは変えない。
+  - メンバーの列: 名前の値の一覧（検索欄つき）。名前で並べる。
+  - 月の列・期間計: 人月の範囲（下限〜上限、端を含む。単位「人月」）。比べるのは表示（小数 2 桁）に丸める前の値（小数の誤差は 6 桁で丸める）。例: 下限 1.01 で 1.0 超の人、上限 0.99 で空きのある人。
+- 表の上の検索欄・組織の選択とも重ねて効く（AND）。件数は「n / 全 m 人」、列の絞り込み中は「絞り込みを解除」。グラフ（§58）と合計行は絞り込み後の人で作り直す（検索欄と同じ）。
+- 絞り込み・並べ替えはタブ単位（`sessionStorage` の `yojitsu-navi:plan-list`）で覚える。表示する月（§71）を変えて表から無くなった月の列の絞り込み・並べ替えは外す。問題一覧からの移動・メンバーを指定して開いたとき（`?member=`）は、その人が隠れないよう列の絞り込みを外す。
+- 説明は見出し横の「?」と使い方だけ（画面の本文には足さない。§37）。
+- 再発防止: `tests/e2e/plan-filter.spec.ts`（範囲で絞ると件数・合計行・再読み込み・解除、並べ替えの向きと明細の位置、名前の値の一覧と検索欄の重ね、月を変えると外れる、390px・1280px・ダークで見出しが 1 行でページがはみ出さない）。

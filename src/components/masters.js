@@ -155,6 +155,25 @@ function pm(v) {
 const KIND_LABELS = { employee: T.members.kindEmployee, partner: T.members.kindPartner };
 const STATE_LABELS = { added: T.masters.added, changed: T.masters.changed };
 
+/**
+ * 表の見出し: 並べ替えのボタン＋絞り込みの漏斗（一覧表と同じ見た目。マスタ編集 §73.1・リソース計画 §99 で共通）。
+ * dir = 並べ替え中の向き（"asc" | "desc"）か null。onFilter(漏斗のボタン)
+ */
+function sortFilterHead({ key, label, sub = null, dir = null, filterOn = false, sortFk, onSort, onFilter, filterLabel = label }) {
+  const sortBtn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label: filterLabel })}><span class="yn-sort-main"><span class="yn-me-th">${label}</span><span class="yn-sort-icon" aria-hidden="true">${dir ? (dir === "asc" ? "▲" : "▼") : "⇅"}</span></span>${sub ? html`<span class="yn-th-sub">${sub}</span>` : null}</button>`;
+  sortBtn.dataset.fk = sortFk;
+  sortBtn.addEventListener("click", onSort);
+  const fl = fmt(filterOn ? T.table.filterActive : T.table.filterBy, { label: filterLabel });
+  const fb = html`<button type="button" class=${`yn-filter-btn${filterOn ? " is-active" : ""}`} aria-haspopup="dialog" aria-expanded="false" aria-label=${fl} title=${fl}></button>`;
+  fb.innerHTML = FILTER_ICON;
+  fb.dataset.fcol = key;
+  fb.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    onFilter(fb);
+  });
+  return html`<div class="yn-th-inner"><span class="yn-th-main">${sortBtn}</span>${fb}</div>`;
+}
+
 /** 安全な localStorage / sessionStorage（使えない環境では何もしない） */
 function safeStorage(kind) {
   try {
@@ -192,6 +211,8 @@ function safeStorage(kind) {
 
 // リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
 const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+/** リソース計画の列ごとの絞り込み・並べ替え（§99。タブ単位） */
+const PLAN_LIST_KEY = "yojitsu-navi:plan-list";
 // リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
 const PLAN_RANGE_KEY = "yojitsu-navi:plan-range";
 const PLAN_NAME_W_MIN = 100;
@@ -323,7 +344,22 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     q: "",
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
+    /** 列ごとの絞り込み（列 key → 絞り込み。月の列は "m:YYYY-MM"）と並べ替え（§99）。タブ単位で覚える */
+    ...loadPlanList(),
   };
+  function loadPlanList() {
+    try {
+      const v = JSON.parse(session.get(PLAN_LIST_KEY) ?? "null");
+      const cols = v && typeof v.cols === "object" && v.cols ? Object.fromEntries(Object.entries(v.cols).filter(([, f]) => isActiveFilter(f))) : {};
+      const sort = v?.sort && typeof v.sort.key === "string" && (v.sort.dir === "asc" || v.sort.dir === "desc") ? { key: v.sort.key, dir: v.sort.dir } : null;
+      return { cols, sort };
+    } catch {
+      return { cols: {}, sort: null };
+    }
+  }
+  // メンバーを指定して開いたとき（他の画面から）は、その人が隠れないように列の絞り込みを外す
+  if (initialMember) plan.cols = {};
+  const savePlanList = () => session.set(PLAN_LIST_KEY, JSON.stringify({ cols: plan.cols, sort: plan.sort }));
   /** 表示する月の範囲を変える。save = 人が選んだ範囲（このブラウザに覚える。問題への移動などで動かしたときは覚えない） */
   function applyPlanRange(r, save = false) {
     plan.range = r;
@@ -334,6 +370,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false, cols: {}, sort: null }]));
   /** 列の絞り込みの吹き出し（ファイルごと） */
   const ledgerPops = {};
+  /** リソース計画の列の絞り込みの値の一覧に使う人の行（描くたびに作り直す） */
+  let planPeople = [];
   /** CSV で直接編集（§25）: on = CSV 表示、text = 反映していない書き換え（null = 今の内容）、result = 直前の反映の結果 */
   const csvEdit = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { on: false, text: null, result: null }]));
   let mode = effectiveSaveMode(data.masterEdit);
@@ -933,24 +971,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const headCell = (key, label, sub) => {
       const fc = fcolByKey.get(key);
       const active = f.sort && f.sort.key === key;
-      const sortBtn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label })}><span class="yn-sort-main"><span class="yn-me-th">${label}</span><span class="yn-sort-icon" aria-hidden="true">${active ? (f.sort.dir === "asc" ? "▲" : "▼") : "⇅"}</span></span>${sub ? html`<span class="yn-th-sub">${sub}</span>` : null}</button>`;
-      sortBtn.dataset.fk = `sort:${fileId}:${key}`;
-      sortBtn.addEventListener("click", () => {
-        f.sort = active ? { key, dir: f.sort.dir === "asc" ? "desc" : "asc" } : { key, dir: fc.numeric ? "desc" : "asc" };
-        renderPanel();
-        focusKey(`sort:${fileId}:${key}`);
+      return sortFilterHead({
+        key,
+        label,
+        sub,
+        dir: active ? f.sort.dir : null,
+        filterOn: isActiveFilter(f.cols[key]),
+        sortFk: `sort:${fileId}:${key}`,
+        onSort: () => {
+          f.sort = active ? { key, dir: f.sort.dir === "asc" ? "desc" : "asc" } : { key, dir: fc.numeric ? "desc" : "asc" };
+          renderPanel();
+          focusKey(`sort:${fileId}:${key}`);
+        },
+        onFilter: (fb) => (pop.isOpenFor(fc) ? pop.close() : pop.open(fc, fb)),
       });
-      const on = isActiveFilter(f.cols[key]);
-      const fl = fmt(on ? T.table.filterActive : T.table.filterBy, { label });
-      const fb = html`<button type="button" class=${`yn-filter-btn${on ? " is-active" : ""}`} aria-haspopup="dialog" aria-expanded="false" aria-label=${fl} title=${fl}></button>`;
-      fb.innerHTML = FILTER_ICON;
-      fb.dataset.fcol = key;
-      fb.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        if (pop.isOpenFor(fc)) pop.close();
-        else pop.open(fc, fb);
-      });
-      return html`<div class="yn-th-inner"><span class="yn-th-main">${sortBtn}</span>${fb}</div>`;
     };
     const ariaSort = (key) => (f.sort && f.sort.key === key ? (f.sort.dir === "asc" ? "ascending" : "descending") : "none");
     const colsFiltered = activeCols.length > 0;
@@ -1461,16 +1495,105 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return html`<td class=${`num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
     };
 
-    // 名前・所属・案件で絞り込む（空白区切りの語をすべて含む）
+    // 人ごとの月の配分（案件＋運用保守以外）。列の絞り込み・並べ替えと表の行の両方で使う
+    const round6 = (v) => Math.round(v * 1e6) / 1e6;
+    const people = view.rows.map((r) => {
+      const oRows = memberPeriodRows("outside", r.memberId);
+      const outsideMonthly = months.map((m) => valueAt(oRows, m));
+      const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
+      return { r, oRows, outsideMonthly, monthly, total: monthly.reduce((a, b) => a + b, 0), name: r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId }) };
+    });
+    // 列ごとの絞り込み・並べ替え（一覧表と同じ部品。§99）。名前は値の一覧、月・期間計は人月の範囲
+    const pcols = [
+      { key: "__name", label: T.plan.colMember, type: "text", filterValue: (d) => d.name, sortValue: (d) => d.name },
+      ...months.map((m, i) => ({ key: `m:${m}`, label: monthJa(m), type: "custom", align: "num", numeric: true, rangeUnit: T.plan.unitPersonMonth, get: (d) => round6(d.monthly[i]) })),
+      { key: "__total", label: T.plan.colFyTotal, type: "custom", align: "num", numeric: true, rangeUnit: T.plan.unitPersonMonth, get: (d) => round6(d.total) },
+    ];
+    const pcolByKey = new Map(pcols.map((c) => [c.key, c]));
+    // 表示する月を変えて無くなった列の絞り込み・並べ替えは外す
+    let dropped = false;
+    for (const k of Object.keys(plan.cols)) {
+      if (pcolByKey.has(k) && isActiveFilter(plan.cols[k])) continue;
+      delete plan.cols[k];
+      dropped = true;
+    }
+    if (plan.sort && !pcolByKey.has(plan.sort.key)) {
+      plan.sort = null;
+      dropped = true;
+    }
+    if (dropped) savePlanList();
+    if (!ledgerPops[PLAN_VIEW_ID]) {
+      ledgerPops[PLAN_VIEW_ID] = createFilterPopover({
+        getRows: () => planPeople,
+        getFilter: (key) => plan.cols[key],
+        setFilter: (col, v) => {
+          if (isActiveFilter(v)) plan.cols[col.key] = v;
+          else delete plan.cols[col.key];
+          savePlanList();
+          renderPanel();
+        },
+      });
+    }
+    const pop = ledgerPops[PLAN_VIEW_ID];
+    planPeople = people;
+    const activeCols = Object.entries(plan.cols).map(([k, v]) => [pcolByKey.get(k), v]);
+
+    // 名前・所属・案件で絞り込む（空白区切りの語をすべて含む）＋列ごとの絞り込み
     const terms = plan.q.normalize("NFKC").toLowerCase().split(/\s+/).filter(Boolean);
-    const rowsShown = terms.length
-      ? view.rows.filter((r) => {
-          const projectsText = memberPeriodRows("assignments", r.memberId).map((x) => contractText(x.contractId)).join(" ");
-          const text = `${r.name ?? ""} ${r.teamId ? (tNames.get(r.teamId) ?? "") : ""} ${r.memberId} ${projectsText}`.normalize("NFKC").toLowerCase();
-          return terms.every((t) => text.includes(t));
+    let rowsShown = people.filter((d) => {
+      const r = d.r;
+      if (terms.length) {
+        const projectsText = memberPeriodRows("assignments", r.memberId).map((x) => contractText(x.contractId)).join(" ");
+        const text = `${r.name ?? ""} ${r.teamId ? (tNames.get(r.teamId) ?? "") : ""} ${r.memberId} ${projectsText}`.normalize("NFKC").toLowerCase();
+        if (!terms.every((t) => text.includes(t))) return false;
+      }
+      return activeCols.every(([c, v]) => matchesFilter(c, v, d, "yen"));
+    });
+    if (plan.sort) {
+      const sc = pcolByKey.get(plan.sort.key);
+      const val = (d) => (sc.sortValue ? sc.sortValue(d) : sc.get(d));
+      const sign = plan.sort.dir === "asc" ? 1 : -1;
+      rowsShown = rowsShown
+        .map((d, i) => ({ d, i, v: val(d) }))
+        .sort((a, b) => {
+          const dd = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : String(a.v).localeCompare(String(b.v), "ja", { numeric: true });
+          return dd * sign || a.i - b.i;
         })
-      : view.rows;
-    const search = html`<input type="search" class="yn-input yn-me-search" id="yn-me-plan-q" placeholder=${T.planEdit.searchPlaceholder} aria-label=${T.planEdit.searchAria} value=${plan.q}>`;
+        .map((x) => x.d);
+    }
+    /** 見出し（並べ替え＋漏斗）。月の列は狭いので、見出しは「11月」のまま、読み上げ・吹き出しは「2026年11月」 */
+    const planHead = (key, shortLabel, sub = null) => {
+      const pc = pcolByKey.get(key);
+      const active = plan.sort && plan.sort.key === key;
+      return sortFilterHead({
+        key,
+        label: shortLabel,
+        filterLabel: pc.label,
+        sub,
+        dir: active ? plan.sort.dir : null,
+        filterOn: isActiveFilter(plan.cols[key]),
+        sortFk: `plan:sort:${key}`,
+        onSort: () => {
+          plan.sort = active ? { key, dir: plan.sort.dir === "asc" ? "desc" : "asc" } : { key, dir: pc.numeric ? "desc" : "asc" };
+          savePlanList();
+          renderPanel();
+          focusKey(`plan:sort:${key}`);
+        },
+        onFilter: (fb) => (pop.isOpenFor(pc) ? pop.close() : pop.open(pc, fb)),
+      });
+    };
+    const planAriaSort = (key) => (plan.sort && plan.sort.key === key ? (plan.sort.dir === "asc" ? "ascending" : "descending") : "none");
+    const planThCls = (key, base) => `${base}has-filter${isActiveFilter(plan.cols[key]) ? " is-filtered" : ""}`;
+    const clearCols = activeCols.length
+      ? html`<button type="button" class="yn-btn yn-btn-sm yn-filter-clear-all" data-fk="plan:clearcols" onclick=${() => {
+          pop.close({ discard: true });
+          plan.cols = {};
+          savePlanList();
+          renderPanel();
+          focusKey("plan:q");
+        }}>${T.table.filterClearAll}</button>`
+      : null;
+    const search = html`<input type="search" class="yn-input yn-me-search" id="yn-me-plan-q" data-fk="plan:q" placeholder=${T.planEdit.searchPlaceholder} aria-label=${T.planEdit.searchAria} value=${plan.q}>`;
     let searchTimer = null;
     search.addEventListener("input", () => {
       clearTimeout(searchTimer);
@@ -1500,13 +1623,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       });
     };
 
-    const body = rowsShown.flatMap((r) => {
+    const body = rowsShown.flatMap(({ r, oRows, outsideMonthly, monthly, name }) => {
       const open = plan.open.has(r.memberId);
       const detailId = `yn-me-plan-d-${r.memberId}`;
       const aRows = memberPeriodRows("assignments", r.memberId);
-      const oRows = memberPeriodRows("outside", r.memberId);
-      const outsideMonthly = months.map((m) => valueAt(oRows, m));
-      const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
       monthly.forEach((v, i) => (totals[i] += v));
       outsideMonthly.forEach((v, i) => (outsideTotals[i] += v));
       months.forEach((m, i) => {
@@ -1528,7 +1648,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       // 開くと出る作業の数 = 案件 ＋ 表示中の期間に計画がある運用保守以外の種別（2026-10-30 試用版のコメント「案件じゃなくて作業」）
       const outTypes = memberOutsideTypes(oRows, r.memberId);
       const workCount = projectList.length + outTypes.length;
-      const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
@@ -1633,7 +1752,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}<span class="yn-me-path"> ${data.files.assignments.path} ・ ${data.files.outside.path}</span></h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -1651,6 +1770,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-toolbar yn-me-plan-filter">
         ${search}
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(rowsShown.length), total: integer(view.rows.length), unit: T.ledger.unit.members })}</span>
+        ${clearCols}
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
       ${rowsShown.length ? planChart() : null}
@@ -1658,9 +1778,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <table class=${`yn-table yn-table-compact yn-me-table yn-me-plan-table${plan.nameW ? " is-name-sized" : ""}`} style=${plan.nameW ? `--yn-plan-name-w: ${plan.nameW}px` : ""}>
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
           <thead><tr>
-            <th scope="col" class="yn-me-plan-name-th">${T.plan.colMember}${planNameResizer()}</th>
-            ${months.map((m, i) => html`<th scope="col" class="num">${fmt(T.plan.colMonth, { m: Number(m.slice(5)) })}${i === 0 || m.endsWith("-01") ? html`<span class="yn-th-sub">${fmt(T.plan.colYear, { y: m.slice(0, 4) })}</span>` : null}</th>`)}
-            <th scope="col" class="num">${T.plan.colFyTotal}<span class="yn-th-sub">${T.plan.unitPersonMonth}</span></th>
+            <th scope="col" class=${planThCls("__name", "yn-me-plan-name-th ")} aria-sort=${planAriaSort("__name")}>${planHead("__name", T.plan.colMember)}${planNameResizer()}</th>
+            ${months.map((m, i) => html`<th scope="col" class=${planThCls(`m:${m}`, "num ")} aria-sort=${planAriaSort(`m:${m}`)}>${planHead(`m:${m}`, fmt(T.plan.colMonth, { m: Number(m.slice(5)) }), i === 0 || m.endsWith("-01") ? fmt(T.plan.colYear, { y: m.slice(0, 4) }) : null)}</th>`)}
+            <th scope="col" class=${planThCls("__total", "num ")} aria-sort=${planAriaSort("__total")}>${planHead("__total", T.plan.colFyTotal, T.plan.unitPersonMonth)}</th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
           <tbody>${body.length ? body : html`<tr class="yn-table-empty"><td colspan=${months.length + 3}>${view.rows.length ? T.planEdit.noMatch : T.plan.noMembers}</td></tr>`}</tbody>
@@ -1675,6 +1795,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${removedList("assignments", diffMasterDoc(docs.assignments).removed, MASTER_FILES.assignments.columns)}
       ${removedList("outside", diffMasterDoc(docs.outside).removed, MASTER_FILES.outside.columns)}
     </section>`);
+    // 開いている絞り込みの吹き出しを、描き直した見出しのボタンに付け直す
+    for (const c of pcols) pop.rebind(c.key, parts.panel.querySelector(`.yn-filter-btn[data-fcol="${CSS.escape(c.key)}"]`));
   }
 
   /** リソース計画の CSV 編集: アサインと契約外予定の 2 つのファイル */
@@ -2626,6 +2748,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const start = row ? cellOf(doc, row, "start_month") : String(i.ref?.month ?? "");
       if (/^\d{4}-\d{2}$/.test(start)) applyPlanRange(planRangeIncluding(plan.range, start));
       plan.q = "";
+      plan.cols = {};
+      savePlanList();
       const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
