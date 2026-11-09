@@ -284,7 +284,9 @@ export function mapWorklogs(
 
   /** 未紐付けのまとめ方: 作業コード（§92）・作業名から抜き出した案件名（§97）・無ければ作業実績の (顧客名, 案件名) */
   type GroupBy = { code: string } | { taskProject: string } | null;
-  const addUnmapped = (w: Worklog, reason: UnmappedReason, by: GroupBy): void => {
+  /** 契約期間外（OUT_OF_PERIOD）の確認用: まとまり → 月ごとの時間 */
+  const unmappedMonths = new Map<UnmappedWorklogGroup, Map<YearMonth, number>>();
+  const addUnmapped = (w: Worklog, reason: UnmappedReason, by: GroupBy, periodOf?: readonly Contract[]): void => {
     const key =
       by && "code" in by
         ? `\u0001${by.code}\u0000${reason}`
@@ -298,6 +300,14 @@ export function mapWorklogs(
       if (w.date < g.firstDate) g.firstDate = w.date;
       if (w.date > g.lastDate) g.lastDate = w.date;
       addMemberHours(unmappedMembers.get(g) as MemberHoursAcc, w);
+      const ms = unmappedMonths.get(g);
+      if (ms) ms.set(monthOfDate(w.date), (ms.get(monthOfDate(w.date)) ?? 0) + w.hours);
+      // 作業ごとに候補の契約が違うこともある（キーワード・期間つきの行）。全部を並べる
+      if (periodOf && g.contracts) {
+        for (const c of periodOf) {
+          if (!g.contracts.some((x) => x.contractId === c.contractId)) g.contracts.push({ contractId: c.contractId, projectName: c.projectName, startMonth: c.startMonth, endMonth: c.endMonth });
+        }
+      }
     } else {
       const group: UnmappedWorklogGroup = {
         customerName: w.customerName,
@@ -314,6 +324,11 @@ export function mapWorklogs(
       unmappedMembers.set(group, acc);
       if (by && "code" in by) group.taskCode = (w.taskCode ?? "").trim();
       if (by && "taskProject" in by) group.fromTask = true;
+      // 契約期間外（§103）: 名前が合った案件の契約期間と、月ごとの時間を持たせる（期間を延ばすのか、作業実績の誤りかを人が決める）
+      if (periodOf) {
+        group.contracts = periodOf.map((c) => ({ contractId: c.contractId, projectName: c.projectName, startMonth: c.startMonth, endMonth: c.endMonth }));
+        unmappedMonths.set(group, new Map([[monthOfDate(w.date), w.hours]]));
+      }
       unmappedGroups.set(key, group);
     }
   };
@@ -376,7 +391,7 @@ export function mapWorklogs(
     const inPeriod = candidates.contracts.filter((c) => c.startMonth <= month && month <= c.endMonth);
     if (inPeriod.length === 0) {
       mappings.push({ kind: "unmapped", worklog: w, month, reason: "OUT_OF_PERIOD" });
-      addUnmapped(w, "OUT_OF_PERIOD", groupBy);
+      addUnmapped(w, "OUT_OF_PERIOD", groupBy, candidates.contracts);
       continue;
     }
     const chosen = inPeriod[0] as Contract; // 契約ID昇順の先頭
@@ -429,6 +444,7 @@ export function mapWorklogs(
   }
   const unmapped = [...unmappedGroups.values()];
   for (const g of unmapped) g.members = memberHoursList(unmappedMembers.get(g) as MemberHoursAcc);
+  for (const [g, ms] of unmappedMonths) g.months = [...ms].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([month, hours]) => ({ month, hours }));
   for (const g of unmapped) {
     const project = g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName;
     warnings.push({

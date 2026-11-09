@@ -255,6 +255,15 @@ export interface Contract {
   note?: string;
   /** 正式な案件の ID（案件管理システム。§98）。空 = 未照合 */
   projectId?: string;
+  /** true: contracts.csv の team_id が空で、顧客の既定の担当チーム（customer-teams.csv。§103）を使っている */
+  teamFromCustomer?: true;
+}
+
+/** 顧客の既定の担当チーム（data/customer-teams.csv。§103）。案件の team_id が空のときに使う */
+export interface CustomerTeam {
+  customerName: string;
+  teamId: string;
+  note?: string;
 }
 
 /** 正式な案件（data/projects.csv。案件管理システムから取り込む。§98） */
@@ -342,6 +351,8 @@ export interface RateRecord {
   /** 時間単価（円） */
   hourlyRate: number;
   effectiveFrom: YearMonth;
+  /** true: 動作確認用の仮の値（provisional 列。§103）。計算には使うが、データ確認・マスタ編集で仮と分かるようにする */
+  provisional?: true;
 }
 
 export interface Holiday {
@@ -417,6 +428,8 @@ export interface Dataset {
   projectAliases?: ProjectAlias[];
   /** 正式な案件の一覧（§98）。省略・空 = 取り込んでいない（照合しない） */
   projects?: Project[];
+  /** 顧客の既定の担当チーム（§103）。省略・空 = なし */
+  customerTeams?: CustomerTeam[];
   /** 作業実績の最終取得日時（ISO 8601）。無ければ undefined */
   worklogFetchedAt?: string;
 }
@@ -604,6 +617,10 @@ export interface UnmappedWorklogGroup {
   taskCode?: string;
   /** 作業名から抜き出した案件名（§97）で探した未紐付け。projectName はこの名前（作業実績の案件名ではない） */
   fromTask?: true;
+  /** 契約期間外（OUT_OF_PERIOD）のとき: 名前が合った案件の契約（契約ID 昇順。§103） */
+  contracts?: Array<{ contractId: string; projectName: string; startMonth: YearMonth; endMonth: YearMonth }>;
+  /** 契約期間外（OUT_OF_PERIOD）のとき: 実績のあった月ごとの時間（月の昇順。§103） */
+  months?: Array<{ month: YearMonth; hours: number }>;
 }
 
 /** 作業名のキーワードに合致せず運用保守以外にした作業（§62.3）。(顧客名, 案件名, 作業名) を正規化してまとめる（表記は最初の行） */
