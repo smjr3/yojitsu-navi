@@ -40,7 +40,7 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 | 人 | ロール | できること |
 |---|---|---|
 | 閲覧だけの人（経営層・メンバー） | **Guest** | Pages の閲覧だけ。ソース・CSV・MR は見えない |
-| 編集する人 | **Developer** | 上に加えて、画面からの保存（MR 作成）・自分の MR の取り下げ |
+| 編集する人 | **Developer** | 上に加えて、ブランチの作成・push・MR の作成（画面からの保存も MR）・自分の MR の取り下げ。`main` には push もマージもできない |
 | マージするリーダー層 | **Maintainer** | 上に加えて、画面の「マージ待ちの変更」でのマージ |
 | 管理者（1〜2 人） | **Owner** | グループ・プロジェクトの設定、トークン・CI/CD 変数の管理 |
 
@@ -53,6 +53,21 @@ Premium 以上なら、保護ブランチの「Allowed to merge」に特定の�
 | 画面からの保存・マージ（各自） | Personal Access Token | scope **`api`**（`read_api` では保存できない）。有効期限は社内の上限 | 各自のブラウザ（設定画面）。サーバー・リポジトリには置かない |
 | 定期取り込みの MR（将来） | Project Access Token | role **Maintainer**（自動マージに必要）、scope **`write_repository`** | CI/CD 変数 `GIT_PUSH_TOKEN`（**Protected・Masked**） |
 | 初期設定スクリプト（一度だけ） | Personal Access Token | Owner か Maintainer の人の scope `api` | 実行時の環境変数 `GITLAB_TOKEN`。終わったら失効させる |
+
+### 本番運用の標準構成
+
+本番で運用を始めたら、次の形を標準にします（SPEC §104）。どれも上の表の設定で成り立ち、`yojitsu-navi gitlab-setup`（プロジェクトの中では `npm run gitlab:setup`）で確かめられます。
+
+| 変更 | 誰が | 流れ |
+|---|---|---|
+| マスタ・計画・設定 | Developer | ブランチを作って push（画面の保存もブランチを作る）→ MR → パイプライン（検証・ビルド）が緑 → Maintainer がマージ |
+| 版上げ | 管理者（決めた人だけ） | 手元で `yojitsu-navi upgrade` を実行（ブランチ `update-<版>` を作る）→ MR → パイプラインが緑 → Maintainer がマージ。自動では動かさない |
+| `main` | Maintainer | MR のマージだけ（直接 push は誰も不可・force push 不可） |
+| 定期取り込みのデータ | 自動（プロジェクトアクセストークン） | スケジュールのパイプラインが `data/<種類>-<日時>` を push して MR を作り、パイプラインが緑なら自動でマージ |
+
+- 版上げは自動にしません（スケジュール・自動の MR では行わない）。新しい版のパッケージを社内 npm ミラーから取る・`upgrade` を実行するのは決めた管理者だけにし、MR のマージは Maintainer が行います。自動の MR は取り込みのデータ（`data/`）だけです。
+- 自動の MR のトークンは Project Access Token（role **Maintainer**・scope **`write_repository`**）を CI/CD 変数 `GIT_PUSH_TOKEN`（Protected・Masked）に入れます。人の PAT は使いません（異動・退職で止まらないように）。
+- `gitlab-setup` は、`GIT_PUSH_TOKEN` を登録した・スケジュールがあるとき、条件に合うプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`）があるかと、期限が 30 日より先かも確かめます。期限が近ければ、作り直して `GIT_PUSH_TOKEN` を入れ替えます。
 
 ### プロジェクトの設定（`npm run gitlab:setup` が確認・適用する）
 
@@ -185,12 +200,13 @@ git push -u origin update-<新しい版>
 |---|---|---|
 | 1 | ファイルを新しい版にする | `yojitsu-navi update`（下）。ブランチ `update-<版>` を作って自動でコミットする |
 | 2 | 設定の互換確認 | 本番の `config.json` が新しい版でそのまま動くか（下の「本番固有の部分とパッケージの部分」）。直すところがあれば止まる |
-| 3 | 依存を入れる | `node scripts/ci/install.mjs`（CI と同じ `npm ci`。依存込みなら `vendor/npm-cache/` から） |
+| 3 | 依存を入れる | `node scripts/ci/install.mjs`（CI と同じ `npm ci`。依存込みなら `vendor/npm-cache/` から）。`package-lock.json`・Node の版・OS が前に入れたときと同じなら入れ直さない（`--install` で必ず入れる） |
 | 4 | CI が使うファイルの確認 | `yojitsu-navi check` |
 | 5 | データ検証 | `npm run validate` |
-| 6 | テスト | `npm run typecheck`・`npm test`。既定は飛ばす（`--test` か環境変数 `YOJITSU_RUN_TESTS=1` のときだけ。CI の test ジョブと同じ） |
+| 6 | テスト | `npm run typecheck`・`npm test`。社内で手を加えたコード（`--keep-local` で残したファイル、社内で足した `src/`・`scripts/`・`tests/` のファイルなど）があるときだけ動かす。`--test`・`YOJITSU_RUN_TESTS=1` で必ず、`--no-test`・`YOJITSU_RUN_TESTS=0` で動かさない |
 | 7 | ビルド | `npm run build` |
 
+- 先に `yojitsu-navi upgrade --dry-run` で、何も変えずに「止まらずに進めるか」を確かめられます。止まる理由（社内で変えたパッケージのファイル・`config.json` のエラー）があれば、一覧と直し方を出して終了コード 2 で終わります。依存を入れ直すか・テストを動かすか・`config.json` に無い新しい設定の数も出ます。
 - 画面には要約だけを出し、全部の出力（ファイルの一覧・変更履歴・npm の出力）は `.yojitsu-navi-log/upgrade-<日時>.log`（UTF-8。git には入りません）に残します。置き場を変えるときは `--log <ファイル>`。失敗したときは、その手順の最後の出力も画面に出します。
 - `--overwrite`・`--keep-local`・`--no-commit`・`--force` は `update` と同じです。直してからもう一度 `upgrade` を実行すれば、済んだところは何も変わらずに進みます。
 - 1 つずつ行うときは、上の表の順に実行します。
@@ -211,12 +227,24 @@ git push -u origin update-<新しい版>
 | 本番固有 | `data/masters/members.csv` | メンバーマスタ（作業実績を取得する人もここから作る） |
 | 本番固有 | `data/contracts.csv`・`data/mapping.csv` など `data/` 以下 | 手入力の契約情報（期間・金額・担当チーム）・対応表・計画。取り込んだ作業実績 |
 | 本番固有 | `.gitlab-ci.local.yml` | Runner のタグ・社内だけのジョブ・変数 |
+| 本番固有 | `.gitignore` の目印「`# 社内で足したもの…`」の下の行 | 社内で git から外すもの（証明書の鍵・社内のツールの出力など）。`update` は新しい版の後ろに残す |
 | 本番固有 | `.npmrc`、CI/CD 変数 `NPM_CONFIG_REGISTRY`・`NPM_AUTH_TOKEN` | 社内の npm レジストリと認証 |
 | 本番固有 | CI/CD 変数 `NODE_EXTRA_CA_CERTS`・`NODE_USE_SYSTEM_CA`（か社内で足した `certs/`） | 社内の証明書 |
 | 本番固有 | CI/CD 変数 `WORKLOG_API_TOKEN`・`MEMBER_API_TOKEN`・`PROJECT_API_TOKEN`・`GIT_PUSH_TOKEN`・`MEMBER_FETCH_ENABLED`・`PROJECT_FETCH_ENABLED` | 各 API・取り込みの MR のトークン、定期取り込みの有効化 |
 | パッケージ | 上以外（`.gitlab-ci.yml`・`package.json`・`src/`・`scripts/`・`docs/` など） | `update` が新しい版にする（社内で変えていたら止まる。下の「上書きするファイルと残すファイル」） |
 
-「設定の互換確認」は、新しい版で `config.json` に必須の項目が増えた・型や決まった値が変わったものだけをエラーにします（直すまで `upgrade` も CI の build も止まる）。この版で使わない項目・名前が変わった項目は注意として出すだけで止めません。新しい任意の項目は書かなくても既定値で動きます（推奨値は「新しい設定と推奨値」に出ます）。プロジェクトの中では `npm run config:check` で同じ確かめができ、`npm run validate` も含みます。
+「設定の互換確認」は、新しい版で `config.json` に必須の項目が増えた・型や決まった値が変わったものだけをエラーにします（直すまで `upgrade` も CI の build も止まる）。この版で使わない項目・名前が変わった項目は注意として出すだけで止めません。新しい任意の項目は書かなくても既定値で動きます（推奨値は「新しい設定と推奨値」に出ます）。書き足すときは `yojitsu-navi migrate-config`（下の「新しい設定を書き足す」）。プロジェクトの中では `npm run config:check` で同じ確かめができ、`npm run validate` も含みます。
+
+### 新しい設定を書き足す
+
+```sh
+yojitsu-navi migrate-config                                   # 何も変えずに、config.json に無い新しい設定（ひな形の値つき）と名前が変わった項目を出す
+yojitsu-navi migrate-config --apply --add projectFromTask     # 選んだ項目だけをひな形の値で書き足す（名前が変わった項目は値を移す）
+```
+
+- 今ある値・ほかの行の書式・メモ（`_` の項目）は変えません。前の `config.json` は `.yojitsu-navi-backup/<日時>/` に写し、コミットはしません（値を確かめて MR に入れる）。
+- 無い項目は既定値で動くので、選ばなければ足しません。ひな形の値は既定値と同じとは限らないので、足したら値を本番に合わせて直します（推奨値は CHANGELOG.md「新しい設定と推奨値」）。
+- 名前が変わった項目は、`--apply` で値を新しい名前へ移します（動きは変わりません）。新しい名前もあれば移さずに知らせます。
 
 ### 社内で手を加えたプロジェクトの版を上げる順番
 
@@ -226,7 +254,7 @@ git push -u origin update-<新しい版>
 2. `git switch main && git pull`。`git status` で変更が無いことを確かめる
 3. `.gitlab-ci.yml` を社内で直していたら、`yojitsu-navi migrate-ci --dry-run` → `yojitsu-navi migrate-ci` でランナーのタグ・変数・社内だけのジョブを `.gitlab-ci.local.yml` に移し、表示のとおりコミットする（下の「社内の設定の置き場」）。「自動で移せないもの」は表示のとおり CI/CD 変数などに移してから、もう一度 `migrate-ci`
 4. `yojitsu-navi upgrade`（または上の表の順に 1 つずつ）。手順 3 で移した `.gitlab-ci.yml` は止まらずに新しい版になる（前のものは `.yojitsu-navi-backup/<日時>/`）。先に `yojitsu-navi update --dry-run --summary` で確かめてもよい
-5. 表示された「更新後に行うこと」「新しい設定と推奨値」を、ブランチ `update-<版>` の中で `config.json`・CI/CD 変数に入れてコミットする
+5. 表示された「更新後に行うこと」「新しい設定と推奨値」を、ブランチ `update-<版>` の中で `config.json`（`yojitsu-navi migrate-config --apply --add <項目>` で書き足せる）・CI/CD 変数に入れてコミットする
 6. `git push -u origin update-<版>` → MR → パイプラインが緑になったらマージ
 
 最後に、今の版から新しい版までの [CHANGELOG.md](../CHANGELOG.md) の「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します。設定は `config.json` の今の値を添えて「項目 今: … / 推奨: …」の形で出るので、要るものを MR の中で `config.json` に書きます（`update` は `config.json` を変えません）。`--dry-run` でも同じものを出します。
@@ -272,7 +300,8 @@ yojitsu-navi update --dry-run --summary --log update.log   # 画面には件数�
 | 残す（社内のもの） | `config.json`・`data/` 以下すべて（`mapping.csv`・`task-types.csv`・`masters/`・`worklogs/` など） | 足しも消しもしない。新しい版で増えた設定の項目・データのファイルは一覧で知らせる（無くても既定値で動く）。サンプルのまま残っているデータも一覧で知らせる（下の「サンプルのデータを消す」） |
 | 残す（社内の CI・npm の設定） | `.gitlab-ci.local.yml`・`.npmrc` | 上書きも削除もしない。`.gitlab-ci.local.yml` が無いときだけひな形を足す（`.gitlab-ci.yml` が include するので、無いと CI が動かない）。`.npmrc` はパッケージに入っていない |
 | 残す（社内で足したもの） | パッケージに無く、前の版の記録（`.yojitsu-navi.json`）にも無いファイル | 触らない |
-| 上書き | 上以外でパッケージに入っているもの（`.gitlab-ci.yml`・`.gitlab/`・`.gitignore`・`.gitattributes`・`package.json`・`package-lock.json`・`observablehq.config.js`・`src/`・`scripts/`・`tests/`・`docs/`・`README.md` など） | 新しい版にする。**社内で変えていたら止まる**（下） |
+| 新しい版にして社内の行を残す | `.gitignore` | 新しい版にし、社内で足した行を目印「`# 社内で足したもの（yojitsu-navi update はこの下の行を残します）`」の下に残す（止まらない）。社内の行は目印の下に足す |
+| 上書き | 上以外でパッケージに入っているもの（`.gitlab-ci.yml`・`.gitlab/`・`.gitattributes`・`package.json`・`package-lock.json`・`observablehq.config.js`・`src/`・`scripts/`・`tests/`・`docs/`・`README.md` など） | 新しい版にする。**社内で変えていたら止まる**（下） |
 | 削除 | 前の版の記録にあって新しい版に無いもの（0.2.0 までに入っていた開発元だけのテスト・スクリプトなど。SPEC §93） | 消す。社内で変えていたら止まる |
 | 入れ替え | `vendor/npm-cache/` | 依存込みのパッケージのとき丸ごと入れ替える |
 | コマンドのもの | `.yojitsu-navi.json`・`.yojitsu-navi-backup/` | コマンドが書く |

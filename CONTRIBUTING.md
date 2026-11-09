@@ -13,7 +13,7 @@ PR を出す前に確認すること:
   - 公開・社内へ渡す版を作るとき → ルートと `packages/app/package.json` の `version` を同じ値に上げ、[CHANGELOG.md](CHANGELOG.md) の「## 次の版」を「## <版>」にしてから `npm run app:pack`（SPEC §44。npmjs.com への公開は [docs/RELEASE.md](docs/RELEASE.md)）
   - 導入先（社内のプロジェクト）に届く変更 → [CHANGELOG.md](CHANGELOG.md) の「## 次の版」に書く。導入先で設定・CI/CD 変数・手順を変える必要がある、テストや CI の前提（動くジョブ・既定値・止まる条件）が変わる、のどちらかなら「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」に必ず書く（`yojitsu-navi update` がそのまま表示する。SPEC §91.2）
   - データの列・ファイル → [docs/DATA.md](docs/DATA.md)
-  - `config.json` の項目を足す・変える → `scripts/lib/config-schema.mjs`（互換確認。SPEC §96）にも足す。新しい項目は既定値のある任意の項目にする（必須にすると導入先の版上げが止まる）。名前を変える・やめるときは `deprecated` に移し方を書く。`tests/unit/config-schema.test.ts` の `fullConfig()` にも足す
+  - `config.json` の項目を足す・変える → `scripts/lib/config-schema.mjs`（互換確認。SPEC §96）にも足す。新しい項目は既定値のある任意の項目にする（必須にすると導入先の版上げが止まる）。名前を変える・やめるときは `deprecated` に移し方を書く（名前だけを変えるなら `renamedTo` に新しい項目も書く。`yojitsu-navi migrate-config --apply` が値を移す。SPEC §104）。`tests/unit/config-schema.test.ts` の `fullConfig()` にも足す
   - ダミーデータ → [docs/DUMMY_DATA.md](docs/DUMMY_DATA.md)（規模・警告の件数の表）
   - 画面の文言 → [docs/TEXTS.md](docs/TEXTS.md)
   - ビルド・ローダ → [docs/DATA_LOADERS.md](docs/DATA_LOADERS.md)

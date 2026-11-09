@@ -33,7 +33,7 @@ const DIST = join(PKG, "dist");
 const DEPS = join(PKG, "deps");
 const SAMPLE = join(PKG, "sample");
 /** scripts/lib から packages/app/lib に写すもの（yojitsu-navi コマンドが使う） */
-const SHARED_LIB = ["ci-files.mjs", "ci-local.mjs", "config-schema.mjs"];
+const SHARED_LIB = ["ci-files.mjs", "ci-local.mjs", "config-schema.mjs", "config-migrate.mjs"];
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
