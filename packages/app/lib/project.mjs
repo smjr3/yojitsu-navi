@@ -79,11 +79,12 @@ export function mergeGitignore(cur, next, unchangedAbove) {
   const above = at >= 0 ? lines.slice(0, at) : lines;
   const below = at >= 0 ? lines.slice(at + 1) : [];
   const nextText = next.replace(/\r\n/g, "\n");
-  const inNext = new Set(nextText.split("\n").map((l) => l.trim()));
-  // 後に書いた規則が勝つ（! で外す規則がある）ので、社内の行は書いた順・重なりもそのまま残す
+  const inNext = new Set(nextText.split("\n"));
+  // 後に書いた規則が勝つ（! で外す規則がある）ので、社内の行は書いた順・重なりもそのまま残す。
+  // 行の前後の空白も規則の一部（「 a」「a\ 」）なので、行はそのまま写す（空の行だけ除く）
   const local = [];
-  if (!unchangedAbove) for (const l of above) if (l.trim() && !l.trim().startsWith("#") && !inNext.has(l.trim())) local.push(l.trim());
-  for (const l of below) if (l.trim() && l.trim() !== GITIGNORE_MARK) local.push(l.trim());
+  if (!unchangedAbove) for (const l of above) if (l.trim() && !l.startsWith("#") && !inNext.has(l)) local.push(l);
+  for (const l of below) if (l.trim() && l !== GITIGNORE_MARK) local.push(l);
   const text = local.length ? `${nextText.replace(/\n*$/, "")}\n\n${GITIGNORE_MARK}\n${local.join("\n")}\n` : nextText;
   return { text, local };
 }

@@ -748,6 +748,9 @@ describe("update", () => {
     const m = app.mergeGitignore(`*.log\n\n${app.GITIGNORE_MARK}\n!*.log\n*.log\n`, "*.log\n", true);
     expect(m.local).toEqual(["!*.log", "*.log"]);
     expect(m.text).toBe(`*.log\n\n${app.GITIGNORE_MARK}\n!*.log\n*.log\n`);
+    // 行の前後の空白は規則の一部なので変えない
+    expect(app.mergeGitignore(`*.log\n\n${app.GITIGNORE_MARK}\n private.pem\nsecret\\ \n`, "*.log\n", true).local).toEqual([" private.pem", "secret\\ "]);
+    expect(app.mergeGitignore("*.log\n private.pem\n", "*.log\n", false).local).toEqual([" private.pem"]);
   });
 
   it("migrate-config: 無い新しい設定・名前が変わった項目を出す。--apply --add で選んだものだけ書き足し、バックアップする（SPEC §100）", () => {
