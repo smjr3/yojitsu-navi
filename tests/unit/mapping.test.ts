@@ -55,8 +55,9 @@ describe("作業実績の紐付け (SPEC §4.2)", () => {
       [C1],
     );
     expect(r.unmapped).toEqual([
-      { customerName: "XYZ", projectName: "P", hours: 3.5, count: 2, firstDate: "2026-05-01", lastDate: "2026-05-20", reason: "NO_RULE" },
-      { customerName: "XYZ", projectName: "Q", hours: 1, count: 1, firstDate: "2026-06-01", lastDate: "2026-06-01", reason: "NO_RULE" },
+      // 作業した人は時間の多い順（§100）
+      { customerName: "XYZ", projectName: "P", hours: 3.5, count: 2, firstDate: "2026-05-01", lastDate: "2026-05-20", reason: "NO_RULE", members: [{ memberId: "M2", memberName: "M2", hours: 2.5, count: 1 }, { memberId: "M1", memberName: "M1", hours: 1, count: 1 }] },
+      { customerName: "XYZ", projectName: "Q", hours: 1, count: 1, firstDate: "2026-06-01", lastDate: "2026-06-01", reason: "NO_RULE", members: [{ memberId: "M2", memberName: "M2", hours: 1, count: 1 }] },
     ]);
     expect(r.warnings.filter((w) => w.code === "UNMAPPED_WORKLOG")).toHaveLength(2);
   });

@@ -7,7 +7,7 @@
  * - 画面は workRows（data/work-hours.json）を期間・軸で合算する（aggregateWork / workByTask / workMonthlySeries）
  */
 import { isValidISODate, monthOfDate, monthRange } from "./calendar.js";
-import { customerKey } from "./customers.js";
+import { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey } from "./customers.js";
 import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { createKeywordRouter } from "./mapping.js";
 import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
@@ -15,6 +15,7 @@ import type { ProjectMatcher } from "./projectFromTask.js";
 import { monthStatusFromMeta } from "./status.js";
 import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
+import { addMemberHours, memberHoursList, type MemberHoursAcc } from "./worklogMembers.js";
 
 // ---------------------------------------------------------------------------
 // 分類（§30.1）
@@ -119,20 +120,27 @@ export function isOutsideWorklog(w: Worklog, classifier: TaskClassifier): boolea
 /** キーワードに合致せず運用保守以外にした作業を (顧客名, 案件名, 作業名)（正規化後）でまとめる（§62.3。時間の多い順） */
 export function keywordUnmatchedGroups(worklogs: readonly Worklog[], classifier: TaskClassifier): KeywordUnmatchedGroup[] {
   const acc = new Map<string, KeywordUnmatchedGroup>();
+  const people = new Map<KeywordUnmatchedGroup, MemberHoursAcc>();
   for (const w of worklogs) {
     if (!isOutsideWorklog(w, classifier)) continue;
     const c = classifier.classifyWorklog(w);
     if (!c.keywordMiss) continue;
     // 表記ゆれ（法人格・全角半角）は 1 行にまとめ、表記は最初の行のもの
     const key = [normalizeName(w.customerName), normalizeName(w.projectName), normalizeKeyword(w.task)].join(SEP);
-    const g = acc.get(key);
+    let g = acc.get(key);
     if (g) {
       g.hours += w.hours;
       g.count += 1;
       if (w.date < g.firstDate) g.firstDate = w.date;
       if (w.date > g.lastDate) g.lastDate = w.date;
-    } else acc.set(key, { customerName: w.customerName, projectName: w.projectName, task: w.task, type: c.group, hours: w.hours, count: 1, firstDate: w.date, lastDate: w.date });
+    } else {
+      g = { customerName: w.customerName, projectName: w.projectName, task: w.task, type: c.group, hours: w.hours, count: 1, firstDate: w.date, lastDate: w.date, members: [] };
+      acc.set(key, g);
+      people.set(g, new Map());
+    }
+    addMemberHours(people.get(g) as MemberHoursAcc, w);
   }
+  for (const g of acc.values()) g.members = memberHoursList(people.get(g) as MemberHoursAcc);
   return [...acc.values()].sort((a, b) => b.hours - a.hours || cmp(a.customerName, b.customerName) || cmp(a.projectName, b.projectName) || cmp(a.task, b.task));
 }
 
@@ -553,7 +561,8 @@ export function aggregateWork(model: Pick<Model, "meta" | "members">, rows: read
     const groups = new Map<string, { label: string; list: WorkRow[] }>();
     for (const r of inPeriod) {
       let g = groups.get(r.customerKey);
-      if (!g) groups.set(r.customerKey, (g = { label: r.customerName, list: [] }));
+      // 顧客名の無い作業（社内業務など）は空欄にせず「顧客名なし」の名前で出す
+      if (!g) groups.set(r.customerKey, (g = { label: r.customerKey === NONE_CUSTOMER_KEY ? (options.unassignedLabel ?? NONE_CUSTOMER_LABEL) : r.customerName, list: [] }));
       g.list.push(r);
     }
     return [...groups.entries()].map(([key, g]) => make(key, g.label, g.list)).sort(byTotal);

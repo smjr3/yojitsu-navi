@@ -6,6 +6,7 @@ import { isValidISODate, monthOfDate } from "./calendar.js";
 import { includesAnyKeyword, normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import type { ProjectMatcher } from "./projectFromTask.js";
 import type { Contract, ISODate, MappingRule, UnmappedWorklogGroup, Warning, Worklog, YearMonth } from "./types.js";
+import { addMemberHours, memberHoursList, type MemberHoursAcc } from "./worklogMembers.js";
 import { T, fmt } from "../i18n/index.js";
 
 export type UnmappedReason = UnmappedWorklogGroup["reason"];
@@ -273,6 +274,7 @@ export function mapWorklogs(
   const mappings: WorklogMapping[] = [];
   const assigned: MappingResult["assigned"] = [];
   const unmappedGroups = new Map<string, UnmappedWorklogGroup>();
+  const unmappedMembers = new Map<UnmappedWorklogGroup, MemberHoursAcc>();
   const ambiguous = new Map<string, AmbiguousAcc>();
   // 同じ (ルール, 月, 作業名) の候補は同じなので覚えておく（10 万行規模で行ごとに探さない）
   const candidateCache = new Map<string, { contracts: Contract[]; reason?: UnmappedReason }>();
@@ -295,6 +297,7 @@ export function mapWorklogs(
       g.count += 1;
       if (w.date < g.firstDate) g.firstDate = w.date;
       if (w.date > g.lastDate) g.lastDate = w.date;
+      addMemberHours(unmappedMembers.get(g) as MemberHoursAcc, w);
     } else {
       const group: UnmappedWorklogGroup = {
         customerName: w.customerName,
@@ -304,7 +307,11 @@ export function mapWorklogs(
         firstDate: w.date as ISODate,
         lastDate: w.date as ISODate,
         reason,
+        members: [],
       };
+      const acc: MemberHoursAcc = new Map();
+      addMemberHours(acc, w);
+      unmappedMembers.set(group, acc);
       if (by && "code" in by) group.taskCode = (w.taskCode ?? "").trim();
       if (by && "taskProject" in by) group.fromTask = true;
       unmappedGroups.set(key, group);
@@ -421,6 +428,7 @@ export function mapWorklogs(
     });
   }
   const unmapped = [...unmappedGroups.values()];
+  for (const g of unmapped) g.members = memberHoursList(unmappedMembers.get(g) as MemberHoursAcc);
   for (const g of unmapped) {
     const project = g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName;
     warnings.push({

@@ -12,7 +12,7 @@ title: 稼働実績
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { UNASSIGNED_WORK_KEY, aggregateWork, customerKey, decodeWorkRows, elapsedMonthCount, memberTeamsAt, monthRange, personMonths, workMonthlySeries, workTotals } from "./core/index.js";
+import { NONE_CUSTOMER_KEY, UNASSIGNED_WORK_KEY, aggregateWork, customerKey, decodeWorkRows, elapsedMonthCount, memberTeamsAt, monthRange, personMonths, workMonthlySeries, workTotals } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note, withToday } from "./components/layout.js";
@@ -210,6 +210,9 @@ if (vm) {
     breakdown: (r) => workTaskSpec({ title: `${r.name} ・ ${labelText}`, subtitle: periodJa(period), rows: r.rows, config: cfg }),
     ...extra,
   });
+  // 顧客詳細は案件のある顧客だけ（運用保守以外の作業しかない顧客には詳細画面が無い）。案件の無い顧客には印を付ける（§100）
+  const contractCustomers = new Set(model.contracts.map((c) => customerKey(c.contract.customerName)));
+  const noContract = (r) => axis === "customer" && r.key !== NONE_CUSTOMER_KEY && !contractCustomers.has(r.key);
   const rows = groups.map((g) => ({
     ...g,
     name: g.label,
@@ -220,7 +223,14 @@ if (vm) {
       key: "name",
       label: label,
       type: "text",
-      render: axis === "member" ? (r) => html`<span class="yn-cell-2line"><span class="yn-cell-main">${r.name}</span><span class="yn-cell-sub">${r.teamName}</span></span>` : undefined,
+      render:
+        axis === "member"
+          ? (r) => html`<span class="yn-cell-2line"><span class="yn-cell-main">${r.name}</span><span class="yn-cell-sub">${r.teamName}</span></span>`
+          : axis === "customer"
+            ? (r) => (noContract(r) ? html`<span>${r.name} <span class="yn-chip yn-chip-neutral" title=${T.work.noContractTitle}>${T.work.noContract}</span></span>` : r.name)
+            : undefined,
+      // 列の絞り込みで「案件なし」の顧客だけを選べるようにする
+      filterValue: axis === "customer" ? (r) => (noContract(r) ? [r.name, T.work.noContract] : [r.name]) : undefined,
       exportValue: (r) => r.name,
     },
     ...(axis === "member" ? [{ key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true }] : [{ key: "people", label: T.work.colMembers, type: "int", get: (r) => r.totals.memberCount, hideOnPhone: true }]),
@@ -240,8 +250,6 @@ if (vm) {
       hideNarrow: axis !== "member",
     },
   ];
-  // 顧客詳細は契約のある顧客だけ（契約外の作業しかない顧客には詳細画面が無い）
-  const contractCustomers = new Set(model.contracts.map((c) => customerKey(c.contract.customerName)));
   const rowHref =
     axis === "member"
       ? (r) => store.href("./member", {}, { id: r.key })

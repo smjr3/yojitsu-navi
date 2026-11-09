@@ -9,14 +9,15 @@ import { addMonths, businessDaysInMonth, isValidISODate, isValidYearMonth, month
 import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
 import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
-import { mapWorklogs } from "./mapping.js";
+import { mapWorklogs, type WorklogMapping } from "./mapping.js";
+import { customerKey } from "./customers.js";
 import { projectMatcherFor } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
-import type { ContractMonth, ContractResult, Dataset, ISODate, Model, Warning, YearMonth } from "./types.js";
+import type { Contract, ContractMonth, ContractResult, Dataset, ISODate, Model, UnknownMemberWork, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
 export interface BuildModelOptions {
@@ -178,6 +179,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     keywordUnmatched: keywordUnmatchedGroups(outsideLogs, classifier),
     unregisteredTaskCodes: taskCodeFindings.unregistered,
     taskCodeChanges: taskCodeFindings.changes,
+    unknownMembers: unknownMemberWork([...mapping.mappings, ...outsideMapping], masters, contracts),
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {
@@ -189,6 +191,40 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     outsideTypes: outsideTypes(dataset.taskTypes),
     targets: dataset.targets ?? [],
   };
+}
+
+/**
+ * メンバーマスタに無い社員番号の作業をまとめる（§100）。案件の実績（0 円）・運用保守以外・未紐付けのすべてを見る。
+ * 除外（顧客名なし）・不正な行は数えない。時間の多い順
+ */
+export function unknownMemberWork(mappings: readonly WorklogMapping[], masters: MasterIndex, contracts: readonly Contract[]): UnknownMemberWork[] {
+  const contractById = new Map(contracts.map((c) => [c.contractId, c]));
+  const acc = new Map<string, UnknownMemberWork & { byCustomer: Map<string, { name: string; hours: number }> }>();
+  for (const m of mappings) {
+    if (m.kind === "ignored" || m.kind === "excluded") continue;
+    const w = m.worklog;
+    const id = (w.memberId ?? "").trim();
+    if (masters.members.has(id)) continue;
+    let u = acc.get(id);
+    if (!u) {
+      u = { memberId: id, memberName: (w.memberName ?? "").trim(), hours: 0, contractHours: 0, count: 0, firstDate: w.date as ISODate, lastDate: w.date as ISODate, customers: [], byCustomer: new Map() };
+      acc.set(id, u);
+    }
+    u.hours += w.hours;
+    u.count += 1;
+    if (w.date < u.firstDate) u.firstDate = w.date as ISODate;
+    if (w.date > u.lastDate) u.lastDate = w.date as ISODate;
+    const contract = m.kind === "assigned" ? contractById.get(m.contractId) : undefined;
+    if (contract) u.contractHours += w.hours;
+    const name = contract ? contract.customerName : w.customerName.trim();
+    const key = customerKey(name);
+    const c = u.byCustomer.get(key);
+    if (c) c.hours += w.hours;
+    else u.byCustomer.set(key, { name, hours: w.hours });
+  }
+  return [...acc.values()]
+    .map(({ byCustomer, ...u }) => ({ ...u, customers: [...byCustomer.values()].sort((a, b) => b.hours - a.hours || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) }))
+    .sort((a, b) => b.hours - a.hours || (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0));
 }
 
 /**
