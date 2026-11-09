@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { applyCustomerTeams, customerTeamIndex, isProvisionalCell, parseDataset } from "../../src/core/csv.js";
 import { mapWorklogs } from "../../src/core/mapping.js";
-import { emptyMasterText, parseMasterDoc, serializeMasterDoc, updateRow, withColumn } from "../../src/core/masterEdit.js";
+import { addRow, docFromDraft, draftFileOf, emptyMasterText, parseDraft, parseMasterDoc, planSourcesFromDocs, rebaseDraftFile, serializeMasterDoc, updateRow, withColumn } from "../../src/core/masterEdit.js";
 import { findUnsetItems, nextContractId } from "../../src/core/unset.js";
 import { validateDataset } from "../../src/core/validate.js";
 import { baseConfig, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
@@ -143,5 +143,45 @@ describe("契約期間外の実績（OUT_OF_PERIOD）", () => {
     expect(r.unmapped[0]?.reason).toBe("NO_RULE");
     expect(r.unmapped[0]?.contracts).toBeUndefined();
     expect(r.unmapped[0]?.months).toBeUndefined();
+  });
+});
+
+describe("下書きと見出しに足した列（Codex の指摘）", () => {
+  const text = "key,hourly_rate,effective_from\nSE,1000,2025-04\nPM,2000,2025-04\n";
+  it("仮にした行の provisional 列は下書きの保存・復元・当て直しで消えない", () => {
+    const doc = updateRow(withColumn(parseMasterDoc("rates", text), "provisional"), "o0", { provisional: "1" });
+    const f = draftFileOf(doc, { text, lastCommitId: null });
+    expect(f.columns).toEqual(["provisional"]);
+    const restored = parseDraft(JSON.stringify({ version: 2, savedAt: "t", files: { rates: f } }))!.files.rates!;
+    expect(serializeMasterDoc(docFromDraft("rates", restored)).text).toBe(serializeMasterDoc(doc).text);
+    // 最新の土台に行が増えていても列と値は残る
+    const latest = text + "主任,800,2025-04\n";
+    const r = rebaseDraftFile("rates", restored, latest);
+    expect(serializeMasterDoc(r.doc).text).toBe("key,hourly_rate,effective_from,provisional\nSE,1000,2025-04,1\nPM,2000,2025-04\n主任,800,2025-04\n");
+  });
+  it("列を足していない下書きは columns を持たない", () => {
+    expect(draftFileOf(updateRow(parseMasterDoc("rates", text), "o0", { hourly_rate: "1100" }), { text, lastCommitId: null }).columns).toBeUndefined();
+  });
+  it("正式な案件ID の列が無い contracts.csv でも、値を入れた新しい案件は列を足して残す", () => {
+    const c = "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount,note\n";
+    const doc = addRow(withColumn(parseMasterDoc("contracts", c), "project_id"), { contract_id: "C1", customer_name: "A社", project_name: "保守", project_id: "PJ-1", start_month: "2026-04", end_month: "2027-03", total_amount: "1" }).doc;
+    expect(serializeMasterDoc(doc).text).toBe(c.replace("note\n", "note,project_id\n") + "C1,A社,保守,,2026-04,2027-03,1,,PJ-1\n");
+  });
+});
+
+describe("リソース計画の担当チームも顧客の既定を使う（Codex の指摘）", () => {
+  it("planSourcesFromDocs: team_id が空なら顧客の既定、書いた案件はそのまま", () => {
+    const docs = {
+      teams: parseMasterDoc("teams", "team_id,name,parent_team_id,effective_from\nT1,一課,,2025-04\n"),
+      members: parseMasterDoc("members", "member_id,name,kind,title,department,section,team_id,effective_from\n"),
+      assignments: parseMasterDoc("assignments", "member_id,contract_id,start_month,end_month,allocation\n"),
+      customerTeams: parseMasterDoc("customerTeams", "customer_name,team_id,note\nＡ社,T1,\n"),
+    };
+    const contracts = "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\nC1,A社,保守,,2026-04,2027-03,1\nC2,A社,別件,T2,2026-04,2027-03,1\nC3,B社,保守,,2026-04,2027-03,1\n";
+    expect([...planSourcesFromDocs(docs, contracts).contractTeams]).toEqual([
+      ["C1", "T1"],
+      ["C2", "T2"],
+      ["C3", null],
+    ]);
   });
 });

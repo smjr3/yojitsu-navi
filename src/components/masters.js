@@ -995,12 +995,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const unsetCtx = { inheritedTeam };
     if (f.unset && !unsetDefs[f.unset]) f.unset = null;
     const unsetTest = f.unset ? unsetDefs[f.unset] : null;
+    // 今の行か、履歴のどれかの行が当たれば出す（過去・予定の仮の単価も見つけられるように）
+    const unsetHit = (g, test) => test(g.shown.record, unsetCtx) || g.entries.some((e) => test(e.record, unsetCtx));
     let groups = groupsOf(fileId).filter((g) => {
       const rows = g.entries.map((e) => rowById.get(e.rowId));
       if (f.changedOnly && !rows.some((r) => rowState(doc, r) !== "unchanged" || issues[r.id]?.length > 0)) return false;
       if (q && !rows.some((r) => searchText(fileId, doc, r).includes(q))) return false;
       if (!activeCols.every(([c, v]) => matchesFilter(c, v, g, "yen"))) return false;
-      if (unsetTest && !unsetTest(g.shown.record, unsetCtx)) return false;
+      if (unsetTest && !unsetHit(g, unsetTest)) return false;
       return true;
     });
     if (f.sort) {
@@ -1217,7 +1219,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 未設定・仮の値の数（§103）。0 件の種類は出さない（選んでいるものは 0 件でも出して外せるようにする）
     const unsetChips = Object.entries(unsetDefs)
       .map(([key, test]) => {
-        const n = groupsOf(fileId).filter((g) => test(g.shown.record, unsetCtx)).length;
+        const n = groupsOf(fileId).filter((g) => unsetHit(g, test)).length;
         if (n === 0 && f.unset !== key) return null;
         const on = f.unset === key;
         return html`<button type="button" class=${`yn-btn yn-btn-sm yn-me-unset${on ? " is-on" : ""}`} aria-pressed=${on ? "true" : "false"} data-fk=${`unset:${fileId}:${key}`} onclick=${() => {

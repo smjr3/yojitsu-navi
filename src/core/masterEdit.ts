@@ -9,7 +9,8 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
-import { memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
+import { customerTeamIndex, memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
+import { normalizeName } from "./normalize.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
 import type { Config, Dataset, MemberRecord, TeamRecord, YearMonth } from "./types.js";
 import type { ValidationIssue } from "./validate.js";
@@ -139,8 +140,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
       { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
       { name: "project_name", label: T.masterFiles.colProjectName, input: "text", required: true },
-      // 正式な案件ID（§98）。列があるときだけ出す。画面では変えない（contracts.csv で入れる）
-      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true, listHidden: true },
+      // 正式な案件ID（§98）。列があるときだけ一覧に出す。登録済みの行では変えない。列が無くても新しい案件の登録（§103.3）で入れたら見出しに足す
+      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },
@@ -1018,6 +1019,8 @@ export interface DraftFile {
   removed: number[];
   /** 追加した行のセル（追加した順） */
   added: string[][];
+  /** 編集で見出しの末尾に足した列（§103.5 の provisional）。セルはこの列を足した見出しの順 */
+  columns?: string[];
 }
 
 export interface MasterDraft {
@@ -1047,7 +1050,12 @@ export function draftFileOf(doc: MasterDoc, base: { text: string; lastCommitId: 
     .filter(([id]) => !present.has(id))
     .map(([, o]) => o.index)
     .sort((a, b) => a - b);
-  return { baseText: base.text, baseCommitId: base.lastCommitId, changed, removed, added };
+  // 見出しに足した列（§103.5）。見出しを書き換えたときだけ土台の見出しと比べる
+  const columns = doc.headerRaw === null ? (() => {
+    const baseHeader = parseMasterDoc(doc.fileId, base.text).header;
+    return doc.header.filter((h) => !baseHeader.includes(h));
+  })() : [];
+  return { baseText: base.text, baseCommitId: base.lastCommitId, changed, removed, added, ...(columns.length > 0 ? { columns } : {}) };
 }
 
 /** 下書きのファイルの変更件数（追加 + 変更 + 削除） */
@@ -1107,6 +1115,7 @@ export function parseDraft(json: string | null): MasterDraft | null {
         changed: (changed as DraftFile["changed"]).map((c) => ({ baseIndex: c.baseIndex, cells: c.cells.slice() })),
         removed: (removed as number[]).slice(),
         added: (added as string[][]).map((c) => c.slice()),
+        ...(isCells(f.columns) && f.columns.length > 0 ? { columns: (f.columns as string[]).slice() } : {}),
       };
     }
     return { version: 2, savedAt: typeof d.savedAt === "string" ? d.savedAt : "", files };
@@ -1250,8 +1259,13 @@ export function alignRows(a: readonly string[], b: readonly string[]): number[] 
  */
 export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: string, choices: Readonly<Record<string, ConflictChoice>> = {}): RebaseResult {
   const def = MASTER_FILES[fileId];
-  const old = parseMasterDoc(fileId, f.baseText);
-  const latest = parseMasterDoc(fileId, latestText);
+  // 下書きで見出しに足した列（§103.5）は、土台にも最新にも足してから当て直す
+  let old = parseMasterDoc(fileId, f.baseText);
+  let latest = parseMasterDoc(fileId, latestText);
+  for (const c of f.columns ?? []) {
+    old = withColumn(old, c);
+    latest = withColumn(latest, c);
+  }
   const header = latest.header;
   const width = header.length;
   const sameHeader = sameCells(old.header, header);
@@ -1372,7 +1386,7 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
  * worklogMonths は作業実績のある「メンバー|月」（§35 の不在した月の稼働判定。model.json の worklogMonths）
  */
 export function planSourcesFromDocs(
-  docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "outside">>,
+  docs: Pick<Record<MasterFileId, MasterDoc>, "teams" | "members" | "assignments"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "outside" | "customerTeams">>,
   contractsText: string,
   worklogMonths: readonly string[] = [],
 ): PlanSources {
@@ -1414,10 +1428,13 @@ export function planSourcesFromDocs(
       allocation: raw === "" ? Number.NaN : parseNumberCell(raw),
     };
   });
+  // 担当チームが空の案件は顧客の既定の担当チーム（§103.6。読み込み時と同じ）
+  const ct = docs.customerTeams;
+  const defaults = ct ? customerTeamIndex(ct.rows.map((r) => ({ customerName: cellOf(ct, r, "customer_name"), teamId: cellOf(ct, r, "team_id") }))) : new Map<string, string>();
   const contractTeams = new Map<string, string | null>();
   for (const row of parseCsvTable(contractsText).rows) {
     const id = row.get("contract_id");
-    if (id !== "" && !contractTeams.has(id)) contractTeams.set(id, row.get("team_id") || null);
+    if (id !== "" && !contractTeams.has(id)) contractTeams.set(id, row.get("team_id") || defaults.get(normalizeName(row.get("customer_name"))) || null);
   }
   const outsidePlans = (docs.outside?.rows ?? []).map((r) => {
     const v = rowRecord(docs.outside as MasterDoc, r);
