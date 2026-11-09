@@ -11,6 +11,7 @@ import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider
 import { assignmentPlanOf, forecastAllMethodsForMonths, type ForecastContext } from "./forecast.js";
 import { mapWorklogs, type WorklogMapping } from "./mapping.js";
 import { customerKey } from "./customers.js";
+import { createTaskNameExtractor } from "./taskFromName.js";
 import { projectMatcherFor } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
@@ -52,7 +53,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   // 紐付けルールに作業名のキーワードがあれば、合致しない作業も運用保守以外にする（§62）
   // 作業名から抜き出した案件名での紐付け（§97）
   const projects = projectMatcherFor(dataset);
-  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects);
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects, createTaskNameExtractor(dataset.config));
   const inScopeLogs = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
   const outsideLogs = classifier.enabled ? dataset.worklogs.filter((w) => isOutsideWorklog(w, classifier)) : [];
   const excludedContracts = new Map(partition.excluded.map((e) => [e.contract.contractId, e.reason]));

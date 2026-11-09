@@ -188,6 +188,29 @@ describe("fetch-worklogs: メンバーマスタの在籍者を人数ごとに分
     expect(readMeta().lastFailure).toBeUndefined();
   });
 
+  it("前回と中身が同じ月は書き換えず、変わった月だけを changedMonths に記録する（§101.3）", async () => {
+    const all = MONTHS.flatMap(original);
+    vi.stubGlobal("fetch", memberApi(all));
+    useMemberApi(50);
+    const first = await fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV);
+    // テスト用のデータと同じ月（在籍者だけの行と変わらない月）は書き換えない
+    expect(readMeta().changedMonths).toEqual(first.changedMonths);
+    expect(first.changedMonths?.every((m) => MONTHS.includes(m))).toBe(true);
+    // 改行コードだけ違うファイル（Windows の autocrlf）も同じとみなす
+    writeFileSync(join(root, "data/worklogs/2026-08.csv"), readMonth("2026-08").replace(/\n/g, "\r\n"));
+    const crlf = readMonth("2026-08");
+    const second = await fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV);
+    expect(second.changedMonths).toEqual([]);
+    expect(readMeta().changedMonths).toEqual([]);
+    expect(readMonth("2026-08")).toBe(crlf);
+    // 10 月だけ 1 行増えた
+    const extra = { ...(original("2026-10")[0] as Worklog), date: "2026-10-26", hours: 0.5 };
+    vi.stubGlobal("fetch", memberApi([...all, extra]));
+    const third = await fetchWorklogs({ rootDir: root, asOf: AS_OF }, ENV);
+    expect(third.changedMonths).toEqual(["2026-10"]);
+    expect(readMeta().changedMonths).toEqual(["2026-10"]);
+  });
+
   it("初回の取り込み（--initial）: 今年度の初めから今月までを、その期間の在籍者で取り、各月のファイルを書く（§96）", async () => {
     const all = MONTHS.flatMap(original);
     const seen: string[][] = [];
