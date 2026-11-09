@@ -290,7 +290,19 @@ describe("buildModel — 境界・警告", () => {
     // 案件の時間に入っている（単価が無いので 0 円）
     expect(model.contracts[0]?.months[1]?.hours).toBe(7);
     expect(model.contracts[0]?.months[1]?.costLines.find((l) => l.memberId === "GHOST")?.amount).toBe(0);
-    expect(model.unmapped[0]?.members).toEqual([{ memberId: "GHOST", memberName: "臨時 太郎", hours: 1, count: 1 }]);
+    expect(model.unmapped[0]?.members).toEqual([{ memberId: "GHOST", memberName: "臨時 太郎", hours: 1, count: 1, lastDate: "2026-06-03" }]);
+  });
+
+  it("マスタに無い人の運用保守以外の作業は、案件に紐付いても「うち運用保守」に数えない（§100）", () => {
+    const ds = dataset({
+      contracts: [contract({ contractId: "C1", customerName: "ABC" })],
+      mappings: [rule("ABC", "", "C1")],
+      taskTypes: [{ task: "保守", category: "contract" }, { task: "提案", category: "outside" }],
+      worklogs: [worklog({ date: "2026-05-01", memberId: "GHOST", hours: 3, customerName: "ABC", task: "提案" }), worklog({ date: "2026-05-02", memberId: "GHOST", hours: 1, customerName: "ABC", task: "保守" })],
+    });
+    const model = buildModel(ds, { asOf: "2026-10-27" });
+    expect(model.unknownMembers?.[0]).toMatchObject({ memberId: "GHOST", hours: 4, contractHours: 1 });
+    expect(model.contracts[0]?.months[1]?.hours).toBe(1);
   });
 
   it("マスタに無い人がいなければ unknownMembers は空", () => {

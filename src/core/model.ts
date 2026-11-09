@@ -179,7 +179,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     keywordUnmatched: keywordUnmatchedGroups(outsideLogs, classifier),
     unregisteredTaskCodes: taskCodeFindings.unregistered,
     taskCodeChanges: taskCodeFindings.changes,
-    unknownMembers: unknownMemberWork([...mapping.mappings, ...outsideMapping], masters, contracts),
+    unknownMembers: unknownMemberWork(mapping.mappings, outsideMapping, masters, contracts),
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {
@@ -197,10 +197,12 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
  * メンバーマスタに無い社員番号の作業をまとめる（§100）。案件の実績（0 円）・運用保守以外・未紐付けのすべてを見る。
  * 除外（顧客名なし）・不正な行は数えない。時間の多い順
  */
-export function unknownMemberWork(mappings: readonly WorklogMapping[], masters: MasterIndex, contracts: readonly Contract[]): UnknownMemberWork[] {
+export function unknownMemberWork(mappings: readonly WorklogMapping[], outsideMappings: readonly WorklogMapping[], masters: MasterIndex, contracts: readonly Contract[]): UnknownMemberWork[] {
   const contractById = new Map(contracts.map((c) => [c.contractId, c]));
   const acc = new Map<string, UnknownMemberWork & { byCustomer: Map<string, { name: string; hours: number }> }>();
-  for (const m of mappings) {
+  // 運用保守以外の「紐付き」は関連契約にすぎず案件の実績に入らないので、うち運用保守には数えない
+  const all = [...mappings.map((m) => ({ m, outside: false })), ...outsideMappings.map((m) => ({ m, outside: true }))];
+  for (const { m, outside } of all) {
     if (m.kind === "ignored" || m.kind === "excluded") continue;
     const w = m.worklog;
     const id = (w.memberId ?? "").trim();
@@ -215,7 +217,7 @@ export function unknownMemberWork(mappings: readonly WorklogMapping[], masters: 
     if (w.date < u.firstDate) u.firstDate = w.date as ISODate;
     if (w.date > u.lastDate) u.lastDate = w.date as ISODate;
     const contract = m.kind === "assigned" ? contractById.get(m.contractId) : undefined;
-    if (contract) u.contractHours += w.hours;
+    if (contract && !outside) u.contractHours += w.hours;
     const name = contract ? contract.customerName : w.customerName.trim();
     const key = customerKey(name);
     const c = u.byCustomer.get(key);

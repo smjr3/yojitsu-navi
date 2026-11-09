@@ -576,6 +576,8 @@ export interface WorklogMemberHours {
   memberName: string;
   hours: number;
   count: number;
+  /** その人のこのまとまりでの最後の日 */
+  lastDate: ISODate;
 }
 
 export interface UnmappedWorklogGroup {

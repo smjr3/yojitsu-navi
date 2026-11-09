@@ -80,7 +80,8 @@ export function byPerson(model, groups, groupName) {
       a.hours += p.hours;
       a.count += p.count;
       a.groups += 1;
-      if (g.lastDate > a.lastDate) a.lastDate = g.lastDate;
+      // その人の最後の日（まとまりの最後の日ではない）
+      if (p.lastDate > a.lastDate) a.lastDate = p.lastDate;
       a.items.push({ name: groupName(g), hours: p.hours, count: p.count });
     }
   }
