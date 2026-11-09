@@ -138,6 +138,19 @@ describe("契約期間外の実績（OUT_OF_PERIOD）", () => {
       ],
     });
   });
+  it("作業ごとに候補の契約が違っても（キーワードの行）、同じまとまりに全部の契約を並べる", () => {
+    const C1 = contract({ contractId: "C1", startMonth: "2026-04", endMonth: "2027-03" });
+    const C2 = contract({ contractId: "C2", startMonth: "2026-04", endMonth: "2027-03" });
+    const r = mapWorklogs(
+      [worklog({ date: "2025-12-01", memberId: "M1", hours: 2, task: "保守A" }), worklog({ date: "2025-12-02", memberId: "M1", hours: 3, task: "保守B" })],
+      [{ ...rule("ABC株式会社", "", "C1"), taskInclude: ["A"] }, { ...rule("ABC株式会社", "", "C2"), taskInclude: ["B"] }],
+      [C1, C2],
+    );
+    const g = r.unmapped.filter((u) => u.reason === "OUT_OF_PERIOD");
+    expect(g).toHaveLength(1);
+    expect(g[0]?.hours).toBe(5);
+    expect(g[0]?.contracts?.map((c) => c.contractId).sort()).toEqual(["C1", "C2"]);
+  });
   it("ほかの理由のまとまりには契約・月を付けない", () => {
     const r = mapWorklogs([worklog({ date: "2026-05-01", memberId: "M1", hours: 1, customerName: "無い顧客" })], [], []);
     expect(r.unmapped[0]?.reason).toBe("NO_RULE");

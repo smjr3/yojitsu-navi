@@ -302,6 +302,12 @@ export function mapWorklogs(
       addMemberHours(unmappedMembers.get(g) as MemberHoursAcc, w);
       const ms = unmappedMonths.get(g);
       if (ms) ms.set(monthOfDate(w.date), (ms.get(monthOfDate(w.date)) ?? 0) + w.hours);
+      // 作業ごとに候補の契約が違うこともある（キーワード・期間つきの行）。全部を並べる
+      if (periodOf && g.contracts) {
+        for (const c of periodOf) {
+          if (!g.contracts.some((x) => x.contractId === c.contractId)) g.contracts.push({ contractId: c.contractId, projectName: c.projectName, startMonth: c.startMonth, endMonth: c.endMonth });
+        }
+      }
     } else {
       const group: UnmappedWorklogGroup = {
         customerName: w.customerName,
