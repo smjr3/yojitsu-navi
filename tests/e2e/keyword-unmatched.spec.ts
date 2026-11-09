@@ -18,9 +18,10 @@ test("国際送金の案件で_保守対応の付かない作業が一覧に出�
     expect(await cellText(rows.nth(i), col(head, "作業名"))).not.toContain("_保守対応");
     expect(await cellText(rows.nth(i), col(head, "扱い"))).not.toBe("");
   }
-  // 「未紐付けの作業実績」の次に置く
+  // 「未紐付けの作業実績」「契約期間外の実績」（§103）の次に置く
   const headings = await page.locator("h2.yn-section-title").allTextContents();
-  expect(headings.indexOf(TITLE)).toBe(headings.indexOf("未紐付けの作業実績") + 1);
+  expect(headings.indexOf("契約期間外の実績")).toBe(headings.indexOf("未紐付けの作業実績") + 1);
+  expect(headings.indexOf(TITLE)).toBe(headings.indexOf("契約期間外の実績") + 1);
 });
 
 for (const [width, dark] of [[390, false], [768, true], [1280, false], [1280, true]] as const) {

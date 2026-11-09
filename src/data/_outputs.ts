@@ -6,7 +6,7 @@
  * Model の計算は 1 回だけ）、結果を Framework のキャッシュに置く。ローダを個別に動かしても、まとめて作っても同じ中身になる
  * （docs/DATA_LOADERS.md「6. 増分ビルド」、SPEC §102）。
  */
-import { checkProjects, encodeDaily, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
+import { checkProjects, encodeDaily, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
 import type { ParsedDataset } from "../core/csv.js";
 import { buildMastersPayload } from "./_masters.js";
 import { loadDataset } from "../../scripts/lib/load.js";
@@ -97,6 +97,10 @@ function datasetIssuesOutput(ctx: OutputContext) {
     },
     // 正式な案件の一覧との照合（§98）。一覧が無ければ enabled: false
     projects: checkProjects(parsed.dataset.contracts, parsed.dataset.projects),
+    // 未設定・仮の値（§103）。マスタ編集の該当箇所へ移るための一覧
+    unset: findUnsetItems(parsed.dataset),
+    // 正式な案件の一覧（§98）。未登録の案件の「案件に登録」で、案件名が同じ正式な案件の ID・顧客名を入れるのに使う
+    officialProjects: (parsed.dataset.projects ?? []).filter((p) => p.projectId !== "").map((p) => ({ projectId: p.projectId, customerName: p.customerName, projectName: p.projectName })),
     _build: buildStamp(),
   };
 }

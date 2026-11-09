@@ -4720,3 +4720,8 @@ a.yn-org-person:hover {
 .yn-org-spot > .yn-org-people {
   padding-top: 2px;
 }
+
+/* データ確認の表の「案件に登録」「マスタで直す」など（§103）。折り返さない */
+.yn-row-action {
+  white-space: nowrap;
+}
