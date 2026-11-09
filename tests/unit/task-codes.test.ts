@@ -138,8 +138,8 @@ describe("未登録の作業コード・作業名の変更（findTaskCodeIssues�
   it("キーワードに合う作業のうち、作業コードの行が無い（未登録）・行の期間に入らない（期間外）ものをコードごとに出す", () => {
     const f = findTaskCodeIssues(logs, rules, CHECK);
     expect(f.unregistered).toEqual([
-      { taskCode: "W-02", task: "問い合わせ_保守対応", customerName: "ABC", projectName: "基幹", hours: 4, count: 2, firstDate: "2026-05-01", lastDate: "2026-05-20", status: "none" },
-      { taskCode: "W-05", task: "問い合わせ_保守対応", customerName: "ABC", projectName: "基幹", hours: 4, count: 1, firstDate: "2027-04-01", lastDate: "2027-04-01", status: "period" },
+      { taskCode: "W-02", task: "問い合わせ_保守対応", customerName: "ABC", projectName: "基幹", hours: 4, count: 2, firstDate: "2026-05-01", lastDate: "2026-05-20", status: "none", members: [{ memberId: "M1", memberName: "M1", hours: 4, count: 2, lastDate: "2026-05-20" }] },
+      { taskCode: "W-05", task: "問い合わせ_保守対応", customerName: "ABC", projectName: "基幹", hours: 4, count: 1, firstDate: "2027-04-01", lastDate: "2027-04-01", status: "period", members: [{ memberId: "M1", memberName: "M1", hours: 4, count: 1, lastDate: "2027-04-01" }] },
     ]);
   });
 

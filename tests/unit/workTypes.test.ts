@@ -189,6 +189,9 @@ describe("buildModel: 契約外は契約の実績に入れない", () => {
       ["ABC", 7.5],
       ["新規見込み", 4],
     ]);
+    // 顧客名の無い作業は空欄にせず unassignedLabel で出す（§100）
+    const noCustomer = aggregateWork(model, [{ ...rows[0]!, customerKey: "__none__", customerName: "" }], { period, axis: "customer", unassignedLabel: "顧客名なし" });
+    expect(noCustomer.map((g) => [g.key, g.label])).toEqual([["__none__", "顧客名なし"]]);
     const byMember = aggregateWork(model, rows, { period, axis: "member", unassignedLabel: "-" });
     expect(byMember.map((g) => [g.key, g.teamId, g.totals.totalHours])).toEqual([
       ["M1", "T1", 6.5],

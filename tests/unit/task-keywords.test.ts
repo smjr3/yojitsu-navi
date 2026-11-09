@@ -115,6 +115,13 @@ describe("buildModel: 作業名のキーワードで運用保守を抜き出す�
       ["月次定例", "その他", 1, 1, "2026-04-05", "2026-04-05"],
     ]);
   });
+  it("キーワードに合わない作業には作業した人が付く（§100）", () => {
+    for (const g of model.keywordUnmatched) {
+      expect(g.members.length).toBeGreaterThan(0);
+      expect(g.members.reduce((s, p) => s + p.hours, 0)).toBeCloseTo(g.hours, 12);
+      expect(g.members.reduce((s, p) => s + p.count, 0)).toBe(g.count);
+    }
+  });
   it("キーワードで決まった作業は未分類の警告を出さない", () => {
     expect(model.warnings.map((w) => w.code)).not.toContain("TASK_UNCLASSIFIED");
     expect(validateDataset(data).map((i) => i.code)).not.toContain("TASK_UNCLASSIFIED");
