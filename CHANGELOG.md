@@ -4,7 +4,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 `yojitsu-navi update` は、今の版から新しい版までの「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します（「新しい設定と推奨値」には導入先の `config.json` の今の値を添えます）。
 書き方と、版を上げるときの手順は [docs/RELEASE.md](docs/RELEASE.md)。
 
-## 次の版
+## 0.2.4
 
 ### 更新後に行うこと
 
