@@ -58,7 +58,9 @@ describe("データローダ（別プロセス）", () => {
     const again = await run(file, ["--contractId=C001"]);
     expect(again.stdout).toBe(first.stdout);
     const v = JSON.parse(first.stdout);
-    expect(v).toMatchObject({ contractId: "C001", _build: { inputHash: HASH } });
+    // 明細は入力の指紋を持たない（増分ビルドで変わらなければ書き換えないため。SPEC §102）
+    expect(v).toMatchObject({ contractId: "C001", _build: { asOf: "2026-10-27" } });
+    expect(v._build.inputHash).toBeUndefined();
     expect(v.months.length).toBeGreaterThan(0);
     // 作り置きに無い ID でも落ちずに notFound を返す
     const unknown = await run(file, ["--contractId=NOPE"]);

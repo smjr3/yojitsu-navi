@@ -270,6 +270,46 @@ describe("buildModel — 境界・警告", () => {
     expect(model.contracts[0]?.months[2]?.cost).toBe(1000);
   });
 
+  it("マスタに無い人の作業を人ごとにまとめる（§100）: 時間は案件の実績に含め、運用保守以外・未紐付けも数える", () => {
+    const ds = dataset({
+      contracts: [contract({ contractId: "C1", customerName: "ABC" })],
+      mappings: [rule("ABC", "", "C1")],
+      members: [member({ memberId: "M1" })],
+      worklogs: [
+        worklog({ date: "2026-05-01", memberId: "GHOST", memberName: "臨時 太郎", hours: 2, customerName: "ABC株式会社" }),
+        worklog({ date: "2026-06-03", memberId: " GHOST ", memberName: "臨時 太郎", hours: 1, customerName: "XYZ", projectName: "未登録" }),
+        worklog({ date: "2026-05-02", memberId: "M1", hours: 5, customerName: "ABC" }),
+        worklog({ date: "2026-05-03", memberId: "NOBODY", hours: 1, customerName: "" }), // 顧客名なしは除外なので数えない
+        worklog({ date: "2026-05-04", memberId: "ZERO", hours: 0 }), // 不正な時間は数えない
+      ],
+    });
+    const model = buildModel(ds, { asOf: "2026-10-27" });
+    expect(model.unknownMembers).toEqual([
+      { memberId: "GHOST", memberName: "臨時 太郎", hours: 3, contractHours: 2, count: 2, firstDate: "2026-05-01", lastDate: "2026-06-03", customers: [{ name: "ABC", hours: 2 }, { name: "XYZ", hours: 1 }] },
+    ]);
+    // 案件の時間に入っている（単価が無いので 0 円）
+    expect(model.contracts[0]?.months[1]?.hours).toBe(7);
+    expect(model.contracts[0]?.months[1]?.costLines.find((l) => l.memberId === "GHOST")?.amount).toBe(0);
+    expect(model.unmapped[0]?.members).toEqual([{ memberId: "GHOST", memberName: "臨時 太郎", hours: 1, count: 1, lastDate: "2026-06-03" }]);
+  });
+
+  it("マスタに無い人の運用保守以外の作業は、案件に紐付いても「うち運用保守」に数えない（§100）", () => {
+    const ds = dataset({
+      contracts: [contract({ contractId: "C1", customerName: "ABC" })],
+      mappings: [rule("ABC", "", "C1")],
+      taskTypes: [{ task: "保守", category: "contract" }, { task: "提案", category: "outside" }],
+      worklogs: [worklog({ date: "2026-05-01", memberId: "GHOST", hours: 3, customerName: "ABC", task: "提案" }), worklog({ date: "2026-05-02", memberId: "GHOST", hours: 1, customerName: "ABC", task: "保守" })],
+    });
+    const model = buildModel(ds, { asOf: "2026-10-27" });
+    expect(model.unknownMembers?.[0]).toMatchObject({ memberId: "GHOST", hours: 4, contractHours: 1 });
+    expect(model.contracts[0]?.months[1]?.hours).toBe(1);
+  });
+
+  it("マスタに無い人がいなければ unknownMembers は空", () => {
+    const model = buildModel(dataset({ contracts: [contract({ contractId: "C1" })], mappings: [rule("ABC株式会社", "", "C1")], members: [member({ memberId: "M1" })], worklogs: [worklog({ date: "2026-05-01", memberId: "M1", hours: 1 })] }), { asOf: "2026-10-27" });
+    expect(model.unknownMembers).toEqual([]);
+  });
+
   it("追加の原価プロバイダを差し込める", () => {
     const ds = dataset({ config: { ...workedExample().config, costTypes: [{ id: "labor", label: "工数" }, { id: "outsourcing", label: "外注費" }] }, contracts: [contract({ contractId: "C1" })] });
     const model = buildModel(ds, {

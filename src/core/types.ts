@@ -569,6 +569,17 @@ export interface Warning {
   count?: number;
 }
 
+/** 作業実績のまとまりに作業を付けた人（データ確認で「誰の作業か」を出す。時間の多い順） */
+export interface WorklogMemberHours {
+  memberId: string;
+  /** 作業実績の氏名（最初の行の表記） */
+  memberName: string;
+  hours: number;
+  count: number;
+  /** その人のこのまとまりでの最後の日 */
+  lastDate: ISODate;
+}
+
 export interface UnmappedWorklogGroup {
   customerName: string;
   projectName: string;
@@ -576,6 +587,8 @@ export interface UnmappedWorklogGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
+  /** 作業を付けた人 */
+  members: WorklogMemberHours[];
   reason: "NO_RULE" | "OUT_OF_PERIOD" | "RULE_OUT_OF_PERIOD" | "UNKNOWN_CONTRACT" | "EXCLUDED_CONTRACT" | "UNREGISTERED_PROJECT";
   /** 作業コードの行（§92）で探した未紐付け。顧客名・案件名ではなくこのコードでまとめる */
   taskCode?: string;
@@ -594,6 +607,8 @@ export interface KeywordUnmatchedGroup {
   count: number;
   firstDate: ISODate;
   lastDate: ISODate;
+  /** 作業を付けた人 */
+  members: WorklogMemberHours[];
 }
 
 /** 運用保守のキーワードに合う作業コードのうち、mapping.csv で紐付けていないもの（§92） */
@@ -609,6 +624,24 @@ export interface UnregisteredTaskCode {
   lastDate: ISODate;
   /** none = mapping.csv に無い、period = 行はあるが期間外の実績がある */
   status: "none" | "period";
+  /** 作業を付けた人 */
+  members: WorklogMemberHours[];
+}
+
+/** メンバーマスタに無い社員番号の作業（データ確認）。時間は集計に含め、単価が無ければ 0 円 */
+export interface UnknownMemberWork {
+  memberId: string;
+  /** 作業実績の氏名（最初の行の表記） */
+  memberName: string;
+  /** すべての作業時間 */
+  hours: number;
+  /** うち案件の実績に入った時間（運用保守） */
+  contractHours: number;
+  count: number;
+  firstDate: ISODate;
+  lastDate: ISODate;
+  /** 作業した顧客（案件に紐付けばその顧客名、他は作業実績の顧客名。時間の多い順） */
+  customers: { name: string; hours: number }[];
 }
 
 /** 同じ作業コードの作業名の変更（§92）。名前が変わった回ごとに 1 件 */
@@ -671,6 +704,8 @@ export interface Model {
   unregisteredTaskCodes?: UnregisteredTaskCode[];
   /** 作業コードの作業名の変更（§92） */
   taskCodeChanges?: TaskCodeChange[];
+  /** メンバーマスタに無い社員番号の作業（§100） */
+  unknownMembers?: UnknownMemberWork[];
   /** 顧客なし等で除外した工数の合計 */
   excludedHours: number;
   /**

@@ -57,7 +57,7 @@ export function fileKind(path) {
 export class CliError extends Error {}
 
 export const GITIGNORE = ".gitignore";
-/** .gitignore の社内の行の目印。update はこの下の行を新しい版の後ろに残す（SPEC §100） */
+/** .gitignore の社内の行の目印。update はこの下の行を新しい版の後ろに残す（SPEC §104） */
 export const GITIGNORE_MARK = "# 社内で足したもの（yojitsu-navi update はこの下の行を残します）";
 
 /**
@@ -375,7 +375,7 @@ export function configCompat(dir) {
 }
 
 /**
- * 新しい版のひな形にあって導入先の config.json に無い項目と、名前が変わった項目（SPEC §100）。読めなければ空
+ * 新しい版のひな形にあって導入先の config.json に無い項目と、名前が変わった項目（SPEC §104）。読めなければ空
  * @returns {{ missing: { path: string, value: string }[], renames: { from: string, to: string, value: string, conflict: boolean }[] }}
  */
 export function missingConfigReport(pkgDir, dir) {
@@ -389,7 +389,7 @@ export function missingConfigReport(pkgDir, dir) {
 }
 
 /**
- * yojitsu-navi migrate-config（SPEC §100）: config.json の不足の項目・名前が変わった項目を出す。
+ * yojitsu-navi migrate-config（SPEC §104）: config.json の不足の項目・名前が変わった項目を出す。
  * apply のときだけ書く: 名前が変わった項目の値を新しい名前へ移し、add で選んだ不足の項目をひな形の値で書き足す。今ある値は変えない。
  * 前のファイルは .yojitsu-navi-backup/<日時>/ に写す。コミットはしない（MR の中で値を確かめるため）
  * @param {{ pkgDir: string, dir: string, version?: string, add?: string[], apply?: boolean, now?: Date, log: (s: string) => void }} o
@@ -469,7 +469,7 @@ export function update(o) {
   const old = manifest.files ?? {};
   const keptBefore = new Set(manifest.kept ?? []);
   const dry = Boolean(o.dryRun);
-  // upgrade --dry-run（SPEC §100）: 本番の update を止める条件を、止めずに blockers に集める
+  // upgrade --dry-run（SPEC §104）: 本番の update を止める条件を、止めずに blockers に集める
   const blockers = [];
   const guard = !dry || Boolean(o.reportBlockers);
   const stop = (msg) => {
@@ -534,7 +534,7 @@ export function update(o) {
       continue;
     }
     const base = old[f];
-    // .gitignore は社内で足した行（証明書・社内のツールの出力など）を残して新しい版にする（止めない。SPEC §100）
+    // .gitignore は社内で足した行（証明書・社内のツールの出力など）を残して新しい版にする（止めない。SPEC §104）
     if (f === GITIGNORE && cur && !(keptBefore.has(f) && !o.overwrite)) {
       // 記録には目印より上（パッケージの行）のハッシュを書き、次の update で社内が上を直したかを見分ける
       const curText = cur.toString("utf-8");
@@ -614,7 +614,7 @@ export function update(o) {
   const ciNote = () => {
     if (ciNotes.length) log(ciNotes.join("\n"));
   };
-  // 社内の版のまま残す、新しい版で無くなったファイル（社内のファイルとして残る。テストを動かす理由になる。SPEC §100）
+  // 社内の版のまま残す、新しい版で無くなったファイル（社内のファイルとして残る。テストを動かす理由になる。SPEC §104）
   const keptRemoved = keptNow.filter((c) => c.type === "removedModified").map((c) => c.f).sort();
   const base = { changed, added, removed: deletes, migratedCi, repairedLocal, mergedIgnore, keptRemoved, blockers, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
   /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */

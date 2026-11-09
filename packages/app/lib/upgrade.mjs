@@ -1,6 +1,6 @@
 // yojitsu-navi upgrade（SPEC §94）: 版を上げる作業を 1 回で行う。
 // update → 設定の互換確認（SPEC §96）→ 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト → ビルド。
-// 依存とテストは要るときだけ動かす（SPEC §100）。失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
+// 依存とテストは要るときだけ動かす（SPEC §104）。失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CliError, VENDOR_CACHE, check, configCompat, missingConfigReport, update } from "./project.mjs";
 
-/** 依存を入れたときの印（node_modules の中。lock ファイル・Node の版・OS が同じなら入れ直さない。SPEC §100） */
+/** 依存を入れたときの印（node_modules の中。lock ファイル・Node の版・OS が同じなら入れ直さない。SPEC §104） */
 export const INSTALL_STAMP = "node_modules/.yojitsu-navi-install.json";
 
 /** 依存の中身を決めるもの（package-lock.json・依存込みのキャッシュの有無・Node の主な版・OS） */
@@ -90,7 +90,7 @@ function run(cmd, args, o) {
 }
 
 /**
- * upgrade --dry-run（SPEC §100）: 何も変えずに、upgrade が止まらずに進めるか・依存とテストを動かすかを出す。
+ * upgrade --dry-run（SPEC §104）: 何も変えずに、upgrade が止まらずに進めるか・依存とテストを動かすかを出す。
  * 止まる理由（社内で変えたパッケージのファイル・config.json のエラー）があれば終了コード 2
  */
 function preview(o, testChoice) {
@@ -136,7 +136,7 @@ const seconds = (ms) => `${Math.max(1, Math.round(ms / 1000))} 秒`;
  *   update?: object, test?: boolean, env?: NodeJS.ProcessEnv, now?: () => number }} o
  *   update: update に渡すオプション（overwrite・keepLocal・force・commit）
  *   test: true で必ず動かす・false で動かさない。省略は環境変数 YOJITSU_RUN_TESTS（1 で動かす・0 で動かさない）、
- *     それも無ければ社内で手を加えたコードがあるときだけ動かす（SPEC §100）
+ *     それも無ければ社内で手を加えたコードがあるときだけ動かす（SPEC §104）
  * @returns {Promise<{ ok: boolean, code: number, steps: { name: string, status: "ok" | "failed" | "skipped" | "notRun", note: string }[] }>}
  */
 export async function upgrade(o) {
@@ -180,7 +180,7 @@ export async function upgrade(o) {
         // 本番で決めた設定（config.json）が新しい版でそのまま動くかだけを見る。必須の項目の追加・型や値の違いがあれば止める（SPEC §96）
         const c = configCheck ?? configCompat(dir);
         if (c.errors) return { ok: false, tail: [...c.lines, "config.json を直してコミットしてから、もう一度 yojitsu-navi upgrade を実行してください（項目は docs/DATA.md。yojitsu-navi migrate-config で足りない項目を確かめられます）"] };
-        // 新しい版で増えた任意の項目（無くても既定値で動く）。書き足すかは migrate-config で選ぶ（SPEC §100）
+        // 新しい版で増えた任意の項目（無くても既定値で動く）。書き足すかは migrate-config で選ぶ（SPEC §104）
         const m = missingConfigReport(o.pkgDir, dir);
         if (m.missing.length) out.detail(["config.json に無い新しい設定（無くても既定値で動きます。yojitsu-navi migrate-config で確かめ・書き足せます）:", ...m.missing.map((x) => `  ${x.path}  ひな形の値: ${x.value}`)].join("\n"));
         const extra = [c.warnings ? `注意 ${c.warnings}` : "", m.missing.length ? `新しい設定 ${m.missing.length}（yojitsu-navi migrate-config）` : ""].filter(Boolean);
@@ -191,7 +191,7 @@ export async function upgrade(o) {
       name: "install",
       title: "依存を入れる（npm ci）",
       run: async () => {
-        // package-lock.json・Node の版・OS が前に入れたときと同じなら入れ直さない（--install で必ず入れる。SPEC §100）
+        // package-lock.json・Node の版・OS が前に入れたときと同じなら入れ直さない（--install で必ず入れる。SPEC §104）
         const key = installKey(dir);
         if (!o.install && installUpToDate(dir, key)) return { ok: true, skipped: "依存が変わっていない（package-lock.json が前と同じ）" };
         // CI と同じ入れ方（依存込みのプロジェクトは vendor/npm-cache から。社内ミラーは NPM_CONFIG_REGISTRY・.npmrc）
@@ -215,7 +215,7 @@ export async function upgrade(o) {
     {
       name: "test",
       title: "テスト（npm run typecheck・npm test）",
-      // 社内で手を加えたコードが無ければ、開発元が確かめたものと同じなので動かさない（CI の test ジョブと同じ考え。SPEC §79.2・§100）
+      // 社内で手を加えたコードが無ければ、開発元が確かめたものと同じなので動かさない（CI の test ジョブと同じ考え。SPEC §79.2・§104）
       skip: () => {
         if (testChoice === true) return "";
         if (testChoice === false) return o.test === false ? "--no-test" : "YOJITSU_RUN_TESTS=0";

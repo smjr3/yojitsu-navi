@@ -129,7 +129,7 @@ export function ciChecks(variables: Variable[] | null, schedules: Schedule[] | n
 }
 
 /**
- * 取り込みの MR を作るプロジェクトアクセストークン（GIT_PUSH_TOKEN の中身。SPEC §39・§100）。
+ * 取り込みの MR を作るプロジェクトアクセストークン（GIT_PUSH_TOKEN の中身。SPEC §39・§104）。
  * GIT_PUSH_TOKEN を登録した・スケジュールがあるときだけ見る。トークンの値は API から読めないので、
  * 「Maintainer 以上・write_repository・有効」のものが 1 つでもあるか、期限が近くないかを見る
  */

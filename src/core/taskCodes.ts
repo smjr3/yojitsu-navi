@@ -13,6 +13,7 @@ import { includesAnyKeyword, normalizeCode, normalizeKeyword, normalizeName } fr
 import { resolvesByTask, type ProjectMatcher } from "./projectFromTask.js";
 import type { Contract, ISODate, MappingRule, TaskCodeChange, TaskCodeCheckConfig, UnregisteredTaskCode, Warning, Worklog, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
+import { addMemberHours, memberHoursList, type MemberHoursAcc } from "./worklogMembers.js";
 
 /** 点検が有効か（含むキーワードが 1 つ以上） */
 export function taskCodeCheckEnabled(check: TaskCodeCheckConfig | undefined): check is TaskCodeCheckConfig {
@@ -41,7 +42,7 @@ interface CodeAcc {
   taskCode: string;
   /** 正規化した作業名 → 最初・最後の日付（表記は最初の行） */
   names: Map<string, NameSpan>;
-  unreg: { hours: number; count: number; firstDate: ISODate; lastDate: ISODate; status: "none" | "period"; customerName: string; projectName: string; lastTask: string } | null;
+  unreg: { hours: number; count: number; firstDate: ISODate; lastDate: ISODate; status: "none" | "period"; customerName: string; projectName: string; lastTask: string; members: MemberHoursAcc } | null;
 }
 
 /**
@@ -91,8 +92,10 @@ export function findTaskCodeIssues(worklogs: readonly Worklog[], rules: readonly
     const status = list ? "period" : "none";
     const u = acc.unreg;
     if (!u) {
-      acc.unreg = { hours: w.hours, count: 1, firstDate: w.date, lastDate: w.date, status, customerName: w.customerName, projectName: w.projectName, lastTask: w.task.trim() };
+      acc.unreg = { hours: w.hours, count: 1, firstDate: w.date, lastDate: w.date, status, customerName: w.customerName, projectName: w.projectName, lastTask: w.task.trim(), members: new Map() };
+      addMemberHours(acc.unreg.members, w);
     } else {
+      addMemberHours(u.members, w);
       u.hours += w.hours;
       u.count += 1;
       if (w.date < u.firstDate) u.firstDate = w.date;
@@ -110,7 +113,7 @@ export function findTaskCodeIssues(worklogs: readonly Worklog[], rules: readonly
   for (const acc of accs.values()) {
     if (acc.unreg) {
       const u = acc.unreg;
-      unregistered.push({ taskCode: acc.taskCode, task: u.lastTask, customerName: u.customerName, projectName: u.projectName, hours: u.hours, count: u.count, firstDate: u.firstDate, lastDate: u.lastDate, status: u.status });
+      unregistered.push({ taskCode: acc.taskCode, task: u.lastTask, customerName: u.customerName, projectName: u.projectName, hours: u.hours, count: u.count, firstDate: u.firstDate, lastDate: u.lastDate, status: u.status, members: memberHoursList(u.members) });
     }
     if (acc.names.size > 1) {
       // 名前を使い始めた順に並べ、隣どうしを「前 → 次」とする

@@ -8,6 +8,9 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ### 更新後に行うこと
 
+- CI のジョブ選びは何もしなくてよい（`.gitlab-ci.yml` はパッケージの新しいものになる）。MR のパイプラインは、データだけの MR では `validate`、文書・CI の設定だけの MR では `ci-check` だけが動き、ビルドは既定ブランチへのマージ後になる（SPEC §102.3）
+- データだけの MR でもビルドまで確かめたいときは CI/CD 変数 `YOJITSU_MR_BUILD` = `1`。キャッシュを使わずに作り直したいときは Run pipeline で `YOJITSU_FULL_BUILD` = `1`
+- 最初のビルドはキャッシュが無いのでフルビルドになる（2 回目から増分）
 - 版上げの前に `yojitsu-navi upgrade --dry-run` で「止まらずに進めます」と出ることを確かめてから `yojitsu-navi upgrade` を実行する（止まる理由があれば一覧と直し方が出る。何も変えない）
 - `.gitignore` を社内で直していたら、この版から止まらずに新しい版になり、社内で足した行は最後の目印「`# 社内で足したもの（yojitsu-navi update はこの下の行を残します）`」の下に移る。以後、社内の行はこの目印の下に足す
 - `config.json` に無い新しい設定は `yojitsu-navi migrate-config` で一覧を確かめ、要るものだけ `yojitsu-navi migrate-config --apply --add <項目>` で書き足して値を本番に合わせる（コミットはしないので MR に入れる）
@@ -20,10 +23,15 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 
 ### 変更
 
-- `yojitsu-navi upgrade --dry-run`: 何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す（止まるなら終了コード 2）。`--no-test`・`--install` を足した（SPEC §100）
-- `yojitsu-navi migrate-config`: `config.json` に無い新しい設定と名前が変わった項目を出し、`--apply` で名前が変わった項目を移し、`--add` で選んだ項目だけを書き足す（今の値・書式は変えない。SPEC §100）
-- `update` が `.gitignore` に社内で足した行を残して新しい版にする（止めない。SPEC §100）
-- `gitlab-setup` が取り込みの MR 用のプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`・期限）と、`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` の Protected・Masked を確かめる。docs/DEPLOY_GITLAB.md に「本番運用の標準構成」（SPEC §100）
+- ビルドを増分にした: ローダの出力を 1 回の計算でまとめて作り、変わったファイルだけを書き換える（契約ごとの作業ログ明細を毎回全件作り直さない）。プログラムが変わったときだけキャッシュを全部捨てる。CI はローダのキャッシュをパイプラインをまたいで使い回す（SPEC §102）
+- `.gitlab-ci.yml` が変わったファイルを見てジョブを選ぶようにした: MR はプログラムが変われば `build`、データだけなら `validate`、それ以外は `ci-check`。既定ブランチは文書だけの変更ではビルド・公開しない（SPEC §102.3）
+- データ確認の作業実績の一覧（未紐付け・キーワードに合致しない作業・未登録の作業コード）に「作業した人」の列を足し、「案件ごと／人ごと」で切り替えられるようにした。単価のないメンバーは人ごとに 1 行にまとめた（SPEC §100）
+- データ確認の KPI に「マスタに無いメンバー」の人数を出し、一覧に名前・作業した顧客・期間を足した。時間は従来どおり集計に含める（単価が無ければ 0 円。SPEC §100）
+- 稼働実績の顧客別で、案件の無い顧客に「案件なし」を付けた。顧客名の無い作業の行が空欄だったのを「顧客名なし」にした（SPEC §100）
+- `yojitsu-navi upgrade --dry-run`: 何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す（止まるなら終了コード 2）。`--no-test`・`--install` を足した（SPEC §104）
+- `yojitsu-navi migrate-config`: `config.json` に無い新しい設定と名前が変わった項目を出し、`--apply` で名前が変わった項目を移し、`--add` で選んだ項目だけを書き足す（今の値・書式は変えない。SPEC §104）
+- `update` が `.gitignore` に社内で足した行を残して新しい版にする（止めない。SPEC §104）
+- `gitlab-setup` が取り込みの MR 用のプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`・期限）と、`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` の Protected・Masked を確かめる。docs/DEPLOY_GITLAB.md に「本番運用の標準構成」（SPEC §104）
 
 ## 0.2.3
 

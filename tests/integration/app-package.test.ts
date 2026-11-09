@@ -718,7 +718,7 @@ describe("update", () => {
     expect(readFileSync(join(dir, app.VENDOR_CACHE, "index"), "utf-8")).toBe("1.1.0");
   }, scaled(60_000));
 
-  it(".gitignore に社内で足した行は残して新しい版にする（止めない。次の版でも残る。SPEC §100）", () => {
+  it(".gitignore に社内で足した行は残して新しい版にする（止めない。次の版でも残る。SPEC §104）", () => {
     const dir = project("upd-gitignore");
     writeFileSync(join(dir, ".gitignore"), "node_modules/\ncerts/*.key\n");
     git(dir, "commit", "-qam", "社内の除外");
@@ -753,7 +753,7 @@ describe("update", () => {
     expect(app.mergeGitignore("*.log\n private.pem\n", "*.log\n", false).local).toEqual([" private.pem"]);
   });
 
-  it("migrate-config: 無い新しい設定・名前が変わった項目を出す。--apply --add で選んだものだけ書き足し、バックアップする（SPEC §100）", () => {
+  it("migrate-config: 無い新しい設定・名前が変わった項目を出す。--apply --add で選んだものだけ書き足し、バックアップする（SPEC §104）", () => {
     const dir = project("upd-migrate-config");
     const pkg = fakePackage("upd-migrate-config-v2", "1.1.0", v2);
     const before = readFileSync(join(dir, "config.json"), "utf-8");
@@ -1010,7 +1010,7 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(again.steps[1].note).toContain("注意 1");
     }, scaled(120_000));
 
-    it("依存は package-lock.json が前と同じなら入れ直さない。テストは社内で手を加えたコードがあるときだけ動かす（SPEC §100）", async () => {
+    it("依存は package-lock.json が前と同じなら入れ直さない。テストは社内で手を加えたコードがあるときだけ動かす（SPEC §104）", async () => {
       const { dir, up, pkg } = await setup("v100-up-auto");
       // 本物の npm ci と同じく node_modules を作る
       const withModules = fakePackage("v100-up-auto-v2", "1.1.0", { ...files("1.1.0"), "scripts/ci/install.mjs": "(await import('node:fs')).mkdirSync('node_modules', { recursive: true });\nconsole.log('依存を入れた')\n" });
@@ -1048,7 +1048,7 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(readFileSync(join(dir, "src", "a.js"), "utf-8")).toBe("社内");
     }, scaled(120_000));
 
-    it("--dry-run は何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す。止まる理由があれば終了コード 2（SPEC §100）", async () => {
+    it("--dry-run は何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す。止まる理由があれば終了コード 2（SPEC §104）", async () => {
       const { dir, up, pkg } = await setup("v100-up-dry");
       const head = git(dir, "rev-parse", "HEAD");
       const screen: string[] = [];

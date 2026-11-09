@@ -132,7 +132,7 @@ describe("gitlab:setup の判定", () => {
     ]);
     expect(ciChecks(null, null)).toEqual([]);
   });
-  it("取り込みの MR 用のプロジェクトアクセストークン: 有効・Maintainer 以上・write_repository があり、期限が 30 日より先か（SPEC §100）", () => {
+  it("取り込みの MR 用のプロジェクトアクセストークン: 有効・Maintainer 以上・write_repository があり、期限が 30 日より先か（SPEC §104）", () => {
     const today = "2030-01-01";
     const ok = { active: true, revoked: false, access_level: 40, scopes: ["write_repository"], expires_at: "2030-06-01" };
     expect(accessTokenChecks([ok], true, today)).toMatchObject([{ id: "access_token_expiry", ok: true }]);
