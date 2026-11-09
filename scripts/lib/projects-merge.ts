@@ -8,7 +8,7 @@
  *   - idFromNote: メモ（note）に書いていた案件 ID を正規表現で取り出して project_id に移し、メモから消す
  *   - linkExact : 案件名（§4.1 の正規化）が同じ正式な案件がちょうど 1 件のときだけ project_id を入れる
  */
-import { csvFormat } from "d3-dsv";
+import { csvFormat, csvFormatRows, csvParseRows } from "d3-dsv";
 import { normalizeName } from "../../src/core/normalize.js";
 import { projectNameIndex } from "../../src/core/projects.js";
 import type { Project } from "../../src/core/types.js";
@@ -48,6 +48,75 @@ export function formatProjectsCsv(projects: readonly Project[]): string {
 /** contracts.csv の中身。project_id の列が無ければ contract_id の次に足す */
 export function formatContractsCsv(rows: readonly ContractCsvRow[], headers: readonly string[]): string {
   return csvFormat(rows as ContractCsvRow[], [...headers]) + "\n";
+}
+
+/** CSV の文字列をレコード（行）の生の文字列に分ける（引用符の中の改行は分けない）。末尾の空行は含めない */
+export function splitCsvRecords(text: string): { records: string[]; eol: string } {
+  const eol = /\r\n/.test(text) ? "\r\n" : "\n";
+  const records: string[] = [];
+  let start = 0;
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') quoted = !quoted;
+    else if (ch === "\n" && !quoted) {
+      records.push(text.slice(start, i > start && text[i - 1] === "\r" ? i - 1 : i));
+      start = i + 1;
+    }
+  }
+  if (start < text.length) records.push(text.slice(start));
+  return { records, eol };
+}
+
+/**
+ * contracts.csv の中身を、変わった行だけ書き換えて作る（§101.4）。ほかの行は元の文字列のまま（引用符・改行コードも）。
+ * 見出しが変わった・行の数が合わないときは全体を書き直す
+ */
+export function formatContractsCsvKeeping(originalText: string, before: readonly ContractCsvRow[], after: readonly ContractCsvRow[], headers: readonly string[], afterHeaders: readonly string[]): string {
+  const full = () => formatContractsCsv(after, afterHeaders);
+  if (headers.length !== afterHeaders.length || before.length !== after.length) return full();
+  const text = originalText.replace(/^\uFEFF/, "");
+  const { records, eol } = splitCsvRecords(text);
+  const [head, ...body] = records;
+  if (head === undefined) return full();
+  const isData = (rec: string) => (csvParseRows(rec)[0] ?? []).some((v) => v.trim() !== "");
+  const dataIdx = body.map((r, i) => (isData(r) ? i : -1)).filter((i) => i >= 0);
+  if (dataIdx.length !== after.length) return full();
+  const out = [...body];
+  dataIdx.forEach((bodyIndex, k) => {
+    const a = after[k] as ContractCsvRow;
+    const b = before[k] as ContractCsvRow;
+    if (headers.every((h) => (a[h] ?? "") === (b[h] ?? ""))) return;
+    out[bodyIndex] = csvFormatRows([headers.map((h) => a[h] ?? "")]);
+  });
+  // 見出しの前後の空白は除いた名前にそろえる（データの読み込みと同じ）
+  const rawHead = csvParseRows(head)[0] ?? [];
+  const outHead = rawHead.some((h) => h !== h.trim()) ? csvFormatRows([[...afterHeaders]]) : head;
+  return [outHead, ...out].join(eol) + eol;
+}
+
+/** projects.csv の前後の違いの件数（追加・削除・名前の変更。§101.4） */
+export function diffProjects(beforeText: string, after: readonly Project[]): { added: number; removed: number; renamed: number } {
+  const rows = csvParseRows(beforeText.replace(/^\uFEFF/, ""));
+  const head = (rows[0] ?? []).map((h) => h.trim());
+  const at = (name: string) => head.indexOf(name);
+  const prev = new Map<string, string>();
+  for (const r of rows.slice(1)) {
+    const id = (r[at("project_id")] ?? "").trim();
+    if (id !== "") prev.set(id, `${r[at("customer_name")] ?? ""}\u0000${r[at("project_name")] ?? ""}`);
+  }
+  let added = 0;
+  let renamed = 0;
+  const seen = new Set<string>();
+  for (const p of after) {
+    seen.add(p.projectId);
+    const old = prev.get(p.projectId);
+    if (old === undefined) added++;
+    else if (old !== `${p.customerName}\u0000${p.projectName}`) renamed++;
+  }
+  let removed = 0;
+  for (const id of prev.keys()) if (!seen.has(id)) removed++;
+  return { added, removed, renamed };
 }
 
 export function withProjectIdColumn(headers: readonly string[]): string[] {

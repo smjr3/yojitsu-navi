@@ -28,6 +28,8 @@
 
 `taskCodeCheck`（作業コードの点検。省略 = 点検しない。SPEC §92）: `include`（運用保守の作業名に含むキーワード）、`exclude`（含むと対象外）、`onUnregistered`（未登録の作業コードを見つけたとき `warn` = 警告だけ・既定 / `stop` = 取り込みを失敗にする）、`onChange`（作業名の変更・キーワードの一致の変化を見つけたとき。`warn` / `stop`。`stop` で止まったら確かめて `FETCH_ACCEPT_TASK_CHANGES=1` で取り込む）。
 
+`taskFromName`（作業名の括弧内をタスクにする。省略 = 使わない。SPEC §101）: `markers`（目印の配列。省略すると `projectFromTask.marker`）、`enabled`（`false` で止める。既定 `true`）。目印の直後の括弧内を作業種別の内訳のタスクにする。括弧が無い・期間の表記だけなら「タスク分類なし」（時間は運用保守として数え、未分類の警告にしない）。括弧内が task-types.csv に無くても未分類にしない。
+
 `projectFromTask`（作業名から案件名を抜き出して紐付ける。省略 = 使わない。SPEC §97）: `marker`（運用保守の目印。作業名の最初の目印より前を案件名とし、contracts.csv の `project_name` と完全一致する案件へ紐付ける。全角半角・空白は区別しない）、`enabled`（`false` で止める。既定 `true`）。mapping.csv の行がある作業はそちらが先。目印も mapping.csv の行も無い作業は運用保守以外。表記揺れは `data/project-aliases.csv` に別名を登録する（曖昧一致はしない）。
 
 ## 取り込み元の設定（config.json の `worklogSource.http`・`memberSource`・`projectSource`）

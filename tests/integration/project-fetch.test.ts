@@ -115,6 +115,33 @@ describe("fetch:projects（§98）", () => {
     expect(again.written).toEqual([]);
   });
 
+  it("contracts.csv は変わった行だけを書き換え、ほかの行は元の文字列のまま（引用符・改行コード）。projects.csv の違いの件数を出す（§101.4）", async () => {
+    useHttp();
+    const text = readFileSync(contractsPath(), "utf-8")
+      .replace("contract_id,customer_name", "contract_id,project_id,customer_name")
+      .replace(/\n(C\d+),/g, (_m, id: string) => `\n${id},${id === "C001" ? "EX-1" : ""},`)
+      // 手で書いた引用符（書き直すと消える）
+      .replace(/\nC002,,([^,\n]*),/, '\nC002,,"$1",')
+      .replace(/\n/g, "\r\n");
+    writeFileSync(contractsPath(), text);
+    writeFileSync(join(root, "data/projects.csv"), "project_id,customer_name,project_name\r\nEX-1,旧,旧\r\nEX-7,消える,消える\r\n");
+    vi.stubGlobal("fetch", api(API_ROWS));
+    const r = await fetchProjects({ rootDir: root }, ENV);
+    expect(r.projectDiff).toEqual({ added: 4, removed: 1, renamed: 1 });
+    expect(summaryLines(r).join("\n")).toContain("追加 4 件・削除 1 件・名前の変更 1 件");
+    const before = text.split("\r\n");
+    const after = readFileSync(contractsPath(), "utf-8").split("\r\n");
+    expect(after.length).toBe(before.length);
+    const diff = after.map((l, i) => (l === before[i] ? null : i)).filter((i) => i !== null);
+    expect(diff).toEqual([before.findIndex((l) => l.startsWith("C001,"))]);
+    expect(after.find((l) => l.startsWith("C002,"))).toContain('"');
+    // projects.csv は改行コードだけ違っても書き換えない
+    writeFileSync(join(root, "data/projects.csv"), readFileSync(join(root, "data/projects.csv"), "utf-8").replace(/\n/g, "\r\n"));
+    const again = await fetchProjects({ rootDir: root }, ENV);
+    expect(again.projectsChanged).toBe(false);
+    expect(again.written).toEqual([]);
+  });
+
   it("見出しの前後に空白があっても、データの読み込みと同じ列として扱う", async () => {
     useHttp();
     const text = readFileSync(contractsPath(), "utf-8")

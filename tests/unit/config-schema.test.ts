@@ -50,6 +50,7 @@ function fullConfig(): Record<string, any> {
     filters: [{ column: "maintenance", equals: true }, { column: "status", in: ["ordered"] }],
   };
   c.projectFromTask = { marker: "_保守対応", enabled: true };
+  c.taskFromName = { markers: ["_保守対応", "_ヘルプデスク"], enabled: true };
   c.masterEdit.gitlab.projectId = 123;
   return c;
 }

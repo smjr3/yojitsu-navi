@@ -7,6 +7,7 @@
 import { contractInvalidReason } from "./budget.js";
 import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
+import { createTaskNameExtractor } from "./taskFromName.js";
 import { projectMatcherFor, validateProjectAliases } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
 import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
@@ -411,7 +412,7 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   for (const c of validContracts) excluded.delete(c.contractId); // 重複 ID は 1 行目が有効
   // 契約外の作業（§30）は紐付けの対象外（buildModel と同じ）
   const projects = projectMatcherFor(dataset);
-  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects);
+  const classifier = createTaskClassifier(dataset.taskTypes, dataset.mappings, projects, createTaskNameExtractor(dataset.config));
   const inScope = classifier.enabled ? dataset.worklogs.filter((w) => !isOutsideWorklog(w, classifier)) : dataset.worklogs;
   const mapping = mapWorklogs(inScope, dataset.mappings, validContracts, excluded, projects);
   for (const w of unclassifiedTaskWarnings(mapping.mappings.filter((m) => m.kind === "assigned" || m.kind === "unmapped").map((m) => m.worklog), classifier)) {

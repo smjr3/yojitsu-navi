@@ -28,7 +28,7 @@ import { readTextAuto } from "./lib/encoding.js";
 import { DATA_FILES, loadConfig } from "./lib/load.js";
 import { formatMappingTable } from "./lib/dry-run.js";
 import { PROJECTS_META, clearFailure, safeMessage, writeFailure } from "./lib/fetch-status.js";
-import { formatContractsCsv, formatProjectsCsv, syncContracts, type ContractCsvRow, type SyncResult } from "./lib/projects-merge.js";
+import { diffProjects, formatContractsCsvKeeping, formatProjectsCsv, syncContracts, type ContractCsvRow, type SyncResult } from "./lib/projects-merge.js";
 
 export interface FetchProjectsOptions {
   rootDir: string;
@@ -48,6 +48,8 @@ export interface FetchProjectsResult {
   imported: number;
   /** projects.csv の中身が変わったか */
   projectsChanged: boolean;
+  /** 前回の projects.csv との違い（追加・削除・名前の変更の件数） */
+  projectDiff?: { added: number; removed: number; renamed: number };
   sync?: SyncResult;
   written: string[];
   dryRun: boolean;
@@ -65,7 +67,7 @@ function readText(path: string): string {
   return existsSync(path) ? stripBom(readTextAuto(path)) : "";
 }
 
-function readContracts(path: string): { rows: ContractCsvRow[]; headers: string[] } {
+function readContracts(path: string): { rows: ContractCsvRow[]; headers: string[]; text: string } {
   const text = readText(path);
   if (text.trim() === "") throw new Error(`${DATA_FILES.contracts} がありません（見出しの行も無い）`);
   const parsed = csvParse(text);
@@ -74,7 +76,7 @@ function readContracts(path: string): { rows: ContractCsvRow[]; headers: string[
   const rows = (parsed as unknown as ContractCsvRow[])
     .filter((r) => Object.values(r).some((v) => (v ?? "").trim() !== ""))
     .map((r) => Object.fromEntries(parsed.columns.map((h, i) => [headers[i] as string, r[h] ?? ""])));
-  return { rows, headers };
+  return { rows, headers, text };
 }
 
 function compileNotePattern(src: string | undefined): RegExp | undefined {
@@ -123,14 +125,18 @@ async function inner(opts: FetchProjectsOptions, env: NodeJS.ProcessEnv): Promis
   const projectsPath = join(opts.rootDir, DATA_FILES.projects);
   const contractsPath = join(opts.rootDir, DATA_FILES.contracts);
   const projectsText = formatProjectsCsv(projects);
-  const projectsChanged = readText(projectsPath) !== projectsText;
-  const { rows, headers } = readContracts(contractsPath);
+  const previousProjects = readText(projectsPath);
+  // 改行コードの違い（Windows の autocrlf）だけなら書き換えない。案件ID順で並びが決まるので、変わった案件の行だけが差分になる
+  const projectsChanged = previousProjects.replace(/\r\n/g, "\n") !== projectsText;
+  const projectDiff = diffProjects(previousProjects, projects);
+  const { rows, headers, text: contractsText } = readContracts(contractsPath);
   const sync = syncContracts(rows, headers, projects, { ...(notePattern ? { idFromNote: notePattern } : {}), ...(opts.linkExact ? { linkExact: true } : {}) });
   const contractsChanged = sync.changes.length > 0 || sync.headers.length !== headers.length;
 
   const entries: Array<{ path: string; data: string }> = [];
   if (projectsChanged) entries.push({ path: projectsPath, data: projectsText });
-  if (contractsChanged) entries.push({ path: contractsPath, data: formatContractsCsv(sync.rows, sync.headers) });
+  // 変わった行だけを書き換える（ほかの行は手で書いたときのまま。§101.4）
+  if (contractsChanged) entries.push({ path: contractsPath, data: formatContractsCsvKeeping(contractsText, rows, sync.rows, headers, sync.headers) });
   if (!dryRun && entries.length > 0) writeFilesAtomic(entries); // 2 つとも書けたときだけ差し替える
 
   const after: Contract[] = sync.rows.map((r) => ({
@@ -149,6 +155,7 @@ async function inner(opts: FetchProjectsOptions, env: NodeJS.ProcessEnv): Promis
     adapter: adapter.name,
     imported: projects.length,
     projectsChanged,
+    projectDiff,
     sync,
     written: dryRun ? [] : entries.map((e) => (e.path === projectsPath ? DATA_FILES.projects : DATA_FILES.contracts)),
     dryRun,
@@ -173,7 +180,8 @@ export function summaryLines(r: FetchProjectsResult): string[] {
     }
     out.push("");
   }
-  out.push(`取り込み ${r.imported} 件（projects.csv ${r.projectsChanged ? "変更あり" : "変化なし"}）`);
+  const d = r.projectDiff;
+  out.push(`取り込み ${r.imported} 件（projects.csv ${r.projectsChanged ? `変更あり${d ? `: 追加 ${d.added} 件・削除 ${d.removed} 件・名前の変更 ${d.renamed} 件` : ""}` : "変化なし"}）`);
   const changes = r.sync?.changes ?? [];
   out.push(`contracts.csv の変更 ${changes.length} 件`);
   for (const c of changes.slice(0, 30)) out.push(`  ${c.contractId}: ${KIND_LABEL[c.kind] ?? c.kind} ${c.detail.join(", ")}`);

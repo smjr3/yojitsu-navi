@@ -14,7 +14,8 @@
  * - 取り直す月数は config.worklogSource.http.refetchMonths（既定 3）。
  *   前月分の修正入力（締め後の訂正）を拾うため、毎回「今月を含む直近 N か月」を上書きする。
  * - 対象月のファイルだけを書き換え、それ以外の月は触らない。
- * - 同じ入力なら同じ出力（行は日付→メンバー→顧客順に並べる）。冪等。
+ * - 同じ入力なら同じ出力（行は日付→メンバー→顧客順に並べる）。冪等。前回と中身が同じ月のファイルは書き換えない（§101.3）。
+ * - _meta.json の changedMonths に今回変わった月を書く（変わらなければ空）。
  * - _meta.json に fetchedAt（ISO 8601）と adapter を書く。
  * - worklogSource.http.members を設定すると、取得対象の社員番号をメンバーマスタから作って API に渡す（§87）。
  * - 取得に失敗したら月ファイルは 1 つも書き換えず、_meta.json の lastFailure に記録する（データ確認画面に出る）。
@@ -41,7 +42,7 @@ import { parseMemberList, readMemberRecords, targetMemberIds } from "./lib/fetch
 import { listWorklogFiles, loadConfig, readWorklogMeta, worklogDir } from "./lib/load.js";
 import { enforceTaskCodeGate, inspectTaskCodes, readCodeRules, readProjectMatcher } from "./lib/task-code-gate.js";
 import { taskCodeCheckEnabled } from "../src/core/taskCodes.js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 interface CliOptions {
   rootDir: string;
@@ -92,6 +93,8 @@ function todayJst(): string {
 
 export interface FetchResult {
   months: YearMonth[];
+  /** 中身が変わって書き換えた月（前回と同じ月は書かない）。dry-run では無い */
+  changedMonths?: YearMonth[];
   /** 取得対象の人数（メンバーマスタから作った・--members で指定した。対象を絞らないときは undefined） */
   targetCount?: number;
   /** --members で人を指定したか（その人の行だけ差し替え） */
@@ -222,11 +225,17 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   const rowsByMonth: Record<YearMonth, number> = {};
   const outputs: Array<{ path: string; data: string }> = [];
   const lists = new Map<YearMonth, Worklog[]>();
+  // 前回と中身が同じ月は書き換えない（毎日取り直しても、変わらない月のファイル・差分・後の処理を増やさない）
+  const changedMonths: YearMonth[] = [];
   for (const ym of months) {
     const list = mergeMonth(ym, byMonth.get(ym) ?? []);
     lists.set(ym, list);
-    outputs.push({ path: join(dir, `${ym}.csv`), data: formatWorklogCsv(list) });
+    const path = join(dir, `${ym}.csv`);
+    const data = formatWorklogCsv(list);
     rowsByMonth[ym] = list.length;
+    if (sameText(path, data)) continue;
+    outputs.push({ path, data });
+    changedMonths.push(ym);
   }
   const taskCodeLines = enforceTaskCodeGate(config, gateFor(lists), opts.acceptTaskChanges === true);
   for (const line of taskCodeLines) log(`[fetch] 警告: ${line}`);
@@ -235,12 +244,22 @@ async function fetchWorklogsInner(opts: CliOptions, config: ReturnType<typeof lo
   const prev = readWorklogMeta(dir);
   // 成功したので前回の失敗の記録は消す。人を指定した取り直しは「全員分の取得日時」ではないので fetchedAt を変えない
   const { lastFailure: _lastFailure, ...rest } = prev;
-  const meta = explicit ? { ...rest } : { ...rest, fetchedAt, adapter: adapter.name, refetchedMonths: months };
-  outputs.push({ path: join(dir, "_meta.json"), data: JSON.stringify(meta, null, 2) + "\n" });
+  // changedMonths: 今回中身が変わった月（無ければ空）。後の処理（検証・ビルド）が変わった月だけを見るための目印
+  const meta = explicit ? { ...rest, changedMonths } : { ...rest, fetchedAt, adapter: adapter.name, refetchedMonths: months, changedMonths };
+  const metaPath = join(dir, "_meta.json");
+  const metaText = JSON.stringify(meta, null, 2) + "\n";
+  if (!sameText(metaPath, metaText)) outputs.push({ path: metaPath, data: metaText });
   // 全月を書けたときだけまとめて差し替える（途中で失敗しても、一部の月だけ新しい・空のファイルが残る状態にしない）
-  writeFilesAtomic(outputs);
-  for (const ym of months) log(`[fetch] ${ym}.csv を書き込み (${rowsByMonth[ym]} 行)`);
-  return { months, rowsByMonth, adapter: adapter.name, fetchedAt, ...(taskCodeLines.length > 0 ? { taskCodeWarnings: taskCodeLines } : {}), ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
+  if (outputs.length > 0) writeFilesAtomic(outputs);
+  for (const ym of months) log(changedMonths.includes(ym) ? `[fetch] ${ym}.csv を書き込み (${rowsByMonth[ym]} 行)` : `[fetch] ${ym}.csv は変化なし (${rowsByMonth[ym]} 行)`);
+  return { months, changedMonths, rowsByMonth, adapter: adapter.name, fetchedAt, ...(taskCodeLines.length > 0 ? { taskCodeWarnings: taskCodeLines } : {}), ...(memberIds ? { targetCount: memberIds.length } : {}), ...(explicit ? { partial: true } : {}) };
+}
+
+/** 既存のファイルの中身が data と同じか（BOM・改行コードの違いは同じとみなす。Windows の autocrlf で毎回書き換えない） */
+function sameText(path: string, data: string): boolean {
+  if (!existsSync(path)) return false;
+  const norm = (t: string) => t.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  return norm(readFileSync(path, "utf-8")) === norm(data);
 }
 
 /** 既存の月ファイルの行（無ければ空） */
@@ -320,7 +339,7 @@ if (isMain) {
         console.log(formatDryRun(r).join("\n"));
         return;
       }
-      console.log(`作業実績を更新しました: ${r.months.join(", ")}${r.targetCount !== undefined ? `（対象 ${r.targetCount} 人${r.partial ? "。指定した人の行だけ差し替え" : ""}）` : ""} (adapter=${r.adapter}, fetchedAt=${r.fetchedAt})`);
+      console.log(`作業実績を取り込みました: ${r.months.join(", ")}（変わった月: ${r.changedMonths && r.changedMonths.length > 0 ? r.changedMonths.join(", ") : "なし"}）${r.targetCount !== undefined ? `（対象 ${r.targetCount} 人${r.partial ? "。指定した人の行だけ差し替え" : ""}）` : ""} (adapter=${r.adapter}, fetchedAt=${r.fetchedAt})`);
     })
     .catch((e: unknown) => {
       console.error(`取得に失敗しました: ${e instanceof Error ? e.message : String(e)}`);

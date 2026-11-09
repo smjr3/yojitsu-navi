@@ -12,6 +12,7 @@ import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex }
 import { createKeywordRouter } from "./mapping.js";
 import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import type { ProjectMatcher } from "./projectFromTask.js";
+import type { TaskNameExtractor } from "./taskFromName.js";
 import { monthStatusFromMeta } from "./status.js";
 import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
@@ -40,6 +41,8 @@ export interface TaskClassification {
   unclassified: boolean;
   /** 作業名のキーワードに合致せず運用保守以外にした（§62.1） */
   keywordMiss?: boolean;
+  /** 作業名の目印の後ろに括弧が無い・期間の表記だけ（§101。タスク分類なし。未分類ではない） */
+  noTask?: boolean;
 }
 
 export interface TaskClassifier {
@@ -55,7 +58,7 @@ export interface TaskClassifier {
  * 分類表（と紐付けルールの作業名キーワード）から分類器を作る。
  * 照合は 完全一致（正規化後）→ 含む（§62.2。ファイルの順で最初の行）。正規化後に同じ作業種別が複数あれば先の行を使う
  */
-export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined, mappings: readonly MappingRule[] = [], projects?: ProjectMatcher): TaskClassifier {
+export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined, mappings: readonly MappingRule[] = [], projects?: ProjectMatcher, taskNames?: TaskNameExtractor): TaskClassifier {
   const index = new Map<string, { category: TaskCategory; group: string }>();
   const contains: Array<{ key: string; task: string; category: TaskCategory; group: string }> = [];
   for (const r of rules ?? []) {
@@ -71,19 +74,25 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined,
   const classify = (task: string): TaskClassification => {
     let c = cache.get(task);
     if (c) return c;
-    const hit = index.get(normalizeName(task));
-    if (hit) c = { category: hit.category, group: hit.group, label: task, unclassified: false };
+    // 作業名の目印の後ろの括弧内（§101）。目印のある作業名は括弧内で分類し、分類表に無くても未分類にしない
+    const fromName = taskNames?.enabled ? taskNames.extract(task) : undefined;
+    if (fromName && fromName.task === null) c = { category: "contract", group: "", label: T.work.noTask, unclassified: false, noTask: true };
     else {
-      const t = normalizeKeyword(task);
-      const part = t === "" ? undefined : contains.find((r) => t.includes(r.key));
-      c = part ? { category: part.category, group: part.group, label: part.task, unclassified: false } : { category: "contract", group: "", label: task, unclassified: hasTypes };
+      const name = fromName ? (fromName.task as string) : task;
+      const hit = index.get(normalizeName(name));
+      if (hit) c = { category: hit.category, group: hit.group, label: name, unclassified: false };
+      else {
+        const t = normalizeKeyword(name);
+        const part = t === "" ? undefined : contains.find((r) => t.includes(r.key));
+        c = part ? { category: part.category, group: part.group, label: part.task, unclassified: false } : { category: "contract", group: "", label: name, unclassified: hasTypes && !fromName };
+      }
     }
     cache.set(task, c);
     return c;
   };
   const byWorklog = new Map<string, TaskClassification>();
   return {
-    enabled: hasTypes || router.enabled,
+    enabled: hasTypes || router.enabled || taskNames?.enabled === true,
     classify,
     classifyWorklog(w) {
       if (!router.enabled) return classify(w.task);

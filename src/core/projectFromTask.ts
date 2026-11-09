@@ -7,6 +7,7 @@
  * - 表記揺れは data/project-aliases.csv（alias → project_name）で明示的に登録したものだけを使う
  */
 import { normalizeKeyword, normalizeName } from "./normalize.js";
+import { findMarker } from "./taskFromName.js";
 import type { Contract, Dataset, ProjectAlias, ProjectFromTaskConfig } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -22,20 +23,8 @@ export function projectFromTaskEnabled(cfg: ProjectFromTaskConfig | undefined): 
 export function extractProjectName(task: string, marker: string): string | null {
   const key = normalizeKeyword(marker);
   if (key === "") return null;
-  const text = (task ?? "").normalize("NFKC");
-  // 空白を除いた小文字の文字列と、その各文字の元の位置
-  let compact = "";
-  const pos: number[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i] as string;
-    if (/\s/u.test(ch)) continue;
-    const lower = ch.toLowerCase();
-    for (let j = 0; j < lower.length; j++) pos.push(i);
-    compact += lower;
-  }
-  const at = compact.indexOf(key);
-  if (at < 0) return null;
-  return text.slice(0, pos[at]).trim();
+  const hit = findMarker((task ?? "").normalize("NFKC"), key);
+  return hit ? (task ?? "").normalize("NFKC").slice(0, hit.start).trim() : null;
 }
 
 export interface ProjectMatcher {
