@@ -1,17 +1,27 @@
 # 予実ナビ — GitLab CI/CD
 #
-# パイプライン:
-#   build → pages（test は既定で動かさない）
+# パイプライン（変わったファイルを見て、要るジョブだけを GitLab が選ぶ。SPEC §102.3）:
+#   MR       : プログラム（src/・scripts/・package.json など）が変わった → build（検証つき。公開はしない）
+#              データ（data/・config.json）だけが変わった              → validate（データ検証だけ。ビルドしない）
+#              それ以外（文書・CI の設定など）だけ                     → ci-check（CI の設定の点検だけ。依存も取らない）
+#   既定ブランチへの push（MR のマージ・自動取り込みのマージ）:
+#              プログラム・データ・CI の設定のどれかが変わった         → build → pages
+#              文書だけ                                                → 何も動かない（公開中のサイトはそのまま）
+#   Run pipeline（手動）・API: build → pages（既定ブランチのとき）。test は既定で動かさない
+#   - validate : データ検証（scripts/validate-data.ts。error があれば止める）。MR のパイプラインだけ
+#   - ci-check : CI 定義が使うファイルが揃っているか・GitLab が受け付けない書き方が無いか（scripts/ci/check.mjs）。MR のパイプラインだけ
 #   - test     : 型チェック + 運用のテスト（取り込み・データ検証・CI のスクリプト。SPEC §93）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
 #                アプリ本体のテスト（計算・画面・パッケージ・性能など）は開発元で公開前に済ませていて、このプロジェクトには入っていない。
 #                導入先で変わるのはデータと config.json だけで、それは build（データ検証を含む）と取り込みで確かめる（SPEC §79.2）。
 #                テストは本番の config.json・data/ を使わない（設定はテストの中、データは tests/fixtures/）
-#   - build    : データ検証（scripts/validate-data.ts。error があれば止める）→ Observable Framework で dist/ を生成。
-#                検証とビルドを 1 つのジョブにして、依存の取得（npm ci）を 1 回にする（Windows の Runner では 1 回に数分かかる。SPEC §79.3）
+#   - build    : データ検証 → Observable Framework で dist/ を生成。
+#                検証とビルドを 1 つのジョブにして、依存の取得（npm ci）を 1 回にする（Windows の Runner では 1 回に数分かかる。SPEC §79.3）。
+#                ビルドは増分（SPEC §102）: ローダのキャッシュを cache: でパイプラインをまたいで使い回し、データだけが変わったときは
+#                変わった出力だけを作り直す。プログラムが変わったときと、CI/CD 変数 YOJITSU_FULL_BUILD=1 のときはフルビルド
 #   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
-#                      マージで通常パイプラインが走り、build → pages まで流れる）
+#                      MR では validate だけが動き、マージで既定ブランチの build → pages まで流れる）
 #
 # 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §39）。
 # 設定の確認・適用は `npm run gitlab:setup`（scripts/gitlab-setup.ts）
@@ -28,6 +38,8 @@
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・運用のテスト）も動く。既定は動かさない
+#   YOJITSU_MR_BUILD    （任意）"1" にすると MR でも毎回 build を動かす（データだけの MR でも。既定はデータだけなら validate だけ）
+#   YOJITSU_FULL_BUILD  （任意）"1" にすると build がキャッシュを使わずに全部作り直す（Run pipeline で入れてもよい）
 #   NODE_IMAGE          （任意）Node のイメージ。Docker Hub に出られないときは社内レジストリのものを指定する
 #   NODE_EXTRA_CA_CERTS （任意）社内の証明書（PEM）。種類を File にして中身を貼る（npm・Node がこの証明書も信頼する）
 #   NODE_USE_SYSTEM_CA  （任意）"1" で OS の証明書ストア（Windows の証明書ストアなど）も信頼する。Node 22.19 以降。docs/DEPLOY_GITLAB.md「社内の証明書」
@@ -96,13 +108,70 @@ default:
     # （npm ci --offline --cache vendor/npm-cache。外に出ない。SPEC §44）。社内ミラーは NPM_CONFIG_REGISTRY で切り替わる
     - node scripts/ci/install.mjs
 
-# スケジュール実行以外（push / MR / 手動）で動く共通条件
-.normal-rules: &normal-rules
+# ジョブを選ぶためのファイルの分け方（rules: の changes: で使う。GitLab は MR なら対象ブランチとの差分、push なら前回の push との差分で見る。
+# Run pipeline・API などの push 以外では、changes: は常に「変わった」になる）
+.yojitsu-changes:
+  # プログラム（パッケージの更新で変わるもの）
+  app: &app-changes
+    - src/**/*
+    - scripts/**/*
+    - tests/**/*
+    - vendor/**/*
+    - package.json
+    - package-lock.json
+    - observablehq.config.js
+    - tsconfig.json
+    - vitest.config.ts
+    - .npmrc
+  # データ（導入先が日々変えるもの）
+  data: &data-changes
+    - data/**/*
+    - config.json
+  # CI の設定（ランナーのタグなどを変えたら、既定ブランチで一度ビルドと公開まで通す）
+  ci: &ci-changes
+    - .gitlab-ci.yml
+    - .gitlab-ci.local.yml
+
+# --------------------------------------------------------------------------
+# validate: MR でデータ（data/・config.json）だけが変わったときのデータ検証。ビルドはしない（マージ後に既定ブランチで build する）
+#   マスタ編集の保存・取り込みの自動 MR（fetch-*）はこれだけが動く。プログラムも変わった MR は build（検証つき）が動くので動かさない
+# --------------------------------------------------------------------------
+validate:
+  stage: validate
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
       when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
+    - if: $YOJITSU_MR_BUILD == "1"
+      when: never
+    - changes: *app-changes
+      when: never
+    - changes: *data-changes
+  script:
+    - npm run validate
+
+# --------------------------------------------------------------------------
+# ci-check: MR でプログラムもデータも変わっていない（文書・CI の設定だけ）ときの、CI の設定の点検。
+#   Node の標準モジュールだけで動くので依存を取らない。MR に必ず 1 つはジョブがあるようにする役目もある
+#   （ジョブが 1 つも無いとパイプラインが作られず、「パイプラインの成功が必要」の設定では MR をマージできない）
+# --------------------------------------------------------------------------
+ci-check:
+  stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: never
+    - if: $YOJITSU_MR_BUILD == "1"
+      when: never
+    - changes: *app-changes
+      when: never
+    - changes: *data-changes
+      when: never
+    - when: on_success
+  variables:
+    GIT_DEPTH: "1"
+  before_script: []
+  cache: []
+  script:
+    - node scripts/ci/check.mjs
 
 # --------------------------------------------------------------------------
 # test: 型チェックとテスト。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1、または Run pipeline で入れたときだけ）
@@ -134,7 +203,26 @@ test:
 # --------------------------------------------------------------------------
 build:
   stage: build
-  <<: *normal-rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    # MR: プログラムが変わったときだけ（データだけなら validate、それ以外は ci-check）。YOJITSU_MR_BUILD=1 なら毎回
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $YOJITSU_MR_BUILD == "1"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *app-changes
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    # push（MR のマージを含む）: プログラム・データ・CI の設定のどれかが変わったときだけ（文書だけなら動かさない）
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *app-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *data-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *ci-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: never
+    # Run pipeline・API など
+    - if: $CI_COMMIT_BRANCH
   variables:
     # マスタ編集（src/data/masters.json.ts）が各 CSV の最終コミット ID を履歴から取るため、浅いクローンにしない
     # （浅いと ID を取れず、GitLab 保存時の競合検出が効かない）
@@ -142,6 +230,18 @@ build:
     # マスタ編集の保存先（config.json の apiBaseUrl・projectId が空のとき）をこのプロジェクトにする（§39.1）
     YOJITSU_GITLAB_API_URL: $CI_API_V4_URL
     YOJITSU_GITLAB_PROJECT: $CI_PROJECT_PATH
+  # 1 つ目は npm のダウンロード（全体の cache: と同じ。ジョブに cache: を書くと全体の分は使われないので並べる）、
+  # 2 つ目はローダのキャッシュ（増分ビルド。SPEC §102）。中身は入力の指紋で確かめてから使うので、古い・壊れたキャッシュが戻っても
+  # 古い数字は公開されない（合わなければ捨てて作り直す）。保護ブランチ（main）と MR のブランチでは GitLab が別のキャッシュにする
+  cache:
+    - key:
+        files:
+          - package-lock.json
+      paths:
+        - .npm/
+    - key: yojitsu-navi-build
+      paths:
+        - src/.observablehq/cache/
   script:
     - npm run validate
     - npm run build
@@ -156,10 +256,21 @@ build:
 pages:
   stage: pages
   needs: ["build"]
+  # build と同じ条件（build が動かないパイプラインに pages だけがあると、パイプラインが作れない）
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *app-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *data-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes: *ci-changes
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - when: on_success
   # build の成果物を移すだけなので、npm ci・キャッシュは不要（移すスクリプトのためにリポジトリは浅く取る）
   variables:
     GIT_DEPTH: "1"

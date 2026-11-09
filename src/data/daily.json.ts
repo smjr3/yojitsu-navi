@@ -1,11 +1,7 @@
 /**
- * 今月の進捗（SPEC §61）。asOf の月の、案件ごと・日ごとの実績（速報）。
- * 全体・チーム・顧客・案件の詳細の「今月の進捗」だけが読む。
+ * 今月の進捗（SPEC §61）。asOf の月の、案件ごと・日ごとの実績（速報）。中身は _outputs.ts
  */
-import { encodeDaily } from "../core/index.js";
-import { buildModelFromData, buildStamp, emitJson } from "./_shared.js";
+import { emitJson } from "./_shared.js";
+import { AGGREGATE_OUTPUTS, createContext } from "./_outputs.js";
 
-emitJson(() => {
-  const model = buildModelFromData();
-  return { ...encodeDaily(model), _build: buildStamp() };
-});
+emitJson(() => AGGREGATE_OUTPUTS.daily(createContext()));
