@@ -2,7 +2,7 @@
  * データローダ・キャッシュの破損対策（docs/DATA_LOADERS.md）
  *   - 原子的な書き込み（途中で失敗しても元のファイルが残る・一部だけ差し替わらない）
  *   - 入力の指紋（内容が変われば変わる・更新時刻だけでは変わらない）
- *   - キャッシュの掃除（指紋が変われば捨てる・_npm は残す・*.err と一時ファイルは必ず消す）
+ *   - キャッシュの掃除（プログラムが変われば全部捨てる・データだけなら依存ライブラリの束とローダの出力を残す・_npm は残す・*.err と一時ファイルは必ず消す。SPEC §102）
  *   - JSON に出せない値の検出（NaN を黙って null にしない）
  *   - ビルド結果の検証（古い出力・欠け・余り・壊れた JSON を見つける）
  */
@@ -12,7 +12,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listStaleTempFiles, writeFileAtomic, writeFilesAtomic } from "../../scripts/lib/atomic.js";
 import { computeFingerprint, isAsOfFixed, listInputFiles, resolveAsOf, todayJst } from "../../scripts/lib/inputs.js";
-import { CACHE_DIR, prepareLoaderCache, STAMP_FILE } from "../../scripts/lib/loader-cache.js";
+import { CACHE_DIR, MANIFEST_FILE, prepareLoaderCache, STAMP_FILE } from "../../scripts/lib/loader-cache.js";
+import type { OutputManifest } from "../../scripts/lib/prebuild.js";
+import { createHash } from "node:crypto";
 import { verifyDist } from "../../scripts/verify-dist.js";
 import { findInvalidJsonValue, serializeChecked } from "../../scripts/lib/json-out.js";
 import { worklogKey } from "../../src/components/worklog-key.js";
@@ -155,9 +157,13 @@ describe("入力の指紋", () => {
 
 describe("prepareLoaderCache", () => {
   const cache = () => join(dir, CACHE_DIR);
-  const fp = (hash: string) => ({ hash, asOf: "2026-10-27", files: 1 });
+  const CODE = "0".repeat(64);
+  const fp = (hash: string, codeHash = CODE) => ({ hash, codeHash, asOf: "2026-10-27", files: 1 });
   function seedCache() {
     mkdirSync(join(cache(), "_npm", "react@19.3.1"), { recursive: true });
+    mkdirSync(join(cache(), "_node", "d3@7.9.0"), { recursive: true });
+    writeFileSync(join(cache(), "rules.md"), "# old");
+    writeFileSync(join(cache(), MANIFEST_FILE), "{}");
     mkdirSync(join(cache(), "data", "worklogs"), { recursive: true });
     writeFileSync(join(cache(), "data", "model.json"), '{"old":true}');
     writeFileSync(join(cache(), "data", "worklogs", "C001.json"), "{}");
@@ -174,13 +180,41 @@ describe("prepareLoaderCache", () => {
     expect(JSON.parse(readFileSync(join(cache(), STAMP_FILE), "utf-8")).hash).toBe("a".repeat(64));
   });
 
-  it("指紋が同じなら残す。違えば捨てる", () => {
+  it("指紋が同じなら残す。プログラムが違えば全部捨てる（_npm は残す）", () => {
     prepareLoaderCache(dir, fp("a".repeat(64)));
     seedCache();
-    expect(prepareLoaderCache(dir, fp("a".repeat(64)))).toMatchObject({ cleared: false, reason: "same" });
+    expect(prepareLoaderCache(dir, fp("a".repeat(64)))).toMatchObject({ cleared: false, full: false, reason: "same" });
     expect(existsSync(join(cache(), "data", "model.json"))).toBe(true);
-    expect(prepareLoaderCache(dir, fp("b".repeat(64)))).toMatchObject({ cleared: true, reason: "changed" });
-    expect(existsSync(join(cache(), "data", "model.json"))).toBe(false);
+    expect(prepareLoaderCache(dir, fp("b".repeat(64), "1".repeat(64)), { keepDataOutputs: true })).toMatchObject({ cleared: true, full: true, reason: "code" });
+    expect(readdirSync(cache()).sort()).toEqual([STAMP_FILE, "_npm"]);
+    expect(JSON.parse(readFileSync(join(cache(), STAMP_FILE), "utf-8"))).toMatchObject({ hash: "b".repeat(64), codeHash: "1".repeat(64) });
+  });
+
+  it("データだけが違えば、依存ライブラリの束（_node）を残す。npm run build（keepDataOutputs）はローダの出力と記録も残す（増分ビルド）", () => {
+    prepareLoaderCache(dir, fp("a".repeat(64)));
+    seedCache();
+    expect(prepareLoaderCache(dir, fp("b".repeat(64)), { keepDataOutputs: true })).toMatchObject({ cleared: true, full: false, reason: "data" });
+    expect(readdirSync(cache()).sort()).toEqual([STAMP_FILE, MANIFEST_FILE, "_node", "_npm", "data"]);
+    expect(existsSync(join(cache(), "data", "worklogs", "C001.json"))).toBe(true);
+    // npm run dev はローダに作り直させるので、出力は捨てる
+    seedCache();
+    expect(prepareLoaderCache(dir, fp("c".repeat(64)))).toMatchObject({ reason: "data" });
+    expect(readdirSync(cache()).sort()).toEqual([STAMP_FILE, "_node", "_npm"]);
+  });
+
+  it("full を指定すると、データだけの違い・同じ入力でも全部捨てる（YOJITSU_FULL_BUILD=1）", () => {
+    prepareLoaderCache(dir, fp("a".repeat(64)));
+    seedCache();
+    expect(prepareLoaderCache(dir, fp("a".repeat(64)), { full: true, keepDataOutputs: true })).toMatchObject({ cleared: true, full: true, reason: "forced" });
+    expect(readdirSync(cache()).sort()).toEqual([STAMP_FILE, "_npm"]);
+  });
+
+  it("プログラムの指紋が無い記録（以前の版）は読めないものとして全部捨てる", () => {
+    prepareLoaderCache(dir, fp("a".repeat(64)));
+    seedCache();
+    writeFileSync(join(cache(), STAMP_FILE), JSON.stringify({ hash: "a".repeat(64) }));
+    expect(prepareLoaderCache(dir, fp("a".repeat(64)), { keepDataOutputs: true })).toMatchObject({ full: true, reason: "unreadable" });
+    expect(existsSync(join(cache(), "_node"))).toBe(false);
   });
 
   it("指紋が同じでも、失敗の記録（*.err）と書きかけ（<name>.<pid>）は消す", () => {
@@ -240,9 +274,22 @@ describe("JSON に出せない値の検出", () => {
 
 describe("ビルド結果の検証（verifyDist）", () => {
   const HASH = "c".repeat(64);
-  const FP = { hash: HASH, asOf: "2026-10-27", files: 1 };
+  const FP = { hash: HASH, codeHash: "0".repeat(64), asOf: "2026-10-27", files: 1 };
   const stamp = { inputHash: HASH, asOf: "2026-10-27" };
+  /** 作業ログ明細は指紋を持たない（増分ビルドで変わらなければ書き換えないため。SPEC §102） */
+  const detailStamp = { asOf: "2026-10-27" };
   let ids: string[];
+  let manifest: OutputManifest;
+  const sha = (p: string) => createHash("sha256").update(readFileSync(p)).digest("hex");
+  /** 今の dist の中身どおりの記録（seedRoot の直後に作る。そのあと dist を変えると記録と合わなくなる） */
+  function record(): OutputManifest {
+    const d = join(dir, "dist");
+    const outputs: Record<string, string> = {};
+    for (const n of readdirSync(join(d, "_file", "data"))) outputs[`data/${n.replace(/\.[0-9a-f]{8}\.json$/, ".json")}`] = sha(join(d, "_file", "data", n));
+    for (const n of readdirSync(join(d, "data", "worklogs"))) outputs[`data/worklogs/${n}`] = sha(join(d, "data", "worklogs", n));
+    return { version: 1, hash: HASH, codeHash: FP.codeHash, asOf: FP.asOf, outputs, stats: { aggregates: 6, details: ids.length, written: 0, detailsWritten: 0, unchanged: 0, removed: 0 } };
+  }
+  const verify = (m: OutputManifest | null = manifest) => verifyDist(dir, FP, join(dir, "dist"), m);
 
   function seedRoot() {
     cpSync(join(REPO, "data"), join(dir, "data"), { recursive: true });
@@ -255,25 +302,26 @@ describe("ビルド結果の検証（verifyDist）", () => {
     writeFileSync(join(d, "index.html"), "<!doctype html>");
     writeFileSync(join(d, "_file", "data", "model.0123abcd.json"), JSON.stringify({ meta: { asOf: "2026-10-27" }, contracts: ids.map((id) => ({ id })), _build: stamp }));
     for (const n of ["member-months", "masters", "dataset-issues", "work-hours", "daily"]) writeFileSync(join(d, "_file", "data", `${n}.0123abcd.json`), JSON.stringify({ _build: stamp }));
-    for (const id of ids) writeFileSync(join(d, "data", "worklogs", `${worklogKey(id)}.json`), JSON.stringify({ contractId: id, months: [], _build: stamp }));
+    for (const id of ids) writeFileSync(join(d, "data", "worklogs", `${worklogKey(id)}.json`), JSON.stringify({ contractId: id, months: [], _build: detailStamp }));
+    manifest = record();
   }
 
   it("正しい dist は問題なし", () => {
     seedRoot();
-    expect(verifyDist(dir, FP)).toEqual([]);
+    expect(verify()).toEqual([]);
   });
 
   it("古い入力から作られた出力が 1 つでも混ざると見つける", () => {
     seedRoot();
     writeFileSync(join(dir, "dist", "data", "worklogs", `${worklogKey(ids[0]!)}.json`), JSON.stringify({ contractId: ids[0], _build: { inputHash: "d".repeat(64), asOf: "2026-10-27" } }));
-    expect(verifyDist(dir, FP).join("\n")).toMatch(/別の入力から作られています/);
+    expect(verify().join("\n")).toMatch(/別の入力から作られています/);
   });
 
   it("指紋の無い出力（以前の版のキャッシュ）・計算基準日の違いを見つける", () => {
     seedRoot();
     writeFileSync(join(dir, "dist", "_file", "data", "masters.0123abcd.json"), "{}");
     writeFileSync(join(dir, "dist", "_file", "data", "dataset-issues.0123abcd.json"), JSON.stringify({ _build: { inputHash: HASH, asOf: "2026-10-26" } }));
-    const p = verifyDist(dir, FP).join("\n");
+    const p = verify().join("\n");
     expect(p).toMatch(/masters.*指紋（_build）がありません/);
     expect(p).toMatch(/計算基準日 2026-10-26/);
   });
@@ -284,7 +332,7 @@ describe("ビルド結果の検証（verifyDist）", () => {
     writeFileSync(join(dir, "dist", "_file", "data", "work-hours.0123abcd.json"), "");
     rmSync(join(dir, "dist", "_file", "data", "masters.0123abcd.json"));
     writeFileSync(join(dir, "dist", "_file", "data", "model.89abcdef.json"), JSON.stringify({ _build: stamp }));
-    const p = verifyDist(dir, FP).join("\n");
+    const p = verify().join("\n");
     expect(p).toMatch(/member-months.*JSON として読めません/);
     expect(p).toMatch(/work-hours.*空です/);
     expect(p).toMatch(/masters\.<hash>\.json がありません/);
@@ -297,16 +345,27 @@ describe("ビルド結果の検証（verifyDist）", () => {
     writeFileSync(join(dir, "dist", "data", "worklogs", "ZZZ.json"), JSON.stringify({ contractId: "ZZZ", _build: stamp }));
     writeFileSync(join(dir, "dist", "data", "worklogs", `${worklogKey(ids[2]!)}.json`), JSON.stringify({ contractId: ids[3], _build: stamp }));
     writeFileSync(join(dir, "dist", "_file", "data", "model.0123abcd.json"), JSON.stringify({ meta: { asOf: "2026-10-27" }, contracts: [], _build: stamp }));
-    const p = verifyDist(dir, FP).join("\n");
+    const p = verify().join("\n");
     expect(p).toContain(`契約 ${ids[1]} の作業ログ明細`);
     expect(p).toContain("ZZZ.json は contracts.csv に無い契約");
     expect(p).toContain(`contractId が ${ids[3]} です`);
     expect(p).toMatch(/契約が 0 件ですが contracts.csv は \d+ 件/);
   });
 
+  it("ローダの出力の記録が無い・別の入力のもの・中身が記録と違う（古い明細の混入）を見つける", () => {
+    seedRoot();
+    expect(verify(null).join("\n")).toMatch(/出力の記録.*がありません/);
+    expect(verify({ ...manifest, hash: "d".repeat(64) }).join("\n")).toMatch(/記録は別の入力のもの/);
+    // 指紋を持たない明細でも、記録のハッシュと違えば見つかる
+    writeFileSync(join(dir, "dist", "data", "worklogs", `${worklogKey(ids[0]!)}.json`), JSON.stringify({ contractId: ids[0], months: [{ month: "2026-04" }], _build: detailStamp }));
+    expect(verify()).toEqual([expect.stringMatching(/中身がローダの出力の記録と違います/)]);
+    const { [`data/worklogs/${worklogKey(ids[1]!)}.json`]: _drop, ...rest } = manifest.outputs;
+    expect(verify({ ...manifest, outputs: rest }).join("\n")).toMatch(/記録にありません/);
+  });
+
   it("dist/ が無ければ index.html が無いと言う", () => {
     seedRoot();
     rmSync(join(dir, "dist"), { recursive: true });
-    expect(verifyDist(dir, FP)[0]).toMatch(/index.html がありません/);
+    expect(verify()[0]).toMatch(/index.html がありません/);
   });
 });

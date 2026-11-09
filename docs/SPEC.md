@@ -1147,9 +1147,9 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 79.3 パイプラインの待ち時間を短くする（2026-11-04 依頼者）
 マスタ編集の保存から画面に反映されるまで、MR とマージ後の 2 回のパイプラインを待つ（それまで合わせて約 40 分かかっていた）。Windows の Runner では依存の取得とキャッシュの圧縮・展開が特に遅いので、次のようにする。
-- データ検証（`npm run validate`）は `build` ジョブの最初で行い、`validate` ジョブは置かない。依存の取得（`npm ci`）はパイプライン 1 回につき 1 回（`build` だけ。`pages` は取らない）。
+- データ検証（`npm run validate`）は `build` ジョブの最初で行う。依存の取得（`npm ci`）はパイプライン 1 回につき 1 回（`build` か、MR でデータだけが変わったときの `validate` のどちらか 1 つ。`pages`・`ci-check` は取らない。§102.3）。
 - `cache:` に `node_modules/` を入れない。`npm ci` は毎回 node_modules を消して入れ直すので、固めて戻すのは時間の無駄。npm のダウンロードキャッシュ（`.npm/`）だけを共有する。
-- `tests/unit/ci-portable.test.ts` で、依存を取るジョブが 1 つだけであることと、キャッシュに `node_modules/` が無いことを検査する。
+- `tests/unit/ci-portable.test.ts` で、依存を取るジョブが build と validate だけであることと、キャッシュに `node_modules/` が無いことを検査する（同じパイプラインで両方が動かないことは `tests/unit/ci-rules.test.ts`）。
 
 ## 80. マスタ編集の「案件」「祝日」（2026-11-01 依頼者）
 保守案件（`data/contracts.csv`）と祝日（`data/holidays.csv`）を、マスタ編集のタブに出す（それまでは GitLab の Web IDE で CSV を直していた）。保存は他のマスタと同じ GitLab のマージ。作業種別（`task-types.csv`）はタブにしない（作業名から抜き出す運用になる予定。依頼者）。名称の対応（`mapping.csv`）もタブにしない。
@@ -1545,3 +1545,43 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 顧客別の表で、案件の無い顧客の名前の横に「案件なし」を付ける（時間は数える。詳細画面は無いのでリンクなし）。列の絞り込みで「案件なし」を選ぶとその顧客だけになる。
 - 顧客名の無い作業（社内業務など）の行の名前が空欄だったので「顧客名なし」にする。
 - 再発防止: `tests/unit/worklog-members.test.ts`・`model.test.ts`・`mapping.test.ts`・`task-codes.test.ts`・`task-keywords.test.ts`・`workTypes.test.ts`、`tests/e2e/data-check-people.spec.ts`（作業した人の列・内訳・人で絞り込み・人ごとの切り替え、マスタに無いメンバーの KPI と一覧、単価なしが人ごとに 1 行、案件なし・顧客名なし、390〜1280px・ダークではみ出さない）。
+
+## 102. 増分ビルドと、変わったファイルに応じた CI のジョブ選び（2026-11-09 依頼者。導入先のレビュー指摘）
+
+「マスタを 1 行直しただけでも全件を作り直し、CI が長くかかる」「MR は軽い検証、マージ後に必要なビルドと公開だけにしたい」「変わったファイルを見て要るジョブだけを選びたい」への対応。
+
+### 102.1 ローダの出力をまとめて作り、変わったものだけ書き換える（`npm run build`）
+
+- それまで: Framework はローダを出力 1 つにつき 1 プロセスで動かし、集計のローダ（model・member-months・daily・work-hours・dataset-issues・masters）はそれぞれデータの読み込みと Model の計算をやり直していた。契約ごとの作業ログ明細は契約の数だけプロセスが立つ。入力が 1 バイトでも変わるとキャッシュを全部捨てていた（依存ライブラリの束 `_node/` も作り直し）。
+- これから: `scripts/build.ts` が `observable build` の前に `scripts/prebuild-data.ts`（本体 `scripts/lib/prebuild.ts`）を 1 プロセスで動かし、データの読み込みと Model の計算を 1 回だけして全ローダの出力を作る。Framework のキャッシュ（`src/.observablehq/cache/data/`）と中身を比べ、**変わったファイルだけ**を書き換える（同じ中身は触らない）。作るべき出力に無いファイル（消えた契約の明細・失敗の記録）は消す。キャッシュに出力があるので Framework はローダを動かさない。
+- ローダの中身は `src/data/_outputs.ts` にまとめ、各ローダ（`src/data/*.json.ts`）はそれを呼ぶだけ（`npm run dev`・単体実行でも同じ中身）。ローダを足したら `AGGREGATE_OUTPUTS` にも足す（テストで突き合わせる）。
+- 作業ログ明細は入力の指紋を持たない（`_build` は計算基準日だけ）。データのほかの所（金額・別の契約の作業）が変わっても、その契約の明細が同じなら書き換わらない。集計はデータ全体から作るので毎回作り直す。
+- 取得日時・計算基準日は明細にも入るので、日次の取り込み（取得日時が変わる）や日付が変わった日の最初のビルドでは明細も全件書き換わる（それでも計算は 1 回）。
+
+### 102.2 フルビルドと増分ビルドの分かれ目
+
+- 入力の指紋（docs/DATA_LOADERS.md。`scripts/lib/inputs.ts`）を「データ」（`data/`・`config.json`）と「プログラム」（それ以外: 計算コア・ローダ・文言・読み込み処理・`package-lock.json`・Node の版）に分け、プログラムの分の指紋（`codeHash`）も記録する（`.yojitsu-inputs.json`）。
+  - プログラムが変わった・初回・記録が読めない・CI/CD 変数 `YOJITSU_FULL_BUILD=1` → キャッシュを全部捨てる（フルビルド）。
+  - データだけが変わった → `_node/`・`_observablehq/`（依存ライブラリの束）とローダの出力を残し、ほかを捨てる（増分ビルド）。`npm run dev` はローダの出力も捨てる（ローダに作り直させる）。
+  - 同じ → そのまま使う。前回の出力の記録が今の指紋のものなら作り直さない。
+- 安全のための決まり: 出力の記録（`.yojitsu-outputs.json`。各出力の sha256）は作り始めに消し、全部書けてから書く。ビルド後の検証（`scripts/verify-dist.ts`）は、記録が今の指紋のものであることと、`dist/` の全出力の中身が記録のハッシュと一致することを確かめる（指紋を持たない明細の古いものの混入もここで見つかる）。キャッシュを使ったビルドが検証で落ちたら、キャッシュが壊れていたとみなして 1 回だけフルビルドでやり直し、それでも落ちたら `dist/` を消して失敗する。
+- CI では `build` ジョブの `cache:` でローダのキャッシュ（`src/.observablehq/cache/`）をパイプラインをまたいで使い回す（キー `yojitsu-navi-build`。保護ブランチと MR のブランチは GitLab が別のキャッシュにする）。
+
+### 102.3 変わったファイルに応じたジョブ（利用環境の `.gitlab-ci.yml`）
+
+GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前回の push との差分）で選ぶ。シェルの書き方を使わないので Windows・Linux の Runner のどちらでも同じ。
+
+| パイプライン | 変わったファイル | 動くジョブ |
+|---|---|---|
+| MR | プログラム（`src/`・`scripts/`・`tests/`・`vendor/`・`package.json`・`package-lock.json`・`observablehq.config.js`・`tsconfig.json`・`vitest.config.ts`・`.npmrc`） | `build`（データ検証つき。公開しない） |
+| MR | データ（`data/`・`config.json`）だけ | `validate`（データ検証だけ） |
+| MR | それ以外（文書・`.gitlab-ci.yml`・`.gitlab-ci.local.yml`）だけ | `ci-check`（CI の設定の点検。依存を取らない） |
+| 既定ブランチへの push（MR のマージ） | プログラム・データ・CI の設定のどれか | `build` → `pages` |
+| 既定ブランチへの push | 文書だけ | なし（公開中のサイトはそのまま） |
+| Run pipeline・API | — | `build` → `pages`（既定ブランチのとき） |
+| スケジュール | — | 取り込み（`fetch-*`）だけ（従来どおり） |
+
+- 取り込みの自動 MR（`fetch-worklogs` など）とマスタ編集の保存の MR はデータだけなので `validate` だけが動き、成功後の自動マージは従来どおり。マージ後の既定ブランチで `build` → `pages`。
+- MR に必ず 1 つはジョブがあるようにする（ジョブが無いとパイプラインが作られず、「Pipelines must succeed」の設定ではマージできない）。そのため `ci-check` を「ほかに何も動かないとき」に置く。
+- CI/CD 変数 `YOJITSU_MR_BUILD=1` で、MR でも毎回 `build` を動かす（データだけの MR でもビルドまで確かめたいとき）。`test` は従来どおり `YOJITSU_RUN_TESTS=1` のときだけ（§79.2）。
+- 再発防止: `tests/unit/ci-rules.test.ts`（GitLab の rules の評価を真似て、パイプラインの種類と変わったファイルごとに動くジョブを確かめる。依存を取るジョブがパイプライン 1 回につき 1 つまで、`pages` があれば `build` もある）、`tests/integration/incremental-build.test.ts`（変わったものだけ書き換える・明細は影響のある契約だけ・消えたものを消す・失敗したら記録を残さない・ローダとの対応）、`tests/unit/loader-integrity.test.ts`（フル／増分の分かれ目・出力の記録との突き合わせ）。

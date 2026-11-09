@@ -1,7 +1,7 @@
 /**
- * マスタ編集画面用: 編集対象 4 ファイルの生テキストと最終コミット ID、保存方式の設定（SPEC §19.2）
+ * マスタ編集画面用: 編集対象のファイルの生テキストと最終コミット ID、保存方式の設定（SPEC §19.2）。中身は _outputs.ts
  */
-import { ROOT_DIR, buildStamp, emitJson } from "./_shared.js";
-import { buildMastersPayload } from "./_masters.js";
+import { emitJson } from "./_shared.js";
+import { AGGREGATE_OUTPUTS, createContext } from "./_outputs.js";
 
-emitJson(() => ({ ...buildMastersPayload(ROOT_DIR), _build: buildStamp() }));
+emitJson(() => AGGREGATE_OUTPUTS.masters(createContext()));

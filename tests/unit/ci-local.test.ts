@@ -175,20 +175,26 @@ describe("migrate-ci（SPEC §91.4）", () => {
   });
 
   it("ほかで定義したアンカーを使うジョブ・<<: で受け継ぐ項目の追加は自動で移さない", () => {
-    const alias = CI.concat('\ninternal:\n  <<: *normal-rules\n  script: ["node -v"]\n');
+    const alias = CI.concat('\ninternal:\n  rules:\n    - changes: *app-changes\n  script: ["node -v"]\n');
     const a = migrateCi({ current: alias, base: CI, local: "" });
-    expect(a.manual).toEqual([expect.stringContaining("アンカー *normal-rules")]);
+    expect(a.manual).toEqual([expect.stringContaining("アンカー *app-changes")]);
     expect(migratedHash(a.local)).toBe("");
     const ownAnchor = CI.concat('\n.mine: &mine\n  tags: [x]\n');
     expect(migrateCi({ current: ownAnchor, base: CI, local: "" }).manual).toEqual([]);
-    const rules = CI.replace("build:\n  stage: build\n", "build:\n  stage: build\n  rules:\n    - when: manual\n");
+    // <<: で受け継いだ項目を足したもの（今のひな形のジョブは <<: を使わないので、受け継ぐジョブを足して確かめる）
+    const base = CI.concat('\n.shared: &shared\n  rules:\n    - when: always\n\ninternal:\n  <<: *shared\n  script: ["node -v"]\n');
+    const inherit = base.replace('internal:\n  <<: *shared\n', 'internal:\n  <<: *shared\n  rules:\n    - when: manual\n');
+    expect(inherit).not.toBe(base);
+    const r = migrateCi({ current: inherit, base, local: "" });
+    expect([r.moved, r.manual]).toEqual([[], [expect.stringContaining("internal の rules: の追加")]]);
+    // ジョブが自分で持つ rules: を変えたもの
+    const rules = CI.replace("build:\n  stage: build\n  rules:\n", "build:\n  stage: build\n  rules:\n    - when: manual\n");
     expect(rules).not.toBe(CI);
-    const r = migrateCi({ current: rules, base: CI, local: "" });
-    expect([r.moved, r.manual]).toEqual([[], [expect.stringContaining("build の rules: の追加")]]);
+    expect(migrateCi({ current: rules, base: CI, local: "" }).manual).toEqual([expect.stringContaining("build の rules: の変更")]);
   });
 
   it("ジョブの script の変更・ジョブを消したことは手で移すものに出す。.gitlab-ci.local.yml が無くても何もしない項目を入れて空にしない", () => {
-    const cur = CI.replace("    - npm run validate\n", "    - npm run validate -- --strict\n").replace(/\nfetch-members:[\s\S]*?(?=\n# -{10}|$)/, "\n");
+    const cur = CI.replace("    - npm run validate\n    - npm run build\n", "    - npm run validate -- --strict\n    - npm run build\n").replace(/\nfetch-members:[\s\S]*?(?=\n# -{10}|$)/, "\n");
     const r = migrateCi({ current: cur, base: CI, local: "" });
     expect(r.manual).toEqual(["build の script: の変更（.gitlab-ci.local.yml では変えられない。差分は yojitsu-navi update --dry-run）", "ジョブ fetch-members を消したこと（.gitlab-ci.local.yml では消せない）"]);
     expect(lintCiYaml(r.local, ".gitlab-ci.local.yml")).toEqual([]);
