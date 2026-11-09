@@ -47,6 +47,7 @@ export {
 } from "./masters.js";
 export { createKeywordRouter, isCodeRule, mapWorklogs, ruleCoversMonth, unmappedReasonLabel, type KeywordMatch, type KeywordRouter, type MappingResult, type UnmappedReason, type WorklogMapping } from "./mapping.js";
 export { findTaskCodeIssues, isMatchChange, matchesMaintenance, taskCodeCheckEnabled, taskCodeWarnings, validateMappingPeriods, type MappingRowIssue, type TaskCodeFindings } from "./taskCodes.js";
+export { createTaskNameExtractor, extractTaskFromName, isPeriodText, taskMarkers, type TaskFromName, type TaskNameExtractor } from "./taskFromName.js";
 export { createProjectMatcher, extractProjectName, projectFromTaskEnabled, projectMatcherFor, resolvesByTask, validateProjectAliases, type AliasIssue, type ProjectMatcher } from "./projectFromTask.js";
 export { UNSET_KINDS, findUnsetItems, nextContractId, type UnsetItem, type UnsetKind } from "./unset.js";
 export { checkProjects, projectNameIndex, validateProjects, type NameMismatch, type ProjectCheck, type UnknownProjectContract, type UnlinkedContract } from "./projects.js";

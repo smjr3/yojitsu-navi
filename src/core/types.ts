@@ -53,6 +53,16 @@ export interface Config {
   taskCodeCheck?: TaskCodeCheckConfig;
   /** 作業名から案件名を抜き出して紐付ける（§97）。省略 = 使わない */
   projectFromTask?: ProjectFromTaskConfig;
+  /** 作業名の括弧内を作業種別（タスク）にする（§101）。省略 = 使わない */
+  taskFromName?: TaskFromNameConfig;
+}
+
+/** 作業名の括弧内をタスクにする設定（§101） */
+export interface TaskFromNameConfig {
+  /** 目印（複数可）。目印の直後の括弧内をタスクとする。省略 = projectFromTask.marker */
+  markers?: string[];
+  /** false で止める（既定 true） */
+  enabled?: boolean;
 }
 
 /** 作業名から案件名を抜き出す設定（§97） */

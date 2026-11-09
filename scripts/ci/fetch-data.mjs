@@ -61,11 +61,26 @@ try {
   process.exit(1);
 }
 try {
-  // 取り直した結果で検証が通ることを確認してから反映する
-  npm(["run", "validate"], { stdio: "inherit" });
+  // 取り直した結果で検証が通ることを確認してから反映する。データが変わらず記録（meta）だけなら検証を省く（§101.3）
+  if (dataChanged(job)) npm(["run", "validate"], { stdio: "inherit" });
+  else console.log("データに変化がないため検証を省きます（取得日時の記録だけを反映します）");
   const stamp = new Date().toISOString().slice(0, 16);
   console.log(pushDataMr({ kind, message: `chore(data): ${job.title} (${stamp}Z)`, paths: job.paths }));
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);
   process.exit(1);
+}
+
+/** 取り込みで meta 以外のファイル（CSV）が変わったか。git が使えなければ変わったとみなす（検証を省かない） */
+function dataChanged(j) {
+  try {
+    const out = execFileSync("git", ["status", "--porcelain", "--untracked-files=all", "--", ...j.paths], { encoding: "utf-8" });
+    const meta = j.meta.replace(/\\/g, "/");
+    return out
+      .split(/\r?\n/)
+      .map((l) => l.slice(3).trim().replace(/^"|"$/g, ""))
+      .some((p) => p !== "" && p !== meta);
+  } catch {
+    return true;
+  }
 }

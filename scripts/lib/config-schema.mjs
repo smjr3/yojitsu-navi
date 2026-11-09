@@ -141,6 +141,8 @@ export const CONFIG_SCHEMA = obj({
   }),
   /** 作業名から案件名を抜き出して紐付ける（§97。無ければ使わない） */
   projectFromTask: obj({ marker: str(), enabled: { type: "boolean" } }),
+  /** 作業名の括弧内をタスクにする（§101。無ければ使わない） */
+  taskFromName: obj({ markers: arr(str()), enabled: { type: "boolean" } }),
   costTypes: arr(obj({ id: str({ required: true }), label: str({ required: true }) }), { required: true }),
   masterEdit: obj({
     mode: oneOf(["gitlab", "download", "demo"], { required: true }),
