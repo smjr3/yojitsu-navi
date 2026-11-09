@@ -718,6 +718,50 @@ describe("update", () => {
     expect(readFileSync(join(dir, app.VENDOR_CACHE, "index"), "utf-8")).toBe("1.1.0");
   }, scaled(60_000));
 
+  it(".gitignore に社内で足した行は残して新しい版にする（止めない。次の版でも残る。SPEC §100）", () => {
+    const dir = project("upd-gitignore");
+    writeFileSync(join(dir, ".gitignore"), "node_modules/\ncerts/*.key\n");
+    git(dir, "commit", "-qam", "社内の除外");
+    const v2i = { ...v2, _gitignore: "node_modules/\ndist/\n" };
+    logs.length = 0;
+    const r = app.update({ pkgDir: fakePackage("upd-gitignore-v2", "1.1.0", v2i), version: "1.1.0", dir, log });
+    expect(r.conflicts).toEqual([]);
+    expect(r.mergedIgnore).toBe(1);
+    expect(readFileSync(join(dir, ".gitignore"), "utf-8")).toBe(`node_modules/\ndist/\n\n${app.GITIGNORE_MARK}\ncerts/*.key\n`);
+    expect(logs.join("\n")).toContain("社内で足した 1 行");
+    // 目印の下に足した行も、次の版で残る。パッケージの行（目印より上）を直していなければ、新しい版で消えた行は戻さない
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", "update-1.1.0");
+    writeFileSync(join(dir, ".gitignore"), `${readFileSync(join(dir, ".gitignore"), "utf-8")}*.pem\n`);
+    git(dir, "commit", "-qam", "社内の除外を足す");
+    const v3 = { ...v2, _gitignore: "node_modules/\nbuild/\n" };
+    const r3 = app.update({ pkgDir: fakePackage("upd-gitignore-v3", "1.2.0", v3), version: "1.2.0", dir, log });
+    expect(r3.conflicts).toEqual([]);
+    expect(readFileSync(join(dir, ".gitignore"), "utf-8")).toBe(`node_modules/\nbuild/\n\n${app.GITIGNORE_MARK}\ncerts/*.key\n*.pem\n`);
+    // 何も変えずにもう一度: 変わらない
+    git(dir, "switch", "-q", "main");
+    git(dir, "merge", "-q", r3.branch);
+    expect(app.update({ pkgDir: join(work, "upd-gitignore-v3"), version: "1.2.0", dir, log }).changed).toEqual([]);
+  }, scaled(60_000));
+
+  it("migrate-config: 無い新しい設定・名前が変わった項目を出す。--apply --add で選んだものだけ書き足し、バックアップする（SPEC §100）", () => {
+    const dir = project("upd-migrate-config");
+    const pkg = fakePackage("upd-migrate-config-v2", "1.1.0", v2);
+    const before = readFileSync(join(dir, "config.json"), "utf-8");
+    logs.length = 0;
+    const r = app.migrateConfigCommand({ pkgDir: pkg, dir, log });
+    expect(r.missing.map((m: { path: string }) => m.path)).toEqual(["b"]);
+    expect(readFileSync(join(dir, "config.json"), "utf-8")).toBe(before);
+    expect(logs.join("\n")).toContain("b  ひな形の値: { \"c\": 2 }");
+    const done = app.migrateConfigCommand({ pkgDir: pkg, dir, log, apply: true, add: ["b"], now: new Date(2030, 0, 2, 3, 4, 5) });
+    expect(done.added).toEqual(["b"]);
+    expect(JSON.parse(readFileSync(join(dir, "config.json"), "utf-8")).b).toEqual({ c: 2 });
+    expect(readFileSync(join(dir, done.backup, "config.json"), "utf-8")).toBe(before);
+    // コミットはしない
+    expect(git(dir, "status", "--porcelain", "--", "config.json")).toBe("M config.json");
+    expect(app.migrateConfigCommand({ pkgDir: pkg, dir, log, apply: true, add: ["b"] }).changed).toBe(false);
+  }, scaled(60_000));
+
   it("版の比較", () => {
     expect(app.compareVersion("1.10.0", "1.9.9")).toBeGreaterThan(0);
     expect(app.compareVersion("1.0.0", "1.0.0")).toBe(0);
@@ -955,6 +999,56 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       const again = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
       expect(again.code).toBe(0);
       expect(again.steps[1].note).toContain("注意 1");
+    }, scaled(120_000));
+
+    it("依存は package-lock.json が前と同じなら入れ直さない。テストは社内で手を加えたコードがあるときだけ動かす（SPEC §100）", async () => {
+      const { dir, up, pkg } = await setup("v100-up-auto");
+      // 本物の npm ci と同じく node_modules を作る
+      const withModules = fakePackage("v100-up-auto-v2", "1.1.0", { ...files("1.1.0"), "scripts/ci/install.mjs": "(await import('node:fs')).mkdirSync('node_modules', { recursive: true });\nconsole.log('依存を入れた')\n" });
+      const o = out.createOutput({ screen: () => {}, errScreen: () => {}, summary: true });
+      const env = { ...process.env, YOJITSU_RUN_TESTS: "" };
+      const r = await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env });
+      expect(r.steps.map((s: { status: string }) => s.status)).toEqual(["ok", "ok", "ok", "ok", "ok", "skipped", "ok"]);
+      expect(r.steps[5].note).toContain("社内で手を加えたコードが無い");
+      expect(existsSync(join(dir, up.INSTALL_STAMP))).toBe(true);
+      // 2 回目: lock ファイルが同じなので依存は入れ直さない（--install なら入れる）
+      const again = await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env });
+      expect(again.steps[2]).toMatchObject({ status: "skipped" });
+      expect((await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env, install: true })).steps[2].status).toBe("ok");
+      // 社内で足したスクリプトがあればテストを動かす。--no-test（test: false）なら動かさない
+      writeFileSync(join(dir, "scripts", "local-tool.mjs"), "console.log('社内')\n");
+      git(dir, "add", "-A");
+      git(dir, "commit", "-qm", "社内のスクリプト");
+      const withLocal = await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env });
+      expect(withLocal.steps[5]).toMatchObject({ status: "ok" });
+      expect(withLocal.steps[5].note).toContain("社内で手を加えたコード 1 ファイル");
+      expect((await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env, test: false })).steps[5].status).toBe("skipped");
+      expect((await up.upgrade({ pkgDir: withModules, version: "1.1.0", dir, out: o, env: { ...env, YOJITSU_RUN_TESTS: "0" } })).steps[5].status).toBe("skipped");
+      expect(up.localCodeChanges(["package.json"], ["docs/memo.md", "certs/ca.pem", "vitest.config.ts", "src/x.md"])).toEqual(["package.json", "src/x.md", "vitest.config.ts"]);
+    }, scaled(180_000));
+
+    it("--dry-run は何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す。止まる理由があれば終了コード 2（SPEC §100）", async () => {
+      const { dir, up, pkg } = await setup("v100-up-dry");
+      const head = git(dir, "rev-parse", "HEAD");
+      const screen: string[] = [];
+      const o = out.createOutput({ screen: (s: string) => screen.push(s), errScreen: (s: string) => screen.push(s), summary: true });
+      const ok = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, dryRun: true, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(ok.code).toBe(0);
+      expect(screen.join("\n")).toContain("止まらずに進めます");
+      expect(screen.join("\n")).toContain("テスト: 動かさない");
+      expect(git(dir, "rev-parse", "HEAD")).toBe(head);
+      expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).version).toBe("1.0.0");
+      writeFileSync(join(dir, "src", "a.js"), "社内");
+      git(dir, "commit", "-qam", "社内の変更");
+      screen.length = 0;
+      const stop = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, dryRun: true });
+      expect(stop.code).toBe(2);
+      expect(screen.join("\n")).toMatch(/止まります[\s\S]*src\/a\.js/);
+      // --keep-local を付ければ止まらず、残すファイルがあるのでテストを動かす
+      screen.length = 0;
+      const kept = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, dryRun: true, update: { keepLocal: true }, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(kept.code).toBe(0);
+      expect(screen.join("\n")).toContain("テスト: 動かす（社内で手を加えたコード 1 ファイル）");
     }, scaled(120_000));
 
     it("社内で変えたファイルで update が止まれば、終了コード 2 で止まる", async () => {

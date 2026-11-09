@@ -19,5 +19,6 @@ packages/app/sample/
 packages/app/lib/ci-files.mjs
 packages/app/lib/ci-local.mjs
 packages/app/lib/config-schema.mjs
+packages/app/lib/config-migrate.mjs
 .yojitsu-navi-backup/
 .yojitsu-navi-log/

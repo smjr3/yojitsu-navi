@@ -9,10 +9,11 @@
 // 項目を足す・変えるときはここも直す（tests/unit/config-schema.test.ts がリポジトリの config.json と
 // テスト用の設定の全項目がここにあることを確かめる）。必須の項目を足すと既存の導入先が止まるので、
 // 新しい項目は既定値のある任意の項目にする。項目の名前を変える・やめるときは deprecated に移し方を書く。
+// 名前だけを変えたときは renamedTo に新しい項目（"a.b.c"）も書く（yojitsu-navi migrate-config --apply が値を移す。SPEC §100）。
 
 /** @typedef {{ type: string, required?: boolean | ((root: any) => boolean), requiredWhen?: string, enum?: any[], min?: number, max?: number,
  *   props?: Record<string, Node>, additional?: Node, items?: Node, variants?: { key: string, cases: Record<string, Record<string, Node>> },
- *   deprecated?: string, since?: string }} Node */
+ *   deprecated?: string, renamedTo?: string, since?: string }} Node */
 
 const str = (o = {}) => ({ type: "string", ...o });
 const int = (o = {}) => ({ type: "integer", ...o });
@@ -216,7 +217,7 @@ export function checkConfig(config, schema = CONFIG_SCHEMA) {
       return;
     }
     if (node.deprecated) {
-      warn("CONFIG_DEPRECATED", path, node.deprecated);
+      warn("CONFIG_DEPRECATED", path, node.renamedTo ? `${node.deprecated}（yojitsu-navi migrate-config --apply で ${node.renamedTo} に移せます）` : node.deprecated);
       return;
     }
     if (!typeOk(node.type, v)) {

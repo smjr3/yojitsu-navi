@@ -9,6 +9,7 @@ import { CHANGELOG, updateNotes } from "./changelog.mjs";
 import { CI_FILE, checkCiFiles, describeCiProblems } from "./ci-files.mjs";
 import { ciHash, migrateCi, migratedHash, repairLocalPlaceholder } from "./ci-local.mjs";
 import { checkConfig, formatConfigIssues, parseConfigText } from "./config-schema.mjs";
+import { configDiff, migrateConfigText } from "./config-migrate.mjs";
 import { compareVersion } from "./version.mjs";
 
 export { compareVersion };
@@ -54,6 +55,41 @@ export function fileKind(path) {
 }
 
 export class CliError extends Error {}
+
+export const GITIGNORE = ".gitignore";
+/** .gitignore の社内の行の目印。update はこの下の行を新しい版の後ろに残す（SPEC §100） */
+export const GITIGNORE_MARK = "# 社内で足したもの（yojitsu-navi update はこの下の行を残します）";
+
+/**
+ * .gitignore を新しい版にし、社内で足した行を目印の下に残す。
+ * - 目印の下の行はいつも残す（新しい版にもある行は二重にしない）
+ * - 社内で目印の上を直していたら（記録と違う）、新しい版に無い行も社内の行として目印の下に移す
+ * @returns {{ text: string, local: string[] }}
+ */
+/** .gitignore の目印より上（パッケージの行）。改行は LF、最後は改行 1 つにそろえる */
+export function gitignoreAbove(text) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const at = lines.indexOf(GITIGNORE_MARK);
+  return `${(at >= 0 ? lines.slice(0, at) : lines).join("\n").replace(/\n*$/, "")}\n`;
+}
+
+export function mergeGitignore(cur, next, unchangedAbove) {
+  const lines = cur.replace(/\r\n/g, "\n").split("\n");
+  const at = lines.indexOf(GITIGNORE_MARK);
+  const above = at >= 0 ? lines.slice(0, at) : lines;
+  const below = at >= 0 ? lines.slice(at + 1) : [];
+  const nextText = next.replace(/\r\n/g, "\n");
+  const inNext = new Set(nextText.split("\n").map((l) => l.trim()));
+  const local = [];
+  const add = (l) => {
+    const t = l.trim();
+    if (t && t !== GITIGNORE_MARK && !inNext.has(t) && !local.includes(t)) local.push(t);
+  };
+  if (!unchangedAbove) for (const l of above) if (!l.trim().startsWith("#")) add(l);
+  for (const l of below) add(l);
+  const text = local.length ? `${nextText.replace(/\n*$/, "")}\n\n${GITIGNORE_MARK}\n${local.join("\n")}\n` : nextText;
+  return { text, local };
+}
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 /** 中身が同じか（テキストは改行 CRLF と LF の違いを見ない。Windows で core.autocrlf のまま取り出したファイルを「変えた」としない） */
@@ -340,6 +376,63 @@ export function configCompat(dir) {
   return { errors, warnings: issues.length - errors, lines: formatConfigIssues(issues) };
 }
 
+/**
+ * 新しい版のひな形にあって導入先の config.json に無い項目と、名前が変わった項目（SPEC §100）。読めなければ空
+ * @returns {{ missing: { path: string, value: string }[], renames: { from: string, to: string, value: string, conflict: boolean }[] }}
+ */
+export function missingConfigReport(pkgDir, dir) {
+  try {
+    const tpl = readTemplate(join(pkgDir, "template")).get("config.json");
+    if (!tpl) return { missing: [], renames: [] };
+    return configDiff(readFileSync(join(dir, "config.json"), "utf-8"), readFileSync(tpl, "utf-8"));
+  } catch {
+    return { missing: [], renames: [] };
+  }
+}
+
+/**
+ * yojitsu-navi migrate-config（SPEC §100）: config.json の不足の項目・名前が変わった項目を出す。
+ * apply のときだけ書く: 名前が変わった項目の値を新しい名前へ移し、add で選んだ不足の項目をひな形の値で書き足す。今ある値は変えない。
+ * 前のファイルは .yojitsu-navi-backup/<日時>/ に写す。コミットはしない（MR の中で値を確かめるため）
+ * @param {{ pkgDir: string, dir: string, version?: string, add?: string[], apply?: boolean, now?: Date, log: (s: string) => void }} o
+ */
+export function migrateConfigCommand(o) {
+  const { pkgDir, dir, log } = o;
+  const path = join(dir, "config.json");
+  if (!existsSync(path)) throw new CliError(`${dir} に config.json がありません`);
+  const tpl = readTemplate(join(pkgDir, "template")).get("config.json");
+  if (!tpl) throw new CliError("パッケージに config.json のひな形がありません");
+  const localText = readFileSync(path, "utf-8");
+  const parsed = parseConfigText(localText);
+  if (parsed.error) throw new CliError(parsed.error);
+  const templateText = readFileSync(tpl, "utf-8");
+  const diff = configDiff(localText, templateText);
+  const add = o.add ?? [];
+  if (!o.apply) {
+    log(`config.json の確認（何も変えていません）: 無い新しい設定 ${diff.missing.length}・名前が変わった項目 ${diff.renames.length}`);
+    if (diff.renames.length) log(`名前が変わった項目（--apply で値を新しい名前に移します。動きは変わりません）:\n${diff.renames.map((r) => `  ${r.from} → ${r.to}  値: ${r.value}${r.conflict ? "（新しい名前もあるので移しません）" : ""}`).join("\n")}`);
+    if (diff.missing.length) {
+      log(`無い新しい設定（無くても既定値で動きます。書き足すと「ひな形の値」になるので、値を確かめてから選んでください）:\n${diff.missing.map((m) => `  ${m.path}  ひな形の値: ${m.value}`).join("\n")}`);
+      log(`書き足すには: yojitsu-navi migrate-config --apply --add <項目>[,<項目>…]（親の項目を選ぶと下の項目をまとめて足します。推奨値は CHANGELOG.md「新しい設定と推奨値」）`);
+    }
+    if (!diff.missing.length && !diff.renames.length) log("直すところはありません");
+    return { ...diff, changed: false, backup: "" };
+  }
+  const r = migrateConfigText({ localText, templateText, add, renames: true });
+  for (const s of r.skipped) log(`  飛ばしました: ${s.path}（${s.why}）`);
+  if (r.text === localText) {
+    log("config.json は変わりませんでした");
+    return { ...diff, ...r, changed: false, backup: "" };
+  }
+  const backup = backupFiles(dir, ["config.json"], o.now, join(dir, MANIFEST));
+  writeFileSync(path, r.text);
+  for (const m of r.moved) log(`  移しました: ${m.from} → ${m.to}`);
+  for (const a of r.added) log(`  書き足しました: ${a}`);
+  log(`config.json を直しました（前のものは ${backup}/。コミットはしていません。値を確かめて MR に入れてください）`);
+  reportConfig(log, log, configCompat(dir), o.version ?? "この版");
+  return { ...diff, ...r, changed: true, backup };
+}
+
 /** 互換確認の結果を出す。エラーは画面に、注意の中身は詳しい行に */
 function reportConfig(log, detail, c, version) {
   if (!c.errors && !c.warnings) {
@@ -406,6 +499,9 @@ export function update(o) {
   const kept = [];
   let repairedLocal = false;
   let migratedCi = false;
+  /** .gitignore に残した社内の行の数 */
+  let mergedIgnore = 0;
+  let ignoreRecord = "";
   /** migrate-ci が社内の設定を .gitlab-ci.local.yml へ移したときの .gitlab-ci.yml の中身（同じなら止めずに新しい版にする。SPEC §91.4） */
   const migrated = existsSync(join(dir, LOCAL_CI_FILE)) ? migratedHash(readFileSync(join(dir, LOCAL_CI_FILE), "utf-8")) : "";
   for (const [f, abs] of template) {
@@ -433,6 +529,17 @@ export function update(o) {
       continue;
     }
     const base = old[f];
+    // .gitignore は社内で足した行（証明書・社内のツールの出力など）を残して新しい版にする（止めない。SPEC §100）
+    if (f === GITIGNORE && cur && !(keptBefore.has(f) && !o.overwrite)) {
+      // 記録には目印より上（パッケージの行）のハッシュを書き、次の update で社内が上を直したかを見分ける
+      const curText = cur.toString("utf-8");
+      const m = mergeGitignore(curText, next.toString("utf-8"), Boolean(base && matchesHash(Buffer.from(gitignoreAbove(curText), "utf-8"), base)));
+      if (m.local.length) mergedIgnore = m.local.length;
+      const merged = Buffer.from(m.text, "utf-8");
+      ignoreRecord = sha(Buffer.from(gitignoreAbove(next.toString("utf-8")), "utf-8"));
+      if (!sameContent(cur, merged)) writes.push({ f, next: merged, kind: "changed" });
+      continue;
+    }
     // 無くなっていたファイルは入れ直す（git の除外設定でコミットされなかったもの §85 と、社内で消したものは見分けられないので止めない）
     let type = cur ? (base ? (matchesHash(cur, base) ? null : "modified") : "created") : null;
     // 前に社内の版を残すと決めたファイルは、記録と中身が同じでも（新しい版と同じだった版を挟んだとき）社内の版として扱う
@@ -466,6 +573,7 @@ export function update(o) {
     kept.push(c.f);
   }
   for (const w of writes) if (fileKind(w.f) === "package") record.set(w.f, sha(w.next));
+  if (ignoreRecord) record.set(GITIGNORE, ignoreRecord);
   const sortByPath = (a, b) => (a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
   conflicts.sort(sortByPath);
   writes.sort(sortByPath);
@@ -495,12 +603,13 @@ export function update(o) {
   const notes = template.has(CHANGELOG) ? updateNotes(readFileSync(template.get(CHANGELOG), "utf-8"), manifest.version, version, localConfig) : [];
   const ciNotes = [
     ...(migratedCi ? [`${CI_FILE}: 社内の設定は migrate-ci で ${LOCAL_CI_FILE} に移してあるので、新しい版にします`] : []),
+    ...(mergedIgnore ? [`${GITIGNORE}: 社内で足した ${mergedIgnore} 行を「${GITIGNORE_MARK}」の下に残して新しい版にします`] : []),
     ...(repairedLocal ? [`${LOCAL_CI_FILE}: 中身の無い項目（GitLab が「config can't be blank」で失敗にする）を直します（ほかの行は変えません）`] : []),
   ];
   const ciNote = () => {
     if (ciNotes.length) log(ciNotes.join("\n"));
   };
-  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
+  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, mergedIgnore, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
   /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */
   const list = (title, items) => {
     if (!items.length) return;
@@ -597,7 +706,7 @@ export function update(o) {
   list("新しい版で増えたデータのファイルで、このプロジェクトに無いもの（入れていません。要るなら docs/DATA.md を見て作ってください）", newData);
   reportFound();
   if (missing.length) {
-    log(`config.json に無い新しい設定: ${missing.length} 項目（無くても既定値で動きます。変えるときは docs/DATA.md）`);
+    log(`config.json に無い新しい設定: ${missing.length} 項目（無くても既定値で動きます。書き足すときは yojitsu-navi migrate-config。項目は docs/DATA.md）`);
     detail(missing.map((k) => `  ${k}`).join("\n"));
   }
   reportConfig(log, detail, configCheck, version);

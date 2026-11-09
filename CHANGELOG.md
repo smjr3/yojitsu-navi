@@ -4,6 +4,27 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 `yojitsu-navi update` は、今の版から新しい版までの「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します（「新しい設定と推奨値」には導入先の `config.json` の今の値を添えます）。
 書き方と、版を上げるときの手順は [docs/RELEASE.md](docs/RELEASE.md)。
 
+## 次の版
+
+### 更新後に行うこと
+
+- 版上げの前に `yojitsu-navi upgrade --dry-run` で「止まらずに進めます」と出ることを確かめてから `yojitsu-navi upgrade` を実行する（止まる理由があれば一覧と直し方が出る。何も変えない）
+- `.gitignore` を社内で直していたら、この版から止まらずに新しい版になり、社内で足した行は最後の目印「`# 社内で足したもの（yojitsu-navi update はこの下の行を残します）`」の下に移る。以後、社内の行はこの目印の下に足す
+- `config.json` に無い新しい設定は `yojitsu-navi migrate-config` で一覧を確かめ、要るものだけ `yojitsu-navi migrate-config --apply --add <項目>` で書き足して値を本番に合わせる（コミットはしないので MR に入れる）
+- 定期取り込みを動かしているなら、`yojitsu-navi gitlab-setup` で取り込みの MR 用のプロジェクトアクセストークン（`GIT_PUSH_TOKEN` の中身）の条件と期限が ✓ になることを確かめる
+
+### テスト・CI の前提
+
+- `upgrade` のテストは、社内で手を加えたコード（`--keep-local` で残したファイル、社内で足した `src/`・`scripts/`・`tests/` のファイルなど）があるときだけ自動で動く。前は既定で飛ばしていた。必ず動かすなら `--test`（`YOJITSU_RUN_TESTS=1`）、動かさないなら `--no-test`（`YOJITSU_RUN_TESTS=0`）
+- `upgrade` の依存（`npm ci`）は、`package-lock.json`・Node の版・OS が前に入れたときと同じなら入れ直さない（`--install` で必ず入れる）。CI の動きは変わらない
+
+### 変更
+
+- `yojitsu-navi upgrade --dry-run`: 何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す（止まるなら終了コード 2）。`--no-test`・`--install` を足した（SPEC §100）
+- `yojitsu-navi migrate-config`: `config.json` に無い新しい設定と名前が変わった項目を出し、`--apply` で名前が変わった項目を移し、`--add` で選んだ項目だけを書き足す（今の値・書式は変えない。SPEC §100）
+- `update` が `.gitignore` に社内で足した行を残して新しい版にする（止めない。SPEC §100）
+- `gitlab-setup` が取り込みの MR 用のプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`・期限）と、`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` の Protected・Masked を確かめる。docs/DEPLOY_GITLAB.md に「本番運用の標準構成」（SPEC §100）
+
 ## 0.2.3
 
 ### 変更

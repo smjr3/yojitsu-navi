@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, LOG_DIR, backupStamp, check, gitlabFromRemote, init, migrateCiCommand, normalizeGitlab, readGitlabTarget, resetData, update } from "../lib/project.mjs";
+import { CliError, LOG_DIR, backupStamp, check, gitlabFromRemote, init, migrateCiCommand, migrateConfigCommand, normalizeGitlab, readGitlabTarget, resetData, update } from "../lib/project.mjs";
 import { createOutput } from "../lib/output.mjs";
 import { upgrade } from "../lib/upgrade.mjs";
 
@@ -19,10 +19,14 @@ const HELP = `予実ナビ ${VERSION}
       新しいプロジェクトのフォルダを作る（既定 yojitsu-navi）。接続先を config.json と git remote に入れる
       data/ は空（見出しの行だけ）で作る
         --sample      試す用のサンプルのデータ（架空の会社。作業実績 約 13MB）を data/ に入れる（本番には使わない）
-  yojitsu-navi upgrade [フォルダ] [--overwrite | --keep-local] [--no-commit] [--force] [--test] [--log <ファイル>]
-      版を上げる作業を 1 回で行う: update → 設定の互換確認（config.json）→ 依存を入れる（npm ci）→ check → データ検証 → テスト（既定は飛ばす）→ ビルド
+  yojitsu-navi upgrade [フォルダ] [--dry-run] [--overwrite | --keep-local] [--no-commit] [--force] [--test | --no-test] [--install] [--log <ファイル>]
+      版を上げる作業を 1 回で行う: update → 設定の互換確認（config.json）→ 依存を入れる（npm ci）→ check → データ検証 → テスト → ビルド
+      本番固有のもの（config.json・data/・.gitlab-ci.local.yml・.npmrc・社内で足したファイル・.gitignore に足した行）は変えない
+      依存は package-lock.json が前と同じなら入れ直さない。テストは社内で手を加えたコードがあるときだけ動かす
       失敗したところで止まり、最後に結果の要約を出す。全部の出力は ${LOG_DIR}/upgrade-<日時>.log（UTF-8）に残す
-        --test        テストも動かす（CI/CD 変数と同じく環境変数 YOJITSU_RUN_TESTS=1 でもよい）
+        --dry-run     何も変えずに、止まらずに進めるか（社内で変えたパッケージのファイル・config.json のエラー）と、依存・テストを動かすかを出す
+        --test        テストを必ず動かす（--no-test は動かさない。環境変数 YOJITSU_RUN_TESTS=1 / 0 でもよい）
+        --install     依存を必ず入れ直す
         ほかのオプションは update と同じ
   yojitsu-navi update [フォルダ] [--dry-run] [--overwrite | --keep-local] [--no-commit] [--force] [--summary] [--log <ファイル>]
       今あるプロジェクトをこの版にする（data/ と config.json は変えない）。ブランチ update-<版> を作って自動でコミットする
@@ -47,6 +51,11 @@ const HELP = `予実ナビ ${VERSION}
       移し終えると、次の update は .gitlab-ci.yml で止まらずに新しい版にする
         --dry-run     何も変えずに、移すものと自動で移せないものを出す
         --force       自動で移せないものが残っていても、次の update で .gitlab-ci.yml を新しい版にする（前のものはバックアップに残る）
+  yojitsu-navi migrate-config [フォルダ] [--apply] [--add <項目>[,<項目>…]] [--log <ファイル>]
+      config.json に無い新しい設定（新しい版のひな形にあるもの）と、名前が変わった項目を出す。--apply が無ければ何も変えない
+        --apply       名前が変わった項目の値を新しい名前に移す（動きは変わらない）。--add の項目をひな形の値で書き足す
+        --add         書き足す項目（例 projectFromTask・worklogSource.http.members）。今ある値・ほかの行の書式は変えない
+      前のものは .yojitsu-navi-backup/<日時>/ に写す。コミットはしない
   yojitsu-navi gitlab-setup [--apply] [--api <URL> --project <グループ/プロジェクト>]
       GitLab プロジェクトの設定を確認（--apply で直す）。トークンは環境変数 GITLAB_TOKEN（無ければ聞く）。接続先は config.json から読む
   yojitsu-navi --version
@@ -112,7 +121,7 @@ let out = createOutput();
 function assertKnown(rest, known, withValue = []) {
   const unknown = rest.filter((a, i) => a.startsWith("--") && !known.includes(a) && !withValue.includes(a) && !withValue.includes(rest[i - 1]));
   if (unknown.length) throw new CliError(`知らないオプションです: ${unknown.join(" ")}\n\n${HELP}`);
-  for (const w of withValue) if (rest.includes(w) && !opt(rest, w.slice(2))) throw new CliError(`${w} のあとにファイルの名前を書いてください`);
+  for (const w of withValue) if (rest.includes(w) && !opt(rest, w.slice(2))) throw new CliError(`${w} のあとに${w === "--log" ? "ファイルの名前" : "値"}を書いてください`);
 }
 
 /** update・upgrade に共通のオプション */
@@ -156,14 +165,24 @@ async function main(argv) {
     return 0;
   }
   if (cmd === "upgrade") {
-    assertKnown(rest, ["--force", "--overwrite", "--keep-local", "--no-commit", "--test"], ["--log"]);
+    assertKnown(rest, ["--force", "--overwrite", "--keep-local", "--no-commit", "--test", "--no-test", "--install", "--dry-run"], ["--log"]);
+    if (rest.includes("--test") && rest.includes("--no-test")) throw new CliError("--test と --no-test はどちらか 1 つにしてください");
     const dir = resolve(positional(rest, ["--log"])[0] ?? ".");
     if (!existsSync(join(dir, ".yojitsu-navi.json"))) throw new CliError(`${dir} に .yojitsu-navi.json がありません。yojitsu-navi init で作ったプロジェクトのフォルダで実行してください`);
     // 画面には要約、ログのファイルには全部（update のファイルの一覧・変更履歴、npm の出力）
     out = createOutput({ file: opt(rest, "log") ? resolve(opt(rest, "log")) : join(dir, LOG_DIR, `upgrade-${backupStamp()}.log`), summary: true });
     out.log(`予実ナビ ${VERSION} への版上げ（${dir}）`);
-    const r = await upgrade({ pkgDir: PKG_DIR, version: VERSION, dir, out, update: updateOptions(rest), test: rest.includes("--test") || undefined });
+    const test = rest.includes("--test") ? true : rest.includes("--no-test") ? false : undefined;
+    const r = await upgrade({ pkgDir: PKG_DIR, version: VERSION, dir, out, update: updateOptions(rest), test, install: rest.includes("--install"), dryRun: rest.includes("--dry-run") });
     return r.code;
+  }
+  if (cmd === "migrate-config") {
+    assertKnown(rest, ["--apply"], ["--log", "--add"]);
+    out = createOutput({ file: opt(rest, "log") && resolve(opt(rest, "log")) });
+    const add = opt(rest, "add").split(",").map((x) => x.trim()).filter(Boolean);
+    if (add.length && !rest.includes("--apply")) throw new CliError("--add は --apply と一緒に指定してください（--apply が無ければ何も変えません）");
+    migrateConfigCommand({ pkgDir: PKG_DIR, version: VERSION, dir: resolve(positional(rest, ["--log", "--add"])[0] ?? "."), add, apply: rest.includes("--apply"), log: out.log });
+    return 0;
   }
   if (cmd === "reset-data") {
     assertKnown(rest, ["--dry-run"], ["--log"]);

@@ -1414,7 +1414,7 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 
 ## 94. 版上げを 1 回で行う・update の出力を読みやすくする（2026-11-05 依頼者。導入先のレビュー指摘）
 0.2.1 の適用で: 版上げに update・npm ci・check・データ検証・テスト・ビルドを 1 つずつ打った、update が自動でコミットしたことに気づきにくい、`update --dry-run` の出力が画面からあふれた、社内で足したテスト用のデータが使われないまま残っていた、サンプルのまま残ったデータを手で空にした、PowerShell で日本語が化けた、変更履歴の手順どおり先に `.gitlab-ci.local.yml` を作ると「コミットしていない変更」で止まった。作り変えはパッケージ側で行う（社内のスクリプトにしない。どの導入先でも同じ手順にするため）。
-- **`yojitsu-navi upgrade [フォルダ]`**（`packages/app/lib/upgrade.mjs`）: ①`update` ②設定の互換確認（§96）③依存（`node scripts/ci/install.mjs`。CI の before_script と同じ）④`check` ⑤`npm run validate` ⑥テスト（`npm run typecheck`・`npm test`。既定は飛ばす。`--test` か環境変数 `YOJITSU_RUN_TESTS=1`。§79.2 の CI と同じ考え）⑦`npm run build` を順に行い、失敗した手順で止める（残りは「未実行」）。最後に手順ごとの結果（済み・失敗・飛ばした・未実行、件数・かかった秒）を出す。`update` のオプション（`--overwrite`・`--keep-local`・`--no-commit`・`--force`）を受け付ける。終了コードは `update` の社内の変更で止まれば 2、ほかの失敗は 1。
+- **`yojitsu-navi upgrade [フォルダ]`**（`packages/app/lib/upgrade.mjs`）: ①`update` ②設定の互換確認（§96）③依存（`node scripts/ci/install.mjs`。CI の before_script と同じ）④`check` ⑤`npm run validate` ⑥テスト（`npm run typecheck`・`npm test`。社内で手を加えたコードがあるときだけ動かす。`--test` か環境変数 `YOJITSU_RUN_TESTS=1` で必ず。§79.2 の CI と同じ考え。§100）⑦`npm run build` を順に行い、失敗した手順で止める（残りは「未実行」）。最後に手順ごとの結果（済み・失敗・飛ばした・未実行、件数・かかった秒）を出す。`update` のオプション（`--overwrite`・`--keep-local`・`--no-commit`・`--force`）を受け付ける。終了コードは `update` の社内の変更で止まれば 2、ほかの失敗は 1。
 - **ログ**: `upgrade` は画面に要約だけを出し（`update` は `--summary` と同じ。npm の出力は出さず、失敗したときだけその手順の最後の 40 行を出す）、全部を `.yojitsu-navi-log/upgrade-<年月日-時分秒>.log` に書く（`--log <ファイル>` で変える）。`.yojitsu-navi-log/` は区分「コマンドのもの」で git に入れない（`.gitignore`。古い版の `.gitignore` でも `update` の `git status`・`git add` はこのフォルダを除く）。
 - **`--log <ファイル>`**（`update`・`check`・`reset-data`）: 出力を UTF-8（BOM 付き。メモ帳・PowerShell 5.1 の `Get-Content` でも化けない）のファイルにも書く。止まったときのメッセージも書く。画面の文字コードは変えない（`chcp` はコンソール全体を変えてほかのプログラムに響くため）。PowerShell で化けるときの対処（`[Console]::OutputEncoding`）は `docs/DEPLOY_GITLAB.md`。
 - **`--summary`**（`update`）: 画面には件数（変更・追加・削除・一覧の件数・変更履歴の行数）と、社内で変えたファイルの一覧（止まるかどうかの判断に要る）だけを出す。ファイルの一覧・差分・変更履歴の中身・新しい設定の項目は `--log` のファイルにだけ書く。
@@ -1520,3 +1520,21 @@ npm 12 から、依存の `preinstall`・`install`・`postinstall` は `package.
 - 絞り込み・並べ替えはタブ単位（`sessionStorage` の `yojitsu-navi:plan-list`）で覚える。表示する月（§71）を変えて表から無くなった月の列の絞り込み・並べ替えは外す。問題一覧からの移動・メンバーを指定して開いたとき（`?member=`）は、その人が隠れないよう列の絞り込みを外す。
 - 説明は見出し横の「?」と使い方だけ（画面の本文には足さない。§37）。
 - 再発防止: `tests/e2e/plan-filter.spec.ts`（範囲で絞ると件数・合計行・再読み込み・解除、並べ替えの向きと明細の位置、名前の値の一覧と検索欄の重ね、月を変えると外れる、390px・1280px・ダークで見出しが 1 行でページがはみ出さない）。
+
+## 100. 本番の設定を守ったまま 1 回で版を上げる（2026-11-09 依頼者。導入先のレビュー指摘）
+「本番運用の開始後は、版上げを更新ボタンに近い手間にしたい。`config.json`・`.gitlab-ci.local.yml`・CI・`.npmrc`・本番のデータ・社内レジストリ・API の設定を確実に守り、毎回差分を人が確かめなくても安全に更新したい」「upgrade・互換確認・npm ci・validate・必要なときだけテスト・ビルドを自動で判断してほしい」「パッケージ側で設定が増えたら、既存の設定を残して不足分だけ示し、移せるようにしたい」「main 保護を前提にした本番の GitLab の構成を標準にしたい」への対応。§91・§94・§96 の続き。
+- **境界**: 導入先のもの（`config.json`・`data/`・`.gitlab-ci.local.yml`・`.npmrc`・パッケージに無いファイル・`.gitignore` に足した行・証明書とトークンの CI/CD 変数）は `update`・`upgrade` が変えない。パッケージのもの（それ以外でパッケージに入っているファイル）を社内で変えていれば、何も変えずに止まる（§91）。表は `docs/DEPLOY_GITLAB.md`「本番固有の部分とパッケージの部分」。
+- **`.gitignore`**: 社内で足した行を残して新しい版にする（止めない）。新しい版の後ろに目印 `# 社内で足したもの（yojitsu-navi update はこの下の行を残します）` を置き、その下に社内の行を並べる。目印の下の行はいつも残す。目印より上（パッケージの行）を社内で直していたら、新しい版に無い行も目印の下へ移す（記録 `.yojitsu-navi.json` には目印より上のハッシュを書いて見分ける）。新しい版にもある行は二重にしない。
+- **`upgrade` の自動の判断**（`packages/app/lib/upgrade.mjs`）:
+  - 依存（3 番目）: `package-lock.json`・依存込みのキャッシュの有無・Node の主な版・OS が前に入れたときと同じで `node_modules` があれば入れ直さない（「飛ばした」）。入れたら印 `node_modules/.yojitsu-navi-install.json` を書く。`--install` で必ず入れる。
+  - テスト（6 番目）: 社内で手を加えたコード（`--keep-local` で残したパッケージのファイル、社内で足した `src/`・`scripts/`・`tests/` のファイルと `*.config.*`・`package.json`・`tsconfig.json`）があるときだけ動かす。無ければ開発元が確かめたものと同じなので飛ばす（§79.2 の CI と同じ考え）。`--test`・`YOJITSU_RUN_TESTS=1` で必ず、`--no-test`・`YOJITSU_RUN_TESTS=0` で動かさない。動かす理由（ファイルの数）を要約に、一覧をログに出す。
+  - 設定の互換確認（2 番目）: 新しい版のひな形にあって `config.json` に無い項目の数を要約に、一覧をログに出す（止めない）。
+- **`upgrade --dry-run`**: 何も変えずに、止まらずに進めるかを出す。止まる理由（社内で変えたパッケージのファイル、`config.json` のエラー）があれば一覧と直し方を出して終了コード 2、無ければ 0。残すもの・`.gitignore` に残す行の数・依存を入れ直すか・テストを動かすか・無い新しい設定の数も出す。`--overwrite`・`--keep-local` も付けられる（付けたときの結果を出す）。
+- **`yojitsu-navi migrate-config [フォルダ] [--apply] [--add <項目>,…]`**（`scripts/lib/config-migrate.mjs`。`npm run app:build` が `packages/app/lib` に写す）:
+  - 出すもの: 新しい版のひな形（`config.json`）にあって導入先に無い項目（ひな形の値つき。`_` で始まるメモは見ない）、名前が変わった項目（スキーマの `renamedTo`）。`--apply` が無ければ何も変えない。
+  - `--apply`: 名前が変わった項目の値を新しい名前へ移す（新しい名前もあれば移さず知らせる）。`--add` で選んだ無い項目だけをひな形の値で書き足す（親を選べば下の無い項目をまとめて）。無い項目は既定値で動くので、選ばないものは足さない（ひな形の値が既定値と同じとは限らないため）。
+  - 今ある値は変えない。文字の位置で書き足すので、ほかの行の書式・並び・メモは変わらない（複数行のオブジェクトには同じ字下げで 1 行、1 行のオブジェクトには同じ行に）。前のファイルは `.yojitsu-navi-backup/<日時>/` に写す。コミットはしない（値を確かめて MR に入れる）。書いたあとに互換確認（§96）を出す。
+  - 開発元: 項目の名前だけを変えるときは、スキーマの古い項目に `deprecated` と `renamedTo`（新しい項目のパス）を書く（`CONTRIBUTING.md`）。
+- **本番の GitLab の標準構成**（§39 の続き。`docs/DEPLOY_GITLAB.md`「本番運用の標準構成」）: `main` は保護（直接 push は誰も不可・マージは Maintainer・force push 不可・パイプライン成功が条件）。Developer はブランチの作成・push・MR まで、Maintainer が `main` にマージ。定期取り込みはプロジェクトアクセストークン（Maintainer・`write_repository`。CI/CD 変数 `GIT_PUSH_TOKEN`）でデータのブランチを push して MR を作り、パイプラインが通れば自動でマージする（今の仕組みのまま）。版上げは自動にしない（依頼者: 誰でも簡単に上げられるのは困る）。決めた管理者が手元で `upgrade` を実行し、MR を Maintainer がマージする。自動の MR は取り込みのデータだけ。
+  - `yojitsu-navi gitlab-setup` の確認を足す: `GIT_PUSH_TOKEN` が要るとき（登録した・スケジュールがある）、条件に合うプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`）があるか、期限が 30 日より先か（日本時間の今日で数える）。トークンの値は API で読めないので、条件に合うものが 1 つでもあれば通す。`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` も、登録していれば Protected・Masked かを見る。
+- 再発防止: `tests/unit/config-migrate.test.ts`（書き足し・消し方の書式、メモ、CRLF、名前が変わった項目）、`tests/integration/app-package.test.ts`「.gitignore に社内で足した行」「migrate-config」「依存は package-lock.json が前と同じなら」「--dry-run は何も変えずに」、`tests/unit/gitlab-setup.test.ts`「プロジェクトアクセストークン」。

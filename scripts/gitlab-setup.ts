@@ -64,6 +64,7 @@ export type ProtectedBranch = { push_access_levels?: AccessRow[]; merge_access_l
 type Variable = { key?: unknown; protected?: unknown; masked?: unknown };
 type Schedule = { active?: unknown };
 type Member = { access_level?: unknown };
+export type AccessToken = { name?: unknown; scopes?: unknown; access_level?: unknown; active?: unknown; revoked?: unknown; expires_at?: unknown };
 
 const ROLE: Record<number, string> = { 0: "No one", 10: "Guest", 20: "Reporter", 30: "Developers + Maintainers", 40: "Maintainers", 50: "Owner", 60: "Admin" };
 const ROLE_NAME: Record<number, string> = { 10: "Guest", 15: "Planner", 20: "Reporter", 30: "Developer", 40: "Maintainer", 50: "Owner" };
@@ -119,12 +120,29 @@ export function ciChecks(variables: Variable[] | null, schedules: Schedule[] | n
       hint: "Project Access Token（role: Maintainer、scope: write_repository）を作り、Protected と Masked をオンにして登録",
     });
   }
-  for (const key of ["WORKLOG_API_TOKEN", "MEMBER_API_TOKEN"]) {
+  for (const key of ["WORKLOG_API_TOKEN", "MEMBER_API_TOKEN", "PROJECT_API_TOKEN", "NPM_AUTH_TOKEN"]) {
     const v = byKey.get(key);
     if (!v) continue;
     out.push({ id: key.toLowerCase(), label: `CI/CD 変数 ${key}（Protected・Masked）`, ok: v.protected === true && v.masked === true, current: `protected=${String(v.protected)}, masked=${String(v.masked)}`, fixable: false, hint: "Settings > CI/CD > Variables で Protected と Masked をオン" });
   }
   return out;
+}
+
+/**
+ * 取り込みの MR を作るプロジェクトアクセストークン（GIT_PUSH_TOKEN の中身。SPEC §39・§100）。
+ * GIT_PUSH_TOKEN を登録した・スケジュールがあるときだけ見る。トークンの値は API から読めないので、
+ * 「Maintainer 以上・write_repository・有効」のものが 1 つでもあるか、期限が近くないかを見る
+ */
+export function accessTokenChecks(tokens: AccessToken[] | null, needed: boolean, today: string): CheckItem[] {
+  if (!needed || tokens === null) return [];
+  const usable = tokens.filter((t) => t.active !== false && t.revoked !== true && typeof t.access_level === "number" && t.access_level >= 40 && Array.isArray(t.scopes) && t.scopes.includes("write_repository"));
+  const hint = "Settings > Access tokens で role: Maintainer・scope: write_repository のトークンを作り、CI/CD 変数 GIT_PUSH_TOKEN を入れ替える";
+  if (!usable.length) return [{ id: "access_token", label: "取り込みの MR 用のプロジェクトアクセストークン（Maintainer・write_repository・有効）", ok: false, current: tokens.length ? `条件に合うものが無い（${tokens.length} 件）` : "無い", fixable: false, hint }];
+  // 期限（YYYY-MM-DD）が一番先のもの。期限なしは null
+  const dates = usable.map((t) => (typeof t.expires_at === "string" ? t.expires_at : ""));
+  const latest = dates.includes("") ? "" : (dates.sort().at(-1) ?? "");
+  const days = latest ? Math.round((Date.parse(`${latest}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000) : Infinity;
+  return [{ id: "access_token_expiry", label: "取り込みの MR 用のプロジェクトアクセストークンの期限が 30 日より先", ok: days > 30, current: latest ? `${latest}（あと ${days} 日）` : "期限なし", fixable: false, hint: `期限が切れると取り込みの MR が作れなくなります。${hint}` }];
 }
 
 /** メンバーの役割ごとの人数（情報として出す。Maintainer がいなければ直すところ） */
@@ -186,7 +204,12 @@ export async function inspect(fetchImpl: Fetch, target: SetupTarget, token: stri
   const schedules = await call<Schedule[]>("GET", "/pipeline_schedules?per_page=100");
   const members = await call<Member[]>("GET", "/members/all?per_page=100");
   const m = memberChecks(members.data);
-  const items = [...projectChecks(project.data, target.branch), ...branchChecks(pb.data, target.branch), ...m.items, ...ciChecks(vars.data, schedules.data)];
+  const ci = ciChecks(vars.data, schedules.data);
+  // GIT_PUSH_TOKEN が要るとき（登録した・スケジュールがある）だけ、中身のプロジェクトアクセストークンを見る（読めなければ見ない）
+  const tokens = ci.some((i) => i.id === "git_push_token") ? await call<AccessToken[]>("GET", "/access_tokens?per_page=100") : { data: null };
+  // 日本時間の今日（CLAUDE.md の「今日」と同じ）
+  const today = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+  const items = [...projectChecks(project.data, target.branch), ...branchChecks(pb.data, target.branch), ...m.items, ...ci, ...accessTokenChecks(tokens.data, true, today)];
   return { items, members: m.summary, ok: items.every((i) => i.ok) };
 }
 

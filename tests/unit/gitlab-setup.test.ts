@@ -3,7 +3,7 @@
  * GitLab の API を小さな模擬で置き換え、確認 → 適用 → 確認し直しの流れを確かめる
  */
 import { describe, expect, it } from "vitest";
-import { DESIRED_PROJECT, branchChecks, ciChecks, main, memberChecks, parseArgs, projectChecks, type Fetch } from "../../scripts/gitlab-setup.js";
+import { DESIRED_PROJECT, accessTokenChecks, branchChecks, ciChecks, main, memberChecks, parseArgs, projectChecks, type Fetch } from "../../scripts/gitlab-setup.js";
 
 type Pb = { push_access_levels: Array<{ access_level: number }>; merge_access_levels: Array<{ access_level: number }>; allow_force_push: boolean } | null;
 
@@ -131,6 +131,20 @@ describe("gitlab:setup の判定", () => {
       { id: "worklog_api_token", ok: false },
     ]);
     expect(ciChecks(null, null)).toEqual([]);
+  });
+  it("取り込みの MR 用のプロジェクトアクセストークン: 有効・Maintainer 以上・write_repository があり、期限が 30 日より先か（SPEC §100）", () => {
+    const today = "2030-01-01";
+    const ok = { active: true, revoked: false, access_level: 40, scopes: ["write_repository"], expires_at: "2030-06-01" };
+    expect(accessTokenChecks([ok], true, today)).toMatchObject([{ id: "access_token_expiry", ok: true }]);
+    expect(accessTokenChecks([{ ...ok, expires_at: "2030-01-20" }], true, today)).toMatchObject([{ id: "access_token_expiry", ok: false, current: "2030-01-20（あと 19 日）" }]);
+    // 期限なしのものがあれば通す
+    expect(accessTokenChecks([{ ...ok, expires_at: "2030-01-20" }, { ...ok, expires_at: null }], true, today)[0]?.ok).toBe(true);
+    for (const bad of [{ ...ok, access_level: 30 }, { ...ok, scopes: ["read_repository"] }, { ...ok, active: false }, { ...ok, revoked: true }]) {
+      expect(accessTokenChecks([bad], true, today)).toMatchObject([{ id: "access_token", ok: false, fixable: false }]);
+    }
+    expect(accessTokenChecks([], false, today)).toEqual([]);
+    expect(accessTokenChecks(null, true, today)).toEqual([]);
+    expect(ciChecks([{ key: "PROJECT_API_TOKEN", protected: false, masked: true }], [])).toMatchObject([{ id: "project_api_token", ok: false }]);
   });
   it("Maintainer 以上がいなければ ✗", () => {
     expect(memberChecks([{ access_level: 30 }]).items[0]?.ok).toBe(false);
