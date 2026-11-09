@@ -7,10 +7,10 @@
  *
  * そこでローダの出力を左右するものを全部まとめてハッシュにし（= 指紋）、
  *   - ビルド・プレビューの前に、前回の指紋と違えばローダのキャッシュを捨てる（loader-cache.ts）
- *   - ローダの出力に指紋を埋め込み、ビルド後に全出力の指紋が今の指紋と一致するか確かめる（verify-dist.ts）
+ *   - ローダの出力に指紋を埋め込み・各出力のハッシュを記録し、ビルド後に dist/ の全出力が今の指紋のものか確かめる（verify-dist.ts）
  * の 2 段で、古い出力・混ざった出力が公開されないようにする。
  *
- * 指紋に入るもの:
+ * 指紋（hash）に入るもの:
  *   data/ 配下の全ファイル、config.json、計算コア・ローダ・文言（src/core, src/data, src/i18n, worklog-key.js）、
  *   Node 側の読み込み処理（scripts/lib, scripts/adapters）、package-lock.json、計算基準日（asOf）、
  *   マスタ編集が使う Git の最終コミット（HEAD と data/ の未コミット変更の有無）、
@@ -24,7 +24,7 @@ import { GITLAB_ENV_KEYS } from "../../src/components/gitlab-env.js";
 import { todayJst as todayJstCore } from "../../src/core/calendar.js";
 
 /** 指紋の計算方法を変えたら上げる（古い指紋のキャッシュを確実に捨てるため） */
-export const FINGERPRINT_VERSION = 2;
+export const FINGERPRINT_VERSION = 3;
 
 /** ローダの出力を左右するファイル・フォルダ（プロジェクトルートからの相対パス） */
 export const INPUT_PATHS = [
@@ -42,6 +42,15 @@ export const INPUT_PATHS = [
   "scripts/lib",
   "scripts/adapters",
 ] as const;
+
+/**
+ * 入力のうち「データ」（導入先が日々変えるもの）。これ以外（計算コア・ローダ・文言・読み込み処理・依存の版）は「プログラム」。
+ * プログラムが変わったときだけキャッシュを全部捨てて作り直し（フルビルド）、データだけが変わったときは
+ * Framework が作る依存ライブラリの束（_node/ など）を残して、ローダの出力だけを作り直す（増分ビルド。SPEC §102）
+ */
+export const DATA_PATHS = ["data", "config.json"] as const;
+/** 入力のうちプログラムのもの（INPUT_PATHS から DATA_PATHS を除いたもの） */
+export const CODE_PATHS = INPUT_PATHS.filter((p) => !(DATA_PATHS as readonly string[]).includes(p));
 
 /** 今日の日付（JST）を YYYY-MM-DD で返す */
 export function todayJst(now: Date = new Date()): string {
@@ -102,6 +111,8 @@ function git(rootDir: string, args: string[]): string | null {
 export interface Fingerprint {
   /** 16 進 64 文字 */
   hash: string;
+  /** プログラムの分だけの指紋（16 進 64 文字）。これが変わったらフルビルド */
+  codeHash: string;
   asOf: string;
   files: number;
 }
@@ -116,17 +127,23 @@ export function computeFingerprint(rootDir: string, opts: { asOf?: string; git?:
   h.update(`v${FINGERPRINT_VERSION}\0asOf=${asOf}\0fixed=${isAsOfFixed(opts.env ?? process.env) ? 1 : 0}\0`);
   // マスタ編集の接続先（masters.json）は環境変数でも変わる
   for (const k of GITLAB_ENV_KEYS) h.update(`${k}=${(opts.env ?? process.env)[k] ?? ""}\0`);
-  const files = listInputFiles(rootDir, opts.paths ?? INPUT_PATHS);
+  const paths = opts.paths ?? INPUT_PATHS;
+  const files = listInputFiles(rootDir, paths);
+  const code = createHash("sha256");
+  code.update(`v${FINGERPRINT_VERSION}\0node=${process.versions.node.split(".")[0]}\0`);
+  const isData = (f: string) => DATA_PATHS.some((d) => f === d || f.startsWith(`${d}/`));
   for (const f of files) {
     const bytes = readFileSync(join(rootDir, f));
-    h.update(`${f}\0${bytes.length}\0`);
-    h.update(bytes);
-    h.update("\0");
+    for (const x of isData(f) ? [h] : [h, code]) {
+      x.update(`${f}\0${bytes.length}\0`);
+      x.update(bytes);
+      x.update("\0");
+    }
   }
   if (opts.git !== false && existsSync(join(rootDir, ".git"))) {
     // マスタ編集（masters.json）は各ファイルの最終コミット ID を持つので、コミットが変わったら作り直す
     h.update(`head=${git(rootDir, ["rev-parse", "HEAD"]) ?? ""}\0`);
     h.update(`shallow=${git(rootDir, ["rev-parse", "--is-shallow-repository"]) ?? ""}\0`);
   }
-  return { hash: h.digest("hex"), asOf, files: files.length };
+  return { hash: h.digest("hex"), codeHash: code.digest("hex"), asOf, files: files.length };
 }
