@@ -98,16 +98,16 @@ function preview(o, testChoice) {
   /** @type {any} */
   let r;
   try {
-    r = update({ ...o.update, pkgDir: o.pkgDir, version: o.version, dir, dryRun: true, log: out.detail, detail: out.detail, exclude: out.file ? [out.file] : [] });
+    r = update({ ...o.update, pkgDir: o.pkgDir, version: o.version, dir, dryRun: true, reportBlockers: true, log: out.detail, detail: out.detail, exclude: out.file ? [out.file] : [] });
   } catch (e) {
     if (!(e instanceof CliError)) throw e;
     out.error(e.message);
     return { ok: false, code: 2, steps: [] };
   }
-  const unresolved = r.conflicts.filter((c) => !r.kept.includes(c.path) && !r.overwritten.includes(c.path));
+  const unresolved = r.conflicts.filter((c) => !r.kept.includes(c.path) && !r.keptRemoved.includes(c.path) && !r.overwritten.includes(c.path));
   const lockNext = join(o.pkgDir, "template", "package-lock.json");
   const nextKey = { ...installKey(dir), lock: existsSync(lockNext) ? createHash("sha256").update(readFileSync(lockNext)).digest("hex") : installKey(dir).lock };
-  const code = localCodeChanges(r.kept, r.extras);
+  const code = localCodeChanges([...r.kept, ...r.keptRemoved], r.extras);
   const tests = testChoice === true ? "動かす（指定あり）" : testChoice === false ? "動かさない（指定あり）" : code.length ? `動かす（社内で手を加えたコード ${code.length} ファイル）` : "動かさない（社内で手を加えたコードが無い）";
   const m = missingConfigReport(o.pkgDir, dir);
   out.log(`版上げの確認（何も変えていません）: 変更 ${r.changed.length}・追加 ${r.added.length}・削除 ${r.removed.length} ファイル`);
@@ -116,7 +116,7 @@ function preview(o, testChoice) {
   out.log(`  依存（npm ci）: ${!o.install && installUpToDate(dir, nextKey) ? "入れ直さない（package-lock.json が同じ）" : "入れる"}`);
   out.log(`  テスト: ${tests}`);
   if (m.missing.length) out.log(`  config.json に無い新しい設定: ${m.missing.length} 項目（無くても既定値で動きます。yojitsu-navi migrate-config）`);
-  const stops = [];
+  const stops = [...r.blockers];
   if (unresolved.length) stops.push(`社内で変えたパッケージのファイル ${unresolved.length}:\n${unresolved.map((c) => `    ${c.path}`).join("\n")}\n    → yojitsu-navi update --dry-run で差分を確かめ、--overwrite か --keep-local を付ける（.gitlab-ci.yml なら yojitsu-navi migrate-ci）`);
   if (r.configCheck.errors) stops.push(`config.json のエラー ${r.configCheck.errors}:\n${r.configCheck.lines.map((l) => `  ${l}`).join("\n")}`);
   out.log("");
@@ -167,7 +167,7 @@ export async function upgrade(o) {
         branch = r.commit?.branch ?? "";
         notes = r.notes.length;
         configCheck = r.configCheck ?? null;
-        localCode = localCodeChanges(r.kept ?? [], r.extras ?? []);
+        localCode = localCodeChanges([...(r.kept ?? []), ...(r.keptRemoved ?? [])], r.extras ?? []);
         const note = `変更 ${r.changed.length}・追加 ${r.added.length}・削除 ${r.removed.length}${r.commit ? `・ブランチ ${r.commit.branch} にコミット（${r.commit.hash}）` : r.changed.length + r.added.length + r.removed.length ? "・コミットしていない" : ""}`;
         const warn = [r.sampleLeft.length ? `サンプルのまま残っているデータ ${r.sampleLeft.length}` : "", r.extras.length ? `パッケージに無いファイル ${r.extras.length}` : ""].filter(Boolean);
         return { ok: true, note: warn.length ? `${note}（要確認: ${warn.join("・")}）` : note };

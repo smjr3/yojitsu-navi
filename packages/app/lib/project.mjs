@@ -80,13 +80,10 @@ export function mergeGitignore(cur, next, unchangedAbove) {
   const below = at >= 0 ? lines.slice(at + 1) : [];
   const nextText = next.replace(/\r\n/g, "\n");
   const inNext = new Set(nextText.split("\n").map((l) => l.trim()));
+  // 後に書いた規則が勝つ（! で外す規則がある）ので、社内の行は書いた順・重なりもそのまま残す
   const local = [];
-  const add = (l) => {
-    const t = l.trim();
-    if (t && t !== GITIGNORE_MARK && !inNext.has(t) && !local.includes(t)) local.push(t);
-  };
-  if (!unchangedAbove) for (const l of above) if (!l.trim().startsWith("#")) add(l);
-  for (const l of below) add(l);
+  if (!unchangedAbove) for (const l of above) if (l.trim() && !l.trim().startsWith("#") && !inNext.has(l.trim())) local.push(l.trim());
+  for (const l of below) if (l.trim() && l.trim() !== GITIGNORE_MARK) local.push(l.trim());
   const text = local.length ? `${nextText.replace(/\n*$/, "")}\n\n${GITIGNORE_MARK}\n${local.join("\n")}\n` : nextText;
   return { text, local };
 }
@@ -471,21 +468,28 @@ export function update(o) {
   const old = manifest.files ?? {};
   const keptBefore = new Set(manifest.kept ?? []);
   const dry = Boolean(o.dryRun);
-  if (compareVersion(version, manifest.version) < 0 && !o.force && !dry) throw new CliError(`今のプロジェクト（${manifest.version}）より古い版（${version}）です。戻すときは --force`);
+  // upgrade --dry-run（SPEC §100）: 本番の update を止める条件を、止めずに blockers に集める
+  const blockers = [];
+  const guard = !dry || Boolean(o.reportBlockers);
+  const stop = (msg) => {
+    if (dry) blockers.push(msg);
+    else throw new CliError(msg);
+  };
+  if (compareVersion(version, manifest.version) < 0 && !o.force && guard) stop(`今のプロジェクト（${manifest.version}）より古い版（${version}）です。戻すときは --force`);
   const useGit = o.git !== false && isGitRepo(dir);
   // バックアップの置き場は git の外（.gitignore が古い版でも「コミットしていない変更」にしない）
   // --log で指定したプロジェクトの中のファイル（先に書き始めるので、変更・コミットに数えない）
   const excludeExtra = (o.exclude ?? []).map((p) => posix(relative(dir, p))).filter((p) => p && !p.startsWith("..") && !/^[A-Za-z]:/.test(p));
   const outsideBackup = ["--", ".", `:(exclude)${BACKUP_DIR}`, `:(exclude)${LOG_DIR}`, ...excludeExtra.map((p) => `:(exclude,literal)${p}`)];
-  if (useGit && !dry && !o.force) {
+  if (useGit && guard && !o.force) {
     // .gitlab-ci.local.yml だけは、変更履歴の手順どおり update の前に作った・直したものとして止めない（update のコミットに入る）。
     // .npmrc は社内レジストリのトークンが入ることがあるので、コミットに入れないよう止める（SPEC §94）
     const dirty = gitStatusPaths(dir, outsideBackup).filter((p) => p !== LOCAL_CI_FILE);
-    if (dirty.length) throw new CliError(`コミットしていない変更があります。コミットするか取り消してから実行してください（差分を MR で確かめられるように）:\n${dirty.map((p) => `  ${p}`).join("\n")}`);
+    if (dirty.length) stop(`コミットしていない変更があります。コミットするか取り消してから実行してください（差分を MR で確かめられるように）:\n${dirty.map((p) => `  ${p}`).join("\n")}`);
   }
   const hasVendor = existsSync(join(dir, VENDOR_CACHE));
   const pkgHasDeps = existsSync(join(pkgDir, "deps", "npm-cache"));
-  if (hasVendor && !pkgHasDeps && !o.force && !dry) throw new CliError(`このプロジェクトは依存込み（${VENDOR_CACHE}）です。依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で update してください`);
+  if (hasVendor && !pkgHasDeps && !o.force && guard) stop(`このプロジェクトは依存込み（${VENDOR_CACHE}）です。依存込みのパッケージ（yojitsu-navi-<版>-with-deps.tgz）で update してください`);
 
   // 1. 何をするかを決める（ここではまだ何も変えない）
   const template = readTemplate(join(pkgDir, "template"));
@@ -609,7 +613,9 @@ export function update(o) {
   const ciNote = () => {
     if (ciNotes.length) log(ciNotes.join("\n"));
   };
-  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, mergedIgnore, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
+  // 社内の版のまま残す、新しい版で無くなったファイル（社内のファイルとして残る。テストを動かす理由になる。SPEC §100）
+  const keptRemoved = keptNow.filter((c) => c.type === "removedModified").map((c) => c.f).sort();
+  const base = { changed, added, removed: deletes, migratedCi, repairedLocal, mergedIgnore, keptRemoved, blockers, conflicts: conflicts.map((c) => ({ path: c.f, type: c.type })), overwritten, kept, missing, newData, notes, sampleLeft, extras, configCheck };
   /** 一覧（--summary のときは件数だけを画面に出し、一覧はログのファイルに書く） */
   const list = (title, items) => {
     if (!items.length) return;

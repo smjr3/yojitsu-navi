@@ -71,6 +71,14 @@ describe("configDiff・migrateConfigText", () => {
     expect(r.text.replace(/,\n {2}"projectFromTask": .*\n/, "\n")).toBe(local(cfg));
   });
 
+  it("親ごと無いときは、選んだ下の項目だけを親を作って足す", () => {
+    const cfg = structuredClone(base);
+    delete cfg.labels;
+    const r = migrateConfigText({ localText: local(cfg), templateText: TEMPLATE, add: ["labels.customer"] });
+    expect(r.added).toEqual(["labels.customer"]);
+    expect(JSON.parse(r.text).labels).toEqual({ customer: base.labels.customer });
+  });
+
   it("名前が変わった項目は値を新しい名前へ移す。新しい名前もあれば移さない", () => {
     const schema = { type: "object", props: { old: { type: "string", deprecated: "x に名前が変わりました", renamedTo: "grp.x" }, grp: { type: "object", props: { x: { type: "string" } } } } };
     expect(renamedPaths(schema)).toEqual([{ from: "old", to: "grp.x" }]);

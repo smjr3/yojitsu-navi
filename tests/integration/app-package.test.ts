@@ -744,6 +744,12 @@ describe("update", () => {
     expect(app.update({ pkgDir: join(work, "upd-gitignore-v3"), version: "1.2.0", dir, log }).changed).toEqual([]);
   }, scaled(60_000));
 
+  it(".gitignore の社内の行は書いた順・重なりのまま残す（! で外す規則の意味を変えない）", () => {
+    const m = app.mergeGitignore(`*.log\n\n${app.GITIGNORE_MARK}\n!*.log\n*.log\n`, "*.log\n", true);
+    expect(m.local).toEqual(["!*.log", "*.log"]);
+    expect(m.text).toBe(`*.log\n\n${app.GITIGNORE_MARK}\n!*.log\n*.log\n`);
+  });
+
   it("migrate-config: 無い新しい設定・名前が変わった項目を出す。--apply --add で選んだものだけ書き足し、バックアップする（SPEC §100）", () => {
     const dir = project("upd-migrate-config");
     const pkg = fakePackage("upd-migrate-config-v2", "1.1.0", v2);
@@ -1027,6 +1033,18 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(up.localCodeChanges(["package.json"], ["docs/memo.md", "certs/ca.pem", "vitest.config.ts", "src/x.md"])).toEqual(["package.json", "src/x.md", "vitest.config.ts"]);
     }, scaled(180_000));
 
+    it("新しい版で無くなるファイルを社内の版のまま残したら、テストを動かす", async () => {
+      const { dir, up } = await setup("v100-up-keptremoved");
+      writeFileSync(join(dir, "src", "a.js"), "社内");
+      git(dir, "commit", "-qam", "社内の変更");
+      const { "src/a.js": _drop, ...rest } = files("1.1.0");
+      const pkg = fakePackage("v100-up-keptremoved-v2", "1.1.0", rest);
+      const o = out.createOutput({ screen: () => {}, errScreen: () => {}, summary: true });
+      const r = await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, update: { keepLocal: true }, env: { ...process.env, YOJITSU_RUN_TESTS: "" } });
+      expect(r.steps[5]).toMatchObject({ status: "ok" });
+      expect(readFileSync(join(dir, "src", "a.js"), "utf-8")).toBe("社内");
+    }, scaled(120_000));
+
     it("--dry-run は何も変えずに、止まらずに進めるか・依存とテストを動かすかを出す。止まる理由があれば終了コード 2（SPEC §100）", async () => {
       const { dir, up, pkg } = await setup("v100-up-dry");
       const head = git(dir, "rev-parse", "HEAD");
@@ -1038,6 +1056,12 @@ describe("upgrade・reset-data・update の出力（SPEC §94）", () => {
       expect(screen.join("\n")).toContain("テスト: 動かさない");
       expect(git(dir, "rev-parse", "HEAD")).toBe(head);
       expect(JSON.parse(readFileSync(join(dir, app.MANIFEST), "utf-8")).version).toBe("1.0.0");
+      // コミットしていない変更があれば、本番の upgrade と同じく止まると出す
+      writeFileSync(join(dir, "config.json"), `${readFileSync(join(dir, "config.json"), "utf-8")}\n`);
+      screen.length = 0;
+      expect((await up.upgrade({ pkgDir: pkg, version: "1.1.0", dir, out: o, dryRun: true })).code).toBe(2);
+      expect(screen.join("\n")).toMatch(/止まります[\s\S]*コミットしていない変更[\s\S]*config\.json/);
+      git(dir, "checkout", "--", "config.json");
       writeFileSync(join(dir, "src", "a.js"), "社内");
       git(dir, "commit", "-qam", "社内の変更");
       screen.length = 0;

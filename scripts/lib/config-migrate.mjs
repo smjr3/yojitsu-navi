@@ -239,6 +239,12 @@ export function migrateConfigText(o) {
   for (const p of o.add ?? []) {
     // 親を選んだときは、その下の不足の項目をまとめて足す
     const under = [...missing].filter((m) => m === p || m.startsWith(`${p}.`));
+    // 親ごと無いときに下の項目だけを選んだ: その項目だけを（親を作って）足す
+    if (!under.length && getPath(tpl, p) !== undefined && getPath(JSON.parse(text), p) === undefined) {
+      text = addPath(text, p, getPath(tpl, p));
+      added.push(p);
+      continue;
+    }
     if (!under.length) {
       skipped.push({ path: p, why: getPath(JSON.parse(text), p) !== undefined ? "もう書いてあります（値は変えません）" : "新しい版のひな形にありません" });
       continue;
