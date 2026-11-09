@@ -26,7 +26,7 @@ const issuesData = await loadJson(FileAttachment("./data/dataset-issues.json"));
 ```
 
 ```js
-// マスタ編集へ移る（§101）。「案件に登録」は分かっている値を入れた追加のダイアログ、ほかは該当の行を検索・絞り込んで開く
+// マスタ編集へ移る（§103）。「案件に登録」は分かっている値を入れた追加のダイアログ、ほかは該当の行を検索・絞り込んで開く
 const mastersHref = (view, params) => {
   const q = new URLSearchParams({ view });
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, v);
@@ -91,9 +91,9 @@ if (summary) {
 ```js
 if (model) {
   display(sectionTitle(T.dataCheck.unmappedTitle, T.dataCheck.unmappedHint));
-  // 契約期間外は下の「契約期間外の実績」に分ける（§101）
+  // 契約期間外は下の「契約期間外の実績」に分ける（§103）
   const rows = model.unmapped.filter((g) => g.reason !== "OUT_OF_PERIOD").map((g) => ({ ...g, reasonLabel: UNMAPPED_REASON_LABELS[g.reason] ?? g.reason }));
-  // 未登録の案件（作業名から抜き出した案件名。§97）は、本当に案件があれば人が登録する（自動では登録しない。§101）
+  // 未登録の案件（作業名から抜き出した案件名。§97）は、本当に案件があれば人が登録する（自動では登録しない。§103）
   const registerCol = rows.some((r) => r.reason === "UNREGISTERED_PROJECT")
     ? [
         {
@@ -139,7 +139,7 @@ if (model) {
 ```
 
 ```js
-// 契約期間外の実績（§101）: 消したり自動で直したりせず、契約期間・実績の日付・時間を並べて人が判断する
+// 契約期間外の実績（§103）: 消したり自動で直したりせず、契約期間・実績の日付・時間を並べて人が判断する
 if (model) {
   display(sectionTitle(T.dataCheck.outOfPeriodTitle, T.dataCheck.outOfPeriodHint));
   const groups = model.unmapped.filter((g) => g.reason === "OUT_OF_PERIOD");
@@ -313,7 +313,7 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
 ```
 
 ```js
-// 未設定・仮の値（§101）。マスタ編集の該当箇所を開くだけで、値は人が入れる
+// 未設定・仮の値（§103）。マスタ編集の該当箇所を開くだけで、値は人が入れる
 if (model && issuesData) {
   display(sectionTitle(T.dataCheck.unsetTitle, T.dataCheck.unsetHint));
   const kinds = T.dataCheck.unsetKinds;

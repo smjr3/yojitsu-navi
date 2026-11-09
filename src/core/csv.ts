@@ -159,7 +159,7 @@ export interface DatasetFiles {
   projectAliases?: string;
   /** 正式な案件の一覧（§98。data/projects.csv）。省略・空 = 取り込んでいない */
   projects?: string;
-  /** 顧客の既定の担当チーム（§101。data/customer-teams.csv）。省略・空 = なし */
+  /** 顧客の既定の担当チーム（§103。data/customer-teams.csv）。省略・空 = なし */
   customerTeams?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
@@ -249,7 +249,7 @@ function jstMinute(iso: string): string {
   return new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ");
 }
 
-/** 仮の値の印（rates.csv の provisional 列。§101） */
+/** 仮の値の印（rates.csv の provisional 列。§103） */
 export function isProvisionalCell(value: string): boolean {
   const v = value.normalize("NFKC").trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes" || v === "仮";
@@ -265,7 +265,7 @@ export function customerTeamIndex(rows: readonly CustomerTeam[]): Map<string, st
   return map;
 }
 
-/** team_id が空の案件に顧客の既定の担当チームを入れる（§101。書いてある案件はそのまま = 例外の上書き） */
+/** team_id が空の案件に顧客の既定の担当チームを入れる（§103。書いてある案件はそのまま = 例外の上書き） */
 export function applyCustomerTeams(contracts: Contract[], rows: readonly CustomerTeam[]): void {
   const index = customerTeamIndex(rows);
   if (index.size === 0) return;
@@ -358,7 +358,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     key: r.get("key"),
     hourlyRate: parseNumberCell(r.get("hourly_rate")),
     effectiveFrom: r.get("effective_from"),
-    // 仮の値（§101）。省略可の列。1・true・yes・仮 なら仮
+    // 仮の値（§103）。省略可の列。1・true・yes・仮 なら仮
     ...(isProvisionalCell(r.get("provisional")) ? { provisional: true as const } : {}),
   }));
 
@@ -451,7 +451,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           projectName: r.get("project_name"),
         }));
   if (projects.length > 0) dataset.projects = projects;
-  // 顧客の既定の担当チーム（§101）: 省略可。案件の team_id が空なら顧客名（正規化して完全一致）の既定を使う
+  // 顧客の既定の担当チーム（§103）: 省略可。案件の team_id が空なら顧客名（正規化して完全一致）の既定を使う
   const customerTeams: CustomerTeam[] =
     (files.customerTeams ?? "").trim() === ""
       ? []

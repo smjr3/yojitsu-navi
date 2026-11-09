@@ -4721,7 +4721,7 @@ a.yn-org-person:hover {
   padding-top: 2px;
 }
 
-/* データ確認の表の「案件に登録」「マスタで直す」など（§101）。折り返さない */
+/* データ確認の表の「案件に登録」「マスタで直す」など（§103）。折り返さない */
 .yn-row-action {
   white-space: nowrap;
 }

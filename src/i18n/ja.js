@@ -1462,10 +1462,10 @@ export default {
     colProjectId: "正式な案件ID",
     colTotalAmount: "金額（円・税抜）",
     colContractTeam: "担当チーム",
-    // 顧客の既定の担当チーム（customer-teams.csv。§101）
+    // 顧客の既定の担当チーム（customer-teams.csv。§103）
     customerTeams: "顧客",
     colCustomerTeam: "既定の担当チーム",
-    // 単価の仮の値（rates.csv の provisional。§101）
+    // 単価の仮の値（rates.csv の provisional。§103）
     colProvisional: "仮の値",
     provisionalYes: "仮",
     provisionalNo: "本番の値",
@@ -1684,7 +1684,7 @@ export default {
     customerDefaultHint: "顧客の既定",
     hintContractTeamDefault: "空欄なら顧客の既定の担当チーム",
     hintContractId: "ほかの案件と重ならない ID（続き番号を入れています）",
-    // 未設定・仮の値の絞り込み（§101）
+    // 未設定・仮の値の絞り込み（§103）
     unsetFilters: { team: "担当チーム未設定", amount: "金額未入力", provisional: "仮の単価" },
     holidayEditAria: "{key} の祝日を修正",
     holidayDeleteAria: "{key} の祝日を削除",

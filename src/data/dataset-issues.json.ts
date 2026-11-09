@@ -31,7 +31,7 @@ emitJson(() => {
     },
     // 正式な案件の一覧との照合（§98）。一覧が無ければ enabled: false
     projects: checkProjects(parsed.dataset.contracts, parsed.dataset.projects),
-    // 未設定・仮の値（§101）。マスタ編集の該当箇所へ移るための一覧
+    // 未設定・仮の値（§103）。マスタ編集の該当箇所へ移るための一覧
     unset: findUnsetItems(parsed.dataset),
     // 正式な案件の一覧（§98）。未登録の案件の「案件に登録」で、案件名が同じ正式な案件の ID・顧客名を入れるのに使う
     officialProjects: (parsed.dataset.projects ?? []).filter((p) => p.projectId !== "").map((p) => ({ projectId: p.projectId, customerName: p.customerName, projectName: p.projectName })),

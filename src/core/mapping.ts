@@ -318,7 +318,7 @@ export function mapWorklogs(
       unmappedMembers.set(group, acc);
       if (by && "code" in by) group.taskCode = (w.taskCode ?? "").trim();
       if (by && "taskProject" in by) group.fromTask = true;
-      // 契約期間外（§101）: 名前が合った案件の契約期間と、月ごとの時間を持たせる（期間を延ばすのか、作業実績の誤りかを人が決める）
+      // 契約期間外（§103）: 名前が合った案件の契約期間と、月ごとの時間を持たせる（期間を延ばすのか、作業実績の誤りかを人が決める）
       if (periodOf) {
         group.contracts = periodOf.map((c) => ({ contractId: c.contractId, projectName: c.projectName, startMonth: c.startMonth, endMonth: c.endMonth }));
         unmappedMonths.set(group, new Map([[monthOfDate(w.date), w.hours]]));

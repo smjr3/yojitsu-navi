@@ -49,7 +49,7 @@ if (model && mastersData?.error) {
   display(errorState({ title: T.mastersPage.loadFailed, error: mastersData.error }));
 } else if (model && mastersData) {
   const params = new URLSearchParams(location.search);
-  // ?q=検索語・?unset=未設定の種類・?new=1&列名=値（追加のダイアログの初期値。§101）
+  // ?q=検索語・?unset=未設定の種類・?new=1&列名=値（追加のダイアログの初期値。§103）
   const initialAdd = params.get("new") === "1" ? Object.fromEntries([...params].filter(([k]) => /^[a-z_]+$/.test(k) && !["view", "new", "q", "unset", "jump", "team", "member"].includes(k))) : null;
   display(mastersEditor({ data: mastersData, config: model.config, asOfMonth: model.meta.asOfMonth, minMonth: model.meta.minMonth, views: LEDGER_VIEWS, initialView: params.get("view"), initialTeam: params.get("team") || null, initialMember: params.get("member") || null, initialJump: params.get("jump"), initialQuery: params.get("q") || null, initialUnset: params.get("unset") || null, initialAdd }));
 }

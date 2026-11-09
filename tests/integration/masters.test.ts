@@ -120,7 +120,7 @@ describe("ダミーデータのマスタで往復", () => {
       const contract = docs.contracts.rows[0]!;
       const contractId = cellOf(docs.contracts, contract, "contract_id");
       docs.contracts = updateRow(docs.contracts, contract.id, { total_amount: "12345000", note: "増額, 再見積" });
-      // 顧客の既定の担当チーム（§101）: 1 行追加（ファイルが無ければ新しく作る）
+      // 顧客の既定の担当チーム（§103）: 1 行追加（ファイルが無ければ新しく作る）
       const customer = cellOf(docs.contracts, contract, "customer_name");
       docs.customerTeams = addRow(docs.customerTeams, { customer_name: customer, team_id: anyTeam, note: "既定, 例外は案件で" }).doc;
       // 祝日（§80）: 会社の休日を 1 日追加（未来の日）

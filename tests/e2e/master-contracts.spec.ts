@@ -45,7 +45,7 @@ test("一覧: 全案件を顧客・案件名・期間・金額・担当チーム
   await expect(rows.first()).toContainText(`${max.toLocaleString("ja-JP")}円`);
 });
 
-test("登録済みの案件の顧客名・案件名は変えられない（他システムから取り込む）。担当チームは変えられる。取り込み済みの行の削除・CSV で編集は無い（追加は §101 の「＋ 新しい案件」）", async ({ page }) => {
+test("登録済みの案件の顧客名・案件名は変えられない（他システムから取り込む）。担当チームは変えられる。取り込み済みの行の削除・CSV で編集は無い（追加は §103 の「＋ 新しい案件」）", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   await expect(page.getByRole("button", { name: /新しい案件/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "CSV で編集" })).toHaveCount(0);

@@ -31,7 +31,7 @@ export interface MasterColumnDef {
   required: boolean;
   /** true: CSV に列があるときだけ扱う（無いファイルに見出しを足さない。§98 の project_id） */
   onlyIfPresent?: boolean;
-  /** true（onlyIfPresent と一緒に使う）: 列が無くても入力欄は出し、値を入れたときだけ見出しの末尾に足す（§101 の provisional） */
+  /** true（onlyIfPresent と一緒に使う）: 列が無くても入力欄は出し、値を入れたときだけ見出しの末尾に足す（§103 の provisional） */
   addOnInput?: boolean;
   /** true: 台帳の一覧の列には出さない（修正のダイアログには出す。§98 の project_id。表を横に広げないため） */
   listHidden?: boolean;
@@ -66,7 +66,7 @@ export interface MasterFileDef {
   editableColumns?: readonly string[];
   /**
    * true: editableColumns があっても、画面で新しい行を足せる（足した行は保存するまですべての列を入れられる）。
-   * 案件（§101）: 未登録の案件の確認から登録する。取り込み済みの行の顧客名・案件名は変えない
+   * 案件（§103）: 未登録の案件の確認から登録する。取り込み済みの行の顧客名・案件名は変えない
    */
   addable?: boolean;
 }
@@ -105,7 +105,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "key", label: T.masterFiles.colRateKey, input: "rateKey", required: true },
       { name: "hourly_rate", label: T.masterFiles.colHourlyRate, input: "number", required: true },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
-      // 仮の値（§101。動作確認用で本番の単価ではない）。省略可。列が無いファイルは、画面で仮にした行を保存するときに見出しの末尾に足す
+      // 仮の値（§103。動作確認用で本番の単価ではない）。省略可。列が無いファイルは、画面で仮にした行を保存するときに見出しの末尾に足す
       { name: "provisional", label: T.masterFiles.colProvisional, input: "flag", required: false, onlyIfPresent: true, addOnInput: true },
     ],
   },
@@ -148,7 +148,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
     ],
   },
-  // 顧客の既定の担当チーム（§101）。1 行 = 1 顧客。案件の team_id が空ならこのチーム（案件に書けばそちらが優先）
+  // 顧客の既定の担当チーム（§103）。1 行 = 1 顧客。案件の team_id が空ならこのチーム（案件に書けばそちらが優先）
   customerTeams: {
     id: "customerTeams",
     path: "data/customer-teams.csv",
@@ -465,7 +465,7 @@ export function withStampColumns(doc: MasterDoc): MasterDoc {
   return { ...doc, header, headerRaw: null, originals, rows: doc.rows.map((r) => ({ id: r.id, cells: padCells(r.cells, width) })) };
 }
 
-/** 列が見出しに無ければ末尾に足す（元の行も列数を揃える。行の値・状態は変えない。§101 の provisional） */
+/** 列が見出しに無ければ末尾に足す（元の行も列数を揃える。行の値・状態は変えない。§103 の provisional） */
 export function withColumn(doc: MasterDoc, column: string): MasterDoc {
   if (doc.header.includes(column)) return doc;
   const header = [...doc.header, column];
@@ -910,7 +910,7 @@ export interface ContextFiles {
   holidays: string;
   /** 作業種別の分類表（契約外の種別の検証用。§50.1）。省略 = 分類なし */
   taskTypes?: string;
-  /** 顧客の既定の担当チーム（§101。文書を渡さないときだけ使う） */
+  /** 顧客の既定の担当チーム（§103。文書を渡さないときだけ使う） */
   customerTeams?: string;
 }
 

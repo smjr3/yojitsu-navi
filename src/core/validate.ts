@@ -72,7 +72,7 @@ function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push:
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountTooLarge, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
     }
     // 主担当チームが teams.csv に無い: 打ち間違いのまま「未設定」に集計されるのを防ぐ（メンバーの MEMBER_UNKNOWN_TEAM と同じ扱い）
-    // 顧客の既定（§101）から入れた担当チームは customer-teams.csv の側で知らせる
+    // 顧客の既定（§103）から入れた担当チームは customer-teams.csv の側で知らせる
     if (c.teamId !== null && c.teamId !== "" && !c.teamFromCustomer && !teamIds.has(c.teamId)) {
       push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: fmt(T.checks.contractUnknownTeam, { file, row, contractId: c.contractId, teamId: c.teamId }), file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
     }
@@ -338,7 +338,7 @@ function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
   }
 }
 
-/** 顧客の既定の担当チーム（§101）: 顧客名の空・重複・存在しないチームは error、案件に無い顧客は warning */
+/** 顧客の既定の担当チーム（§103）: 顧客名の空・重複・存在しないチームは error、案件に無い顧客は warning */
 function validateCustomerTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
   const rows = dataset.customerTeams ?? [];
   if (rows.length === 0) return;
