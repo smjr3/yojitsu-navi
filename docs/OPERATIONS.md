@@ -121,6 +121,8 @@ Settings > CI/CD > Variables に登録します。
 
 **作業名から案件名を抜き出して紐付ける（SPEC §97）**: `config.json` の `projectFromTask.marker` に運用保守の目印を書くと、作業名の最初の目印より前を案件名とし、`contracts.csv` の `project_name` と完全一致する案件へ紐付けます（`mapping.csv` に作業コードを書かなくてよい）。案件名が無いものはデータ確認の「未紐付けの作業実績」に理由「未登録の案件」で出ます。案件を足すか、表記の違いだけなら `data/project-aliases.csv`（`alias,project_name`）に別名を足してください。似た名前に自動で割り当てることはしません。
 
+**作業名の括弧内をタスクにする（SPEC §101）**: `config.json` に `"taskFromName": { "markers": ["<目印>", …] }` を書くと、作業名の目印の直後の括弧内（`(…)`・`（…）` など）を作業種別の内訳のタスクにします。括弧が無い・期間の表記だけ（例「年月〜年月」）の作業は「タスク分類なし」として時間を数え、未分類の警告は出しません。`markers` を省くと `projectFromTask.marker` を使います。運用保守以外にしたいタスクだけ `task-types.csv` に書きます。
+
 **作業コードの点検（SPEC §92）**: `config.json` の `taskCodeCheck.include` に運用保守の作業名のキーワード（例 `_保守対応`）を書くと、キーワードに合うのに `mapping.csv` に無い作業コードと、作業名の変更をデータ確認画面に出します。`onUnregistered` / `onChange` を `stop` にすると、見つかったときに取り込みを失敗にします（月ファイルは書き換えない）。
 
 | 止まったとき | 直し方 |
@@ -144,6 +146,7 @@ Settings > CI/CD > Variables に登録します。
 - どれも取得する人は、その期間に在籍していた人（メンバーマスタから。上の「取得する人をメンバーマスタから決める」）。期間の月のファイルを全員分で書き直します
 - `--initial` と `--from` / `--to` は一緒に使えません。年度の途中で導入したときは、初回に `--initial`、前の年度が要れば `--from`・`--to` で足します
 - `FETCH_MODE`・`FETCH_FROM` などは Run pipeline でだけ入れ、CI/CD 変数（Settings）には登録しません（毎日の取り込みが同じ期間になります）
+- 毎日の取り込みの標準: メンバーマスタの在籍者を 50 人ずつ → 回ごとに空の応答までページング → 全部取れたら差し替え（SPEC §101.3）。前回と中身が同じ月のファイルは書き換えず、`data/worklogs/_meta.json` の `changedMonths` に変わった月だけを書きます。データが変わらなければ CI は検証を省き、取得日時の記録だけを MR にします
 
 ### 氏名・役職を人事データから取り込む（任意）
 
@@ -167,6 +170,7 @@ npm run fetch:members                           # members.csv を更新
 
 - 設定は `config.json` の `projectSource`（[DATA.md](DATA.md#projectsource正式な案件の一覧の取り込みspec-98)）。ページングに対応しない API は `pagination` を書かない（1 回で全件）。サーバー側で絞れない条件は `filters` で取得後に絞る。API のときは環境変数 `PROJECT_API_TOKEN`
 - `npm run fetch:projects` で `data/projects.csv`（正式な案件の一覧）を置き換え、`contracts.csv` の `project_id` のある行の顧客名・案件名を一覧の値にします。`project_id` の無い行は保留のまま（推測で入れません）
+- 案件が多くても差分は変わった行だけです（`projects.csv` は案件ID順、`contracts.csv` は変わった行だけを書き換え。ログに追加・削除・名前の変更の件数。SPEC §101.4）
 - データ確認画面の「正式な案件IDの無い案件」（候補 = 案件名が同じ正式な案件）と「マスタに無い正式な案件」（新しい案件の見落とし）で差分を確かめ、`contracts.csv` に `project_id` を入れる・行を足す。担当チーム（`team_id`）は空のまま入れてよく、後でマスタ編集の「案件」か CSV で設定します
 - CI で毎日実行するには、スケジュールを登録して CI/CD 変数 `PROJECT_FETCH_ENABLED=1` を設定します（既定は無効）。1 回だけなら Run pipeline で `PROJECT_FETCH=1`
 

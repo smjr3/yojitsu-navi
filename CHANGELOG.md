@@ -15,6 +15,8 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `.gitignore` を社内で直していたら、この版から止まらずに新しい版になり、社内で足した行は最後の目印「`# 社内で足したもの（yojitsu-navi update はこの下の行を残します）`」の下に移る。以後、社内の行はこの目印の下に足す
 - `config.json` に無い新しい設定は `yojitsu-navi migrate-config` で一覧を確かめ、要るものだけ `yojitsu-navi migrate-config --apply --add <項目>` で書き足して値を本番に合わせる（コミットはしないので MR に入れる）
 - 定期取り込みを動かしているなら、`yojitsu-navi gitlab-setup` で取り込みの MR 用のプロジェクトアクセストークン（`GIT_PUSH_TOKEN` の中身）の条件と期限が ✓ になることを確かめる
+- 作業名の括弧内をタスクにするなら、`config.json` に `taskFromName`（下の表）を足す。今 `task-types.csv` の「含む」の行で括弧内の表記を拾っているなら、その行は運用保守以外にしたいもの以外は消してよい（残しても動く）。足した後はデータ確認の「未分類の作業種別」が減ることを確かめる
+- 使わないなら何もしなくてよい（作業種別の分類はこれまでどおり）
 
 ### テスト・CI の前提
 
@@ -32,6 +34,16 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 - `yojitsu-navi migrate-config`: `config.json` に無い新しい設定と名前が変わった項目を出し、`--apply` で名前が変わった項目を移し、`--add` で選んだ項目だけを書き足す（今の値・書式は変えない。SPEC §104）
 - `update` が `.gitignore` に社内で足した行を残して新しい版にする（止めない。SPEC §104）
 - `gitlab-setup` が取り込みの MR 用のプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`・期限）と、`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` の Protected・Masked を確かめる。docs/DEPLOY_GITLAB.md に「本番運用の標準構成」（SPEC §104）
+- 作業名の目印の直後の括弧内を作業種別の内訳のタスクにする設定 `taskFromName` を足した（目印は複数可）。括弧が無い・期間の表記だけの作業は「タスク分類なし」として時間を数え、未分類の警告にしない。括弧内が task-types.csv に無くても未分類にしない（SPEC §101）
+- 作業実績の取り込みで、前回と中身が同じ月のファイルを書き換えないようにした（改行コードの違いだけも同じとみなす）。`data/worklogs/_meta.json` に変わった月 `changedMonths` を書く。CI の取り込みはデータが変わらなければ検証を省く（SPEC §101.3）
+- 正式な案件の一覧の取り込みで、`contracts.csv` の変わった行だけを書き換え、ほかの行は元のまま残すようにした。ログに `projects.csv` の追加・削除・名前の変更の件数を出す（SPEC §101.4）
+
+### 新しい設定と推奨値
+
+| 項目 | 書かないとき | 推奨 | 理由・いつ |
+|---|---|---|---|
+| `taskFromName.markers` | なし（`taskFromName` ごと書かないと使わない。`taskFromName` だけ書いて `markers` を省くと `projectFromTask.marker`） | 括弧内にタスクを書く作業名の目印（複数可） | 括弧内を作業種別の内訳のタスクにし、括弧なし・期間だけは「タスク分類なし」にする（SPEC §101） |
+| `taskFromName.enabled` | `true` | そのまま | 一時的に止めるときだけ `false` |
 
 ## 0.2.3
 
