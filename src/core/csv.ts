@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName, splitKeywords } from "./normalize.js";
-import type { Assignment, FetchFailure, OutsidePlan, ProjectAlias, Target, Config, Contract, Dataset, Holiday, MappingRule, Project, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, FetchFailure, OutsidePlan, ProjectAlias, Target, Config, Contract, Dataset, Holiday, MappingRule, Project, CustomerTeam, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -159,6 +159,8 @@ export interface DatasetFiles {
   projectAliases?: string;
   /** 正式な案件の一覧（§98。data/projects.csv）。省略・空 = 取り込んでいない */
   projects?: string;
+  /** 顧客の既定の担当チーム（§101。data/customer-teams.csv）。省略・空 = なし */
+  customerTeams?: string;
   /** 月ごとのファイル内容（順不同） */
   worklogs: string[];
   /** worklogs と同じ順のファイル名（警告にファイル名・行番号を出すため。無ければ worklogs[i]） */
@@ -182,6 +184,7 @@ const REQUIRED_COLUMNS: Record<Exclude<keyof DatasetFiles, "config" | "worklogs"
   targets: ["target_type", "target_id", "end_month", "remaining_rate"],
   projectAliases: ["alias", "project_name"],
   projects: ["project_id", "customer_name", "project_name"],
+  customerTeams: ["customer_name", "team_id"],
   contracts: ["contract_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount"],
   mapping: ["worklog_customer_name", "worklog_project_name", "contract_id"],
   assignments: ["member_id", "contract_id", "start_month", "end_month", "allocation"],
@@ -244,6 +247,35 @@ function jstMinute(iso: string): string {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return iso;
   return new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ");
+}
+
+/** 仮の値の印（rates.csv の provisional 列。§101） */
+export function isProvisionalCell(value: string): boolean {
+  const v = value.normalize("NFKC").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "仮";
+}
+
+/** 顧客名（正規化）→ 既定の担当チーム。同じ顧客が何行あっても最初の行（重複は検証でエラー） */
+export function customerTeamIndex(rows: readonly CustomerTeam[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const k = normalizeName(r.customerName);
+    if (k !== "" && r.teamId !== "" && !map.has(k)) map.set(k, r.teamId);
+  }
+  return map;
+}
+
+/** team_id が空の案件に顧客の既定の担当チームを入れる（§101。書いてある案件はそのまま = 例外の上書き） */
+export function applyCustomerTeams(contracts: Contract[], rows: readonly CustomerTeam[]): void {
+  const index = customerTeamIndex(rows);
+  if (index.size === 0) return;
+  for (const c of contracts) {
+    if (c.teamId !== null && c.teamId !== "") continue;
+    const t = index.get(normalizeName(c.customerName));
+    if (t === undefined) continue;
+    c.teamId = t;
+    c.teamFromCustomer = true;
+  }
 }
 
 /** 各 CSV テキストから Dataset を組み立てる。検証結果（§14）も issues に含める */
@@ -326,6 +358,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     key: r.get("key"),
     hourlyRate: parseNumberCell(r.get("hourly_rate")),
     effectiveFrom: r.get("effective_from"),
+    // 仮の値（§101）。省略可の列。1・true・yes・仮 なら仮
+    ...(isProvisionalCell(r.get("provisional")) ? { provisional: true as const } : {}),
   }));
 
   const holidays: Holiday[] = parseTable("holidays.csv", files.holidays, REQUIRED_COLUMNS.holidays, issues).rows.map((r) => ({
@@ -417,6 +451,18 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           projectName: r.get("project_name"),
         }));
   if (projects.length > 0) dataset.projects = projects;
+  // 顧客の既定の担当チーム（§101）: 省略可。案件の team_id が空なら顧客名（正規化して完全一致）の既定を使う
+  const customerTeams: CustomerTeam[] =
+    (files.customerTeams ?? "").trim() === ""
+      ? []
+      : parseTable("customer-teams.csv", files.customerTeams as string, REQUIRED_COLUMNS.customerTeams, issues).rows.map((r) => {
+          const note = r.get("note");
+          return { customerName: r.get("customer_name"), teamId: r.get("team_id").trim(), ...(note !== "" ? { note } : {}) };
+        });
+  if (customerTeams.length > 0) {
+    dataset.customerTeams = customerTeams;
+    applyCustomerTeams(contracts, customerTeams);
+  }
   if (files.worklogFetchedAt !== undefined) dataset.worklogFetchedAt = files.worklogFetchedAt;
 
   // 列の欠落・引用符の閉じ忘れがあるファイルは、行ごとのエラーが同じ原因で大量に出るだけなので、元のエラーだけを残す

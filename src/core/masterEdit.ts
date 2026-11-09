@@ -19,7 +19,7 @@ import { T, fmt } from "../i18n/index.js";
 // 対象ファイルの定義
 // ---------------------------------------------------------------------------
 
-export type MasterFileId = "members" | "rates" | "teams" | "contracts" | "holidays" | "assignments" | "outside" | "targets";
+export type MasterFileId = "members" | "rates" | "teams" | "contracts" | "customerTeams" | "holidays" | "assignments" | "outside" | "targets";
 
 export interface MasterColumnDef {
   /** CSV の列名 */
@@ -27,10 +27,12 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date";
+  input: "text" | "customer" | "flag" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date";
   required: boolean;
   /** true: CSV に列があるときだけ扱う（無いファイルに見出しを足さない。§98 の project_id） */
   onlyIfPresent?: boolean;
+  /** true（onlyIfPresent と一緒に使う）: 列が無くても入力欄は出し、値を入れたときだけ見出しの末尾に足す（§101 の provisional） */
+  addOnInput?: boolean;
   /** true: 台帳の一覧の列には出さない（修正のダイアログには出す。§98 の project_id。表を横に広げないため） */
   listHidden?: boolean;
 }
@@ -62,6 +64,11 @@ export interface MasterFileDef {
    * 指定したファイルは行の追加・削除・CSV で編集もできない（行は取り込みで増減する）
    */
   editableColumns?: readonly string[];
+  /**
+   * true: editableColumns があっても、画面で新しい行を足せる（足した行は保存するまですべての列を入れられる）。
+   * 案件（§101）: 未登録の案件の確認から登録する。取り込み済みの行の顧客名・案件名は変えない
+   */
+  addable?: boolean;
 }
 
 export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
@@ -98,6 +105,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "key", label: T.masterFiles.colRateKey, input: "rateKey", required: true },
       { name: "hourly_rate", label: T.masterFiles.colHourlyRate, input: "number", required: true },
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
+      // 仮の値（§101。動作確認用で本番の単価ではない）。省略可。列が無いファイルは、画面で仮にした行を保存するときに見出しの末尾に足す
+      { name: "provisional", label: T.masterFiles.colProvisional, input: "flag", required: false, onlyIfPresent: true, addOnInput: true },
     ],
   },
   teams: {
@@ -125,6 +134,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     history: "list",
     keyColumns: ["contract_id"],
     editableColumns: ["start_month", "end_month", "total_amount", "team_id"],
+    addable: true,
     columns: [
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
       { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
@@ -135,6 +145,21 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },
       { name: "team_id", label: T.masterFiles.colContractTeam, input: "team", required: false },
+      { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
+    ],
+  },
+  // 顧客の既定の担当チーム（§101）。1 行 = 1 顧客。案件の team_id が空ならこのチーム（案件に書けばそちらが優先）
+  customerTeams: {
+    id: "customerTeams",
+    path: "data/customer-teams.csv",
+    issueFile: "customer-teams.csv",
+    label: T.masterFiles.customerTeams,
+    history: "list",
+    keyColumns: ["customer_name"],
+    optional: true,
+    columns: [
+      { name: "customer_name", label: T.masterFiles.colCustomer, input: "customer", required: true },
+      { name: "team_id", label: T.masterFiles.colCustomerTeam, input: "team", required: true },
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
     ],
   },
@@ -206,7 +231,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
   },
 };
 
-export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "contracts", "holidays", "assignments", "outside", "targets"];
+export const MASTER_FILE_IDS: readonly MasterFileId[] = ["members", "rates", "teams", "contracts", "customerTeams", "holidays", "assignments", "outside", "targets"];
 
 /** 行の「いつ」の列（履歴 = 適用開始月、期間 = 開始月、一覧 = 終了月） */
 export function timeColumnOf(def: Pick<MasterFileDef, "history">): string {
@@ -423,7 +448,7 @@ export function serializeMasterDoc(doc: MasterDoc): SerializedDoc {
 /** 変更者・変更日の列（リソース計画の変更の履歴・目標の一覧に出す。§56）。保存するときに画面が書き込み、フォームでは編集しない */
 export const STAMP_COLUMNS = { by: "updated_by", at: "updated_at" } as const;
 /** 変更者・変更日を書き込むファイル */
-export const STAMPED_FILES: readonly MasterFileId[] = ["contracts", "assignments", "outside", "targets"];
+export const STAMPED_FILES: readonly MasterFileId[] = ["contracts", "customerTeams", "assignments", "outside", "targets"];
 
 /**
  * 追加・変更した行に変更者（GitLab のユーザー名。分からなければ空）と変更日（YYYY-MM-DD）を書き込む（§56）。
@@ -434,6 +459,16 @@ export function withStampColumns(doc: MasterDoc): MasterDoc {
   const missing = [STAMP_COLUMNS.by, STAMP_COLUMNS.at].filter((c) => !doc.header.includes(c));
   if (missing.length === 0) return doc;
   const header = [...doc.header, ...missing];
+  const width = header.length;
+  const originals: MasterDoc["originals"] = {};
+  for (const [id, o] of Object.entries(doc.originals)) originals[id] = { ...o, cells: padCells(o.cells, width) };
+  return { ...doc, header, headerRaw: null, originals, rows: doc.rows.map((r) => ({ id: r.id, cells: padCells(r.cells, width) })) };
+}
+
+/** 列が見出しに無ければ末尾に足す（元の行も列数を揃える。行の値・状態は変えない。§101 の provisional） */
+export function withColumn(doc: MasterDoc, column: string): MasterDoc {
+  if (doc.header.includes(column)) return doc;
+  const header = [...doc.header, column];
   const width = header.length;
   const originals: MasterDoc["originals"] = {};
   for (const [id, o] of Object.entries(doc.originals)) originals[id] = { ...o, cells: padCells(o.cells, width) };
@@ -808,6 +843,11 @@ const EFFECTS: Record<MasterFileId, Record<string, [number, string, boolean]>> =
   rates: {
     key: [0, T.masterFiles.effectRate, true],
     hourly_rate: [0, T.masterFiles.effectRate, true],
+    provisional: [1, T.masterFiles.effectProvisional, false],
+  },
+  customerTeams: {
+    customer_name: [0, T.masterFiles.effectContractTeam, false],
+    team_id: [0, T.masterFiles.effectContractTeam, false],
   },
   teams: {
     team_id: [0, T.masterFiles.effectTeamTree, false],
@@ -870,6 +910,8 @@ export interface ContextFiles {
   holidays: string;
   /** 作業種別の分類表（契約外の種別の検証用。§50.1）。省略 = 分類なし */
   taskTypes?: string;
+  /** 顧客の既定の担当チーム（§101。文書を渡さないときだけ使う） */
+  customerTeams?: string;
 }
 
 export interface RowIssue extends ValidationIssue {
@@ -896,7 +938,7 @@ export interface EditValidation {
  * 編集後の 4 ファイル ＋ 編集しないファイルで parseDataset（validateDataset を含む）を実行し、
  * 問題を行に結び付ける。作業実績は読み込まない（作業実績に関する警告はビルド後の「データ確認」で見る）
  */
-export function validateEdited(docs: Omit<Record<MasterFileId, MasterDoc>, "contracts" | "holidays"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "contracts" | "holidays">>, context: ContextFiles, config: Config): EditValidation {
+export function validateEdited(docs: Omit<Record<MasterFileId, MasterDoc>, "contracts" | "holidays" | "customerTeams"> & Partial<Pick<Record<MasterFileId, MasterDoc>, "contracts" | "holidays" | "customerTeams">>, context: ContextFiles, config: Config): EditValidation {
   const ser = {} as Record<MasterFileId, SerializedDoc>;
   // 案件・祝日（§80）の文書が無い呼び出し（以前の形）は、ビルド時の contracts.csv・holidays.csv をそのまま使う
   const ids = MASTER_FILE_IDS.filter((id) => docs[id] !== undefined);
@@ -912,12 +954,13 @@ export function validateEdited(docs: Omit<Record<MasterFileId, MasterDoc>, "cont
     rates: ser.rates.text,
     outsidePlans: ser.outside.text,
     targets: ser.targets.text,
+    ...(ser.customerTeams ? { customerTeams: ser.customerTeams.text } : context.customerTeams !== undefined ? { customerTeams: context.customerTeams } : {}),
     ...(context.taskTypes !== undefined ? { taskTypes: context.taskTypes } : {}),
     worklogs: [],
   };
   const { issues, dataset } = parseDataset(files);
   const byFile = new Map<string, MasterFileId>(ids.map((id) => [MASTER_FILES[id].issueFile, id]));
-  const byRow = { members: {}, rates: {}, teams: {}, contracts: {}, holidays: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
+  const byRow = { members: {}, rates: {}, teams: {}, contracts: {}, customerTeams: {}, holidays: {}, assignments: {}, outside: {}, targets: {} } as EditValidation["byRow"];
   const general: RowIssue[] = [];
   const seen = new Set<string>();
   const out: RowIssue[] = [];

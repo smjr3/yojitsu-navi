@@ -27,6 +27,7 @@ export const DATA_FILES = {
   targets: "data/targets.csv",
   projectAliases: "data/project-aliases.csv",
   projects: "data/projects.csv",
+  customerTeams: "data/customer-teams.csv",
 } as const;
 
 export interface WorklogMeta {
@@ -105,6 +106,8 @@ export function readDatasetFiles(rootDir: string): DatasetFiles {
     projectAliases: readOrEmpty(join(rootDir, DATA_FILES.projectAliases)),
     // 省略可（§98）。無ければ空 = 正式な案件の一覧を取り込んでいない
     projects: readOrEmpty(join(rootDir, DATA_FILES.projects)),
+    // 省略可（§101）。無ければ空 = 顧客の既定の担当チームなし
+    customerTeams: readOrEmpty(join(rootDir, DATA_FILES.customerTeams)),
     worklogs,
     worklogNames: listed.map((f) => f.name),
     skippedWorklogFiles: skippedWorklogFiles(dir),

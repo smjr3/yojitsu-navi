@@ -17,11 +17,32 @@ import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { formatHours, integer, dateTimeJst, monthJa, WARNING_LABELS, UNMAPPED_REASON_LABELS } from "./components/format.js";
 import { groupedWorklogTable, peopleColumn } from "./components/worklog-people.js";
+import { normalizeName } from "./core/index.js";
 ```
 
 ```js
 const model = await loadModel(FileAttachment("./data/model.json"), { skeleton: "page-skeleton" });
 const issuesData = await loadJson(FileAttachment("./data/dataset-issues.json"));
+```
+
+```js
+// マスタ編集へ移る（§101）。「案件に登録」は分かっている値を入れた追加のダイアログ、ほかは該当の行を検索・絞り込んで開く
+const mastersHref = (view, params) => {
+  const q = new URLSearchParams({ view });
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, v);
+  return `./masters?${q}`;
+};
+const linkButton = (href, text, aria) => html`<a class="yn-btn yn-btn-sm yn-row-action" href=${href} aria-label=${aria}>${text}</a>`;
+/** 案件名が同じ正式な案件（§98）がちょうど 1 件なら、その案件 */
+const officialByName = (() => {
+  const map = new Map();
+  for (const p of issuesData?.officialProjects ?? []) {
+    const k = normalizeName(p.projectName);
+    map.set(k, map.has(k) ? null : p);
+  }
+  return (name) => map.get(normalizeName(name ?? "")) ?? null;
+})();
+const registerHref = ({ customerName, projectName, projectId }) => mastersHref("contracts", { new: "1", customer_name: customerName, project_name: projectName, project_id: projectId });
 ```
 
 ```js
@@ -70,7 +91,25 @@ if (summary) {
 ```js
 if (model) {
   display(sectionTitle(T.dataCheck.unmappedTitle, T.dataCheck.unmappedHint));
-  const rows = model.unmapped.map((g) => ({ ...g, reasonLabel: UNMAPPED_REASON_LABELS[g.reason] ?? g.reason }));
+  // 契約期間外は下の「契約期間外の実績」に分ける（§101）
+  const rows = model.unmapped.filter((g) => g.reason !== "OUT_OF_PERIOD").map((g) => ({ ...g, reasonLabel: UNMAPPED_REASON_LABELS[g.reason] ?? g.reason }));
+  // 未登録の案件（作業名から抜き出した案件名。§97）は、本当に案件があれば人が登録する（自動では登録しない。§101）
+  const registerCol = rows.some((r) => r.reason === "UNREGISTERED_PROJECT")
+    ? [
+        {
+          key: "action",
+          label: T.dataCheck.colAction,
+          type: "custom",
+          get: (r) => (r.reason === "UNREGISTERED_PROJECT" ? T.dataCheck.registerContract : ""),
+          render: (r) => {
+            if (r.reason !== "UNREGISTERED_PROJECT") return "";
+            const official = officialByName(r.projectName);
+            return linkButton(registerHref({ customerName: official?.customerName ?? r.customerName, projectName: official?.projectName ?? r.projectName, projectId: official?.projectId }), T.dataCheck.registerContract, fmt(T.dataCheck.registerContractAria, { name: [r.customerName, r.projectName].filter(Boolean).join(" / ") }));
+          },
+          exportValue: () => "",
+        },
+      ]
+    : [];
   if (rows.length === 0) display(emptyState({ title: T.dataCheck.unmappedEmpty, icon: "✓" }));
   else
     display(
@@ -89,9 +128,62 @@ if (model) {
           { key: "count", label: T.dataCheck.colCount, type: "int" },
           { key: "firstDate", label: T.dataCheck.colFirstDate, type: "text", hideOnPhone: true },
           { key: "lastDate", label: T.dataCheck.colLastDate, type: "text" },
+          ...registerCol,
         ],
         caption: T.dataCheck.unmappedTitle,
         exportName: "unmapped_worklogs",
+        sort: { key: "hours", dir: "desc" },
+      }),
+    );
+}
+```
+
+```js
+// 契約期間外の実績（§101）: 消したり自動で直したりせず、契約期間・実績の日付・時間を並べて人が判断する
+if (model) {
+  display(sectionTitle(T.dataCheck.outOfPeriodTitle, T.dataCheck.outOfPeriodHint));
+  const groups = model.unmapped.filter((g) => g.reason === "OUT_OF_PERIOD");
+  const periodText = (g) => (g.contracts ?? []).map((c) => `${monthJa(c.startMonth)}〜${monthJa(c.endMonth)}`).join("、");
+  const rows = groups.map((g) => ({ ...g, contractText: (g.contracts ?? []).map((c) => c.contractId).join("、"), contractPeriod: periodText(g), workPeriod: g.firstDate === g.lastDate ? g.firstDate : `${g.firstDate}〜${g.lastDate}` }));
+  if (rows.length === 0) display(emptyState({ title: T.dataCheck.outOfPeriodEmpty, icon: "✓" }));
+  else
+    display(
+      groupedWorklogTable({
+        model,
+        groups: rows,
+        groupName: (g) => [g.taskCode, g.customerName, g.projectName].filter(Boolean).join(" / ") || T.dataCheck.empty,
+        columns: [
+          { key: "customerName", label: T.dataCheck.colWorklogCustomer, type: "text", empty: T.dataCheck.empty },
+          { key: "projectName", label: T.dataCheck.colWorklogProject, type: "text", empty: T.dataCheck.empty },
+          { key: "contractText", label: T.dataCheck.colContractId, type: "text", hideOnPhone: true },
+          { key: "contractPeriod", label: T.dataCheck.colContractPeriod, type: "text" },
+          { key: "workPeriod", label: T.dataCheck.colWorkPeriod, type: "text", sortValue: (r) => r.lastDate },
+          peopleColumn(model),
+          {
+            key: "hours",
+            label: T.columns.hours,
+            type: "hours",
+            breakdown: (r) => ({
+              title: [r.customerName, r.projectName].filter(Boolean).join(" / "),
+              subtitle: `${T.dataCheck.colContractPeriod}: ${r.contractPeriod}`,
+              sections: [{ table: { columns: [{ label: T.charts.colMonth }, { label: T.columns.hours, align: "num" }], rows: (r.months ?? []).map((m) => [monthJa(m.month), formatHours(m.hours)]) } }],
+            }),
+          },
+          { key: "count", label: T.dataCheck.colCount, type: "int", hideOnPhone: true },
+          {
+            key: "action",
+            label: T.dataCheck.colAction,
+            type: "custom",
+            get: () => T.dataCheck.openContract,
+            render: (r) => {
+              const id = r.contracts?.[0]?.contractId;
+              return id ? linkButton(mastersHref("contracts", { q: id }), T.dataCheck.openContract, fmt(T.dataCheck.openContractAria, { name: [r.customerName, r.projectName].filter(Boolean).join(" / ") })) : "";
+            },
+            exportValue: () => "",
+          },
+        ],
+        caption: T.dataCheck.outOfPeriodTitle,
+        exportName: "out_of_period_worklogs",
         sort: { key: "hours", dir: "desc" },
       }),
     );
@@ -202,6 +294,14 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
         { key: "projectId", label: T.dataCheck.colProjectId, type: "text" },
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+        {
+          key: "action",
+          label: T.dataCheck.colAction,
+          type: "custom",
+          get: () => T.dataCheck.registerContract,
+          render: (p) => linkButton(registerHref(p), T.dataCheck.registerContract, fmt(T.dataCheck.registerContractAria, { name: `${p.customerName} / ${p.projectName}` })),
+          exportValue: () => "",
+        },
       ],
       rows: projectCheck.unregistered.map((p, i) => ({ key: i, ...p })),
       caption: T.dataCheck.unregisteredProjectsTitle,
@@ -209,6 +309,46 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
       sort: { key: "projectId", dir: "asc" },
     }),
   );
+}
+```
+
+```js
+// 未設定・仮の値（§101）。マスタ編集の該当箇所を開くだけで、値は人が入れる
+if (model && issuesData) {
+  display(sectionTitle(T.dataCheck.unsetTitle, T.dataCheck.unsetHint));
+  const kinds = T.dataCheck.unsetKinds;
+  const hrefOf = (u) =>
+    u.kind === "contractTeam"
+      ? mastersHref("contracts", { q: u.key, unset: "team" })
+      : u.kind === "contractAmount"
+        ? mastersHref("contracts", { q: u.key, unset: "amount" })
+        : u.kind === "rateMissing"
+          ? mastersHref("rates", { new: "1", key: u.key })
+          : mastersHref("rates", { q: u.key, unset: "provisional" });
+  const rows = (issuesData.unset ?? []).map((u, i) => ({
+    key: i,
+    ...u,
+    kindLabel: kinds[u.kind] ?? u.kind,
+    target: u.customerName !== undefined ? `${[u.customerName, u.projectName].filter(Boolean).join(" / ")}（${u.key}）` : u.key,
+    detail: u.kind === "rateMissing" ? fmt(T.dataCheck.unsetMembers, { n: integer(u.count ?? 0) }) : "",
+  }));
+  if (rows.length === 0) display(emptyState({ title: T.dataCheck.unsetEmpty, icon: "✓" }));
+  else
+    display(
+      dataTable({
+        columns: [
+          { key: "kindLabel", label: T.dataCheck.colUnsetKind, type: "text", sortValue: (r) => ["contractTeam", "contractAmount", "rateMissing", "rateProvisional"].indexOf(r.kind) },
+          { key: "target", label: T.dataCheck.colUnsetTarget, type: "text" },
+          { key: "detail", label: T.dataCheck.colUnsetDetail, type: "text", empty: "", hideOnPhone: true },
+          { key: "action", label: T.dataCheck.colAction, type: "custom", get: () => T.dataCheck.fixInMasters, render: (r) => linkButton(hrefOf(r), T.dataCheck.fixInMasters, fmt(T.dataCheck.fixInMastersAria, { name: `${r.kindLabel} ${r.target}` })), exportValue: () => "" },
+        ],
+        rows,
+        caption: T.dataCheck.unsetTitle,
+        exportName: "unset_items",
+        sort: { key: "kindLabel", dir: "asc" },
+        maxHeight: 520,
+      }),
+    );
 }
 ```
 

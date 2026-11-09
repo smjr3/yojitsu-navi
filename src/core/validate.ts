@@ -72,7 +72,8 @@ function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push:
       push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountTooLarge, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
     }
     // 主担当チームが teams.csv に無い: 打ち間違いのまま「未設定」に集計されるのを防ぐ（メンバーの MEMBER_UNKNOWN_TEAM と同じ扱い）
-    if (c.teamId !== null && c.teamId !== "" && !teamIds.has(c.teamId)) {
+    // 顧客の既定（§101）から入れた担当チームは customer-teams.csv の側で知らせる
+    if (c.teamId !== null && c.teamId !== "" && !c.teamFromCustomer && !teamIds.has(c.teamId)) {
       push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: fmt(T.checks.contractUnknownTeam, { file, row, contractId: c.contractId, teamId: c.teamId }), file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
     }
   });
@@ -337,6 +338,29 @@ function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
   }
 }
 
+/** 顧客の既定の担当チーム（§101）: 顧客名の空・重複・存在しないチームは error、案件に無い顧客は warning */
+function validateCustomerTeams(dataset: Dataset, teamIds: ReadonlySet<string>, push: IssueSink): void {
+  const rows = dataset.customerTeams ?? [];
+  if (rows.length === 0) return;
+  const file = "customer-teams.csv";
+  const customers = new Set(dataset.contracts.map((c) => normalizeName(c.customerName)));
+  const seen = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const row = rowOf(i);
+    const k = normalizeName(r.customerName);
+    if (k === "") {
+      push({ severity: "error", code: "CUSTOMER_TEAM_EMPTY", message: fmt(T.checks.customerTeamEmpty, { file, row }), file, row });
+      return;
+    }
+    const prev = seen.get(k);
+    if (prev !== undefined) push({ severity: "error", code: "CUSTOMER_TEAM_DUPLICATE", message: fmt(T.checks.customerTeamDuplicate, { file, row, customer: r.customerName, prev }), file, row, ref: { customerName: r.customerName } });
+    else seen.set(k, row);
+    if (r.teamId === "") push({ severity: "error", code: "CUSTOMER_TEAM_EMPTY", message: fmt(T.checks.customerTeamNoTeam, { file, row, customer: r.customerName }), file, row, ref: { customerName: r.customerName } });
+    else if (!teamIds.has(r.teamId)) push({ severity: "error", code: "CUSTOMER_TEAM_UNKNOWN_TEAM", message: fmt(T.checks.customerTeamUnknownTeam, { file, row, customer: r.customerName, teamId: r.teamId }), file, row, ref: { customerName: r.customerName, teamId: r.teamId } });
+    if (!customers.has(k)) push({ severity: "warning", code: "CUSTOMER_TEAM_UNKNOWN_CUSTOMER", message: fmt(T.checks.customerTeamUnknownCustomer, { file, row, customer: r.customerName }), file, row, ref: { customerName: r.customerName } });
+  });
+}
+
 /** 役職に単価が 1 行も無いメンバー（個人単価も無い）→ 実績が 0 円になるので警告。役職ごとにまとめる */
 function validateTitleRates(dataset: Dataset, push: IssueSink): void {
   const keys = new Set(dataset.rates.map((r) => r.key));
@@ -459,6 +483,7 @@ export function validateDataset(dataset: Dataset): ValidationIssue[] {
   const teamIds = new Set(dataset.teams.map((t) => t.teamId));
 
   validateContracts(dataset, teamIds, push);
+  validateCustomerTeams(dataset, teamIds, push);
   validateMappings(dataset, contractIds, push);
   validateAliases(dataset, push);
   validateAssignments(dataset, contractIds, memberIds, push);

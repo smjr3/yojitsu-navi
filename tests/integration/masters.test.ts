@@ -120,6 +120,9 @@ describe("ダミーデータのマスタで往復", () => {
       const contract = docs.contracts.rows[0]!;
       const contractId = cellOf(docs.contracts, contract, "contract_id");
       docs.contracts = updateRow(docs.contracts, contract.id, { total_amount: "12345000", note: "増額, 再見積" });
+      // 顧客の既定の担当チーム（§101）: 1 行追加（ファイルが無ければ新しく作る）
+      const customer = cellOf(docs.contracts, contract, "customer_name");
+      docs.customerTeams = addRow(docs.customerTeams, { customer_name: customer, team_id: anyTeam, note: "既定, 例外は案件で" }).doc;
       // 祝日（§80）: 会社の休日を 1 日追加（未来の日）
       docs.holidays = addRow(docs.holidays, { date: "2027-08-13", name: "夏季休暇" }).doc;
       // アサイン: 1 行削除
@@ -138,6 +141,7 @@ describe("ダミーデータのマスタで往復", () => {
       const { dataset, issues } = loadDataset(dir);
       expect(issues.filter((i) => i.severity === "error")).toEqual([]);
       expect(dataset.rates.some((r) => r.key === anyTitle && r.hourlyRate === 99999 && r.effectiveFrom === "2026-11")).toBe(true);
+      expect(dataset.customerTeams).toEqual([{ customerName: customer, teamId: anyTeam, note: "既定, 例外は案件で" }]);
       expect(dataset.members.some((m) => m.memberId === memberId && m.name === '山田, "テスト"' && m.teamId === anyTeam)).toBe(true);
       expect(dataset.teams[0]!.name).toBe("改称した本部");
       expect(dataset.contracts.find((c) => c.contractId === contractId)).toMatchObject({ totalAmount: 12345000, note: "増額, 再見積" });

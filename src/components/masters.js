@@ -10,7 +10,7 @@ import { bindColResizer } from "./col-resize.js";
 import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
 import { html } from "htl";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, memberStatus, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
+import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -40,6 +40,7 @@ import {
   rowState,
   staleDraftFiles,
   updateRow,
+  withColumn,
   planSourcesFromDocs,
   validateEdited,
 } from "../core/masterEdit.js";
@@ -115,6 +116,11 @@ export const FILE_HELP = {
     effect: T.masters.contractsEffect,
     howto: T.masters.contractsHowto,
   },
+  customerTeams: {
+    what: T.masters.customerTeamsWhat,
+    effect: T.masters.customerTeamsEffect,
+    howto: T.masters.customerTeamsHowto,
+  },
   holidays: {
     what: T.masters.holidaysWhat,
     effect: T.masters.holidaysEffect,
@@ -134,16 +140,30 @@ export const FILE_HELP = {
  * 下書き・検証・変更内容・保存は 2 つの画面で共通（どちらで保存しても、両方の変更が 1 つのマージリクエストになる）
  */
 export const PLAN_VIEW_ID = "plan";
-export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "contracts", "targets", "holidays"]);
+export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "contracts", "customerTeams", "targets", "holidays"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
 /** 計画の明細（着地見込みの計画値）に効くファイル（§65） */
 const IMPACT_FILES = Object.freeze(["assignments", "members", "rates"]);
 /** 画面 → その画面で編集するファイル */
-const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], contracts: ["contracts"], holidays: ["holidays"], targets: ["targets"], plan: ["assignments", "outside"] };
+const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], contracts: ["contracts"], customerTeams: ["customerTeams"], holidays: ["holidays"], targets: ["targets"], plan: ["assignments", "outside"] };
 /** 人ごとの検証（案件の行ではなく人の行で見せる） */
 const PERSON_ISSUES = new Set(["ALLOCATION_OVER_1", "ASSIGNMENT_AFTER_LEFT"]);
 /** ファイル → それを編集する画面のパス（他の画面の変更・エラーへの案内） */
-const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", contracts: "./masters?view=contracts", holidays: "./masters?view=holidays", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
+const FILE_PAGE = { members: "./masters", rates: "./masters?view=rates", teams: "./masters?view=teams", contracts: "./masters?view=contracts", customerTeams: "./masters?view=customerTeams", holidays: "./masters?view=holidays", targets: "./masters?view=targets", assignments: "./plan", outside: "./plan" };
+/**
+ * 未設定・仮の値の絞り込み（§101）: ファイル → キー → 対象の今の行（列名 → 値）を出すか。
+ * ctx.inheritedTeam(rec) は顧客の既定の担当チーム（無ければ ""）
+ */
+const UNSET_FILTERS = {
+  contracts: {
+    team: (rec, ctx) => (rec.team_id ?? "").trim() === "" && ctx.inheritedTeam(rec) === "",
+    amount: (rec) => {
+      const v = (rec.total_amount ?? "").trim();
+      return v === "" || parseNumberCell(v) === 0;
+    },
+  },
+  rates: { provisional: (rec) => isProvisionalCell(rec.provisional ?? "") },
+};
 /** 目標（§63）の対象の欄: 値は「種類:ID」（保存時に target_type と target_id に分ける） */
 const TARGET_FIELD = "__target";
 
@@ -266,7 +286,7 @@ function stampEl(doc, row) {
   return html`<span class="yn-me-hint yn-me-plan-stamp" data-role="stamp">${by && at ? fmt(T.planEdit.stamp, { by, at }) : fmt(T.planEdit.stampOne, { v: by || at })}</span>`;
 }
 
-export function mastersEditor({ data, config, asOfMonth, minMonth, model = null, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, fetchImpl = null, now = () => new Date() }) {
+export function mastersEditor({ data, config, asOfMonth, minMonth, model = null, views = LEDGER_VIEWS, initialView = null, initialTeam = null, initialMember = null, initialJump = null, initialQuery = null, initialUnset = null, initialAdd = null, fetchImpl = null, now = () => new Date() }) {
   const VIEW_IDS = [...views];
   /** この画面で編集するファイル */
   const pageFiles = VIEW_IDS.flatMap((v) => VIEW_FILES[v] ?? []);
@@ -322,6 +342,25 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     return c ? `${c.customer} / ${c.project}` : fmt(T.masters.unknownContractValue, { id });
   };
 
+  /** 顧客名（正規化）→ 既定の担当チーム（編集中の customer-teams.csv。§101） */
+  let customerTeamCache = { doc: null, index: new Map() };
+  function customerDefaults() {
+    if (customerTeamCache.doc === docs.customerTeams) return customerTeamCache.index;
+    const d = docs.customerTeams;
+    const rows = d.rows.map((r) => ({ customerName: cellOf(d, r, "customer_name"), teamId: cellOf(d, r, "team_id") }));
+    customerTeamCache = { doc: d, index: customerTeamIndex(rows) };
+    return customerTeamCache.index;
+  }
+  /** 案件の行の既定の担当チーム（team_id が空で、顧客の既定があるとき。無ければ ""） */
+  function inheritedTeam(record) {
+    if ((record.team_id ?? "").trim() !== "") return "";
+    return customerDefaults().get(normalizeName(record.customer_name ?? "")) ?? "";
+  }
+  /** 顧客名の候補（案件の顧客名。§101） */
+  function customerOptions() {
+    return [...new Set(cIndex().list.map((c) => c.customer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+  }
+
   // ---- 状態 ---------------------------------------------------------------
   // 編集の土台は常にこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。書き換えない
   const bases = Object.freeze(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, Object.freeze({ text: data.files[id].text, lastCommitId: data.files[id].lastCommitId })])));
@@ -367,7 +406,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (save) local.set(PLAN_RANGE_KEY, serializePlanRange(r, asOfMonth));
   }
   // 表の絞り込み: 検索語・変更とエラーの行だけ・列ごとの絞り込み（cols。一覧表と同じ部品 §70）・並べ替え（sort）
-  const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false, cols: {}, sort: null }]));
+  // unset: 未設定・仮の値の行だけ（§101。UNSET_FILTERS のキー。null = すべて）
+  const listFilter = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, { q: "", changedOnly: false, cols: {}, sort: null, unset: null }]));
+  if (initialQuery && VIEW_IDS.includes(active)) listFilter[active].q = initialQuery;
+  if (initialUnset && VIEW_IDS.includes(active) && UNSET_FILTERS[active]?.[initialUnset]) listFilter[active].unset = initialUnset;
   /** 列の絞り込みの吹き出し（ファイルごと） */
   const ledgerPops = {};
   /** リソース計画の列の絞り込みの値の一覧に使う人の行（描くたびに作り直す） */
@@ -476,6 +518,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (column === "target_type") return T.targets.kinds[value] ?? value;
     // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
     if (fileId === "members" && column === "status") return memberStatus(value).status === "left" ? T.members.chipLeft : T.masters.statusActive;
+    // 仮の値（§101）: 仮なら「仮」、それ以外（空・0 など）は本番の値なので何も出さない
+    if (column === "provisional") return isProvisionalCell(value) ? T.masterFiles.provisionalYes : "";
     return value;
   }
   /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
@@ -946,11 +990,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       });
     }
     const pop = ledgerPops[fileId];
+    // 未設定・仮の値の行だけ（§101）
+    const unsetDefs = UNSET_FILTERS[fileId] ?? {};
+    const unsetCtx = { inheritedTeam };
+    if (f.unset && !unsetDefs[f.unset]) f.unset = null;
+    const unsetTest = f.unset ? unsetDefs[f.unset] : null;
     let groups = groupsOf(fileId).filter((g) => {
       const rows = g.entries.map((e) => rowById.get(e.rowId));
       if (f.changedOnly && !rows.some((r) => rowState(doc, r) !== "unchanged" || issues[r.id]?.length > 0)) return false;
       if (q && !rows.some((r) => searchText(fileId, doc, r).includes(q))) return false;
       if (!activeCols.every(([c, v]) => matchesFilter(c, v, g, "yen"))) return false;
+      if (unsetTest && !unsetTest(g.shown.record, unsetCtx)) return false;
       return true;
     });
     if (f.sort) {
@@ -1078,6 +1128,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ...columns.map((c) => {
           const raw = g.shown.record[c.name] ?? "";
           const hint = cellHint(fileId, c.name, raw);
+          // 案件の担当チームが空で顧客の既定があれば、そのチームを薄く出す（§101）
+          const inherited = fileId === "contracts" && c.name === "team_id" && raw.trim() === "" ? inheritedTeam(g.shown.record) : "";
+          if (inherited) return html`<td class="is-val"><span class="yn-me-val is-same">${displayValue(fileId, "team_id", inherited)}</span><span class="yn-me-hint">${T.masters.customerDefaultHint}</span></td>`;
           return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
         }),
       ];
@@ -1093,7 +1146,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
             <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${r.id}`} disabled=${!editable} aria-label=${isGoal ? fmt(T.masters.targetEditAria, { key: keyText, month: g.shown.record.end_month ?? "" }) : fileId === "holidays" ? fmt(T.masters.holidayEditAria, { key: keyText }) : fmt(T.masters.contractEditAria, { key: [keyText, g.shown.record.project_name].filter(Boolean).join(" / "), id: rawKey })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: r.id, focus: `edit:${r.id}` })}>${T.masters.edit}</button>
             ${st === "changed" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`revert:${r.id}`} disabled=${!editable} onclick=${() => commit(fileId, revertRow(docs[fileId], r.id), `edit:${r.id}`)}>${T.masters.revert}</button>` : null}
-            ${def.editableColumns ? null : html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${isGoal ? fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" }) : fmt(T.masters.holidayDeleteAria, { key: keyText })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>`}
+            ${def.editableColumns && !(def.addable && st === "added") ? null : html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`del:${r.id}`} disabled=${!editable} aria-label=${isGoal ? fmt(T.masters.targetDeleteAria, { key: keyText, month: g.shown.record.end_month ?? "" }) : fileId === "contracts" ? fmt(T.masters.contractDeleteAria, { key: [keyText, g.shown.record.project_name].filter(Boolean).join(" / ") }) : fmt(T.masters.holidayDeleteAria, { key: keyText })} onclick=${() => openDeleteDialog(fileId, r.id, `add:${fileId}`)}>${T.masters.deleteKind}</button>`}
           </div></td>
         </tr>`;
         if (list.length === 0) return [tr];
@@ -1161,10 +1214,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // メンバーも社員番号・氏名を CSV で書き換えさせないため CSV での編集は無し（§81）
     const fixedRows = !!def.editableColumns;
     const csvBlocked = fileId === "members" || fixedRows;
+    // 未設定・仮の値の数（§101）。0 件の種類は出さない（選んでいるものは 0 件でも出して外せるようにする）
+    const unsetChips = Object.entries(unsetDefs)
+      .map(([key, test]) => {
+        const n = groupsOf(fileId).filter((g) => test(g.shown.record, unsetCtx)).length;
+        if (n === 0 && f.unset !== key) return null;
+        const on = f.unset === key;
+        return html`<button type="button" class=${`yn-btn yn-btn-sm yn-me-unset${on ? " is-on" : ""}`} aria-pressed=${on ? "true" : "false"} data-fk=${`unset:${fileId}:${key}`} onclick=${() => {
+          f.unset = on ? null : key;
+          renderPanel();
+          focusKey(`unset:${fileId}:${key}`);
+        }}>${T.masters.unsetFilters[key]} <span class="num">${integer(n)}</span></button>`;
+      })
+      .filter(Boolean);
     const tableBody = html`<div class="yn-me-toolbar">
-        ${fixedRows ? null : html`<button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${!editable} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>`}
+        ${fixedRows && !def.addable ? null : html`<button type="button" class="yn-btn yn-btn-primary" data-fk=${`add:${fileId}`} disabled=${!editable} onclick=${() => openRowDialog({ fileId, mode: "add", focus: `add:${fileId}` })}>${addLabel}</button>`}
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>${T.masters.onlyChanged}</span></label>
+        ${unsetChips}
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>${clearCols}
       </div>
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${fmt(T.masters.tableAria, { file: def.label })}>
@@ -2348,6 +2415,19 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const v = outsideTypeList.find((t) => sameType(t, value)) ?? value;
       return combobox({ id, name: col.name, options: outsideTypeList.map((t) => ({ value: t, label: t })), value: v, disabled, placeholder: outsideTypeList.length ? T.masters.workTypePlaceholder : T.masterFiles.outsideNoType, describedBy: `${id}-hint`, unknownLabel: (x) => `${x}${T.masters.invalidValue}` });
     }
+    if (col.input === "flag") {
+      // 仮の値（§101）: 空 = 本番の値、1 = 仮。CSV に書いてある別の表記（true・仮 など）はそのまま残す
+      const on = isProvisionalCell(value);
+      return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
+        <option value="" selected=${!on}>${T.masterFiles.provisionalNo}</option>
+        <option value=${on ? value : "1"} selected=${on}>${T.masterFiles.provisionalYes}</option>
+      </select>`;
+    }
+    if (col.input === "customer") {
+      // 顧客名（§101）: 案件の顧客名から選ぶ（案件の無い顧客も書ける。検証で警告）
+      const listId = `${id}-list`;
+      return html`<span class="yn-me-combo"><input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} list=${listId} autocomplete="off" aria-describedby=${`${id}-hint`}><datalist id=${listId}>${customerOptions().map((v) => html`<option value=${v}></option>`)}</datalist></span>`;
+    }
     if (col.input === "date") {
       return html`<input id=${id} name=${col.name} class="yn-input" type="date" value=${/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ""} required=${req} disabled=${disabled} aria-describedby=${`${id}-hint`}>`;
     }
@@ -2374,6 +2454,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
   /** 案件（§80）の入力欄の補足（アサインの案件欄と同じ列名でも中身が違うもの） */
   const CONTRACT_HINTS = {
+    contract_id: T.masters.hintContractId,
     total_amount: T.masters.hintTotalAmount,
     end_month: T.masters.hintMonth,
   };
@@ -2424,13 +2505,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     returnFocusKey = focus;
     const def = MASTER_FILES[fileId];
     const doc = docs[fileId];
-    const columns = def.columns.filter((c) => doc.header.includes(c.name));
-    // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
-    // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す
-    const shownColumns = columns.filter((c) => c.input !== "targetType" && (!def.editableColumns || def.editableColumns.includes(c.name)));
-    const fixedColumns = def.editableColumns ? columns.filter((c) => !def.editableColumns.includes(c.name)) : [];
+    // 列が無くても入れられる列（§101 の仮の値）は欄を出し、値を入れたときに見出しへ足す
+    const columns = def.columns.filter((c) => doc.header.includes(c.name) || c.addOnInput);
     const row = rowId ? doc.rows.find((r) => r.id === rowId) : null;
     const isOriginal = !!(row && doc.originals[row.id]);
+    // 画面で足す行（§101 の案件）は、保存するまで取り込みの列も入れられる
+    const newRow = !!def.addable && ((mode === "add" && !template) || (mode === "edit" && !isOriginal));
+    const importedCol = (name) => !!def.editableColumns && !def.editableColumns.includes(name) && !newRow;
+    // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
+    // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す
+    const shownColumns = columns.filter((c) => c.input !== "targetType" && !importedCol(c.name));
+    const fixedColumns = columns.filter((c) => importedCol(c.name));
     let initial = row ? rowRecord(doc, row) : template ? rowRecord(doc, template) : Object.fromEntries(columns.map((c) => [c.name, ""]));
     if (mode === "add") {
       const next = addMonths(asOfMonth, 1);
@@ -2439,10 +2524,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (def.history === "effective") initial = { ...initial, effective_from: /^\d{4}-\d{2}$/.test(tFrom) && tFrom >= next ? addMonths(tFrom, 1) : next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
+      // 新しい案件（§101）の案件ID は、今の ID の続き番号を入れておく
+      if (!template && fileId === "contracts") initial = { ...initial, contract_id: nextContractId(cIndex().list.map((c) => c.id)) };
       if (preset) initial = { ...initial, ...preset };
     }
     // 他システムから取り込む列（案件の顧客名・案件名など。§80）は変えさせない
-    const lockedByDef = (name) => !!def.editableColumns && !def.editableColumns.includes(name);
+    const lockedByDef = importedCol;
     // メンバーの社員番号・氏名（§81）と取り込みで入る列（§20.2）は、保存済みの行では変えさせない（新しいメンバーと未保存の行は入力できる）
     const memberLocked = (name) => fileId === "members" && (MEMBER_FIXED_COLUMNS.includes(name) || memberImported.includes(name));
     const lockImported = (name) => lockedByDef(name) || (memberLocked(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template));
@@ -2496,7 +2583,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
             ${fieldFor(fileId, c, value, disabled)}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}</span>
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;
         })}
       </div>
@@ -2566,7 +2653,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         return;
       }
       msg.textContent = "";
-      const before = docs[fileId];
+      let before = docs[fileId];
+      // 列の無いファイルで値を入れた列（§101 の仮の値）は、見出しの末尾に足してから書く
+      for (const c of columns) if (c.addOnInput && (values[c.name] ?? "") !== "") before = withColumn(before, c.name);
       let next;
       let focusAfter;
       // アサインは案件 → 期間の月ごとに契約へ割り当て、切り替わりで行を分ける（§31.3）
@@ -2709,6 +2798,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         return [issueRowCell(i, "customer_name"), issueRowCell(i, "project_name")].filter(Boolean).join(" / ") || issueRowCell(i, "contract_id");
       case "targets":
         return goalTargetName(issueRowCell(i, "target_type"), issueRowCell(i, "target_id"));
+      case "customerTeams":
+        return issueRowCell(i, "customer_name");
       default:
         return "";
     }
@@ -3241,6 +3332,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const issue = validation.issues.find((i) => i.fileId === fileId && i.row === row) ?? { fileId, row, rowId: docs[fileId].rows[row - 2]?.id ?? null };
     // 画面に入ってから（スクロールとフォーカスのため）
     requestAnimationFrame(() => revealIssue(issue));
+  }
+  // データ確認の「案件に登録」「単価を登録」から来たとき（?new=1&列名=値）は、値を入れた追加のダイアログを開く（§101。保存は人が決める）
+  if (initialAdd && active !== PLAN_VIEW_ID && VIEW_IDS.includes(active)) {
+    const def = MASTER_FILES[active];
+    if (!def.editableColumns || def.addable) {
+      const names = new Set(def.columns.map((c) => c.name));
+      const preset = Object.fromEntries(Object.entries(initialAdd).filter(([k, v]) => names.has(k) && typeof v === "string" && v !== ""));
+      requestAnimationFrame(() => openRowDialog({ fileId: active, mode: "add", preset, focus: `add:${active}` }));
+    }
   }
   return root;
 }
