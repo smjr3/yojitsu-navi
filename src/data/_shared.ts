@@ -47,6 +47,11 @@ export function inputHash(): string {
   return inputHashMemo;
 }
 
+/** 入力の指紋を決めて使う（scripts/lib/prebuild.ts がまとめて作るとき。null で元に戻す） */
+export function useInputHash(hash: string | null): void {
+  inputHashMemo = hash;
+}
+
 /** ローダの出力に付ける版情報（画面は読まない。検証と、ブラウザのキャッシュ避けに使う） */
 export function buildStamp(): { inputHash: string; asOf: string } {
   return { inputHash: inputHash(), asOf: resolveAsOf() };
@@ -113,12 +118,15 @@ export interface WorklogDetail {
   worklogFetchedAt: string | null;
   months: Array<{ month: string; status: string; worklogs: unknown[] }>;
   notFound?: true;
-  _build: { inputHash: string; asOf: string };
+  /** 計算基準日だけ。入力の指紋は入れない（データのほかの所が変わっても、この契約の明細が同じなら同じ中身にして、増分ビルドで書き換えずに済ませる。
+   * 古い明細が混ざっていないかはビルドの記録＝各出力のハッシュで確かめる。scripts/verify-dist.ts、SPEC §102） */
+  _build: { asOf: string };
 }
 
-function worklogDetailOf(model: Model, contractId: string): WorklogDetail {
+/** 契約 1 件分の作業ログ明細 */
+export function worklogDetailOf(model: Model, contractId: string): WorklogDetail {
   const result = model.contracts.find((r) => r.contract.contractId === contractId);
-  const base = { contractId, asOf: model.meta.asOf, worklogFetchedAt: model.meta.worklogFetchedAt, _build: buildStamp() };
+  const base = { contractId, asOf: model.meta.asOf, worklogFetchedAt: model.meta.worklogFetchedAt, _build: { asOf: resolveAsOf() } };
   return result
     ? { ...base, months: result.months.map((m) => ({ month: m.month, status: m.status, worklogs: m.worklogs })) }
     : { ...base, months: [], notFound: true };
