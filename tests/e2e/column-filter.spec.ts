@@ -1,6 +1,6 @@
 /**
  * 表の列ごとの絞り込み（SPEC §70）
- *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は以上〜以下（表示単位で入力、元の値で比較）、日付は以降〜以前・年のボタン（§108）
+ *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は以上〜以下（表示単位で入力、元の値で比較）、日付は以降〜以前・年のボタン（§109）
  *   - 件数「n 件 / 全 m 件」と「絞り込みを解除」、合計行は絞り込み後の行で作り直す
  *   - 並べ替えと同じくタブ単位で覚える（詳細から戻っても残る）。木構造の表は一致行＋親を残す
  *   - 作業ログ・作業別の内訳にも付く。狭い画面・ダークでも吹き出しが画面内
@@ -126,7 +126,7 @@ test("案件詳細の作業ログ: 作業内容で絞ると合計行が絞り込
   expect(parseNumber(await cellText(table.locator("tfoot tr"), idx))).toBeCloseTo(hours, 2);
   await expect(table.locator("tfoot td").first()).toHaveText(`合計（${tasks.length}件）`);
 
-  // 日付の列は以降〜以前（年月で入れるとその月を丸ごと。§108）
+  // 日付の列は以降〜以前（年月で入れるとその月を丸ごと。§109）
   await filterBtn(table, "date").click();
   const dates = await columnValues(table, "日付");
   const ym = dates[0]!.slice(0, 7);

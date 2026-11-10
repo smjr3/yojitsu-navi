@@ -988,7 +988,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         type: "text",
         filterValue: (g) => leadText(g),
         sortValue: (g) => leadText(g),
-        // 先頭が日付・年月の表（祝日）は以降〜以前で絞る（§108）
+        // 先頭が日付・年月の表（祝日）は以降〜以前で絞る（§109）
         ...(!isGoal && !nameColumn && (keyDef.input === "date" || keyDef.input === "month") ? { filter: "date", dateValue: (g) => parseDateFilterInput(g.shown.record[keyColumn] ?? "") ?? null } : {}),
       },
       ...columns.map((c) => ({
@@ -996,7 +996,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         label: c.label,
         type: "text",
         numeric: isNum(c),
-        // 数値の列は以上〜以下、年月・日付の列は以降〜以前で絞る（一覧表と同じ。§108）。率は % で入れる
+        // 数値の列は以上〜以下、年月・日付の列は以降〜以前で絞る（一覧表と同じ。§109）。率は % で入れる
         ...(isNum(c)
           ? {
               filter: "range",

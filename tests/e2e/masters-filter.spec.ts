@@ -97,7 +97,7 @@ test("390px・ダーク: 見出しの漏斗から絞り込め、吹き出しが�
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
-test("案件: 金額は以上〜以下（円）、開始月は以降〜以前で絞る（§108）", async ({ page }) => {
+test("案件: 金額は以上〜以下（円）、開始月は以降〜以前で絞る（§109）", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   const total = await groups(page).count();
   const amounts = (await columnTexts(page, "total_amount")).map((t) => Number(t.replace(/[^\d.-]/g, "")));
@@ -127,7 +127,7 @@ test("案件: 金額は以上〜以下（円）、開始月は以降〜以前で
 });
 
 
-test("祝日: 先頭の日付の列は以降〜以前と年のボタンで絞る（§108）", async ({ page }) => {
+test("祝日: 先頭の日付の列は以降〜以前と年のボタンで絞る（§109）", async ({ page }) => {
   await gotoPage(page, "/masters?view=holidays");
   const total = await groups(page).count();
   const dates = await columnTexts(page, "__lead");

@@ -52,7 +52,7 @@ describe("matchesFilter", () => {
   });
 });
 
-describe("日付・年月の絞り込み（以降〜以前。SPEC §108）", () => {
+describe("日付・年月の絞り込み（以降〜以前。SPEC §109）", () => {
   const date = { key: "date", label: "日付", type: "text" };
   const month = { key: "month", label: "月", type: "text" };
   const period = { key: "p", label: "期間", type: "text", dateValue: (r: any) => [r.from, r.to] };
