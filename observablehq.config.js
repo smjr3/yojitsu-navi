@@ -214,7 +214,7 @@ const PRERENDER_SCRIPT = `(() => {
       try {
         for (let i = 0; i < st.length; i++) {
           const k = st.key(i);
-          if (k && k.startsWith("yojitsu-navi") && !own.has(k)) out[name + k] = st.getItem(k);
+          if (k && (k.startsWith("yojitsu-navi") || k.startsWith("yn-")) && !own.has(k)) out[name + k] = st.getItem(k);
         }
       } catch {}
     }
