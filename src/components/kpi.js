@@ -2,6 +2,7 @@
  * KPI タイル（値・ラベル・比較・状態）。値はボタンで、クリックすると計算根拠を開く
  */
 import { html } from "htl";
+import { h } from "./dom.js";
 import { numberButton } from "./breakdown.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -49,7 +50,8 @@ export function chipIcon(kind) {
 
 /** 状態チップ（表のセルやヘッダで共通に使う） */
 export function statusChip(kind, text, title = null) {
-  return html`<span class=${`yn-chip yn-chip-${kind}`} title=${title}><span class=${`yn-chip-icon${kind === "prelim" ? " yn-icon-prelim" : ""}`} aria-hidden="true">${chipIcon(kind)}</span>${text}</span>`;
+  // 表の行ごとに作るので html`` でなく直接作る（§107）
+  return h("span", { class: `yn-chip yn-chip-${kind}`, title }, h("span", { class: `yn-chip-icon${kind === "prelim" ? " yn-icon-prelim" : ""}`, "aria-hidden": "true" }, chipIcon(kind)), text);
 }
 
 /**

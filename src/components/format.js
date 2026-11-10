@@ -4,9 +4,10 @@
  * 画面側の単位は "m"（百万円・既定）| "k"（千円）| "yen"。計算コアの MoneyUnit へ変換する。
  */
 import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../core/index.js";
+import { maxFractionFormat } from "../core/money.js";
 import { T, fmt } from "../i18n/index.js";
 
-export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths };
+export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, maxFractionFormat };
 
 export const UNITS = [
   { id: "m", label: T.format.units.m, coreUnit: "millionYen" },
@@ -60,19 +61,19 @@ export function pointsSigned(delta, digits = 1) {
 /** 軸ラベル用の短い金額（百万円） */
 export function millions(yen) {
   if (typeof yen !== "number" || !Number.isFinite(yen)) return EMPTY_VALUE;
-  return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(yen / 1e6);
+  return maxFractionFormat(1).format(yen / 1e6);
 }
 
 /** 整数のカンマ区切り */
 export function integer(n) {
   if (typeof n !== "number" || !Number.isFinite(n)) return EMPTY_VALUE;
-  return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 }).format(n);
+  return maxFractionFormat(0).format(n);
 }
 
 /** 小数（最大 digits 桁） */
 export function decimal(n, digits = 2) {
   if (typeof n !== "number" || !Number.isFinite(n)) return EMPTY_VALUE;
-  return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: digits }).format(n);
+  return maxFractionFormat(digits).format(n);
 }
 
 /** "2026-10" → "2026年10月" */
