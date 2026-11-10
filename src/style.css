@@ -3302,6 +3302,10 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-text-muted);
   overflow-wrap: anywhere;
 }
+/* 契約期間外の案件など（選べるが薄く。§31.6） */
+.yn-combo-opt.is-muted .yn-combo-label {
+  color: var(--yn-text-muted);
+}
 .yn-combo-empty,
 .yn-combo-more {
   padding: 5px 10px;

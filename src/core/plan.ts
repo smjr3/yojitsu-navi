@@ -259,6 +259,15 @@ export function contractSegments(contracts: readonly ContractPeriod[], from: Yea
   return out;
 }
 
+/**
+ * 案件の契約のどれかが期間 [from, to] と 1 か月でも重なるか（§31.6。アサインの案件の候補で「契約期間外」を示す）
+ * 月が不正・from > to なら false
+ */
+export function contractsCover(contracts: readonly ContractPeriod[], from: YearMonth, to: YearMonth): boolean {
+  if (!isValidYearMonth(from) || !isValidYearMonth(to) || from > to) return false;
+  return contracts.some((c) => isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && c.startMonth <= c.endMonth && c.startMonth <= to && from <= c.endMonth);
+}
+
 export interface AllocationPiece {
   startMonth: YearMonth;
   endMonth: YearMonth;

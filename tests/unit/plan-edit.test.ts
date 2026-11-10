@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { contractSegments, editMonthAllocation, mergeAdjacent, projectKey } from "../../src/core/plan.js";
+import { contractSegments, contractsCover, editMonthAllocation, mergeAdjacent, projectKey } from "../../src/core/plan.js";
 import { addMonths, monthRange } from "../../src/core/calendar.js";
 
 const C = (contractId: string, startMonth: string, endMonth: string) => ({ contractId, startMonth, endMonth });
+
+describe("contractsCover（§31.6 案件の候補の「契約期間外」）", () => {
+  const renewal = [C("C001", "2025-04", "2026-03"), C("C002", "2026-04", "2027-03")];
+  it("期間に 1 か月でも契約が掛かれば期間中", () => {
+    expect(contractsCover(renewal, "2026-03", "2026-03")).toBe(true);
+    expect(contractsCover(renewal, "2027-03", "2027-08")).toBe(true);
+    expect(contractsCover(renewal, "2024-10", "2025-04")).toBe(true);
+  });
+  it("契約の前・後・契約の切れ目だけなら期間外", () => {
+    expect(contractsCover(renewal, "2027-04", "2027-06")).toBe(false);
+    expect(contractsCover(renewal, "2025-01", "2025-03")).toBe(false);
+    expect(contractsCover([C("A", "2026-04", "2026-06"), C("B", "2026-10", "2027-03")], "2026-07", "2026-09")).toBe(false);
+  });
+  it("月が不正・逆順・契約 0 件・契約の月が不正なら期間外", () => {
+    expect(contractsCover(renewal, "", "2026-05")).toBe(false);
+    expect(contractsCover(renewal, "2026-06", "2026-05")).toBe(false);
+    expect(contractsCover([], "2026-05", "2026-05")).toBe(false);
+    expect(contractsCover([C("X", "2026-13", "2027-03")], "2026-05", "2026-05")).toBe(false);
+  });
+});
 
 describe("contractSegments（§31.3 案件 → 契約）", () => {
   const renewal = [C("C001", "2025-04", "2026-03"), C("C002", "2026-04", "2027-03")];

@@ -4,7 +4,8 @@
  *   combobox({ id, name, options, value, ... }) → HTMLElement
  *
  * - options: [{ value, label, sub?, search? }]。label は欄に出す名前、sub は候補の補足（所属など）、
- *   search は表示しないが一致に使う文字（ID など）
+ *   search は表示しないが一致に使う文字（ID など）、muted は薄く出す候補（契約期間外の案件など。選べる）
+ *   options は関数でもよい（候補を開くたびに呼ぶ。引数はこの部品の要素。フォームの他の欄に合わせて印を変えるとき）
  * - 選んだ値は name の hidden input に入る（フォームの読み取りは従来どおり name で引ける）
  * - 候補に無い文字のまま離れたら、直前の値に戻す。allowCustom なら打った文字を値にする
  * - WAI-ARIA の combobox（listbox ポップアップ）。↑↓ で移動、Enter で決定、Esc で閉じる
@@ -25,7 +26,7 @@ export function normalizeQuery(text) {
 
 /**
  * 候補を絞り込む（純粋関数。テストする）。空白で区切った語をすべて含むもの。
- * 並びは「名前の先頭一致」→「名前に含む」→「補足・検索語だけに含む」、同じ順位は元の順
+ * 並びは「名前の先頭一致」→「名前に含む」→「補足・検索語だけに含む」、同じ順位は元の順。薄い候補（muted）はいつも後ろ
  */
 export function filterOptions(options, query) {
   const terms = normalizeQuery(query).split(" ").filter(Boolean);
@@ -40,7 +41,7 @@ export function filterOptions(options, query) {
     const rank = label.startsWith(first) ? 0 : label.includes(first) ? 1 : 2;
     ranked.push({ o, rank, i });
   });
-  ranked.sort((a, b) => a.rank - b.rank || a.i - b.i);
+  ranked.sort((a, b) => Number(!!a.o.muted) - Number(!!b.o.muted) || a.rank - b.rank || a.i - b.i);
   return ranked.map((r) => r.o);
 }
 
@@ -49,11 +50,15 @@ let seq = 0;
 export function combobox({ id, name, options, value = "", required = false, disabled = false, placeholder = "", describedBy = null, allowCustom = false, unknownLabel = null, onChange = null }) {
   const listId = `${id}-listbox`;
   const uid = ++seq;
-  const byValue = new Map(options.map((o) => [o.value, o]));
+  let rootEl = null;
+  const optionsOf = typeof options === "function" ? () => options(rootEl) : () => options;
+  /** 名前の引き当て用（値 → 候補）。値と名前は期間で変わらないので最初の 1 回で作る */
+  let byValue = null;
+  const lookup = () => (byValue ??= new Map(optionsOf().map((o) => [o.value, o])));
   let current = value;
   const labelOf = (v) => {
     if (v === "") return "";
-    const o = byValue.get(v);
+    const o = lookup().get(v);
     if (o) return o.label;
     return unknownLabel ? unknownLabel(v) : v;
   };
@@ -64,6 +69,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
   const toggle = html`<button type="button" class="yn-combo-toggle" tabindex="-1" aria-label=${T.combo.showAll} disabled=${disabled}><span aria-hidden="true">▾</span></button>`;
   const status = html`<span class="visually-hidden" aria-live="polite"></span>`;
   const root = html`<span class="yn-combo">${input}${toggle}${hidden}${list}${status}</span>`;
+  rootEl = root;
 
   let shown = [];
   let active = -1;
@@ -91,10 +97,10 @@ export function combobox({ id, name, options, value = "", required = false, disa
   };
 
   const render = (query) => {
-    const all = filterOptions(options, query);
+    const all = filterOptions(optionsOf(), query);
     shown = all.slice(0, COMBO_MAX);
     const items = shown.map((o, i) => {
-      const li = html`<li id=${optionId(i)} role="option" class="yn-combo-opt" data-index=${String(i)} aria-selected=${o.value === current ? "true" : "false"}><span class="yn-combo-label">${o.label}</span>${o.sub ? html`<span class="yn-combo-sub">${o.sub}</span>` : null}</li>`;
+      const li = html`<li id=${optionId(i)} role="option" class=${o.muted ? "yn-combo-opt is-muted" : "yn-combo-opt"} data-index=${String(i)} aria-selected=${o.value === current ? "true" : "false"}><span class="yn-combo-label">${o.label}</span>${o.sub ? html`<span class="yn-combo-sub">${o.sub}</span>` : null}</li>`;
       // mousedown で決める（click だと先に input の blur が走って閉じてしまう）
       li.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
@@ -141,7 +147,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
       return;
     }
     if (text === labelOf(current)) return;
-    const exact = options.filter((o) => normalizeQuery(o.label) === normalizeQuery(text));
+    const exact = optionsOf().filter((o) => normalizeQuery(o.label) === normalizeQuery(text));
     if (exact.length === 1) set(exact[0].value);
     else if (allowCustom) set(text);
     else input.value = labelOf(current);

@@ -47,6 +47,7 @@ import {
 import {
   allocationFromInput,
   contractSegments,
+  contractsCover,
   editMonthAllocation,
   flattenTeamTree,
   hoursFromAllocation,
@@ -496,13 +497,21 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
       const left = memberStatus(get("status")).status === "left";
       const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
-      return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left };
+      return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left, muted: left };
     })
       // 不在の人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
       .sort((a, b) => Number(a.left) - Number(b.left));
   }
-  function projectOptions() {
-    return [...cIndex().projects.values()].map((p) => ({ value: p.key, label: p.project || p.customer, sub: p.project ? p.customer : "", search: p.contracts.map((c) => c.contractId).join(" ") }));
+  /**
+   * 案件の候補。期間 period（{ from, to }）を渡すと、その期間に契約が無い案件に「契約期間外」の印を付けて後ろへ回す（選べる。§31.6）
+   */
+  function projectOptions(period = null) {
+    const opts = [...cIndex().projects.values()].map((p) => {
+      const outside = !!period && !contractsCover(p.contracts, period.from, period.to);
+      const sub = [p.project ? p.customer : "", outside ? T.masters.projectOutOfPeriod : ""].filter(Boolean).join(" ・ ");
+      return { value: p.key, label: p.project || p.customer, sub, search: p.contracts.map((c) => c.contractId).join(" "), muted: outside };
+    });
+    return opts.sort((a, b) => Number(a.muted) - Number(b.muted));
   }
   /** ID の列を画面に出す文字（名前）にする。名前が無いものは ID のまま（§31.1） */
   function displayValue(fileId, column, value) {
@@ -2152,7 +2161,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     });
     // 追加する作業 = 案件 ＋ まだ出ていない運用保守以外の種別（作業の種類は人によって 100 を超えるので検索して選ぶ）
     const typeOptions = outsideTypeList.filter((t) => !shownTypes.some((x) => sameType(x, t))).map((t) => ({ value: `${OUTSIDE_OPTION}${t}`, label: t, sub: T.planEdit.outsideTypeSub }));
-    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: [...projectOptions(), ...typeOptions], value: "", placeholder: T.masters.workPlaceholder });
+    // 案件の候補は反映範囲（この月だけ／この月以降）に契約があるかで印を付ける（§31.6）
+    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: () => [...projectOptions({ from: month, to: scope === "after" && fyLast >= month ? fyLast : month }), ...typeOptions], value: "", placeholder: T.masters.workPlaceholder });
     const newNum = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id="yn-plan-pop-new" aria-label=${fmt(T.plan.editRowAria, { project: T.plan.editNewRow, month: monthJa(month) })}>`;
     const msg = html`<p class="yn-me-form-msg" role="alert"></p>`;
     const note = html`<div class="yn-plan-pop-note"></div>`;
@@ -2358,7 +2368,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       // 案件で選ぶ（値は案件のキー）。ファイルに無い契約を指す既存の行は "c:<ID>" のまま持つ（§31.3）
       const c = cIndex().byId.get(value);
       const v = value === "" ? "" : c ? projectKey(c.customer, c.project) : `c:${value}`;
-      return combobox({ id, name: PROJECT_FIELD, options: projectOptions(), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
+      // 候補を開くたびに、フォームの開始月〜終了月に契約があるかで印を付ける（§31.6）
+      const periodOf = (root) => {
+        const f = root?.closest?.("form");
+        const from = String(f?.elements?.namedItem?.("start_month")?.value ?? "").trim();
+        const to = String(f?.elements?.namedItem?.("end_month")?.value ?? "").trim() || from;
+        return /^\d{4}-\d{2}$/.test(from) && /^\d{4}-\d{2}$/.test(to) ? { from, to } : null;
+      };
+      return combobox({ id, name: PROJECT_FIELD, options: (root) => projectOptions(periodOf(root)), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
     if (col.input === "target") {
       // 目標の対象（§63）: チーム・顧客・案件から 1 つ。値は「種類:ID」
