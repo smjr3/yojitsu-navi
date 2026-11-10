@@ -543,7 +543,7 @@ export function dataTable({
     const href = rowHref ? rowHref(row) : null;
     const danger = row.isDanger || rowDeficit(row) || row.isOverBudget;
     const context = tree && matchedKeys !== null && !matchedKeys.has(row.key);
-    // 行・セルは html`` でなく直接作る（1 マスごとの HTML 解析を避ける。§106）
+    // 行・セルは html`` でなく直接作る（1 マスごとの HTML 解析を避ける。§107）
     const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`, "data-key": String(rowKey(row, i)) });
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
@@ -685,7 +685,7 @@ export function dataTable({
     scroller.classList.toggle("at-end", !scrollable || wrapEl.scrollLeft + wrapEl.clientWidth >= wrapEl.scrollWidth - 1);
     scrollHint.hidden = !scrollable;
   };
-  // 大きさの変化では次の描画の直前に 1 回だけ調べる（描画の途中でレイアウト計算を何度もさせない。§106）
+  // 大きさの変化では次の描画の直前に 1 回だけ調べる（描画の途中でレイアウト計算を何度もさせない。§107）
   let scrollFrame = 0;
   const scheduleScroll = () => {
     if (scrollFrame) return;

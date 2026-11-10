@@ -70,7 +70,7 @@ describe("表示 (SPEC §12)", () => {
     expect(EMPTY_VALUE).toBe("—");
   });
 
-  it("書式を使い回しても桁数ごとに正しく出る（SPEC §106）", () => {
+  it("書式を使い回しても桁数ごとに正しく出る（SPEC §107）", () => {
     expect(formatPercent(0.12345, 2)).toBe("12.35%");
     expect(formatPercent(0.12345)).toBe("12.3%");
     expect(formatPercent(0.12345, 2)).toBe("12.35%");

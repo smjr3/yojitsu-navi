@@ -1097,7 +1097,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 値の表示（空は —） */
     const valueEl = (column, raw, cls = "yn-me-val") => {
       const v = displayValue(fileId, column, raw);
-      // 行 × 列の数だけ作るので html`` でなく直接作る（§106）
+      // 行 × 列の数だけ作るので html`` でなく直接作る（§107）
       return h("span", { class: cls }, v === "" ? h("span", { class: "yn-muted", "aria-label": T.masters.emptyAria }, "—") : v);
     };
 
@@ -1556,7 +1556,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 月のセル（クリックでその場の修正。target を渡すとその対象の欄から始める） */
     const cellButton = (r, m, v, label, focusTarget, level = null) => {
       const fk = `plan:cell:${r.memberId}:${focusTarget ? targetId(focusTarget) : "all"}:${m}`;
-      // 人 × 月の数だけ作るので html`` でなく直接作る（§106）
+      // 人 × 月の数だけ作るので html`` でなく直接作る（§107）
       const btn = h("button", { type: "button", class: editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly", "data-fk": fk, "aria-label": fmt(T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) }), "aria-haspopup": editable ? "dialog" : null }, v > 0 ? pm(v) : h("span", { class: "yn-muted", "aria-hidden": "true" }, "—"));
       const tip = () => tooltip.show(btn, cellTip(r, m));
       btn.addEventListener("mouseenter", tip);

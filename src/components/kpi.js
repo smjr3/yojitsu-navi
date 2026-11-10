@@ -50,7 +50,7 @@ export function chipIcon(kind) {
 
 /** 状態チップ（表のセルやヘッダで共通に使う） */
 export function statusChip(kind, text, title = null) {
-  // 表の行ごとに作るので html`` でなく直接作る（§106）
+  // 表の行ごとに作るので html`` でなく直接作る（§107）
   return h("span", { class: `yn-chip yn-chip-${kind}`, title }, h("span", { class: `yn-chip-icon${kind === "prelim" ? " yn-icon-prelim" : ""}`, "aria-hidden": "true" }, chipIcon(kind)), text);
 }
 

@@ -67,7 +67,7 @@ const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
 ```
 
 ```js
-// 同じ条件の集計は使い回す（単位を変えたとき・前の条件に戻したときに集計し直さない。SPEC §106）
+// 同じ条件の集計は使い回す（単位を変えたとき・前の条件に戻したときに集計し直さない。SPEC §107）
 const aggregateMembersCached = (() => {
   const cache = new Map();
   return (model, scope) => {

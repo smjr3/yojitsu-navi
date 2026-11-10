@@ -8,7 +8,7 @@ export const EMPTY_VALUE = "—";
 
 const intFormat = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 
-// 書式は作るのが重いので桁数ごとに 1 回だけ作って使い回す（表の 1 マスごとに呼ばれる。SPEC §106）
+// 書式は作るのが重いので桁数ごとに 1 回だけ作って使い回す（表の 1 マスごとに呼ばれる。SPEC §107）
 const fractionFormats = new Map<number, Intl.NumberFormat>();
 function fractionFormat(digits: number): Intl.NumberFormat {
   let f = fractionFormats.get(digits);

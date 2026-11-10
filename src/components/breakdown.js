@@ -128,7 +128,7 @@ export function closeBreakdown() {
 
 /** 数値ボタン。クリック／Enter で内訳を開く */
 export function numberButton(text, spec, { className = "", ariaLabel = null, title = T.breakdown.show } = {}) {
-  // 表の 1 マスごとに作るので html`` でなく直接作る（§106）
+  // 表の 1 マスごとに作るので html`` でなく直接作る（§107）
   const btn = h("button", { type: "button", class: `yn-num ${className}`.trim(), title, "aria-label": ariaLabel }, text);
   btn.addEventListener("click", (ev) => {
     ev.stopPropagation();
