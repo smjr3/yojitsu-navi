@@ -115,6 +115,14 @@ function readStorage() {
   }
 }
 
+function readStorageText() {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function writeStorage(state) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -149,9 +157,12 @@ export function createStore(model, options = {}) {
   const listeners = new Set();
   // 初回も URL を正規化しておく（共有しやすい）
   if (options.syncUrl !== false) writeQuery(state);
-  // 先読み（SPEC §108）で裏で作っている間は保存先に書かない（表示されたときに書く。元の画面の状態を古い値で上書きしない）
-  if (typeof document !== "undefined" && document.prerendering) document.addEventListener("prerenderingchange", () => writeStorage(state), { once: true });
-  else writeStorage(state);
+  // 先読み（SPEC §108）で裏で作っている間は保存先に書かない。表示されたときに、その間に元の画面で変わっていなければ書く
+  // （変わっていれば作り直すので書かない。元の画面の状態を古い値で上書きしない）
+  if (typeof document !== "undefined" && document.prerendering) {
+    const seen = readStorageText();
+    document.addEventListener("prerenderingchange", () => readStorageText() === seen && writeStorage(state), { once: true });
+  } else writeStorage(state);
 
   const notify = () => {
     for (const fn of [...listeners]) fn(state);

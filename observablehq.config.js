@@ -190,32 +190,44 @@ const SPECULATION_RULES = JSON.stringify({
   ],
 });
 /**
- * 先読みで作った画面は、作ったときの期間・チームなど（このブラウザに覚えた表示の状態）で描かれる。
- * この画面で状態を書き換えたら（期間を変えた・列を動かした等）、先読みを捨てて、次にマウスを載せたときに作り直させる
+ * 先読みで裏で作っている画面（document.prerendering）の調整:
+ * - 画面の計算（Observable の実行）は requestAnimationFrame で進むが、裏で作っている間は呼ばれない。裏でも集計・表まで作るよう、その間だけ時計（setTimeout）で代わりに呼ぶ
+ * - 裏で作った後、表示される前に元の画面で表示の状態（期間・チーム・列の設定など、このブラウザに覚えたもの）が変わっていたら、表示するときに作り直す（古い状態の画面を出さない）
  */
 const PRERENDER_SCRIPT = `(() => {
-  if (!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"))) return;
-  let timer = 0;
-  const reset = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const old = document.getElementById("yn-speculation");
-      if (!old) return;
-      const s = document.createElement("script");
-      s.type = "speculationrules";
-      s.id = old.id;
-      s.textContent = old.textContent;
-      old.replaceWith(s);
-    }, 0);
-  };
-  for (const m of ["setItem", "removeItem", "clear"]) {
+  if (!document.prerendering) return;
+  const raf = window.requestAnimationFrame.bind(window);
+  const caf = window.cancelAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => (document.prerendering ? -setTimeout(() => cb(performance.now()), 16) : raf(cb));
+  window.cancelAnimationFrame = (id) => (id < 0 ? clearTimeout(-id) : caf(id));
+  const own = new Set();
+  for (const m of ["setItem", "removeItem"]) {
     const f = Storage.prototype[m];
-    Storage.prototype[m] = function (...args) {
-      const r = f.apply(this, args);
-      reset();
-      return r;
+    Storage.prototype[m] = function (key, ...rest) {
+      if (document.prerendering) own.add(String(key));
+      return f.call(this, key, ...rest);
     };
   }
+  const snap = () => {
+    const out = {};
+    for (const [name, st] of [["l", localStorage], ["s", sessionStorage]]) {
+      try {
+        for (let i = 0; i < st.length; i++) {
+          const k = st.key(i);
+          if (k && k.startsWith("yojitsu-navi") && !own.has(k)) out[name + k] = st.getItem(k);
+        }
+      } catch {}
+    }
+    return out;
+  };
+  // 先読みを始めたときにあった値が変わった・消えたら古い（後から足された値は見ない。元の画面が読み込みの途中で初めて書いた既定値で作り直さない）
+  const before = snap();
+  // 作り直すときは、先読みを始めたときの URL で開き直す（裏で作る間に画面が URL へ足した期間などを使わない）
+  const href = location.href;
+  document.addEventListener("prerenderingchange", () => {
+    const now = snap();
+    if (Object.keys(before).some((k) => !own.has(k.slice(1)) && now[k] !== before[k])) location.replace(href);
+  }, { once: true });
 })();`;
 /** 右端「その他」（⋯）のメニュー: 押すと開閉、外を押す・Esc・フォーカスが外れると閉じる */
 const MORE_SCRIPT = `(() => {
@@ -271,7 +283,7 @@ function buildInfo() {
 }
 const BUILD = buildInfo();
 const BUILD_META = `<meta name="yn-build" data-version="${escapeHtml(BUILD.version)}" data-commit="${escapeHtml(BUILD.commit)}" data-built-at="${escapeHtml(BUILD.builtAt)}">`;
-const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script><script>${PRERENDER_SCRIPT}</script><script type="speculationrules" id="yn-speculation">${SPECULATION_RULES}</script>`;
+const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script><script>${PRERENDER_SCRIPT}</script><script type="speculationrules">${SPECULATION_RULES}</script>`;
 
 export default {
   title: ja.app.name,

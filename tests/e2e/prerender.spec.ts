@@ -2,8 +2,8 @@
  * 画面の切り替えの先読み（SPEC §108）
  *
  * Playwright（DevTools がつながったブラウザ）では Chrome が先読みそのものを止めるので、ここでは
- * 先読みの決まり（speculationrules）がエラーなく読まれること、表示の状態を変えたら決まりが作り直される（古い先読みを捨てる）ことを確かめる。
- * 先読みで作った画面がすぐ出ることは、DevTools をつながない Chromium で手で確かめた（PR の説明）。
+ * 先読みの決まり（speculationrules）がエラーなく読まれることを確かめる。
+ * 先読みで裏で表まで作ること・表示の状態が変わっていたら作り直すことは、DevTools をつながない Chromium で確かめた（PR の説明）。
  */
 import { test, expect, gotoPage } from "./helpers/app.js";
 
@@ -24,15 +24,19 @@ test("先読みの決まりがエラーなく読まれ、マスタ編集・設�
   expect(last.sourceText).toContain("./settings");
 });
 
-test("期間を変えると先読みの決まりを作り直す（前の状態で作った先読みを捨てる）", async ({ page }) => {
-  const cdp = await page.context().newCDPSession(page);
-  const removed: string[] = [];
-  cdp.on("Preload.ruleSetRemoved", (e: { id: string }) => removed.push(e.id));
-  await cdp.send("Preload.enable");
+
+test("head の埋め込みスクリプト（先読みの調整を含む）に文法の誤りが無い", async ({ page }) => {
   await gotoPage(page, "/contracts");
-  await page.waitForTimeout(300);
-  const before = removed.length;
-  await page.locator("[data-preset]").nth(1).click();
-  await expect.poll(() => removed.length).toBeGreaterThan(before);
-  await expect(page.locator("#yn-speculation")).toHaveCount(1);
+  const bad = await page.evaluate(() =>
+    [...document.querySelectorAll("head script:not([src]):not([type])")].flatMap((s) => {
+      try {
+        new Function(s.textContent ?? "");
+        return [];
+      } catch (e) {
+        return [`${String(e)}: ${(s.textContent ?? "").slice(0, 60)}`];
+      }
+    }),
+  );
+  expect(bad).toEqual([]);
+  expect(await page.evaluate(() => document.head.innerHTML.includes("prerenderingchange"))).toBe(true);
 });
