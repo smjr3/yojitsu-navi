@@ -3,7 +3,7 @@
  * 顧客キー・表示名の決定はコア（core/customers.ts）。ここでは「選んだ契約ID集合を 1 行にする」だけ。
  */
 import { aggregate, forecastTotals, groupByCustomer } from "../core/index.js";
-import { standardColumns, rowStatus, statusSortValue, contractNameCell } from "./table.js";
+import { standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns } from "./table.js";
 import * as bd from "./breakdown.js";
 import { T } from "../i18n/index.js";
 
@@ -82,9 +82,8 @@ export function contractListColumns({ model, store, period, unit }) {
   return [
     { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
     { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
-    { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
-    { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
-    ...standardColumns({ breakdowns: contractBreakdowns({ model, store, period, unit }) }),
+    ...contractInfoColumns(),
+    ...standardColumns({ costTypes: model.config.costTypes, breakdowns: contractBreakdowns({ model, store, period, unit }) }),
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ];
 }

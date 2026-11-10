@@ -21,7 +21,7 @@ import { statTile, kpiRow, statusChip, forecastStatus } from "./components/kpi.j
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
 ```
@@ -187,9 +187,8 @@ if (vm) {
     const columns = [
       { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
       { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
-      { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
-      { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
-      ...standardColumns({
+      ...contractInfoColumns(),
+      ...standardColumns({ costTypes: model.config.costTypes,
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
           cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
@@ -231,7 +230,7 @@ if (vm) {
     const columns = [
       { key: "name", label: T.columns.team, type: "text" },
       ...teamCountColumns(),
-      ...standardColumns({
+      ...standardColumns({ costTypes: model.config.costTypes,
         forecastLabel: T.columns.forecastGrossProfit,
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit }),

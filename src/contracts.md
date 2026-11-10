@@ -19,7 +19,7 @@ import { onTextInput } from "./components/text-input.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
@@ -190,11 +190,8 @@ if (vm) {
   const columns = [
     { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}`, exportLabel: T.breakdown.colCustomerProject },
     { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
-    { key: "customerName", label: T.customers.colCustomer, type: "text", exportOnly: true },
-    { key: "projectName", label: T.contracts.colProject, type: "text", exportOnly: true },
-    { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
-    { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
-    ...standardColumns({
+    ...contractInfoColumns(),
+    ...standardColumns({ costTypes: model.config.costTypes,
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
         cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
@@ -233,6 +230,10 @@ if (vm) {
       shownIds,
       sumTotals,
       sumForecast,
+      // 「列」で選べる列（時間・人月・着地の予算と実績）の合計（§106.1）
+      totals: sumTotals,
+      forecast: sumForecast,
+      totalAmount: shown.reduce((s, r) => s + (r.totalAmount ?? 0), 0),
       sumSubtitle: fmt(T.contracts.totalSubtitle, { n: shown.length, period: periodJa(scope.period) }),
     };
   };

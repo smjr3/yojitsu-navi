@@ -10,6 +10,12 @@ test("正式な案件IDの無い案件（候補つき）とマスタに無い正
   await gotoPage(page, "/data-check");
   await expect(page.getByRole("heading", { name: UNLINKED })).toBeVisible();
   const un = tableByCaption(page, UNLINKED);
+  // 顧客・案件名が先頭。案件IDは「列」で選べる列（SPEC §106.1）
+  expect(await un.locator("thead th").first().getAttribute("data-key")).toBe("customerName");
+  await expect(un.locator('thead th[data-key="contractId"]')).toHaveCount(0);
+  await page.locator(".yn-table-block", { has: un }).locator(".yn-cols-btn").click();
+  await page.locator('.yn-cols-pop .yn-cols-item[data-key="contractId"] input').click();
+  await page.keyboard.press("Escape");
   const uh = await headerIndex(un);
   const rows = dataRows(un);
   expect(await rows.count()).toBe(2);

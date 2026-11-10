@@ -209,6 +209,12 @@ export default {
     contractCount: "案件数",
     inPeriodSub: "（期間内）",
     contractCountInPeriod: "案件数（期間内）",
+    // 「列」で選べる列（SPEC §106.1）
+    personMonths: "人月",
+    forecastBudget: "着地予算",
+    forecastCost: "着地実績",
+    costOfType: "実績（{type}）",
+    totalAmount: "契約総額",
   },
   table: {
     // Excel の列名に付ける単位
@@ -1184,6 +1190,14 @@ export default {
     colKind: "区分",
     kindPartner: "パートナー",
     kindEmployee: "社員",
+    // 「列」で選べる列（SPEC §106.1）
+    colDivision: "事業本部",
+    colDepartment: "部",
+    colSection: "課",
+    colPresence: "在籍",
+    presenceActive: "在籍",
+    colUnplannedHours: "アサイン外の時間",
+    colUnplannedCost: "アサイン外の実績",
     // 不在（退職・休職など。理由は問わない。§35）
     chipLeft: "不在",
     chipLeftTitle: "{month} から不在",

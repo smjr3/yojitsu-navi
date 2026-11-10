@@ -155,7 +155,7 @@ if (vm) {
   const columns = [
     { key: "name", label: T.customers.colCustomer, type: "text", sortValue: (r) => r.name },
     ...teamCountColumns(),
-    ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
+    ...standardColumns({ costTypes: model.config.costTypes, breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
     hasTargets(model, "customer") ? targetColumn(model, "customer", (r) => r.name, vm.method) : null,
     { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
   ].filter(Boolean);
@@ -182,6 +182,9 @@ if (vm) {
       shownIds,
       sumTotals,
       sumForecast,
+      // 「列」で選べる列（時間・人月・着地の予算と実績）の合計（§106.1）
+      totals: sumTotals,
+      forecast: sumForecast,
       sumSubtitle: fmt(T.customers.totalSubtitle, { n: shown.length, period: periodJa(scope.period) }),
     };
   };

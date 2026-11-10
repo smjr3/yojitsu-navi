@@ -6,6 +6,8 @@
  *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
  *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す）,
  *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
+ *               optional?: 選べる列（既定では出さず「列」でチェックしたときだけ出す。§106.1）, exportAlways?: 画面で隠していても Excel に出す,
+ *               exportOnly?: Excel だけの列（ID など。画面の「列」にも出さない）,
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
  *               filter?: "values"|"range"|"date"|false（見出しの絞り込み。既定は数値列 range、値がすべて年月・日付の列 date、それ以外 values）, filterValue?(row) -> string|string[],
  *               dateValue?(row) -> "YYYY-MM"|"YYYY-MM-DD"|[from, to]（日付の絞り込みに使う値。期間の列は [開始, 終了] で、重なれば残す）,
@@ -22,10 +24,10 @@
  * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
  */
 import { bindColResizer } from "./col-resize.js";
-import { arrangeColumns, columnsButton, loadColumnPrefs } from "./column-prefs.js";
+import { arrangeColumns, columnsButton, loadColumnPrefs, orderColumns } from "./column-prefs.js";
 import { h } from "./dom.js";
 import { html } from "htl";
-import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
+import { EMPTY_VALUE, decimal, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
 import { statusChip } from "./kpi.js";
 import { onTextInput } from "./text-input.js";
@@ -410,15 +412,22 @@ export function dataTable({
   const baseCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   // 列の表示・並び順（§106）。先頭（名前）の列は固定。画面と表ごとにこのブラウザに覚える
   const colPrefsId = caption && baseCols.length >= 3 ? `${location.pathname}:${caption}` : null;
-  let colPrefs = colPrefsId ? loadColumnPrefs(colPrefsId) : { order: [], hidden: [] };
+  let colPrefs = colPrefsId ? loadColumnPrefs(colPrefsId) : { order: [], hidden: [], shown: [] };
+  // 選べる列（optional）は「列」でチェックしたときだけ出す。「列」が無い表では出さない
   const arrange = (cols) => {
-    if (!colPrefsId || cols.length === 0) return cols;
+    if (!colPrefsId || cols.length === 0) return cols.filter((c) => !c.optional);
     const lead = cols[0] === baseCols[0] ? [cols[0]] : [];
     return [...lead, ...arrangeColumns(cols.slice(lead.length), colPrefs)];
   };
   let visibleCols = arrange(baseCols);
-  // Excel も画面の列の並び・表示に合わせる（Excel だけの列は既定の位置のまま）
-  const exportColsNow = () => arrange(columns.filter((c) => !c.hidden && c.export !== false));
+  // Excel も画面の列の並び・表示に合わせる。Excel だけの列（exportOnly）と exportAlways の列は画面で隠していても出す
+  const exportColsNow = () => {
+    const all = columns.filter((c) => !c.hidden && c.export !== false);
+    const lead = colPrefsId && all[0] === baseCols[0] ? [all[0]] : [];
+    const ordered = colPrefsId ? [...lead, ...orderColumns(all.slice(lead.length), colPrefs)] : all;
+    const shown = new Set(visibleCols);
+    return ordered.filter((c) => c.exportOnly || c.exportAlways || shown.has(c));
+  };
   // 利用者が選んだ並べ替えは、絞り込み・単位の変更で表が作り直されても、詳細から戻っても残す（タブ単位）
   const sortMemoKey = !tree && caption ? `yojitsu-navi:sort:${location.pathname}:${caption}` : null;
   const remembered = (() => {
@@ -772,7 +781,7 @@ export function dataTable({
   const colsBtn = colPrefsId
     ? columnsButton({
         id: colPrefsId,
-        columns: baseCols.slice(1).map((c) => ({ key: c.key, label: c.label })),
+        columns: baseCols.slice(1).map((c) => ({ key: c.key, label: c.label, optional: !!c.optional })),
         onChange: (prefs) => {
           colPrefs = prefs;
           visibleCols = arrange(baseCols);
@@ -854,7 +863,7 @@ export function contractNameCell(r) {
  * 全一覧で共通の数値列（予算・原価・粗利・粗利率・消化率・着地）。
  * breakdowns: {budget(row), cost(row), grossProfit(row), margin(row), burnRate(row), forecast(row)} を渡すと各セルが根拠ボタンになる
  */
-export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.forecastGrossProfit, includeHours = false } = {}) {
+export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.forecastGrossProfit, includeHours = false, costTypes = [] } = {}) {
   const cols = [
     { key: "budget", label: T.columns.budget, type: "money", breakdown: breakdowns.budget },
     { key: "cost", label: T.columns.cost, type: "money", breakdown: breakdowns.cost },
@@ -884,7 +893,40 @@ export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.for
     },
   ];
   if (includeHours) cols.splice(2, 0, { key: "hours", label: T.columns.hours, type: "hours", hideOnPhone: true });
+  return [...cols, ...totalsExtraColumns({ includeHours, costTypes })];
+}
+
+/**
+ * 行の集計（totals・forecast）から追加の計算なしで出せる「選べる列」（§106.1。既定では出さない）。
+ * 時間・人月・着地の予算と実績・実績の種類ごとの内訳（種類が 2 つ以上のとき）
+ */
+export function totalsExtraColumns({ includeHours = false, costTypes = [] } = {}) {
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const cols = [];
+  if (!includeHours) cols.push({ key: "hours", label: T.columns.hours, type: "hours", optional: true, get: (r) => num(r.hours ?? r.totals?.hours) });
+  cols.push(
+    { key: "personMonths", label: T.columns.personMonths, align: "num", optional: true, get: (r) => num(r.totals?.personMonthsStandard), render: (r) => decimal(num(r.totals?.personMonthsStandard), 2) },
+    // 着地を出さない行（期間内に案件が無い）は空
+    { key: "forecastBudget", label: T.columns.forecastBudget, type: "money", optional: true, get: (r) => (r.forecastGrossProfit === null ? null : num(r.forecast?.targetBudget)) },
+    { key: "forecastCost", label: T.columns.forecastCost, type: "money", optional: true, get: (r) => (r.forecastGrossProfit === null ? null : num(r.forecast?.forecastCost)) },
+  );
+  if (costTypes.length > 1)
+    for (const t of costTypes) cols.push({ key: `cost:${t.id}`, label: fmt(T.columns.costOfType, { type: t.label }), type: "money", optional: true, get: (r) => num(r.totals?.costs?.[t.id] ?? 0) });
   return cols;
+}
+
+/**
+ * 案件の行で選べる列（顧客・案件名・チーム・契約期間・契約総額。§106.1）。先頭の列は「顧客 / 案件」の 2 行表示なので、
+ * 分けて並べ替え・絞り込みたいとき用。契約総額以外は Excel には従来どおり常に出す
+ */
+export function contractInfoColumns({ team = true } = {}) {
+  return [
+    { key: "customerName", label: T.customers.colCustomer, type: "text", optional: true, exportAlways: true },
+    { key: "projectName", label: T.contracts.colProject, type: "text", optional: true, exportAlways: true },
+    ...(team ? [{ key: "teamName", label: T.columns.team, type: "text", optional: true, exportAlways: true }] : []),
+    { key: "period", label: T.columns.contractPeriod, type: "text", optional: true, exportAlways: true, get: (r) => `${r.startMonth}〜${r.endMonth}`, dateValue: (r) => [r.startMonth, r.endMonth] },
+    { key: "totalAmount", label: T.columns.totalAmount, type: "money", optional: true },
+  ];
 }
 
 /** チーム行の契約数列: 「契約数（期間内）」。年度内の契約数は Excel に別列で出す */
