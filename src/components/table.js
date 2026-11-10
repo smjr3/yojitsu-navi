@@ -16,9 +16,12 @@
  *   filter?: false（列ごとの絞り込みを付けない）,
  *   maxHeight?: px, toolbar?: Node
  * })
+ * 列の表示・並び順: caption があり列が 3 つ以上なら、ツールバーの「列」で利用者が変えられる（先頭の列は固定。§106）。
+ * 文字の列（type "text"、文字だけのセル）は上限の幅で「…」にし、全文を title に出す。
  * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
  */
 import { bindColResizer } from "./col-resize.js";
+import { arrangeColumns, columnsButton, loadColumnPrefs } from "./column-prefs.js";
 import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
@@ -311,8 +314,18 @@ export function dataTable({
   id = null,
   filter = true,
 }) {
-  const visibleCols = columns.filter((c) => !c.hidden && !c.exportOnly);
-  const exportCols = columns.filter((c) => !c.hidden && c.export !== false);
+  const baseCols = columns.filter((c) => !c.hidden && !c.exportOnly);
+  // 列の表示・並び順（§106）。先頭（名前）の列は固定。画面と表ごとにこのブラウザに覚える
+  const colPrefsId = caption && baseCols.length >= 3 ? `${location.pathname}:${caption}` : null;
+  let colPrefs = colPrefsId ? loadColumnPrefs(colPrefsId) : { order: [], hidden: [] };
+  const arrange = (cols) => {
+    if (!colPrefsId || cols.length === 0) return cols;
+    const lead = cols[0] === baseCols[0] ? [cols[0]] : [];
+    return [...lead, ...arrangeColumns(cols.slice(lead.length), colPrefs)];
+  };
+  let visibleCols = arrange(baseCols);
+  // Excel も画面の列の並び・表示に合わせる（Excel だけの列は既定の位置のまま）
+  const exportColsNow = () => arrange(columns.filter((c) => !c.hidden && c.export !== false));
   // 利用者が選んだ並べ替えは、絞り込み・単位の変更で表が作り直されても、詳細から戻っても残す（タブ単位）
   const sortMemoKey = !tree && caption ? `yojitsu-navi:sort:${location.pathname}:${caption}` : null;
   const remembered = (() => {
@@ -323,7 +336,8 @@ export function dataTable({
       return null;
     }
   })();
-  let sortState = tree ? null : remembered ?? (sort ? { ...sort } : null);
+  // 利用者が選んだ並べ替えの列を隠したら、既定の並びに戻す
+  let sortState = tree ? null : (remembered && visibleCols.some((c) => c.key === remembered.key) ? remembered : null) ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
   let currentRows = rows;
 
@@ -387,7 +401,7 @@ export function dataTable({
       if (!saved || typeof saved !== "object") return {};
       return Object.fromEntries(
         Object.entries(saved)
-          .filter(([k]) => visibleCols.some((c) => c.key === k))
+          .filter(([k]) => baseCols.some((c) => c.key === k))
           .map(([k, v]) => [k, clampColW(Number(v))])
           .filter(([, v]) => v !== null),
       );
@@ -567,6 +581,11 @@ export function dataTable({
         }
         if (href) content = html`<a class="yn-row-link" href=${href}>${content}</a>`;
       }
+      // 文字の列（案件名・作業名など）は長くても他の列を潰さないよう上限で「…」にし、全文は title（§106）
+      if (ci > 0 && typeof content === "string" && content !== EMPTY_VALUE && !numeric && (col.type === undefined || col.type === "text")) {
+        cell.classList.add("yn-cell-clip");
+        cell.title = content;
+      }
       cell.append(content);
       if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
@@ -656,9 +675,35 @@ export function dataTable({
     });
   renderBody();
 
+  const colsBtn = colPrefsId
+    ? columnsButton({
+        id: colPrefsId,
+        columns: baseCols.slice(1).map((c) => ({ key: c.key, label: c.label })),
+        onChange: (prefs) => {
+          colPrefs = prefs;
+          visibleCols = arrange(baseCols);
+          // 隠した列の絞り込みは外す（見えない条件で行が減らないように）。並べ替えは既定に戻す
+          let dropped = false;
+          for (const key of [...filters.keys()]) if (!visibleCols.some((c) => c.key === key)) dropped = filters.delete(key) || dropped;
+          if (dropped) saveFilters();
+          if (sortState && !visibleCols.some((c) => c.key === sortState.key)) {
+            sortState = !tree && sort ? { ...sort } : null;
+            try {
+              if (sortMemoKey) sessionStorage.removeItem(sortMemoKey);
+            } catch {
+              /* 無視 */
+            }
+          }
+          renderHead();
+          renderBody();
+          updateScroll();
+        },
+      })
+    : null;
+
   const exportBtn = exportName
     ? exportButton(() => ({
-        columns: exportCols,
+        columns: exportColsNow(),
         // 木構造は折りたたみに関係なく全行（絞り込み中は一致した行とその親）
         rows: tree ? filteredRows().map((r) => ({ ...r, name: `${"　".repeat(r.depth ?? 0)}${r.name ?? ""}` })) : currentRows,
         unit,
@@ -672,7 +717,7 @@ export function dataTable({
   const wrapEl = html`<div class="yn-table-wrap" style=${maxHeight ? `max-height:${maxHeight}px` : null} tabindex="0" role="region" aria-label=${caption ?? T.table.regionLabel}>${table}</div>`;
   const scroller = html`<div class="yn-table-scroll">${wrapEl}</div>`;
   const wrap = html`<div class="yn-table-block">
-    <div class="yn-table-toolbar">${count}${clearBtn}${scrollHint}${toolbar}${exportBtn}</div>
+    <div class="yn-table-toolbar">${count}${clearBtn}${scrollHint}${toolbar}${colsBtn || exportBtn ? html`<span class="yn-table-actions">${colsBtn}${exportBtn}</span>` : null}</div>
     ${scroller}
   </div>`;
   // 横スクロールの有無と位置を示す（端に影、ツールバーに案内）
