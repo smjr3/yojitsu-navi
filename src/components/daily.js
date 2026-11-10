@@ -6,6 +6,7 @@
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
 import { dailyMembers, dailyProgress, formatHours, formatPercent } from "../core/index.js";
+import { maxFractionFormat } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
 import { chartColors, chartLegend } from "./charts.js";
 import { chartFigure } from "./chart-zoom.js";
@@ -128,7 +129,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
   const projLine = last && last.day < n ? [{ day: last.day, v: last.cumulative }, { day: n, v: p.projection }] : [];
   const peak = Math.max(p.cap, p.projection, last?.cumulative ?? 0, 1);
   const axisUnit = peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
-  const axisFormat = (v) => new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(v / axisUnit.div);
+  const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
   // 目盛り: 1 日・5 日おき（狭い画面は 10 日おき）
   const step = width < 520 ? 10 : 5;
   const ticks = [1, ...Array.from({ length: Math.floor(n / step) }, (_, i) => (i + 1) * step).filter((d) => d <= n)];

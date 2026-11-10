@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "../../src/core/money.js";
+import { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, maxFractionFormat, roundToUnit } from "../../src/core/money.js";
 
 describe("表示 (SPEC §12)", () => {
   it("formatYen 円", () => {
@@ -68,5 +68,16 @@ describe("表示 (SPEC §12)", () => {
       expect(formatPersonMonths(v)).toBe(EMPTY_VALUE);
     }
     expect(EMPTY_VALUE).toBe("—");
+  });
+
+  it("書式を使い回しても桁数ごとに正しく出る（SPEC §107）", () => {
+    expect(formatPercent(0.12345, 2)).toBe("12.35%");
+    expect(formatPercent(0.12345)).toBe("12.3%");
+    expect(formatPercent(0.12345, 2)).toBe("12.35%");
+    expect(formatPersonMonths(1.2345, 1)).toBe("1.2人月");
+    expect(formatPersonMonths(1.2345)).toBe("1.23人月");
+    expect(maxFractionFormat(1)).toBe(maxFractionFormat(1));
+    expect(maxFractionFormat(0).format(1234.5)).toBe("1,235");
+    expect(maxFractionFormat(2).format(1.5)).toBe("1.5");
   });
 });

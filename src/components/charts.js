@@ -6,7 +6,7 @@
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
-import { STATUS_LABELS, formatHours, formatPercent, millions, money, monthJa, monthShort } from "./format.js";
+import { STATUS_LABELS, formatHours, formatPercent, maxFractionFormat, millions, money, monthJa, monthShort } from "./format.js";
 import { dataTable } from "./table.js";
 
 export function chartColors(dark) {
@@ -63,7 +63,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const targets = data.filter((d) => d.targetCap != null);
   const peak = Math.max(0, ...data.map((d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0, d.targetCap ?? 0)));
   const axisUnit = peak >= 5e10 ? { label: T.charts.axisHundredMillionYen, div: 1e8 } : peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
-  const axisFormat = (v) => new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(v / axisUnit.div);
+  const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
   // 左余白は最も長い目盛り（負の粗利を含む）に合わせる。固定だと桁が増えたとき符号が切れる
   const low = Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
   const marginLeft = Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1));
