@@ -85,9 +85,16 @@ const vm = (() => {
   const agg = memberIds ? aggregateMembers(model, { period, memberIds, includeOutside }) : all;
   // 期間全体の計画（未来月を含む）。KPI の補足に出す
   const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembers(model, { period: fullPeriod, memberIds: memberIds ?? undefined, includeOutside });
+  // 所属（事業本部・部・課）は基準月のマスタの値（「列」で選べる列。§106.1）
+  const orgOf = new Map();
+  for (const r of model.members) if (r.effectiveFrom <= all.baseMonth && (orgOf.get(r.memberId)?.effectiveFrom ?? "") <= r.effectiveFrom) orgOf.set(r.memberId, r);
   const rows = agg.members.map((m) => ({
     ...m,
     key: m.memberId,
+    division: orgOf.get(m.memberId)?.division ?? "",
+    department: orgOf.get(m.memberId)?.department ?? "",
+    section: orgOf.get(m.memberId)?.section ?? "",
+    contractCount: m.byContract.filter((c) => !c.outsideType).length,
     teamName: m.teamId ? teamName(model, m.teamId, scope.tree) : "",
     searchText: normalizeName(`${m.memberId} ${m.memberName} ${m.title ?? ""}`),
   }));
@@ -206,9 +213,17 @@ if (vm) {
       exportValue: (r) => r.memberName,
     },
     { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
-    { key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true, exportValue: (r) => r.teamName || T.members.noTeam },
-    { key: "title", label: T.members.colTitle, type: "text", exportOnly: true },
-    { key: "kindLabel", label: T.members.colKind, type: "text", exportOnly: true, get: (r) => (r.memberUnknown ? T.members.chipUnknown : r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
+    // 「列」で選べる列（§106.1）。所属チーム・役職・区分は従来どおり Excel には常に出す
+    { key: "teamName", label: T.members.colTeam, type: "text", optional: true, exportAlways: true, get: (r) => r.teamName || T.members.noTeam },
+    { key: "title", label: T.members.colTitle, type: "text", optional: true, exportAlways: true },
+    { key: "kindLabel", label: T.members.colKind, type: "text", optional: true, exportAlways: true, get: (r) => (r.memberUnknown ? T.members.chipUnknown : r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
+    { key: "division", label: T.members.colDivision, type: "text", optional: true },
+    { key: "department", label: T.members.colDepartment, type: "text", optional: true },
+    { key: "section", label: T.members.colSection, type: "text", optional: true },
+    { key: "presence", label: T.members.colPresence, type: "text", optional: true, get: (r) => (r.leftFrom ? T.members.chipLeft : T.members.presenceActive) },
+    { key: "contractCount", label: T.columns.contractCount, type: "int", optional: true },
+    { key: "unplannedHours", label: T.members.colUnplannedHours, type: "hours", optional: true },
+    { key: "unplannedCost", label: T.members.colUnplannedCost, type: "money", optional: true },
     { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
     { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
     { key: "utilization", label: T.breakdown.utilization, type: "percent", breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: sub(r) }) },
@@ -232,7 +247,7 @@ if (vm) {
       summary: (shownRows) => {
         const agg = totalsFor(shownRows);
         const st = agg.total;
-        return { memberName: null, name: fmt(T.members.totalRow, { n: shownRows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, teamName: null, title: null, status: null, agg };
+        return { memberName: null, name: fmt(T.members.totalRow, { n: shownRows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, unplannedHours: st.unplannedHours, unplannedCost: st.unplannedCost, teamName: null, title: null, status: null, agg };
       },
       summaryBreakdown: (col, { agg }) => (["plannedHours", "actualHours", "utilization", "plannedCost", "actualCost", "variance"].includes(col.key) ? () => bd.memberTotalsSpec({ members: agg.members, total: agg.total, measure: col.key, unit, period }) : null),
     }),
