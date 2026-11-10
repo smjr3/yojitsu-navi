@@ -2007,6 +2007,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   .yn-filters,
   .yn-chip-filters,
   .yn-table-toolbar .yn-export,
+  .yn-cols-btn,
   .yn-dialog,
   .yn-section-actions {
     display: none !important;
@@ -4728,4 +4729,61 @@ a.yn-org-person:hover {
 /* データ確認の表の「案件に登録」「マスタで直す」など（§103）。折り返さない */
 .yn-row-action {
   white-space: nowrap;
+}
+
+/* 列の表示・並び順（§106）。吹き出しは列の絞り込みと同じ見た目 */
+.yn-table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.yn-table-actions .yn-export {
+  margin-left: 0;
+}
+.yn-cols-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.yn-cols-btn.is-active {
+  border-color: var(--yn-accent, currentColor);
+  color: var(--yn-accent, inherit);
+}
+.yn-cols-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.yn-cols-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.yn-cols-item .yn-filter-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.yn-cols-item.is-off .yn-filter-item-text {
+  color: var(--yn-text-muted);
+}
+.yn-cols-move {
+  flex: none;
+  min-width: 28px;
+  padding-inline: 4px;
+}
+/* 文字の列（案件名・作業名など）は他の列を潰さないよう上限で「…」（全文は title） */
+.yn-table td.yn-cell-clip:not(.is-col-sized) {
+  box-sizing: border-box;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container (max-width: 700px) {
+  .yn-table td.yn-cell-clip:not(.is-col-sized) {
+    max-width: 200px;
+  }
 }
