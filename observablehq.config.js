@@ -226,7 +226,7 @@ const PRERENDER_SCRIPT = `(() => {
   const href = location.href;
   document.addEventListener("prerenderingchange", () => {
     const now = snap();
-    if (Object.keys(before).some((k) => !own.has(k.slice(1)) && now[k] !== before[k])) location.replace(href);
+    if ([...new Set([...Object.keys(before), ...Object.keys(now)])].some((k) => !own.has(k.slice(1)) && now[k] !== before[k])) location.replace(href);
   }, { once: true });
 })();`;
 /** 右端「その他」（⋯）のメニュー: 押すと開閉、外を押す・Esc・フォーカスが外れると閉じる */
