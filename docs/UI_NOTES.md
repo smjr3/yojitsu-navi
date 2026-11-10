@@ -11,7 +11,7 @@ src/
     model.json.ts                画面が読む Model。ContractMonth.worklogs を空にして軽量化（約 3.1 MB / 5 倍のダミーデータ）
     worklogs/[contractId].json.js 契約ごとの作業ログ明細（遅延取得用）。observablehq.config.js の dynamicPaths で列挙
     dataset-issues.json.ts       データ確認ページ用: CSV 読み込みの問題 + validateDataset（validate-data.ts と同じ内容）
-  components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む）
+  components/                    フレームワーク非依存の ESM（htl の html`` で DOM を組む。表の行・マスなど数の多い部品は dom.js の h() で直接作る。SPEC §107）
     format.js      金額・割合・時間・月・日時の書式。単位 "m"（百万円）| "k"（千円）| "yen" を core の MoneyUnit に変換
     state.js       期間・チーム・単位・着地方式の状態 ⇄ URL クエリ ⇄ localStorage
     analysis.js    scope（期間×チーム）の決定、前年同期比、契約行／チーム行の組み立て、見込み額の月割り
@@ -22,6 +22,7 @@ src/
     charts.js      Observable Plot のグラフ（月次推移）、凡例、表の双子、消化率メーター
     chart-zoom.js  グラフの枠（凡例＋「拡大」ボタン＋幅に合わせた再描画）と拡大表示のダイアログ（全グラフ共通。SPEC §33）
     filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
+    dom.js         h(tag, attrs, ...children): 表の行・マスなど数の多い部品を document.createElement で直接作る（html`` と同じ DOM。SPEC §107）
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
   style.css        デザイントークン（ライト／ダーク・テーマカラー）とスタイル
 ```

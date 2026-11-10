@@ -21,7 +21,7 @@ import {
   setForecastPeriod,
 } from "../core/index.js";
 import { forecastMonthlyCost, grossMarginOf, memberNameAt } from "./analysis.js";
-import { money, monthJa } from "./format.js";
+import { maxFractionFormat, money, monthJa } from "./format.js";
 import { planCellTooltip } from "./plan-cell.js";
 
 /** 体制図で選べる月（データの最初の月〜最後の月。今月は必ず含む） */
@@ -171,7 +171,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
       return Math.abs(d) < 0.005 ? "±0h" : `${d > 0 ? "+" : "−"}${formatHours(Math.abs(d))}`;
     }
     const v = personMonths(p.plannedHours, std);
-    return v > 0 ? new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(v) : "";
+    return v > 0 ? maxFractionFormat(2).format(v) : "";
   };
   let tipSeq = 0;
   const personChip = (p) => {
