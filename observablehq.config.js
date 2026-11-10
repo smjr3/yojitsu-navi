@@ -177,6 +177,46 @@ const FONT_SCRIPT = `(() => {
   s.textContent = css;
   document.head.append(s);
 })();`;
+/**
+ * 画面の切り替えを速くする先読み（SPEC §108）。Chrome・Edge は、リンクにマウスを載せた（または押し始めた）ところで次の画面を裏で作っておき、
+ * 押すとすぐに出す（Speculation Rules。対応しないブラウザでは何もしない）。マスタ編集・設定は先読みしない（下書き・GitLab の確認があるため）
+ */
+const SPECULATION_RULES = JSON.stringify({
+  prerender: [
+    {
+      where: { and: [{ selector_matches: 'a[href^="./"]' }, { not: { selector_matches: 'a[href^="./masters"], a[href^="./settings"], a[download], a[target]' } }] },
+      eagerness: "moderate",
+    },
+  ],
+});
+/**
+ * 先読みで作った画面は、作ったときの期間・チームなど（このブラウザに覚えた表示の状態）で描かれる。
+ * この画面で状態を書き換えたら（期間を変えた・列を動かした等）、先読みを捨てて、次にマウスを載せたときに作り直させる
+ */
+const PRERENDER_SCRIPT = `(() => {
+  if (!(HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules"))) return;
+  let timer = 0;
+  const reset = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const old = document.getElementById("yn-speculation");
+      if (!old) return;
+      const s = document.createElement("script");
+      s.type = "speculationrules";
+      s.id = old.id;
+      s.textContent = old.textContent;
+      old.replaceWith(s);
+    }, 0);
+  };
+  for (const m of ["setItem", "removeItem", "clear"]) {
+    const f = Storage.prototype[m];
+    Storage.prototype[m] = function (...args) {
+      const r = f.apply(this, args);
+      reset();
+      return r;
+    };
+  }
+})();`;
 /** 右端「その他」（⋯）のメニュー: 押すと開閉、外を押す・Esc・フォーカスが外れると閉じる */
 const MORE_SCRIPT = `(() => {
   const parts = () => { const btn = document.querySelector(".yn-more-btn"); return btn ? [btn, document.getElementById("yn-more-menu")] : []; };
@@ -231,7 +271,7 @@ function buildInfo() {
 }
 const BUILD = buildInfo();
 const BUILD_META = `<meta name="yn-build" data-version="${escapeHtml(BUILD.version)}" data-commit="${escapeHtml(BUILD.commit)}" data-built-at="${escapeHtml(BUILD.builtAt)}">`;
-const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script>`;
+const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script><script>${PRERENDER_SCRIPT}</script><script type="speculationrules" id="yn-speculation">${SPECULATION_RULES}</script>`;
 
 export default {
   title: ja.app.name,

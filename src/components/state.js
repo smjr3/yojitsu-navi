@@ -149,7 +149,9 @@ export function createStore(model, options = {}) {
   const listeners = new Set();
   // 初回も URL を正規化しておく（共有しやすい）
   if (options.syncUrl !== false) writeQuery(state);
-  writeStorage(state);
+  // 先読み（SPEC §108）で裏で作っている間は保存先に書かない（表示されたときに書く。元の画面の状態を古い値で上書きしない）
+  if (typeof document !== "undefined" && document.prerendering) document.addEventListener("prerenderingchange", () => writeStorage(state), { once: true });
+  else writeStorage(state);
 
   const notify = () => {
     for (const fn of [...listeners]) fn(state);
