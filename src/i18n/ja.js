@@ -239,6 +239,12 @@ export default {
     filterClear: "解除",
     filterClose: "閉じる",
     filterClearAll: "絞り込みを解除",
+    // 列の表示・並び順（SPEC §106）
+    columnsButton: "列",
+    columnsTitle: "表示する列と並び順",
+    columnsReset: "元に戻す",
+    columnsUp: "{label}を前へ",
+    columnsDown: "{label}を後ろへ",
     filterNoMatch: "該当なし",
     filterEmpty: "絞り込みに一致する行がありません",
     total: "合計",

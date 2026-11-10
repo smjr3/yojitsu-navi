@@ -7,6 +7,7 @@
  *   mastersEditor({ data, asOfMonth, minMonth, storage, fetchImpl, now }) → HTMLElement
  */
 import { bindColResizer } from "./col-resize.js";
+import { arrangeColumns, closeColumnPop, columnsButton, loadColumnPrefs } from "./column-prefs.js";
 import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
 import { html } from "htl";
 import { h } from "./dom.js";
@@ -924,7 +925,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   let drawnView = null;
   function renderPanel() {
     // 別のタブへ移ったら、前のタブの列の絞り込みの吹き出しを閉じる
-    if (drawnView !== active) for (const p of Object.values(ledgerPops)) p.close();
+    if (drawnView !== active) {
+      for (const p of Object.values(ledgerPops)) p.close();
+      closeColumnPop();
+    }
     // 同じ表の描き直しで表の枠のスクロール位置が先頭に戻らないように引き継ぐ（行を開いても位置がずれない。2026-10-31 試用版のコメント）
     const wrap = drawnView === active ? parts.panel.querySelector(".yn-me-table-wrap") : null;
     const scroll = wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
@@ -957,7 +961,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 目標は対象の名前（チーム・顧客・案件）を先頭に出す。案件（§80）は顧客名（補足に案件ID）
     const isGoal = fileId === "targets";
     const nameColumn = (fileId === "members" || fileId === "teams") && doc.header.includes("name") ? "name" : fileId === "contracts" && doc.header.includes("customer_name") ? "customer_name" : null;
-    const columns = def.columns.filter((c) => doc.header.includes(c.name) && !c.listHidden && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
+    const allColumns = def.columns.filter((c) => doc.header.includes(c.name) && !c.listHidden && c.name !== "effective_from" && !def.keyColumns.slice(0, isList ? 2 : 1).includes(c.name) && c.name !== nameColumn);
+    // 値の列の表示・並び順（一覧表と同じ部品。§106）。先頭の対象の列と、履歴・状態・操作の列は固定
+    const colPrefsId = `masters:${fileId}`;
+    const columns = allColumns.length >= 2 ? arrangeColumns(allColumns, loadColumnPrefs(colPrefsId), (c) => c.name) : allColumns;
+    const colsBtn =
+      allColumns.length >= 2
+        ? columnsButton({
+            id: colPrefsId,
+            fk: `cols:${fileId}`,
+            columns: allColumns.map((c) => ({ key: c.name, label: c.label })),
+            anchor: () => root.querySelector(`[data-fk="cols:${fileId}"]`),
+            onChange: () => renderPanel(),
+          })
+        : null;
     const keyDef = def.columns.find((c) => c.name === keyColumn);
     const leadLabel = isGoal ? T.masterFiles.colTarget : nameColumn ? fmt(T.ledger.leadLabel, { name: def.columns.find((c) => c.name === nameColumn).label, key: keyDef.label }) : keyDef.label;
     const colCount = columns.length + (isList ? 3 : 4);
@@ -1243,7 +1260,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ${search}
         <label class="yn-toggle-chip" for=${`yn-me-changed-${fileId}`}>${changedOnly}<span>${T.masters.onlyChanged}</span></label>
         ${unsetChips}
-        <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>${clearCols}
+        <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(groups.length), total: integer(groupsOf(fileId).length), unit: T.ledger.unit[fileId] })}</span>${clearCols}${colsBtn}
       </div>
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${fmt(T.masters.tableAria, { file: def.label })}>
         <table class="yn-table yn-table-compact yn-me-table yn-me-ledger" onmouseover=${clippedTitle}>
