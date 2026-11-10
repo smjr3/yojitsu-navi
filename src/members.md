@@ -260,22 +260,12 @@ if (vm) {
 
 ```js
 // 計画とのずれ（§64）: メンバーごとの計画と実績の表の下に置く（§68）。確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
-const gapsSectionCache = new Map();
-```
-
-```js
-// 計画とのずれ（§64）は単位に関係しないので、期間・チーム・運用保守以外の切替が同じなら作った表を使い回す（単位の切替で作り直さない。SPEC §106）
-const gapsSection = (() => {
-  if (!vm) return [];
-  const key = JSON.stringify([vm.fullPeriod.from, vm.fullPeriod.to, state.team, vm.includeOutside]);
-  const hit = gapsSectionCache.get(key);
-  if (hit) return hit;
-  const out = [];
+if (vm) {
   const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
   const jp = gaps.judgedPeriod;
   const status = !jp ? T.members.gapNoConfirmed : gaps.rows.length ? fmt(T.members.gapStatus, { period: periodJa(jp), n: gaps.rows.length }) : fmt(T.members.gapNone, { period: periodJa(jp) });
   const toPlan = html`<a class="yn-btn yn-btn-sm" id="yn-gap-plan-link" href=${state.team ? `./plan?team=${encodeURIComponent(state.team)}` : "./plan"}>${T.members.gapToPlan}</a>`;
-  out.push(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
+  display(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
   if (gaps.rows.length) {
     const byId = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
     const kindText = { unplanned: T.members.gapUnplanned, noActual: T.members.gapNoActual, over: T.members.gapOver, under: T.members.gapUnder };
@@ -311,7 +301,7 @@ const gapsSection = (() => {
       { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true },
       { key: "diffHours", label: T.members.gapColDiff, sublabel: T.members.gapColDiffSub, type: "hours", render: (r) => signedHours(r.diffHours), sortValue: (r) => Math.abs(r.diffHours) },
     ];
-    out.push(
+    display(
       dataTable({
         columns,
         rows,
@@ -324,12 +314,5 @@ const gapsSection = (() => {
       }),
     );
   }
-  if (gapsSectionCache.size >= 8) gapsSectionCache.delete(gapsSectionCache.keys().next().value);
-  gapsSectionCache.set(key, out);
-  return out;
-})();
-```
-
-```js
-for (const node of gapsSection) display(node);
+}
 ```
