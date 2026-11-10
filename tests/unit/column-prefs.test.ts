@@ -44,7 +44,9 @@ describe("保存", () => {
     store.set("yojitsu-navi:columns:q", JSON.stringify({ order: [1, "a"], hidden: "b" }));
     expect(loadColumnPrefs("q")).toEqual({ order: ["a"], hidden: [] });
     vi.stubGlobal("localStorage", undefined);
-    expect(loadColumnPrefs("p")).toEqual({ order: [], hidden: [] });
-    expect(() => saveColumnPrefs("p", { order: ["a"], hidden: [] })).not.toThrow();
+    expect(loadColumnPrefs("r")).toEqual({ order: [], hidden: [] });
+    // 保存できなくても、変えた設定はこの画面のあいだ効く
+    expect(() => saveColumnPrefs("r", { order: ["b", "a"], hidden: ["c"] })).not.toThrow();
+    expect(loadColumnPrefs("r")).toEqual({ order: ["b", "a"], hidden: ["c"] });
   });
 });

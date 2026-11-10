@@ -8,8 +8,12 @@ import { T, fmt } from "../i18n/index.js";
 
 const PREFIX = "yojitsu-navi:columns:";
 
+/** 今開いている画面での設定（保存できない環境・容量切れでも、変えた設定はこの画面のあいだ効かせる） */
+const memory = new Map();
+
 /** 覚えた設定。壊れた値・無い値は空 */
 export function loadColumnPrefs(id) {
+  if (memory.has(id)) return memory.get(id);
   try {
     const v = JSON.parse(localStorage.getItem(PREFIX + id) ?? "null");
     const keys = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === "string") : []);
@@ -20,6 +24,7 @@ export function loadColumnPrefs(id) {
 }
 
 export function saveColumnPrefs(id, prefs) {
+  memory.set(id, { order: [...prefs.order], hidden: [...prefs.hidden] });
   try {
     if (!prefs.order.length && !prefs.hidden.length) localStorage.removeItem(PREFIX + id);
     else localStorage.setItem(PREFIX + id, JSON.stringify({ order: prefs.order, hidden: prefs.hidden }));
