@@ -14,6 +14,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName, planGaps } from "./core/index.js";
 import { createStore } from "./components/state.js";
+import { onTextInput } from "./components/text-input.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note, withToday } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
@@ -144,19 +145,15 @@ const searchForm = (() => {
   const form = html`<form class="yn-chip-filters" role="search" aria-label=${T.members.searchLabel}></form>`;
   form.addEventListener("submit", (ev) => ev.preventDefault());
   const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder=${T.members.searchPlaceholder} value=${initialQuery} aria-label=${T.members.searchAria}>`;
-  let timer = null;
-  input.addEventListener("input", () => {
-    // 150ms デバウンス（1 文字ごとに表を作り直さない）
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      form.value = input.value;
-      // URL の q に書き戻す（詳細から「戻る」で復元するため）
-      const url = new URL(location.href);
-      if (input.value) url.searchParams.set("q", input.value);
-      else url.searchParams.delete("q");
-      history.replaceState(history.state, "", url);
-      form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
-    }, 150);
+  // 打ち終わってから反映（1 文字ごと・日本語の変換中には表を作り直さない。§105）
+  onTextInput(input, () => {
+    form.value = input.value;
+    // URL の q に書き戻す（詳細から「戻る」で復元するため）
+    const url = new URL(location.href);
+    if (input.value) url.searchParams.set("q", input.value);
+    else url.searchParams.delete("q");
+    history.replaceState(history.state, "", url);
+    form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
   });
   form.append(html`<label class="yn-filter-label" for="yn-m-text">${T.members.searchHead}</label>`, input);
   form.value = initialQuery;
