@@ -8,7 +8,7 @@
  */
 import { bindColResizer } from "./col-resize.js";
 import { arrangeColumns, closeColumnPop, columnsButton, loadColumnPrefs } from "./column-prefs.js";
-import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
+import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInput, FILTER_ICON } from "./table.js";
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
@@ -983,12 +983,35 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const leadText = (g) => (isGoal && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || "";
     const isNum = (c) => c.input === "number" || c.input === "percent";
     const fcols = [
-      { key: "__lead", label: leadLabel, type: "text", filterValue: (g) => leadText(g), sortValue: (g) => leadText(g) },
+      {
+        key: "__lead",
+        label: leadLabel,
+        type: "text",
+        filterValue: (g) => leadText(g),
+        sortValue: (g) => leadText(g),
+        // 先頭が日付・年月の表（祝日）は以降〜以前で絞る（§109）
+        ...(!isGoal && !nameColumn && (keyDef.input === "date" || keyDef.input === "month") ? { filter: "date", dateValue: (g) => parseDateFilterInput(g.shown.record[keyColumn] ?? "") ?? null } : {}),
+      },
       ...columns.map((c) => ({
         key: c.name,
         label: c.label,
         type: "text",
         numeric: isNum(c),
+        // 数値の列は以上〜以下、年月・日付の列は以降〜以前で絞る（一覧表と同じ。§109）。率は % で入れる
+        ...(isNum(c)
+          ? {
+              filter: "range",
+              rangeUnit: c.input === "percent" ? "%" : "",
+              get: (g) => {
+                const raw = g.shown.record[c.name] ?? "";
+                const n = raw === "" ? Number.NaN : c.input === "percent" ? parsePercentCell(raw) * 100 : parseNumberCell(raw);
+                // 率は 0.07 × 100 の誤差で「7 以下」から漏れないよう丸める
+                return Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : null;
+              },
+            }
+          : c.input === "month" || c.input === "date"
+            ? { filter: "date", dateValue: (g) => parseDateFilterInput(g.shown.record[c.name] ?? "") ?? null }
+            : {}),
         filterValue: (g) => String(displayValue(fileId, c.name, g.shown.record[c.name] ?? "") ?? ""),
         sortValue: (g) => {
           const raw = g.shown.record[c.name] ?? "";

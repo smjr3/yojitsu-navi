@@ -2,7 +2,7 @@
  * 表の列ごとの絞り込み（SPEC §70）の判定: 値の一覧・検索語・数値の範囲
  */
 import { describe, expect, it } from "vitest";
-import { matchesFilter, treeFilteredRows } from "../../src/components/table.js";
+import { matchesFilter, parseDateFilterInput, treeFilteredRows } from "../../src/components/table.js";
 
 const text = { key: "task", label: "作業内容", type: "text" };
 const money = { key: "budget", label: "予算", type: "money" };
@@ -49,6 +49,56 @@ describe("matchesFilter", () => {
   it("filterValue を指定した列はその値で絞る", () => {
     const col = { ...text, filterValue: (r: any) => [r.a, r.b] };
     expect(matchesFilter(col, { values: ["B"] }, { a: "A", b: "B" }, "m")).toBe(true);
+  });
+});
+
+describe("日付・年月の絞り込み（以降〜以前。SPEC §109）", () => {
+  const date = { key: "date", label: "日付", type: "text" };
+  const month = { key: "month", label: "月", type: "text" };
+  const period = { key: "p", label: "期間", type: "text", dateValue: (r: any) => [r.from, r.to] };
+
+  it("入力は年・年月・日のどれでも読み、形を揃える。読めないものは undefined、空は null", () => {
+    expect(parseDateFilterInput("")).toBe(null);
+    expect(parseDateFilterInput(" ")).toBe(null);
+    expect(parseDateFilterInput("2031")).toBe("2031");
+    expect(parseDateFilterInput("２０３１年")).toBe("2031");
+    expect(parseDateFilterInput("2031-4")).toBe("2031-04");
+    expect(parseDateFilterInput("2031/04")).toBe("2031-04");
+    expect(parseDateFilterInput("2031年4月")).toBe("2031-04");
+    expect(parseDateFilterInput("203104")).toBe("2031-04");
+    expect(parseDateFilterInput("2031/4/5")).toBe("2031-04-05");
+    expect(parseDateFilterInput("2031年4月5日")).toBe("2031-04-05");
+    expect(parseDateFilterInput("20310405")).toBe("2031-04-05");
+    expect(parseDateFilterInput("2031-13")).toBe(undefined);
+    expect(parseDateFilterInput("2031-02-30")).toBe(undefined);
+    expect(parseDateFilterInput("2032-02-29")).toBe("2032-02-29");
+    expect(parseDateFilterInput("4月")).toBe(undefined);
+  });
+
+  it("年・年月で入れると、その年・月を丸ごと含める（以降はその始まりから、以前はその終わりまで）", () => {
+    expect(matchesFilter(date, { from: "2031-04" }, { date: "2031-04-01" }, "m")).toBe(true);
+    expect(matchesFilter(date, { from: "2031-04" }, { date: "2031-03-31" }, "m")).toBe(false);
+    expect(matchesFilter(date, { to: "2031-04" }, { date: "2031-04-30" }, "m")).toBe(true);
+    expect(matchesFilter(date, { to: "2031-04" }, { date: "2031-05-01" }, "m")).toBe(false);
+    expect(matchesFilter(date, { from: "2031", to: "2031" }, { date: "2031-12-31" }, "m")).toBe(true);
+    expect(matchesFilter(date, { from: "2031", to: "2031" }, { date: "2032-01-01" }, "m")).toBe(false);
+    expect(matchesFilter(date, { from: "2031-04-10", to: "2031-04-10" }, { date: "2031-04-10" }, "m")).toBe(true);
+    expect(matchesFilter(date, { from: "2031-04-10" }, { date: "2031-04-09" }, "m")).toBe(false);
+  });
+
+  it("年月の列は、その月が範囲に掛かれば残す。日付が無い行は外す", () => {
+    expect(matchesFilter(month, { from: "2031-04-15" }, { month: "2031-04" }, "m")).toBe(true);
+    expect(matchesFilter(month, { to: "2031-03" }, { month: "2031-04" }, "m")).toBe(false);
+    expect(matchesFilter(month, { from: "2031" }, { month: "" }, "m")).toBe(false);
+    expect(matchesFilter(month, { from: "2031" }, { month: null }, "m")).toBe(false);
+  });
+
+  it("期間の列は範囲と重なれば残す", () => {
+    const row = { from: "2031-04", to: "2032-03" };
+    expect(matchesFilter(period, { from: "2032", to: "2032" }, row, "m")).toBe(true);
+    expect(matchesFilter(period, { from: "2032-04" }, row, "m")).toBe(false);
+    expect(matchesFilter(period, { to: "2031-03" }, row, "m")).toBe(false);
+    expect(matchesFilter(period, { to: "2031-04" }, row, "m")).toBe(true);
   });
 });
 

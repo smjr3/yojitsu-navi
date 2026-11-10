@@ -1,6 +1,6 @@
 /**
  * 表の列ごとの絞り込み（SPEC §70）
- *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は下限〜上限（表示単位で入力、元の値で比較）
+ *   - 見出しの漏斗ボタン → 値の一覧（検索つき）／数値は以上〜以下（表示単位で入力、元の値で比較）、日付は以降〜以前・年のボタン（§109）
  *   - 件数「n 件 / 全 m 件」と「絞り込みを解除」、合計行は絞り込み後の行で作り直す
  *   - 並べ替えと同じくタブ単位で覚える（詳細から戻っても残る）。木構造の表は一致行＋親を残す
  *   - 作業ログ・作業別の内訳にも付く。狭い画面・ダークでも吹き出しが画面内
@@ -68,18 +68,18 @@ test.describe("案件一覧", () => {
     await expect(clearAll(tableByCaption(page, "案件一覧"))).toBeHidden();
   });
 
-  test("数値は表示単位（百万円）で下限を入れ、元の値で比べる。検索語は部分一致", async ({ page }) => {
+  test("数値は表示単位（百万円）で「以上」を入れ、元の値で比べる。検索語は部分一致", async ({ page }) => {
     await gotoPage(page, "/contracts?unit=m");
     const table = tableByCaption(page, "案件一覧");
     const total = await dataRows(table).count();
     await filterBtn(table, "budget").click();
     await expect(pop(page).locator(".yn-filter-unit")).toHaveText("百万円");
-    await pop(page).getByLabel("予算 下限").fill("10");
+    await pop(page).getByLabel("予算 以上").fill("10");
     await expect(count(table)).toContainText("/ 全");
     for (const t of await columnValues(table, "予算")) expect(parseNumber(t)!).toBeGreaterThanOrEqual(9.95); // 表示は 0.1 百万円単位に丸め
     await pop(page).getByRole("button", { name: "解除" }).click();
     await expect(dataRows(table)).toHaveCount(total);
-    await expect(pop(page).getByLabel("予算 下限")).toHaveValue("");
+    await expect(pop(page).getByLabel("予算 以上")).toHaveValue("");
 
     // 案件列の検索（顧客名の一部）
     await pop(page).getByRole("button", { name: "閉じる" }).click();
@@ -126,13 +126,52 @@ test("案件詳細の作業ログ: 作業内容で絞ると合計行が絞り込
   expect(parseNumber(await cellText(table.locator("tfoot tr"), idx))).toBeCloseTo(hours, 2);
   await expect(table.locator("tfoot td").first()).toHaveText(`合計（${tasks.length}件）`);
 
-  // 日付の検索に年月を入れると月で絞れる
+  // 日付の列は以降〜以前（年月で入れるとその月を丸ごと。§109）
   await filterBtn(table, "date").click();
-  const ym = (await columnValues(table, "日付"))[0]!.slice(0, 7);
-  await pop(page).getByRole("searchbox").fill(ym);
+  const dates = await columnValues(table, "日付");
+  const ym = dates[0]!.slice(0, 7);
+  await expect(pop(page).getByRole("searchbox")).toHaveCount(0);
+  await pop(page).getByLabel("日付 以降").fill(ym);
+  await pop(page).getByLabel("日付 以前").fill(ym.replace("-", "/"));
   await expect(async () => {
-    for (const d of await columnValues(table, "日付")) expect(d.startsWith(ym)).toBe(true);
+    const shown = await columnValues(table, "日付");
+    expect(shown.length).toBe(dates.filter((d) => d.startsWith(ym)).length);
+    for (const d of shown) expect(d.startsWith(ym)).toBe(true);
   }).toPass();
+  // 読めない入力は赤枠で、反映しない
+  await pop(page).getByLabel("日付 以前").fill("13月");
+  await expect(pop(page).getByLabel("日付 以前")).toHaveClass(/is-invalid/);
+});
+
+test("日付の列: 年のボタンでその年だけ、もう一度押すと解除。日付で絞っても再読み込みで残る", async ({ page }) => {
+  await gotoPage(page, "/contract?id=C008");
+  await page.getByRole("button", { name: "作業ログを読み込む" }).click();
+  const table = tableByCaption(page, "作業ログ");
+  await expect(dataRows(table).first()).toBeVisible();
+  const all = await columnValues(table, "日付");
+  const year = all[0]!.slice(0, 4);
+  await filterBtn(table, "date").click();
+  const yearBtn = pop(page).getByRole("button", { name: `${year}年` });
+  await yearBtn.click();
+  await expect(yearBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(pop(page).getByLabel("日付 以降")).toHaveValue(year);
+  await expect(dataRows(table)).toHaveCount(all.filter((d) => d.startsWith(year)).length);
+  await expect(filterBtn(table, "date")).toHaveClass(/is-active/);
+  await yearBtn.click();
+  await expect(yearBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(dataRows(table)).toHaveCount(all.length);
+
+  // 最初の日より後を以降に入れる（日で入れる）→ 再読み込みしても残る
+  const sorted = [...all].sort();
+  const mid = sorted[Math.floor(sorted.length / 2)]!;
+  await pop(page).getByLabel("日付 以降").fill(mid.replace(/-/g, ""));
+  await page.keyboard.press("Enter");
+  const expected = all.filter((d) => d >= mid).length;
+  await expect(dataRows(table)).toHaveCount(expected);
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.getByRole("button", { name: "作業ログを読み込む" }).click();
+  await expect(dataRows(tableByCaption(page, "作業ログ"))).toHaveCount(expected);
 });
 
 test("作業別の内訳: 作業別には付き、単価の列は値の一覧で絞る", async ({ page }) => {

@@ -276,7 +276,7 @@ if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
         { key: "contractId", label: T.dataCheck.colContractId, type: "text", optional: true, exportAlways: true },
-        { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true },
+        { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true, dateValue: (r) => [r.startMonth, r.endMonth] },
         { key: "candidateText", label: T.dataCheck.colCandidates, type: "text", empty: T.dataCheck.noCandidate },
       ],
       rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.join(", ") })),

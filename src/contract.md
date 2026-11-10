@@ -380,7 +380,7 @@ const worklogSection = (() => {
 })();
 
 function worklogExplorer(entries, unit, id) {
-  // 月・メンバー・作業内容などの絞り込みは表の見出しから（SPEC §70。日付の検索に「2026-10」と入れると月で絞れる）
+  // 月・メンバー・作業内容などの絞り込みは表の見出しから（SPEC §70。日付は以降〜以前・年のボタン。§109）
   const columns = [
     { key: "date", label: T.breakdown.colDate, type: "text" },
     { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => r.memberName },

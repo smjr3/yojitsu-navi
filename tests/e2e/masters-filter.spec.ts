@@ -96,3 +96,45 @@ test("390px・ダーク: 見出しの漏斗から絞り込め、吹き出しが�
   }).toPass();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+test("案件: 金額は以上〜以下（円）、開始月は以降〜以前で絞る（§109）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=contracts");
+  const total = await groups(page).count();
+  const amounts = (await columnTexts(page, "total_amount")).map((t) => Number(t.replace(/[^\d.-]/g, "")));
+  const sorted = [...amounts].sort((a, b) => a - b);
+  const mid = sorted[Math.floor(sorted.length / 2)]!;
+  await panel(page).locator('thead .yn-filter-btn[data-fcol="total_amount"]').click();
+  await expect(pop(page).locator(".yn-filter-list")).toHaveCount(0);
+  await pop(page).getByLabel(/^金額.* 以上$/).fill(String(mid));
+  await expect(count(page)).toContainText(`/ ${total} 件`);
+  await expect(async () => {
+    const shown = (await columnTexts(page, "total_amount")).map((t) => Number(t.replace(/[^\d.-]/g, "")));
+    expect(shown.length).toBe(amounts.filter((a) => a >= mid).length);
+    for (const a of shown) expect(a).toBeGreaterThanOrEqual(mid);
+  }).toPass();
+  await pop(page).getByRole("button", { name: "解除" }).click();
+  await expect(groups(page)).toHaveCount(total);
+  await page.keyboard.press("Escape");
+
+  const starts = await columnTexts(page, "start_month");
+  const ym = [...starts].sort()[Math.floor(starts.length / 2)]!;
+  await panel(page).locator('thead .yn-filter-btn[data-fcol="start_month"]').click();
+  await pop(page).getByLabel("開始月 以前").fill(ym);
+  await expect(async () => {
+    const shown = await columnTexts(page, "start_month");
+    expect(shown.length).toBe(starts.filter((s) => s <= ym).length);
+  }).toPass();
+});
+
+
+test("祝日: 先頭の日付の列は以降〜以前と年のボタンで絞る（§109）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=holidays");
+  const total = await groups(page).count();
+  const dates = await columnTexts(page, "__lead");
+  const year = [...dates].sort()[0]!.slice(0, 4);
+  await panel(page).locator('thead .yn-filter-btn[data-fcol="__lead"]').click();
+  await expect(pop(page).getByRole("searchbox")).toHaveCount(0);
+  await pop(page).getByRole("button", { name: `${year}年` }).click();
+  await expect(groups(page)).toHaveCount(dates.filter((d) => d.startsWith(year)).length);
+  await expect(count(page)).toContainText(`/ ${total} `);
+});

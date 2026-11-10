@@ -299,7 +299,7 @@ if (vm) {
     display(
       dataTable({
         columns: [
-          { key: "from", label: T.member.colPeriod, type: "text", render: (r) => (r.from === r.to ? monthJa(r.from) : `${monthJa(r.from)}〜${monthJa(r.to)}`), exportValue: (r) => `${r.from}〜${r.to}` },
+          { key: "from", label: T.member.colPeriod, type: "text", render: (r) => (r.from === r.to ? monthJa(r.from) : `${monthJa(r.from)}〜${monthJa(r.to)}`), exportValue: (r) => `${r.from}〜${r.to}`, dateValue: (r) => [r.from, r.to] },
           { key: "title", label: T.members.colTitle, type: "text", hideOnPhone: true },
           { key: "hourlyRate", label: T.member.colHourlyRate, type: "moneyYen", render: (r) => (r.rateMissing ? statusChip("neutral", T.breakdown.rateMissingZero2, T.member.rateMissingTitle) : money(r.hourlyRate, "yen")) },
           { key: "source", label: T.breakdown.colRateSource, type: "text", get: (r) => (r.rateMissing ? "—" : r.rateSource?.key === memberId ? fmt(T.member.personalRateFrom, { from: r.rateSource.effectiveFrom }) : fmt(T.member.roleRateFrom, { role: r.rateSource?.key, from: r.rateSource?.effectiveFrom })) },
