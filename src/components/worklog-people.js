@@ -115,8 +115,9 @@ export function groupedWorklogTable({ model, groups, columns, caption, exportNam
     return seg;
   };
   const personColumns = [
-    { key: "memberId", label: T.members.colMemberId, type: "text", empty: T.dataCheck.empty },
+    // 名前を先頭に。社員番号は「列」で選べる列（Excel には常に出す。§106.1）
     { key: "name", label: T.dataCheck.colName, type: "text", render: (r) => html`<span>${r.name}${unknownChip(r)}</span>`, exportValue: (r) => r.name },
+    { key: "memberId", label: T.members.colMemberId, type: "text", empty: T.dataCheck.empty, optional: true, exportAlways: true },
     { key: "team", label: T.members.colTeam, type: "text", hideOnPhone: true },
     {
       key: "hours",

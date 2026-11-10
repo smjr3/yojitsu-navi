@@ -300,7 +300,7 @@ if (vm) {
     const columns = [
       { key: "name", label: T.columns.team, type: "text" },
       ...teamCountColumns(),
-      ...standardColumns({ breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
+      ...standardColumns({ costTypes: model.config.costTypes, breakdowns: groupBreakdowns({ model, store, period: scope.period, unit }) }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortValue: (r) => statusSortValue(r), hideNarrow: true },
     ];
     display(

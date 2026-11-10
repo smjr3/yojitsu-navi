@@ -389,6 +389,9 @@ function worklogExplorer(entries, unit, id) {
     { key: "hourlyRate", label: T.breakdown.colRate, type: "moneyYen" },
     { key: "amount", label: T.breakdown.colAmount, type: "moneyYen" },
     { key: "status", label: T.columns.status, type: "text", render: (r) => STATUS_LABELS[r.status], exportValue: (r) => STATUS_LABELS[r.status] ?? "", hideOnPhone: true },
+    // 「列」で選べる列（§106.1）
+    { key: "month", label: T.charts.colMonth, type: "text", optional: true },
+    { key: "taskCode", label: T.dataCheck.colTaskCode, type: "text", optional: true },
   ];
   const rows = entries.map((e, i) => ({ ...e, key: i }));
   const summary = (shown) => {

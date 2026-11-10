@@ -2,7 +2,17 @@
  * データ確認で「誰の作業か」を見る・マスタに無い人に気づく（SPEC §100）
  * 稼働実績の顧客別で、案件の無い顧客に「案件なし」を付ける
  */
+import type { Locator, Page } from "@playwright/test";
 import { test, expect, gotoPage, useDarkTheme, tableByCaption, dataRows, headerIndex, col, cellText } from "./helpers/app.js";
+
+/** 社員番号は「列」で選べる列（既定では出さない。SPEC §106.1）。チェックして出す */
+async function showColumn(page: Page, table: Locator, key: string) {
+  await expect(table.locator(`thead th[data-key="${key}"]`)).toHaveCount(0);
+  await page.locator(".yn-table-block", { has: table }).locator(".yn-cols-btn").click();
+  await page.locator(`.yn-cols-pop .yn-cols-item[data-key="${key}"] input`).click();
+  await page.keyboard.press("Escape");
+  await expect(table.locator(`thead th[data-key="${key}"]`)).toHaveCount(1);
+}
 
 const UNMAPPED = "未紐付けの作業実績";
 
@@ -21,11 +31,13 @@ test("未紐付けの作業実績に作業した人が出て、人ごとに切�
   expect(await dialog.locator("tbody tr").count()).toBeGreaterThan(1);
   await dialog.getByRole("button", { name: "閉じる" }).first().click();
 
-  // 人ごと: 社員番号・名前・所属・時間・案件数
+  // 人ごと: 名前（先頭）・所属・時間・案件数。社員番号は選べる列
   const section = page.locator(".yn-grouped-worklogs").first();
   await section.getByRole("button", { name: "人ごと" }).click();
   await expect(section.getByRole("button", { name: "人ごと" })).toHaveAttribute("aria-pressed", "true");
   const byPerson = tableByCaption(page, UNMAPPED);
+  expect(await byPerson.locator("thead th").first().getAttribute("data-key")).toBe("name");
+  await showColumn(page, byPerson, "memberId");
   const ph = await headerIndex(byPerson);
   expect(ph.has("社員番号") && ph.has("案件数")).toBe(true);
   const first = dataRows(byPerson).first();
@@ -69,6 +81,8 @@ test("マスタに無いメンバーが KPI と一覧に出る（名前・時間
 test("単価のないメンバーは人ごとに 1 行（月ごとは時間の内訳）", async ({ page }) => {
   await gotoPage(page, "/data-check");
   const table = tableByCaption(page, "単価のないメンバー");
+  expect(await table.locator("thead th").first().getAttribute("data-key")).toBe("memberName");
+  await showColumn(page, table, "memberId");
   const head = await headerIndex(table);
   const rows = dataRows(table);
   const ids = [];

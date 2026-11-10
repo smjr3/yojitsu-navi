@@ -2,6 +2,8 @@
 export interface ColumnPrefs {
   order: string[];
   hidden: string[];
+  /** 選べる列（optional）のうち出す列 */
+  shown?: string[];
 }
 export function loadColumnPrefs(id: string): ColumnPrefs;
 export function saveColumnPrefs(id: string, prefs: ColumnPrefs): void;

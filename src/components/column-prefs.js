@@ -1,7 +1,8 @@
 /**
  * 表の列の表示・並び順（SPEC §106）。一覧表（dataTable）とマスタ編集の台帳で共通。
- * 設定は画面と表ごとにこのブラウザ（localStorage）に覚える: {order: [列 key], hidden: [列 key]}
+ * 設定は画面と表ごとにこのブラウザ（localStorage）に覚える: {order: [列 key], hidden: [列 key], shown: [列 key]}
  * 先頭（名前）の列は固定（行の見出し・詳細へのリンク・横スクロールで左に貼り付く列のため）
+ * 列の optional: true は「選べる列」: 既定では出さず、一覧でチェックした列だけ出す（shown に覚える）
  */
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
@@ -17,17 +18,18 @@ export function loadColumnPrefs(id) {
   try {
     const v = JSON.parse(localStorage.getItem(PREFIX + id) ?? "null");
     const keys = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === "string") : []);
-    return { order: keys(v?.order), hidden: keys(v?.hidden) };
+    return { order: keys(v?.order), hidden: keys(v?.hidden), shown: keys(v?.shown) };
   } catch {
-    return { order: [], hidden: [] };
+    return { order: [], hidden: [], shown: [] };
   }
 }
 
 export function saveColumnPrefs(id, prefs) {
-  memory.set(id, { order: [...prefs.order], hidden: [...prefs.hidden] });
+  const p = { order: [...prefs.order], hidden: [...prefs.hidden], shown: [...(prefs.shown ?? [])] };
+  memory.set(id, p);
   try {
-    if (!prefs.order.length && !prefs.hidden.length) localStorage.removeItem(PREFIX + id);
-    else localStorage.setItem(PREFIX + id, JSON.stringify({ order: prefs.order, hidden: prefs.hidden }));
+    if (!p.order.length && !p.hidden.length && !p.shown.length) localStorage.removeItem(PREFIX + id);
+    else localStorage.setItem(PREFIX + id, JSON.stringify(p));
   } catch {
     /* プライベートモード等では覚えない */
   }
@@ -49,8 +51,18 @@ export function orderColumns(cols, prefs, keyOf = (c) => c.key) {
  * 何も隠さない（先頭の固定列だけの表にしない）
  */
 export function hiddenKeys(cols, prefs, keyOf = (c) => c.key) {
-  const hidden = new Set(prefs.hidden.filter((k) => cols.some((c) => keyOf(c) === k)));
-  return cols.length > 0 && hidden.size >= cols.length ? new Set() : hidden;
+  const shown = new Set(prefs.shown ?? []);
+  const userHidden = new Set(prefs.hidden);
+  const optionalHidden = cols.filter((c) => c.optional && !shown.has(keyOf(c))).map(keyOf);
+  const hidden = new Set([...optionalHidden, ...cols.filter((c) => !c.optional && userHidden.has(keyOf(c))).map(keyOf)]);
+  if (cols.length === 0 || hidden.size < cols.length) return hidden;
+  // 全部隠れるときは利用者が隠した列を戻す（選べる列だけの表なら全部出す）
+  return optionalHidden.length < cols.length ? new Set(optionalHidden) : new Set();
+}
+
+/** 既定で隠す列（選べる列） */
+function defaultHidden(cols, keyOf) {
+  return hiddenKeys(cols, { order: [], hidden: [], shown: [] }, keyOf);
 }
 
 /** 表示する列（並べ替え後、隠した列を除く） */
@@ -61,7 +73,9 @@ export function arrangeColumns(cols, prefs, keyOf = (c) => c.key) {
 
 /** 既定から変えているか（ボタンの印） */
 export function isCustomized(cols, prefs, keyOf = (c) => c.key) {
-  if (hiddenKeys(cols, prefs, keyOf).size > 0) return true;
+  const now = hiddenKeys(cols, prefs, keyOf);
+  const def = defaultHidden(cols, keyOf);
+  if (now.size !== def.size || [...now].some((k) => !def.has(k))) return true;
   const ordered = orderColumns(cols, prefs, keyOf);
   return ordered.some((c, i) => c !== cols[i]);
 }
@@ -140,9 +154,11 @@ function openPop({ id, columns, onChange, anchor, mark }) {
           const p = loadColumnPrefs(id);
           const eff = hiddenKeys(columns, p);
           const h = new Set(p.hidden.filter((k) => eff.has(k) || !columns.some((x) => x.key === k)));
-          if (box.checked) h.delete(c.key);
-          else h.add(c.key);
-          apply({ order: ordered.map((x) => x.key), hidden: [...h] }, `[data-col="${i}"] input`);
+          const sh = new Set(p.shown ?? []);
+          // 選べる列は「出す」を覚え、ほかの列は「隠す」を覚える
+          if (c.optional) box.checked ? sh.add(c.key) : sh.delete(c.key);
+          else box.checked ? h.delete(c.key) : h.add(c.key);
+          apply({ order: ordered.map((x) => x.key), hidden: [...h], shown: [...sh] }, `[data-col="${i}"] input`);
         });
         const move = (d, dir) => {
           const b = html`<button type="button" class="yn-btn yn-btn-sm yn-cols-move" aria-label=${fmt(d < 0 ? T.table.columnsUp : T.table.columnsDown, { label: c.label })} title=${fmt(d < 0 ? T.table.columnsUp : T.table.columnsDown, { label: c.label })}><span aria-hidden="true">${dir}</span></button>`;
@@ -154,7 +170,7 @@ function openPop({ id, columns, onChange, anchor, mark }) {
             [keys[i], keys[j]] = [keys[j], keys[i]];
             // 端まで動かしてボタンが押せなくなったら、反対向きのボタンへ
             const edge = j === 0 || j === ordered.length - 1;
-            apply({ order: keys, hidden: loadColumnPrefs(id).hidden }, `[data-col="${j}"] .yn-cols-move[data-dir="${edge ? (d < 0 ? "down" : "up") : d < 0 ? "up" : "down"}"]`);
+            apply({ ...loadColumnPrefs(id), order: keys }, `[data-col="${j}"] .yn-cols-move[data-dir="${edge ? (d < 0 ? "down" : "up") : d < 0 ? "up" : "down"}"]`);
           });
           return b;
         };
@@ -166,7 +182,7 @@ function openPop({ id, columns, onChange, anchor, mark }) {
     if (focusSel) list.querySelector(focusSel)?.focus();
   };
   reset.addEventListener("click", () => {
-    apply({ order: [], hidden: [] });
+    apply({ order: [], hidden: [], shown: [] });
     close.focus();
   });
   close.addEventListener("click", () => closeColumnPop({ focus: true }));

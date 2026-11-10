@@ -273,16 +273,16 @@ if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
   display(
     dataTable({
       columns: [
-        { key: "contractId", label: T.dataCheck.colContractId, type: "text" },
-        { key: "customerName", label: T.dataCheck.colCustomer, type: "text", hideOnPhone: true },
+        { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+        { key: "contractId", label: T.dataCheck.colContractId, type: "text", optional: true, exportAlways: true },
         { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true },
         { key: "candidateText", label: T.dataCheck.colCandidates, type: "text", empty: T.dataCheck.noCandidate },
       ],
       rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.join(", ") })),
       caption: T.dataCheck.unlinkedContractsTitle,
       exportName: "contracts_without_project_id",
-      sort: { key: "contractId", dir: "asc" },
+      sort: { key: "customerName", dir: "asc" },
     }),
   );
 }
@@ -374,8 +374,8 @@ if (model) {
     display(
       dataTable({
         columns: [
-          { key: "memberId", label: T.members.colMemberId, type: "text" },
           { key: "memberName", label: T.dataCheck.colName, type: "text" },
+          { key: "memberId", label: T.members.colMemberId, type: "text", optional: true, exportAlways: true },
           { key: "monthCount", label: T.dataCheck.colMonths, type: "int" },
           {
             key: "span",
@@ -415,8 +415,9 @@ if (model) {
     display(
       dataTable({
         columns: [
-          { key: "memberId", label: T.members.colMemberId, type: "text", empty: T.dataCheck.empty },
+          // マスタに無い人は作業実績の名前が空のこともあるので、社員番号も出しておく（名前が先）
           { key: "memberName", label: T.dataCheck.colName, type: "text", empty: T.dataCheck.empty },
+          { key: "memberId", label: T.members.colMemberId, type: "text", empty: T.dataCheck.empty },
           { key: "hours", label: T.columns.hours, type: "hours" },
           { key: "contractHours", label: T.dataCheck.colContractHours, type: "hours", hideOnPhone: true },
           { key: "count", label: T.dataCheck.colCount, type: "int", hideOnPhone: true },
