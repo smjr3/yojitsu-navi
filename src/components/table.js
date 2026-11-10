@@ -7,7 +7,8 @@
  *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す）,
  *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
- *               filter?: "values"|"range"|false（見出しの絞り込み。既定は数値列 range・それ以外 values）, filterValue?(row) -> string|string[],
+ *               filter?: "values"|"range"|"date"|false（見出しの絞り込み。既定は数値列 range、値がすべて年月・日付の列 date、それ以外 values）, filterValue?(row) -> string|string[],
+ *               dateValue?(row) -> "YYYY-MM"|"YYYY-MM-DD"|[from, to]（日付の絞り込みに使う値。期間の列は [開始, 終了] で、重なれば残す）,
  *               rangeUnit?: 範囲の絞り込みの単位の表示（既定は型から。リソース計画の「人月」など） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
@@ -147,10 +148,91 @@ function rangeUnitLabel(col, unit) {
 /** 絞り込みの種類。右寄せでも値が文字の列（単価の「6,000円 / 7,000円」など）は値の一覧にする */
 function filterKind(col, rows = null) {
   if (col.filter === false) return null;
-  if (col.filter === "values" || col.filter === "range") return col.filter;
+  if (col.filter === "values" || col.filter === "range" || col.filter === "date") return col.filter;
   if (NUMERIC_TYPES.has(col.type)) return "range";
   if (isNumeric(col) && (!rows || rows.some((r) => rangeValue(col, r) !== null))) return "range";
+  if (col.dateValue) return "date";
+  if (rows && isDateColumn(col, rows)) return "date";
   return "values";
+}
+
+// ---- 日付・年月の列の絞り込み（以降〜以前。年・年月・日のどれでも入れられる。SPEC §108） ----
+const DATE_RE = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/;
+
+/** 列の日付の値（"YYYY-MM" | "YYYY-MM-DD" | [開始, 終了]）。無ければ null */
+function dateRaw(col, row) {
+  const v = col.dateValue ? col.dateValue(row) : col.get ? col.get(row) : row[col.key];
+  if (Array.isArray(v)) return v.some((x) => typeof x === "string" && DATE_RE.test(x)) ? v : null;
+  return typeof v === "string" && DATE_RE.test(v) ? v : null;
+}
+
+/** 値のある行がすべて年月・日付の列（作業日・月・初回日など）。文字の列でも日付の絞り込みにする */
+function isDateColumn(col, rows) {
+  let seen = false;
+  for (const r of rows) {
+    const v = col.get ? col.get(r) : r[col.key];
+    if (v === null || v === undefined || v === "") continue;
+    if (typeof v !== "string" || !DATE_RE.test(v)) return false;
+    seen = true;
+  }
+  return seen;
+}
+
+/** "YYYY" | "YYYY-MM" | "YYYY-MM-DD" の始まり（from）・終わり（to）の日。文字の比較で前後が分かる形 */
+function dateBound(s, edge) {
+  if (typeof s !== "string" || s === "") return null;
+  const [y, m, d] = s.split("-");
+  if (d) return s;
+  if (m) return `${y}-${m}-${edge === "from" ? "01" : "31"}`;
+  return `${y}-${edge === "from" ? "01-01" : "12-31"}`;
+}
+
+/**
+ * 絞り込みの入力（年・年月・日）を "YYYY" | "YYYY-MM" | "YYYY-MM-DD" に揃える。空は null、読めないときは undefined。
+ * 2026 / 2026年 / 2026-4 / 2026/04 / 2026年4月 / 202604 / 2026-04-15 / 2026/4/15 / 2026年4月15日 / 20260415
+ */
+export function parseDateFilterInput(text) {
+  const t = String(text ?? "").normalize("NFKC").replace(/\s+/g, "");
+  if (t === "") return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  let m = t.match(/^(\d{4})年?$/);
+  if (m) return m[1];
+  m = t.match(/^(\d{4})[-/.年](\d{1,2})月?$/) ?? t.match(/^(\d{4})(\d{2})$/);
+  if (m) {
+    const mo = Number(m[2]);
+    return mo >= 1 && mo <= 12 ? `${m[1]}-${pad(mo)}` : undefined;
+  }
+  m = t.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/) ?? t.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) {
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    return mo >= 1 && mo <= 12 && d >= 1 && d <= last ? `${m[1]}-${pad(mo)}-${pad(d)}` : undefined;
+  }
+  return undefined;
+}
+
+/** 行の日付の範囲 [最初の日, 最後の日]。期間の列で終了が空なら先は無限 */
+function dateSpan(col, row) {
+  const v = dateRaw(col, row);
+  if (v === null) return null;
+  if (Array.isArray(v)) {
+    const [a, b] = v;
+    const lo = typeof a === "string" && DATE_RE.test(a) ? dateBound(a, "from") : "0000-01-01";
+    const hi = typeof b === "string" && DATE_RE.test(b) ? dateBound(b, "to") : "9999-12-31";
+    return [lo, hi];
+  }
+  return [dateBound(v, "from"), dateBound(v, "to")];
+}
+
+/** 列の値に出てくる年（新しい順の候補にする） */
+function dateYears(col, rows) {
+  const ys = new Set();
+  for (const r of rows) {
+    const v = dateRaw(col, r);
+    if (v === null) continue;
+    for (const x of Array.isArray(v) ? v : [v]) if (typeof x === "string" && DATE_RE.test(x)) ys.add(x.slice(0, 4));
+  }
+  return [...ys].sort();
 }
 
 /** 絞り込みの値（文字）。空は "" */
@@ -187,9 +269,19 @@ function plainText(text) {
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
-/** 1 行が列の絞り込みを満たすか。f = {q, values} | {min, max}（min/max は円・比率などの元の値） */
+/** 1 行が列の絞り込みを満たすか。f = {q, values} | {min, max}（min/max は円・比率などの元の値） | {from, to}（"YYYY"・"YYYY-MM"・"YYYY-MM-DD"） */
 export function matchesFilter(col, f, row, unit) {
   if (!f) return true;
+  if ("from" in f || "to" in f) {
+    const span = dateSpan(col, row);
+    if (span === null) return false;
+    // 年・年月で入れたら、その年・月を丸ごと含める（以降はその始まりから、以前はその終わりまで）。期間の列は重なれば残す
+    const from = dateBound(f.from, "from");
+    const to = dateBound(f.to, "to");
+    if (from && span[1] < from) return false;
+    if (to && span[0] > to) return false;
+    return true;
+  }
   if ("min" in f || "max" in f) {
     const v = rangeValue(col, row);
     if (v === null) return false;
@@ -211,7 +303,7 @@ export function matchesFilter(col, f, row, unit) {
 }
 
 export function isActiveFilter(f) {
-  return !!f && ((typeof f.q === "string" && f.q !== "") || Array.isArray(f.values) || typeof f.min === "number" || typeof f.max === "number");
+  return !!f && ((typeof f.q === "string" && f.q !== "") || Array.isArray(f.values) || typeof f.min === "number" || typeof f.max === "number" || (typeof f.from === "string" && f.from !== "") || (typeof f.to === "string" && f.to !== ""));
 }
 
 export const FILTER_ICON = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 1.5h10L7.2 6.2V10L4.8 11V6.2Z" fill="currentColor"/></svg>';
@@ -345,7 +437,7 @@ export function dataTable({
   // 木構造の表は一致した行とその親（親子の位置を保つための行。薄く出す）を残す
   const filterable = filter !== false && rows.length > 0;
   const filterMemoKey = filterable && caption ? `yojitsu-navi:filter:${location.pathname}:${caption}` : null;
-  /** @type {Map<string, any>} 列 key → {q, values} | {min, max} */
+  /** @type {Map<string, any>} 列 key → {q, values} | {min, max} | {from, to} */
   const filters = new Map();
   if (filterMemoKey) {
     try {
@@ -841,7 +933,7 @@ export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilte
     const kind = filterKind(col, getRows());
     const popId = `yn-filter-pop-${++filterPopSeq}`;
     const pop = html`<div class="yn-filter-pop" role="dialog" id=${popId} aria-label=${fmt(T.table.filterBy, { label: col.label })}></div>`;
-    const body = kind === "range" ? rangeBody(col) : valuesBody(col);
+    const body = kind === "range" ? rangeBody(col) : kind === "date" ? dateBody(col) : valuesBody(col);
     const clear = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClear}</button>`;
     const close = html`<button type="button" class="yn-btn yn-btn-sm">${T.table.filterClose}</button>`;
     clear.addEventListener("click", () => {
@@ -993,9 +1085,7 @@ export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilte
       el.classList.toggle("is-invalid", !Number.isFinite(n));
       return Number.isFinite(n) ? n * factor : undefined;
     };
-    let timer = null;
     const commit = () => {
-      timer = null;
       const a = parse(min);
       const b = parse(max);
       if (a === undefined || b === undefined) return;
@@ -1004,26 +1094,14 @@ export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilte
       if (b !== null) f.max = b;
       setFilter(col, f);
     };
-    const apply = () => {
-      clearTimeout(timer);
-      timer = setTimeout(commit, 250);
-    };
-    min.addEventListener("input", apply);
-    max.addEventListener("input", apply);
+    // 打ち終わってから反映（全角の数字を日本語入力で打つときは確定してから。§105）
+    const inputs = [min, max].map((el) => onTextInput(el, commit, 250));
     const node = html`<div class="yn-filter-range">${min}<span aria-hidden="true">〜</span>${max}${unitLabel ? html`<span class="yn-filter-unit">${unitLabel}</span>` : null}</div>`;
     return {
       node,
       focus: () => min.focus(),
-      flush: () => {
-        if (timer !== null) {
-          clearTimeout(timer);
-          commit();
-        }
-      },
-      cancel: () => {
-        clearTimeout(timer);
-        timer = null;
-      },
+      flush: () => inputs.forEach((x) => x.flush()),
+      cancel: () => inputs.forEach((x) => x.cancel()),
       reset: () => {
         min.value = "";
         max.value = "";
@@ -1033,6 +1111,73 @@ export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilte
     };
   }
 
+  /**
+   * 日付・年月の範囲（以降〜以前。どちらか片方でよい）。年・年月・日のどれでも入れられ、年・年月はその期間を丸ごと含める。
+   * 下の年のボタンで、その年だけに絞る（もう一度押すと解除）
+   */
+  function dateBody(col) {
+    const cur = () => getFilter(col.key) ?? {};
+    const f0 = cur();
+    const mk = (label, v) => html`<input type="text" inputmode="numeric" class="yn-input yn-filter-num yn-filter-date" aria-label=${`${col.label} ${label}`} placeholder=${label} value=${v ?? ""}>`;
+    const from = mk(T.table.filterFrom, f0.from);
+    const to = mk(T.table.filterTo, f0.to);
+    const years = dateYears(col, getRows());
+    const yearBtns = years.map((y) => {
+      const b = html`<button type="button" class="yn-btn yn-btn-sm yn-filter-year">${fmt(T.table.filterYear, { y })}</button>`;
+      b.addEventListener("click", () => {
+        const f = cur();
+        const on = f.from === y && f.to === y;
+        for (const x of inputs) x.cancel();
+        from.value = on ? "" : y;
+        to.value = on ? "" : y;
+        commit();
+      });
+      return { y, b };
+    });
+    const syncYears = () => {
+      const f = cur();
+      for (const { y, b } of yearBtns) b.setAttribute("aria-pressed", String(f.from === y && f.to === y));
+    };
+    const parse = (el) => {
+      const v = parseDateFilterInput(el.value);
+      el.classList.toggle("is-invalid", v === undefined);
+      return v;
+    };
+    function commit() {
+      const a = parse(from);
+      const b = parse(to);
+      if (a === undefined || b === undefined) return;
+      const f = {};
+      if (a) f.from = a;
+      if (b) f.to = b;
+      setFilter(col, f);
+      syncYears();
+    }
+    // 打ち終わってから反映。「2026年4月」のように日本語で打つときは、変換を確定してから読む（§105）
+    const inputs = [from, to].map((el) => onTextInput(el, commit, 250));
+    for (const el of [from, to])
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.isComposing) {
+          for (const x of inputs) x.cancel();
+          commit();
+        }
+      });
+    syncYears();
+    const node = html`<div class="yn-filter-dates"><div class="yn-filter-range yn-filter-date-range">${from}<span aria-hidden="true">〜</span>${to}</div>${yearBtns.length ? html`<div class="yn-filter-years" role="group" aria-label=${fmt(T.table.filterYears, { label: col.label })}>${yearBtns.map((x) => x.b)}</div>` : null}</div>`;
+    return {
+      node,
+      focus: () => from.focus(),
+      flush: () => inputs.forEach((x) => x.flush()),
+      cancel: () => inputs.forEach((x) => x.cancel()),
+      reset: () => {
+        from.value = "";
+        to.value = "";
+        from.classList.remove("is-invalid");
+        to.classList.remove("is-invalid");
+        syncYears();
+      },
+    };
+  }
 
   return {
     open: openFilterPop,

@@ -4344,6 +4344,21 @@ html:has(dialog.yn-dialog[open]) {
   align-items: center;
   gap: 6px;
 }
+/* 日付・年月の範囲（以降〜以前）と年のボタン（§108） */
+.yn-filter-date-range {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.yn-filter-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.yn-filter-year[aria-pressed="true"] {
+  background: var(--yn-accent);
+  border-color: var(--yn-accent);
+  color: var(--yn-on-accent);
+}
 .yn-filter-num.is-invalid {
   border-color: var(--yn-danger);
 }
