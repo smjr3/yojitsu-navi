@@ -1680,3 +1680,10 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - **本番の GitLab の標準構成**（§39 の続き。`docs/DEPLOY_GITLAB.md`「本番運用の標準構成」）: `main` は保護（直接 push は誰も不可・マージは Maintainer・force push 不可・パイプライン成功が条件）。Developer はブランチの作成・push・MR まで、Maintainer が `main` にマージ。定期取り込みはプロジェクトアクセストークン（Maintainer・`write_repository`。CI/CD 変数 `GIT_PUSH_TOKEN`）でデータのブランチを push して MR を作り、パイプラインが通れば自動でマージする（今の仕組みのまま）。版上げは自動にしない（依頼者: 誰でも簡単に上げられるのは困る）。決めた管理者が手元で `upgrade` を実行し、MR を Maintainer がマージする。自動の MR は取り込みのデータだけ。
   - `yojitsu-navi gitlab-setup` の確認を足す: `GIT_PUSH_TOKEN` が要るとき（登録した・スケジュールがある）、条件に合うプロジェクトアクセストークン（有効・Maintainer 以上・`write_repository`）があるか、期限が 30 日より先か（日本時間の今日で数える）。トークンの値は API で読めないので、条件に合うものが 1 つでもあれば通す。`PROJECT_API_TOKEN`・`NPM_AUTH_TOKEN` も、登録していれば Protected・Masked かを見る。
 - 再発防止: `tests/unit/config-migrate.test.ts`（書き足し・消し方の書式、メモ、CRLF、名前が変わった項目）、`tests/integration/app-package.test.ts`「.gitignore に社内で足した行」「migrate-config」「依存は package-lock.json が前と同じなら」「--dry-run は何も変えずに」、`tests/unit/gitlab-setup.test.ts`「プロジェクトアクセストークン」。
+
+## 105. 検索欄で日本語の変換中に文字が確定されない（2026-11-10 依頼者）
+「マスタの検索窓に全角入力すると勝手に確定される」への対応。
+- **原因**: 検索欄は最後に打ってから 150ms で絞り込みを反映していた。マスタ編集・リソース計画の検索は反映のたびに表ごと描き直して欄を作り直すため、日本語の変換中（未確定）に 150ms たつと変換中の文字が確定されていた。
+- **決まり**: 検索・絞り込みの文字の欄は `onTextInput()`（`src/components/text-input.js`）で反映する。最後に打ってから 150ms で 1 回反映し、変換中（`compositionstart` から `compositionend` まで、または `isComposing` の付いた入力）は反映しない。確定してから 150ms で反映する。
+- **対象**: マスタ編集の検索（各タブ）、リソース計画の検索（§99）、案件一覧・顧客一覧・メンバー一覧の検索、表の列の絞り込みの検索（§70・§73.1。値の候補の一覧は打つたびに絞る）。候補を選ぶ欄（§31.2）は欄を作り直さないので対象外。
+- 再発防止: `tests/unit/text-input.test.ts`、`tests/e2e/ime-input.spec.ts`（Chromium の IME 操作で、変換中は表も欄もそのまま、確定してから絞り込むことを上の全画面で確かめる）。

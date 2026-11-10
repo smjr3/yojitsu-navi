@@ -13,6 +13,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { createStore } from "./components/state.js";
+import { onTextInput } from "./components/text-input.js";
 import { scopeFor } from "./components/analysis.js";
 import { customerGroups, customerHref, idsRow, groupBreakdowns } from "./components/customers.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
@@ -108,14 +109,10 @@ const chips = (() => {
     form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
   });
   const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder=${T.customers.searchPlaceholder} value=${listFilter.text} aria-label=${T.customers.searchAria}>`;
-  let timer = null;
-  text.addEventListener("input", () => {
-    // 150ms デバウンス（1 文字ごとに表を作り直さない）
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      listFilter.text = text.value;
-      form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
-    }, 150);
+  // 打ち終わってから反映（1 文字ごと・日本語の変換中には表を作り直さない。§105）
+  onTextInput(text, () => {
+    listFilter.text = text.value;
+    form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
   });
   form.append(
     html`<span class="yn-filter-label">${T.customers.filterHead}</span>`,

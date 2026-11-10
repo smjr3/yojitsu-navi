@@ -73,6 +73,7 @@ import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
 import { combobox } from "./combobox.js";
+import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
 import { chartFigure } from "./chart-zoom.js";
 import { planLoadChart, planLoadLegend } from "./work.js";
@@ -1061,20 +1062,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
 
     const search = html`<input type="search" class="yn-input yn-me-search" id=${`yn-me-q-${fileId}`} placeholder=${T.masters.searchPlaceholder} aria-label=${fmt(T.masters.searchAria, { file: def.label })} value=${f.q}>`;
-    let timer = null;
-    search.addEventListener("input", () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        // 入力の直後にタブの切り替え・一覧からの移動で描き直したときは、古い欄の値で上書きしない
-        if (!search.isConnected) return;
-        f.q = search.value;
-        renderPanel();
-        const el = root.querySelector(`#yn-me-q-${fileId}`);
-        if (el) {
-          el.focus();
-          el.setSelectionRange?.(el.value.length, el.value.length);
-        }
-      }, 150);
+    // 描き直すと欄が作り直されるので、日本語の変換中は反映しない（確定してから。§105）
+    onTextInput(search, () => {
+      // 入力の直後にタブの切り替え・一覧からの移動で描き直したときは、古い欄の値で上書きしない
+      if (!search.isConnected) return;
+      f.q = search.value;
+      renderPanel();
+      const el = root.querySelector(`#yn-me-q-${fileId}`);
+      if (el) {
+        el.focus();
+        el.setSelectionRange?.(el.value.length, el.value.length);
+      }
     });
     const changedOnly = html`<input type="checkbox" id=${`yn-me-changed-${fileId}`} checked=${f.changedOnly}>`;
     changedOnly.addEventListener("change", () => {
@@ -1672,19 +1670,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         }}>${T.table.filterClearAll}</button>`
       : null;
     const search = html`<input type="search" class="yn-input yn-me-search" id="yn-me-plan-q" data-fk="plan:q" placeholder=${T.planEdit.searchPlaceholder} aria-label=${T.planEdit.searchAria} value=${plan.q}>`;
-    let searchTimer = null;
-    search.addEventListener("input", () => {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        if (!search.isConnected) return;
-        plan.q = search.value;
-        renderPanel();
-        const el = root.querySelector("#yn-me-plan-q");
-        if (el) {
-          el.focus();
-          el.setSelectionRange?.(el.value.length, el.value.length);
-        }
-      }, 150);
+    // 描き直すと欄が作り直されるので、日本語の変換中は反映しない（確定してから。§105）
+    onTextInput(search, () => {
+      if (!search.isConnected) return;
+      plan.q = search.value;
+      renderPanel();
+      const el = root.querySelector("#yn-me-plan-q");
+      if (el) {
+        el.focus();
+        el.setSelectionRange?.(el.value.length, el.value.length);
+      }
     });
 
     /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */

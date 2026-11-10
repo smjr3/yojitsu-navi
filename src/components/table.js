@@ -23,6 +23,7 @@ import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
 import { statusChip } from "./kpi.js";
+import { onTextInput } from "./text-input.js";
 import { T, fmt } from "../i18n/index.js";
 
 const NUMERIC_TYPES = new Set(["money", "moneyYen", "percent", "hours", "int"]);
@@ -914,31 +915,16 @@ export function createFilterPopover({ getRows, unit = "yen", getFilter, setFilte
       setFilter(col, { q: f.q ?? "", values: values.every((x) => selected.has(x)) ? null : [...selected] });
       sync();
     });
-    let timer = null;
-    const applySearch = () => {
-      timer = null;
-      setFilter(col, { ...cur(), q: search.value.trim() });
-    };
-    search.addEventListener("input", () => {
-      sync();
-      clearTimeout(timer);
-      timer = setTimeout(applySearch, 150);
-    });
+    // 候補の一覧はすぐ絞る。表への反映は打ち終わってから（日本語の変換中は確定してから。§105）
+    search.addEventListener("input", sync);
+    const applySearch = onTextInput(search, () => setFilter(col, { ...cur(), q: search.value.trim() }));
     sync();
     const node = html`<div class="yn-filter-values">${search}<label class="yn-filter-item yn-filter-all">${allBox}<span>${T.table.filterAll}</span></label>${list}${none}</div>`;
     return {
       node,
       focus: () => search.focus(),
-      flush: () => {
-        if (timer !== null) {
-          clearTimeout(timer);
-          applySearch();
-        }
-      },
-      cancel: () => {
-        clearTimeout(timer);
-        timer = null;
-      },
+      flush: () => applySearch.flush(),
+      cancel: () => applySearch.cancel(),
       reset: () => {
         search.value = "";
         sync();

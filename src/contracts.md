@@ -15,6 +15,7 @@ import { aggregate, forecastTotals, normalizeName } from "./core/index.js";
 import { UNASSIGNED_TEAM_ID } from "./core/index.js";
 import { customerGroups } from "./components/customers.js";
 import { createStore } from "./components/state.js";
+import { onTextInput } from "./components/text-input.js";
 import { scopeFor, contractRow } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
@@ -133,14 +134,10 @@ const chips = (() => {
     return html`<label class="yn-toggle-chip" for=${`yn-f-${key}`} title=${title}>${input}<span>${label}</span></label>`;
   };
   const text = html`<input type="search" class="yn-input" id="yn-f-text" placeholder=${T.contracts.searchPlaceholder} value=${listFilter.text} aria-label=${T.contracts.searchAria}>`;
-  let timer = null;
-  text.addEventListener("input", () => {
-    // 150ms デバウンス（1 文字ごとに表を作り直さない）
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      listFilter.text = text.value;
-      form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
-    }, 150);
+  // 打ち終わってから反映（1 文字ごと・日本語の変換中には表を作り直さない。§105）
+  onTextInput(text, () => {
+    listFilter.text = text.value;
+    form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
   });
   form.append(
     html`<span class="yn-filter-label">${T.customers.filterHead}</span>`,
