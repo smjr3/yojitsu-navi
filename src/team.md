@@ -21,7 +21,7 @@ import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, withTargets } from "./components/charts.js";
-import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, teamCountColumns } from "./components/table.js";
+import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS, originChips, originOrgText } from "./components/team-detail.js";
@@ -191,7 +191,7 @@ if (vm?.exists && vm.node && vm.node.children.length > 0) {
   const columns = [
     { key: "name", label: T.columns.team, type: "text" },
     ...teamCountColumns(),
-    ...standardColumns({
+    ...standardColumns({ costTypes: model.config.costTypes,
       forecastLabel: T.columns.forecastGrossProfit,
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period, unit }),
@@ -232,11 +232,8 @@ if (vm?.exists) {
     const columns = [
       { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}`, exportLabel: T.breakdown.colCustomerProject },
       { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
-      { key: "customerName", label: T.customers.colCustomer, type: "text", exportOnly: true },
-      { key: "projectName", label: T.contracts.colProject, type: "text", exportOnly: true },
-      { key: "teamName", label: T.columns.team, type: "text", exportOnly: true },
-      { key: "period", label: T.columns.contractPeriod, type: "text", exportOnly: true, get: (r) => `${r.startMonth}〜${r.endMonth}` },
-      ...standardColumns({
+      ...contractInfoColumns(),
+      ...standardColumns({ costTypes: model.config.costTypes,
         breakdowns: {
           budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period, unit }),
           cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period, unit, detailHref }),

@@ -55,6 +55,41 @@ test("案件一覧: 列を隠す・前へ動かすと表に反映され、再読
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("yojitsu-navi:columns:")))).toEqual([]);
 });
 
+test("選べる列（§106.1）: 既定では出さず、チェックすると値と合計が出て、再読み込みでも保つ", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoPage(page, "/contracts?unit=yen");
+  const table = tableByCaption(page, "案件一覧");
+  const before = await heads(table);
+  for (const k of ["customerName", "hours", "personMonths", "forecastBudget", "totalAmount"]) expect(before).not.toContain(k);
+  await block(page, table).locator(".yn-cols-btn").click();
+  const hours = pop(page).locator('.yn-cols-item[data-key="hours"]');
+  await expect(hours).toHaveClass(/is-off/);
+  // ID だけの列は一覧にも出さない
+  await expect(pop(page).locator('.yn-cols-item[data-key="contractId"]')).toHaveCount(0);
+  await hours.locator("input").click();
+  await pop(page).locator('.yn-cols-item[data-key="customerName"] input').click();
+  await page.keyboard.press("Escape");
+  const after = await heads(table);
+  expect(after).toContain("hours");
+  expect(after).toContain("customerName");
+  // 値（時間）と合計行
+  const col = after.indexOf("hours");
+  await expect(dataRows(table).first().locator("th, td").nth(col)).toHaveText(/h$/);
+  await expect(table.locator("tfoot td").nth(col)).toHaveText(/h$/);
+  await page.reload();
+  expect(await heads(tableByCaption(page, "案件一覧"))).toEqual(after);
+});
+
+test("データ確認: 作業した人の一覧は名前が先頭で、社員番号は選べる列", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoPage(page, "/data-check");
+  const table = page.locator("table.yn-table").filter({ has: page.locator('thead th[data-key="memberName"]') }).first();
+  await expect(table).toBeVisible();
+  const h = await heads(table);
+  expect(h[0]).toBe("memberName");
+  expect(h).not.toContain("memberId");
+});
+
 test("隠した列の絞り込みは外れる。Excel は画面の列と並びに合わせる", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await gotoPage(page, "/contracts?unit=yen");

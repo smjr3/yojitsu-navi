@@ -151,7 +151,7 @@ if (vm && viewState.view === "table") {
     { key: "level", label: T.columns.level, type: "text", hideNarrow: true },
     { key: "leader", label: T.columns.leader, type: "text", hideNarrow: true },
     ...teamCountColumns(),
-    ...standardColumns({
+    ...standardColumns({ costTypes: model.config.costTypes,
       forecastLabel: T.columns.forecastGrossProfit,
       breakdowns: {
         budget: (r) => bd.budgetAggregateSpec({ model, contractIds: r.contractIds, period: scope.period, unit }),
