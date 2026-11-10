@@ -126,3 +126,15 @@ test("案件: 金額は以上〜以下（円）、開始月は以降〜以前で
   }).toPass();
 });
 
+
+test("祝日: 先頭の日付の列は以降〜以前と年のボタンで絞る（§108）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=holidays");
+  const total = await groups(page).count();
+  const dates = await columnTexts(page, "__lead");
+  const year = [...dates].sort()[0]!.slice(0, 4);
+  await panel(page).locator('thead .yn-filter-btn[data-fcol="__lead"]').click();
+  await expect(pop(page).getByRole("searchbox")).toHaveCount(0);
+  await pop(page).getByRole("button", { name: `${year}年` }).click();
+  await expect(groups(page)).toHaveCount(dates.filter((d) => d.startsWith(year)).length);
+  await expect(count(page)).toContainText(`/ ${total} `);
+});

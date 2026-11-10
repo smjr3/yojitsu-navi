@@ -982,7 +982,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const leadText = (g) => (isGoal && goalTargetName(g.shown.record.target_type ?? "", g.shown.record.target_id ?? "")) || (nameColumn && g.shown.record[nameColumn]) || displayValue(fileId, keyColumn, g.shown.record[keyColumn] ?? "") || "";
     const isNum = (c) => c.input === "number" || c.input === "percent";
     const fcols = [
-      { key: "__lead", label: leadLabel, type: "text", filterValue: (g) => leadText(g), sortValue: (g) => leadText(g) },
+      {
+        key: "__lead",
+        label: leadLabel,
+        type: "text",
+        filterValue: (g) => leadText(g),
+        sortValue: (g) => leadText(g),
+        // 先頭が日付・年月の表（祝日）は以降〜以前で絞る（§108）
+        ...(!isGoal && !nameColumn && (keyDef.input === "date" || keyDef.input === "month") ? { filter: "date", dateValue: (g) => parseDateFilterInput(g.shown.record[keyColumn] ?? "") ?? null } : {}),
+      },
       ...columns.map((c) => ({
         key: c.name,
         label: c.label,
