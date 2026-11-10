@@ -44,16 +44,24 @@ export function orderColumns(cols, prefs, keyOf = (c) => c.key) {
   return cols.map((c) => (pos.has(keyOf(c)) ? known[i++] : c));
 }
 
+/**
+ * 今の列のうち隠す列。月の列のように列が変わる表で、覚えた設定が今の列を全部隠すことになるときは
+ * 何も隠さない（先頭の固定列だけの表にしない）
+ */
+export function hiddenKeys(cols, prefs, keyOf = (c) => c.key) {
+  const hidden = new Set(prefs.hidden.filter((k) => cols.some((c) => keyOf(c) === k)));
+  return cols.length > 0 && hidden.size >= cols.length ? new Set() : hidden;
+}
+
 /** 表示する列（並べ替え後、隠した列を除く） */
 export function arrangeColumns(cols, prefs, keyOf = (c) => c.key) {
-  const hidden = new Set(prefs.hidden);
+  const hidden = hiddenKeys(cols, prefs, keyOf);
   return orderColumns(cols, prefs, keyOf).filter((c) => !hidden.has(keyOf(c)));
 }
 
 /** 既定から変えているか（ボタンの印） */
 export function isCustomized(cols, prefs, keyOf = (c) => c.key) {
-  const keys = new Set(cols.map(keyOf));
-  if (prefs.hidden.some((k) => keys.has(k))) return true;
+  if (hiddenKeys(cols, prefs, keyOf).size > 0) return true;
   const ordered = orderColumns(cols, prefs, keyOf);
   return ordered.some((c, i) => c !== cols[i]);
 }
@@ -119,7 +127,7 @@ function openPop({ id, columns, onChange, anchor, mark }) {
   const draw = (focusSel = null) => {
     const prefs = loadColumnPrefs(id);
     const ordered = orderColumns(columns, prefs);
-    const hidden = new Set(prefs.hidden);
+    const hidden = hiddenKeys(columns, prefs);
     const shownCount = ordered.filter((c) => !hidden.has(c.key)).length;
     list.replaceChildren(
       ...ordered.map((c, i) => {
@@ -128,8 +136,10 @@ function openPop({ id, columns, onChange, anchor, mark }) {
         // 最後の 1 列は外せない（先頭の固定列だけの表にならないように）
         box.disabled = on && shownCount <= 1;
         box.addEventListener("change", () => {
+          // 今の表に無い列（別の期間の月など）の設定は残す
           const p = loadColumnPrefs(id);
-          const h = new Set(p.hidden);
+          const eff = hiddenKeys(columns, p);
+          const h = new Set(p.hidden.filter((k) => eff.has(k) || !columns.some((x) => x.key === k)));
           if (box.checked) h.delete(c.key);
           else h.add(c.key);
           apply({ order: ordered.map((x) => x.key), hidden: [...h] }, `[data-col="${i}"] input`);

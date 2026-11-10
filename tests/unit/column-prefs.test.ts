@@ -20,6 +20,13 @@ describe("列の並び順", () => {
     expect(isCustomized(cols, { order: ["b", "a"], hidden: [] })).toBe(true);
     expect(isCustomized(cols, { order: [], hidden: ["c"] })).toBe(true);
   });
+  it("列が変わって覚えた設定が今の列を全部隠すことになるときは、何も隠さない（月の列など）", () => {
+    // 4〜5 月で 5 月以外を隠した後、期間を 4 月だけにした
+    const april = [{ key: "m:04" }];
+    expect(keys(arrangeColumns(april, { order: [], hidden: ["m:04"] }))).toEqual(["m:04"]);
+    expect(isCustomized(april, { order: [], hidden: ["m:04"] })).toBe(false);
+    expect(keys(arrangeColumns(cols, { order: [], hidden: ["a", "b", "c"] }))).toEqual(["d"]);
+  });
   it("列の名前を返す関数を渡せる（マスタ編集の台帳）", () => {
     const named = [{ name: "x" }, { name: "y" }];
     expect(arrangeColumns(named, { order: ["y", "x"], hidden: [] }, (c) => c.name).map((c) => c.name)).toEqual(["y", "x"]);
