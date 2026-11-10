@@ -3,6 +3,7 @@ export interface ComboOption {
   label: string;
   sub?: string;
   search?: string;
+  muted?: boolean;
 }
 export const COMBO_MAX: number;
 export function normalizeQuery(text: unknown): string;

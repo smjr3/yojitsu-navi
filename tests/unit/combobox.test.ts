@@ -12,6 +12,14 @@ const opts = [
 ];
 
 describe("filterOptions", () => {
+  it("薄い候補（契約期間外の案件・不在の人。§31.6）は一致の順位によらず後ろ", () => {
+    const list = [
+      { value: "A", label: "保守A", muted: true },
+      { value: "B", label: "B保守" },
+      { value: "C", label: "保守C" },
+    ];
+    expect(filterOptions(list, "保守").map((o) => o.value)).toEqual(["C", "B", "A"]);
+  });
   it("空なら全件（元の順）", () => {
     expect(filterOptions(opts, "  ").map((o) => o.value)).toEqual(opts.map((o) => o.value));
   });

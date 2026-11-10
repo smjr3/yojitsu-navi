@@ -1577,6 +1577,8 @@ export default {
     hintMemberKey: "作業実績・人事データと同じ ID（新しい人を足すときだけ入力）",
     hintProject: "案件名・顧客名を入力して候補から選ぶ。期間に合わせて契約（更新前後）へ自動で割り当てます",
     projectPlaceholder: "案件名・顧客名で検索",
+    // 案件の候補で、選んでいる期間に契約が無い案件の印（§31.6）
+    projectOutOfPeriod: "契約期間外",
     workPlaceholder: "案件名・顧客名・作業の種類で検索",
     workTypePlaceholder: "作業の種類で検索",
     memberPlaceholder: "名前・所属で検索",

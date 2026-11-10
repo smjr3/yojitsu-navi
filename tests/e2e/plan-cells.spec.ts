@@ -433,3 +433,55 @@ test("広い画面（1920px）では本文も横いっぱい。ヘッダーの�
   // フィルタバーの段も端まで同じ面
   expect(px[3]).toBe(px[2]);
 });
+
+test("案件の候補: 反映範囲に契約が無い案件は「契約期間外」の印で後ろへ（選べる。§31.6）", async ({ page }) => {
+  await gotoPage(page, "/plan?team=T111");
+  await cell(page, "M010", "2026-12").click();
+  const p = pop(page);
+  const input = p.locator("#yn-plan-pop-project");
+  const list = page.locator(`#${await input.getAttribute("aria-controls")}`);
+  const opt = (name: string) => list.locator('[role="option"]', { hasText: name });
+  // 6 か月契約（9 月まで）・将来開始（1 月から）の案件は期間外、更新済みの案件は期間中（候補は最大 50 件なので名前で引く）
+  await input.fill("受発注");
+  await expect(opt("受発注システム保守")).toContainText("契約期間外");
+  await expect(opt("受発注システム保守")).toHaveClass(/is-muted/);
+  await input.fill("監視");
+  await expect(opt("ネットワーク監視")).toContainText("契約期間外");
+  await input.fill("倉庫管理");
+  await expect(opt("倉庫管理システム保守")).not.toContainText("契約期間外");
+  await expect(opt("倉庫管理システム保守")).not.toHaveClass(/is-muted/);
+  // 期間外（薄い候補）は期間中の案件より後ろ
+  await input.fill("保守");
+  await expect(list.locator('[role="option"]').first()).toBeVisible();
+  const muted = await list.locator('[role="option"]').evaluateAll((els) => els.map((e) => e.classList.contains("is-muted")));
+  expect(muted.some(Boolean)).toBe(true);
+  expect(muted.indexOf(true)).toBeGreaterThan(muted.lastIndexOf(false));
+  await input.press("Escape");
+  // 「この月以降」なら 1 月からの案件は期間中
+  await p.getByLabel("この月以降").check();
+  await input.fill("監視");
+  await expect(opt("ネットワーク監視")).not.toContainText("契約期間外");
+  await input.fill("受発注");
+  await expect(opt("受発注システム保守")).toContainText("契約期間外");
+  // 期間外でも選べる（人が判断する）
+  await opt("受発注システム保守").click();
+  await expect(input).toHaveValue("受発注システム保守");
+});
+
+test("案件の候補（計画を追加）: 開始月〜終了月に契約が無い案件に印、月を変えると印も変わる（§31.6）", async ({ page }) => {
+  await gotoPage(page, "/plan?member=M011");
+  await page.locator('tr.yn-me-plan-row[data-member="M011"]').getByRole("button", { name: /計画を追加/ }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  const input = d.locator("#yn-me-f-contract_id");
+  const list = page.locator(`#${await input.getAttribute("aria-controls")}`);
+  const opt = (name: string) => list.locator('[role="option"]', { hasText: name });
+  await d.locator("#yn-me-f-start_month").fill("2026-11");
+  await d.locator("#yn-me-f-end_month").fill("2026-12");
+  await input.fill("保守");
+  await expect(opt("受発注システム保守")).toContainText("契約期間外");
+  await expect(opt("倉庫管理システム保守")).not.toContainText("契約期間外");
+  await input.press("Escape");
+  await d.locator("#yn-me-f-start_month").fill("2026-08");
+  await input.fill("受発注");
+  await expect(opt("受発注システム保守")).not.toContainText("契約期間外");
+});
