@@ -9,6 +9,7 @@
 import { bindColResizer } from "./col-resize.js";
 import { createFilterPopover, matchesFilter, isActiveFilter, FILTER_ICON } from "./table.js";
 import { html } from "htl";
+import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
 import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
 import {
@@ -1096,7 +1097,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 値の表示（空は —） */
     const valueEl = (column, raw, cls = "yn-me-val") => {
       const v = displayValue(fileId, column, raw);
-      return html`<span class=${cls}>${v === "" ? html`<span class="yn-muted" aria-label=${T.masters.emptyAria}>—</span>` : v}</span>`;
+      // 行 × 列の数だけ作るので html`` でなく直接作る（§106）
+      return h("span", { class: cls }, v === "" ? h("span", { class: "yn-muted", "aria-label": T.masters.emptyAria }, "—") : v);
     };
 
     const rowsHtml = groups.flatMap((g) => {
@@ -1140,7 +1142,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           // 案件の担当チームが空で顧客の既定があれば、そのチームを薄く出す（§103）
           const inherited = fileId === "contracts" && c.name === "team_id" && raw.trim() === "" ? inheritedTeam(g.shown.record) : "";
           if (inherited) return html`<td class="is-val"><span class="yn-me-val is-same">${displayValue(fileId, "team_id", inherited)}</span><span class="yn-me-hint">${T.masters.customerDefaultHint}</span></td>`;
-          return html`<td class=${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}>${valueEl(c.name, raw)}${hint ? html`<span class="yn-me-hint">${hint}</span>` : null}${nextEl(c.name)}</td>`;
+          return h("td", { class: c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val" }, valueEl(c.name, raw), hint ? h("span", { class: "yn-me-hint" }, hint) : null, nextEl(c.name));
         }),
       ];
       if (isList) {
@@ -1554,7 +1556,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 月のセル（クリックでその場の修正。target を渡すとその対象の欄から始める） */
     const cellButton = (r, m, v, label, focusTarget, level = null) => {
       const fk = `plan:cell:${r.memberId}:${focusTarget ? targetId(focusTarget) : "all"}:${m}`;
-      const btn = html`<button type="button" class=${editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly"} data-fk=${fk} aria-label=${fmt(T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) })} aria-haspopup=${editable ? "dialog" : null}>${v > 0 ? pm(v) : html`<span class="yn-muted" aria-hidden="true">—</span>`}</button>`;
+      // 人 × 月の数だけ作るので html`` でなく直接作る（§106）
+      const btn = h("button", { type: "button", class: editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly", "data-fk": fk, "aria-label": fmt(T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) }), "aria-haspopup": editable ? "dialog" : null }, v > 0 ? pm(v) : h("span", { class: "yn-muted", "aria-hidden": "true" }, "—"));
       const tip = () => tooltip.show(btn, cellTip(r, m));
       btn.addEventListener("mouseenter", tip);
       btn.addEventListener("mouseleave", tooltip.hide);
@@ -1568,7 +1571,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       });
       // 不在した月から（不在した月も計画・実績があれば稼働。§35）
       const left = r.leftFrom != null && m >= r.leftFrom && !r.activeMonths[months.indexOf(m)];
-      return html`<td class=${`num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}`}>${btn}</td>`;
+      return h("td", { class: `num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}` }, btn);
     };
 
     // 人ごとの月の配分（案件＋運用保守以外）。列の絞り込み・並べ替えと表の行の両方で使う

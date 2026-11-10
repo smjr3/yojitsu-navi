@@ -67,6 +67,23 @@ const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
 ```
 
 ```js
+// 同じ条件の集計は使い回す（単位を変えたとき・前の条件に戻したときに集計し直さない。SPEC §106）
+const aggregateMembersCached = (() => {
+  const cache = new Map();
+  return (model, scope) => {
+    const key = JSON.stringify([scope.period.from, scope.period.to, scope.includeOutside ?? false, scope.memberIds ?? null]);
+    let v = cache.get(key);
+    if (!v) {
+      v = aggregateMembers(model, scope);
+      if (cache.size >= 16) cache.delete(cache.keys().next().value);
+      cache.set(key, v);
+    }
+    return v;
+  };
+})();
+```
+
+```js
 const vm = (() => {
   if (!model || !state) return null;
   const scope = scopeFor(model, state);
@@ -76,15 +93,15 @@ const vm = (() => {
   const period = allFuture ? fullPeriod : { from: fullPeriod.from, to: fullPeriod.to < model.meta.asOfMonth ? fullPeriod.to : model.meta.asOfMonth };
   // 契約外を含むか（§50.4。フィルタバーの切替）。計画・実績の両方に効く
   const includeOutside = state.outside === "1";
-  const all = aggregateMembers(model, { period, includeOutside });
+  const all = aggregateMembersCached(model, { period, includeOutside });
   // 所属チーム（基準月 = 期間の終了月。未来は基準月）で絞る。上位チームは配下を含む。
   // 「未設定」は所属チームが空か、基準月の組織に無いメンバー
   // 対象の人は「期間全体」で決める（経過月だけで決めると、未来月にだけアサインのある人が期間全体の計画から抜ける）
-  const allFull = period.to === fullPeriod.to ? all : aggregateMembers(model, { period: fullPeriod, includeOutside });
+  const allFull = period.to === fullPeriod.to ? all : aggregateMembersCached(model, { period: fullPeriod, includeOutside });
   const memberIds = memberIdsInTeam(allFull.members, state.team, scope.tree);
-  const agg = memberIds ? aggregateMembers(model, { period, memberIds, includeOutside }) : all;
+  const agg = memberIds ? aggregateMembersCached(model, { period, memberIds, includeOutside }) : all;
   // 期間全体の計画（未来月を含む）。KPI の補足に出す
-  const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembers(model, { period: fullPeriod, memberIds: memberIds ?? undefined, includeOutside });
+  const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembersCached(model, { period: fullPeriod, memberIds: memberIds ?? undefined, includeOutside });
   const rows = agg.members.map((m) => ({
     ...m,
     key: m.memberId,
@@ -175,7 +192,7 @@ if (vm) {
   const q = normalizeName(query ?? "");
   const rows = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
   // 合計行は表示中のメンバーを母集団にコアで集計し直す（検索で絞ったときも一致させる）
-  const shown = q ? aggregateMembers(model, { period, memberIds: rows.map((r) => r.memberId), includeOutside: vm.includeOutside }) : vm.agg;
+  const shown = q ? aggregateMembersCached(model, { period, memberIds: rows.map((r) => r.memberId), includeOutside: vm.includeOutside }) : vm.agg;
   display(
     sectionTitle(
       T.members.sectionTitle,
@@ -218,7 +235,7 @@ if (vm) {
     { key: "status", label: T.columns.status, type: "status", get: chips, hideNarrow: true, sortable: false },
   ];
   // 合計行は表示中のメンバーで集計し直す（列の絞り込み後の行が来る）
-  const totalsFor = (shownRows) => (shownRows.length === rows.length ? shown : aggregateMembers(model, { period, memberIds: shownRows.map((r) => r.memberId), includeOutside: vm.includeOutside }));
+  const totalsFor = (shownRows) => (shownRows.length === rows.length ? shown : aggregateMembersCached(model, { period, memberIds: shownRows.map((r) => r.memberId), includeOutside: vm.includeOutside }));
   display(
     dataTable({
       columns,
@@ -243,12 +260,22 @@ if (vm) {
 
 ```js
 // 計画とのずれ（§64）: メンバーごとの計画と実績の表の下に置く（§68）。確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
-if (vm) {
+const gapsSectionCache = new Map();
+```
+
+```js
+// 計画とのずれ（§64）は単位に関係しないので、期間・チーム・運用保守以外の切替が同じなら作った表を使い回す（単位の切替で作り直さない。SPEC §106）
+const gapsSection = (() => {
+  if (!vm) return [];
+  const key = JSON.stringify([vm.fullPeriod.from, vm.fullPeriod.to, state.team, vm.includeOutside]);
+  const hit = gapsSectionCache.get(key);
+  if (hit) return hit;
+  const out = [];
   const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
   const jp = gaps.judgedPeriod;
   const status = !jp ? T.members.gapNoConfirmed : gaps.rows.length ? fmt(T.members.gapStatus, { period: periodJa(jp), n: gaps.rows.length }) : fmt(T.members.gapNone, { period: periodJa(jp) });
   const toPlan = html`<a class="yn-btn yn-btn-sm" id="yn-gap-plan-link" href=${state.team ? `./plan?team=${encodeURIComponent(state.team)}` : "./plan"}>${T.members.gapToPlan}</a>`;
-  display(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
+  out.push(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
   if (gaps.rows.length) {
     const byId = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
     const kindText = { unplanned: T.members.gapUnplanned, noActual: T.members.gapNoActual, over: T.members.gapOver, under: T.members.gapUnder };
@@ -284,7 +311,7 @@ if (vm) {
       { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true },
       { key: "diffHours", label: T.members.gapColDiff, sublabel: T.members.gapColDiffSub, type: "hours", render: (r) => signedHours(r.diffHours), sortValue: (r) => Math.abs(r.diffHours) },
     ];
-    display(
+    out.push(
       dataTable({
         columns,
         rows,
@@ -297,5 +324,12 @@ if (vm) {
       }),
     );
   }
-}
+  if (gapsSectionCache.size >= 8) gapsSectionCache.delete(gapsSectionCache.keys().next().value);
+  gapsSectionCache.set(key, out);
+  return out;
+})();
+```
+
+```js
+for (const node of gapsSection) display(node);
 ```

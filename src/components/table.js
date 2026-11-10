@@ -19,6 +19,7 @@
  * Excel 出力: 金額は単位に関係なく常に円の整数（列名「…（円）」、1 行目に「単位: 円」の注記）。
  */
 import { bindColResizer } from "./col-resize.js";
+import { h } from "./dom.js";
 import { html } from "htl";
 import { EMPTY_VALUE, formatHours, formatPercent, integer, money, periodCompact } from "./format.js";
 import { numberButton } from "./breakdown.js";
@@ -56,7 +57,7 @@ function defaultRender(col, row, unit) {
     case "status": {
       if (!v) return "";
       const list = Array.isArray(v) ? v : [v];
-      return html`<span class="yn-chip-row">${list.map((s) => statusChip(s.kind, s.text, s.title ?? null))}</span>`;
+      return h("span", { class: "yn-chip-row" }, list.map((s) => statusChip(s.kind, s.text, s.title ?? null)));
     }
     default:
       return v === null || v === undefined || v === "" ? (col.empty ?? EMPTY_VALUE) : String(v);
@@ -542,19 +543,20 @@ export function dataTable({
     const href = rowHref ? rowHref(row) : null;
     const danger = row.isDanger || rowDeficit(row) || row.isOverBudget;
     const context = tree && matchedKeys !== null && !matchedKeys.has(row.key);
-    const tr = html`<tr class=${`${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`} data-key=${String(rowKey(row, i))}></tr>`;
+    // 行・セルは html`` でなく直接作る（1 マスごとの HTML 解析を避ける。§106）
+    const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`, "data-key": String(rowKey(row, i)) });
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
       const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
-      const cell = ci === 0 ? html`<th scope="row" class=${cls}></th>` : html`<td class=${cls}></td>`;
+      const cell = ci === 0 ? h("th", { scope: "row", class: cls }) : h("td", { class: cls });
       let content = cellNode(col, row);
       if (ci === 0) {
         if (tree) {
-          const indent = html`<span class="yn-tree-indent" style=${`--depth:${row.depth ?? 0}`}></span>`;
+          const indent = h("span", { class: "yn-tree-indent", style: `--depth:${row.depth ?? 0}` });
           cell.append(indent);
           if (row.hasChildren && (parentsShown === null || parentsShown.has(row.key))) {
             const open = !collapsed.has(row.key);
-            const toggle = html`<button type="button" class="yn-tree-toggle" aria-expanded=${open ? "true" : "false"} aria-label=${fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" })}><span aria-hidden="true">${open ? "▾" : "▸"}</span></button>`;
+            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" }) }, h("span", { "aria-hidden": "true" }, open ? "▾" : "▸"));
             toggle.addEventListener("click", (ev) => {
               ev.stopPropagation();
               if (collapsed.has(row.key)) collapsed.delete(row.key);
@@ -563,9 +565,9 @@ export function dataTable({
               focusIn(tbody, `tr[data-key="${cssEscape(String(row.key))}"] .yn-tree-toggle`);
             });
             cell.append(toggle);
-          } else cell.append(html`<span class="yn-tree-toggle yn-tree-leaf" aria-hidden="true"></span>`);
+          } else cell.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
         }
-        if (href) content = html`<a class="yn-row-link" href=${href}>${content}</a>`;
+        if (href) content = h("a", { class: "yn-row-link", href }, content);
       }
       cell.append(content);
       if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
@@ -593,12 +595,12 @@ export function dataTable({
       return;
     }
     const sm = currentSummary;
-    tfoot.replaceChildren(html`<tr class="yn-summary-row">${visibleCols.map((col, ci) => {
+    tfoot.replaceChildren(h("tr", { class: "yn-summary-row" }, visibleCols.map((col, ci) => {
       const numeric = isNumeric(col);
       const has = sm[col.key] !== undefined && sm[col.key] !== null;
       const content = ci === 0 ? (sm.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, sm, true);
-      return html`<td class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}`}>${content}</td>`;
-    })}</tr>`);
+      return h("td", { class: `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}` }, content);
+    })));
     if (!tfoot.isConnected) table.append(tfoot);
   }
 
@@ -683,18 +685,32 @@ export function dataTable({
     scroller.classList.toggle("at-end", !scrollable || wrapEl.scrollLeft + wrapEl.clientWidth >= wrapEl.scrollWidth - 1);
     scrollHint.hidden = !scrollable;
   };
+  // 大きさの変化では次の描画の直前に 1 回だけ調べる（描画の途中でレイアウト計算を何度もさせない。§106）
+  let scrollFrame = 0;
+  const scheduleScroll = () => {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      updateScroll();
+    });
+  };
   wrapEl.addEventListener("scroll", updateScroll, { passive: true });
-  if (typeof ResizeObserver !== "undefined") new ResizeObserver(updateScroll).observe(wrapEl);
-  queueMicrotask(updateScroll);
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(scheduleScroll).observe(wrapEl);
+  scheduleScroll();
   wrap.refresh = () => renderBody();
   wrap.getRows = () => currentRows;
   return wrap;
 }
 
+/** 超過の印付きの数値（▲ と赤字。表の 1 マスごとに使うので直接作る） */
+function dangerText(t) {
+  return h("span", { class: "yn-danger-text" }, h("span", { "aria-hidden": "true" }, "▲"), " ", t);
+}
+
 /** 契約名のセル: 1 行目 顧客 / 案件、2 行目 チーム・期間（幅を節約し、title に正式表記。ID は出さない §31.1） */
 export function contractNameCell(r) {
   const full = fmt(T.table.contractTitle, { id: r.contractId, customer: r.customerName, project: r.projectName, team: r.teamName, from: r.startMonth, to: r.endMonth });
-  return html`<span class="yn-cell-2line" title=${full}><span class="yn-cell-main">${r.customerName} / ${r.projectName}</span><span class="yn-cell-sub">${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}</span></span>`;
+  return h("span", { class: "yn-cell-2line", title: full }, h("span", { class: "yn-cell-main" }, `${r.customerName} / ${r.projectName}`), h("span", { class: "yn-cell-sub" }, `${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}`));
 }
 
 /**
@@ -714,7 +730,7 @@ export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.for
       breakdown: breakdowns.burnRate,
       render: (row) => {
         const t = formatPercent(row.burnRate);
-        return row.isOverBudget ? html`<span class="yn-danger-text"><span aria-hidden="true">▲</span> ${t}</span>` : t;
+        return row.isOverBudget ? dangerText(t) : t;
       },
     },
     {
@@ -726,7 +742,7 @@ export function standardColumns({ breakdowns = {}, forecastLabel = T.columns.for
       render: (row, unit) => {
         if (row.forecastGrossProfit === null || row.forecastGrossProfit === undefined) return EMPTY_VALUE;
         const t = money(row.forecastGrossProfit, unit);
-        return row.isDeficit && row.forecastGrossProfit < 0 ? html`<span class="yn-danger-text"><span aria-hidden="true">▲</span> ${t}</span>` : t;
+        return row.isDeficit && row.forecastGrossProfit < 0 ? dangerText(t) : t;
       },
     },
   ];

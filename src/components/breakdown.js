@@ -12,6 +12,7 @@
  * spec は関数でもよい（開いたときに初めて計算する）。
  */
 import { html } from "htl";
+import { h } from "./dom.js";
 import { T, fmt } from "../i18n/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
 import { grossMarginOf, memberNameAt } from "./analysis.js";
@@ -127,7 +128,8 @@ export function closeBreakdown() {
 
 /** 数値ボタン。クリック／Enter で内訳を開く */
 export function numberButton(text, spec, { className = "", ariaLabel = null, title = T.breakdown.show } = {}) {
-  const btn = html`<button type="button" class=${`yn-num ${className}`.trim()} title=${title} aria-label=${ariaLabel}>${text}</button>`;
+  // 表の 1 マスごとに作るので html`` でなく直接作る（§106）
+  const btn = h("button", { type: "button", class: `yn-num ${className}`.trim(), title, "aria-label": ariaLabel }, text);
   btn.addEventListener("click", (ev) => {
     ev.stopPropagation();
     openBreakdown(spec, btn);

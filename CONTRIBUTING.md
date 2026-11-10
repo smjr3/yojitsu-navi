@@ -33,6 +33,7 @@ PR を出す前に確認すること:
 
 ## そのほか
 
+- 表の行・マスなど数の多い部品は `h()`（`src/components/dom.js`）で作る（`` html`` `` は呼ぶたびに HTML を解析するので重い。SPEC §106）
 - 検索・絞り込みの文字の欄は `onTextInput()`（`src/components/text-input.js`）で反映する（日本語の変換中に描き直すと文字が確定される。SPEC §105）
 - 画面の文言は `src/i18n/ja.js`・`src/i18n/rules.txt`・`src/i18n/guide.txt` に集める（[docs/TEXTS.md](docs/TEXTS.md)）。画面を変えたら「使い方」（`guide.txt`）も同じ PR で直す
 - Windows・Linux のどちらでも動かす（本番の Runner は Windows。SPEC §79）: `.gitlab-ci.yml` の `script` にシェルの構文を書かず `scripts/ci/*.mjs` に入れる。`bash`・`grep` などに頼らない、パスは `path` で扱う、文字列の並べ替えは言語を指定する、npm は `scripts/lib/npm.mjs` で起動する。テストのタイムアウトは `scaled()`、性能の判定は `measure()`、長く待つ別プロセスは `runAsync()`（`tests/test-env.ts`。SPEC §79.1）
