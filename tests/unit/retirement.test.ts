@@ -246,8 +246,8 @@ M9,応援,employee,一般,,,T2,2026-04,`;
     expect(needed("M9")).toEqual([]);
     // すべての組織: 所属があれば対象
     const all = planView(planSourcesFromDocs({ teams: parseMasterDoc("teams", TEAMS2), members: parseMasterDoc("members", MEMBERS2), assignments: parseMasterDoc("assignments", ASSIGN2) }, CONTRACTS), null, FY);
-    // 配下の組織を持つ組織の直属（部長など）は対象外: T2 は 2027-01 から T3 を持つ
-    expect(FY.filter((_, i) => all.rows.find((r) => r.memberId === "M9")!.planNeededMonths[i])).toEqual(FY.slice(0, 9));
+    // 配下の組織を持つ組織の直属（部長など）も対象: T2 は 2027-01 から T3 を持つ
+    expect(FY.filter((_, i) => all.rows.find((r) => r.memberId === "M9")!.planNeededMonths[i])).toEqual(FY);
   });
 
   it("退職後の月だけを見ると、配分の残っている人だけが出る", () => {
