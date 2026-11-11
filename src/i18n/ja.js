@@ -2187,12 +2187,15 @@ export default {
     demoReset: "デモをリセット（マージリクエストをすべて消す）",
     demoResetDone: "デモをリセットしました。",
     displayTitle: "表示",
-    displayHint: "「自動」は、ライト／ダークを PC の設定に、テーマカラーを GitLab のテーマに合わせます。",
+    displayHint: "「自動」は、ライト／ダークを PC の設定に、テーマカラーを GitLab のテーマに合わせます。表示の設定はこのブラウザに保存されます。",
     theme: "表示モード",
     accent: "テーマカラー",
     auto: "自動",
     themes: { light: "ライト", dark: "ダーク" },
     accents: { blue: "ブルー", indigo: "インディゴ", green: "グリーン", red: "レッド", gray: "グレー" },
+    // 文字の大きさ（§111）。この PC のこのブラウザだけに保存
+    textSize: "文字の大きさ",
+    textSizes: { s: "小", m: "標準", l: "やや大", xl: "大", xxl: "特大" },
     toMasters: "マスタ編集へ",
     // バージョン情報（§59）。値はビルド時に入る
     versionTitle: "バージョン情報",

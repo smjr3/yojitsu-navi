@@ -12,9 +12,25 @@
 /* ---------------------------------------------------------------------------
  * トークン
  * ------------------------------------------------------------------------- */
+:root[data-text-size="s"] {
+  --yn-fs: 0.9;
+}
+:root[data-text-size="l"] {
+  --yn-fs: 1.1;
+}
+:root[data-text-size="xl"] {
+  --yn-fs: 1.25;
+}
+:root[data-text-size="xxl"] {
+  --yn-fs: 1.4;
+}
 :root {
   /* 上段（単位・リソース計画・アイコン）の操作部品の高さ。狭い幅では少し低く */
   --yn-topbar-ctl-h: 32px;
+  /* 文字の大きさ（§111）。設定画面で選んだ段階を <html data-text-size> に入れ、文字サイズはすべて calc(Npx * var(--yn-fs)) で書く */
+  --yn-fs: 1;
+  /* 18px 以上の大きな文字（見出し・KPI の値）は元から大きく、幅も決まっているので 1.1 倍までにする */
+  --yn-fs-big: min(var(--yn-fs), 1.1);
   --sans-serif: "YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo",
     "Noto Sans JP", "Noto Sans CJK JP", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --monospace: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Noto Sans Mono CJK JP", monospace;
@@ -135,7 +151,7 @@ html {
   background: var(--theme-background);
 }
 body {
-  font: 15px/1.6 var(--sans-serif);
+  font: calc(15px * var(--yn-fs))/1.6 var(--sans-serif);
   color: var(--yn-text-1);
   max-width: var(--yn-max-width);
   -webkit-font-smoothing: antialiased;
@@ -166,6 +182,9 @@ body {
  * Framework の既定（position: fixed・固定高さ）を上書きし、ページ上端に貼り付く sticky にする
  * ------------------------------------------------------------------------- */
 #observablehq-header {
+  /* 上部のタブ・フィルタは幅ごとに並びを決めているので、文字の大きさ（§111）は標準のまま */
+  --yn-fs: 1;
+  --yn-fs-big: 1;
   position: sticky;
   top: 0;
   left: auto;
@@ -179,7 +198,7 @@ body {
   border-bottom: 1px solid var(--yn-hairline);
   /* 本文の最大幅（--yn-max-width）より広い画面でも、ヘッダーの帯と下線はブラウザの左右の端まで伸ばす（border-image の外側は横スクロールを生まない） */
   border-image: linear-gradient(to bottom, var(--yn-card) calc(100% - 1px), var(--yn-hairline) 0) fill 0 / 0 0 1px / 0 100vmax;
-  font: 14px/1.5 var(--sans-serif);
+  font: calc(14px * var(--yn-fs))/1.5 var(--sans-serif);
 }
 #observablehq-header ~ #observablehq-main {
   margin-top: 0;
@@ -217,7 +236,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: calc(16px * var(--yn-fs));
   font-weight: 700;
   color: var(--yn-link) !important;
   text-decoration: none;
@@ -289,7 +308,7 @@ body {
   gap: 6px;
   margin-right: 20px;
   color: var(--yn-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   white-space: nowrap;
 }
 /* 取り込みが止まっている（最後の取得が今日の前日より前。§75）: 警告色で今日とのずれを見せる */
@@ -336,7 +355,7 @@ body {
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   color: var(--yn-text-1) !important;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -367,7 +386,7 @@ body {
   }
   .yn-tool {
     padding: 0 16px;
-    font-size: 13px;
+    font-size: calc(13px * var(--yn-fs));
   }
 }
 /* 狭い幅（ブラウザの左右に余白がある・コメント欄を開いたなど）でもタブが切れないよう詰める（§66） */
@@ -378,7 +397,7 @@ body {
   }
   .yn-tab {
     padding: 0 min(10px, 1.5vw);
-    font-size: 13px;
+    font-size: calc(13px * var(--yn-fs));
   }
 }
 .yn-filterbar-slot:not(.is-filled) {
@@ -538,8 +557,15 @@ body {
     flex: none;
   }
 }
+/* Framework の code・pre の文字（既定 14px）も文字の大きさに合わせる */
+pre,
+code,
+tt {
+  font-size: calc(14px * var(--yn-fs));
+}
 #observablehq-footer {
   margin-top: 64px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
   text-align: center;
 }
@@ -605,7 +631,7 @@ h3 {
   gap: 4px;
   padding: 0;
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-crumbs li + li::before {
@@ -630,7 +656,7 @@ h3 {
 .yn-page-title {
   overflow-wrap: anywhere;
   min-width: 0;
-  font-size: 26px;
+  font-size: calc(26px * var(--yn-fs-big));
   font-weight: 700;
   line-height: 1.25;
   margin: 0;
@@ -650,7 +676,7 @@ h3 {
   margin: 8px 0 0;
   color: var(--yn-text-2);
   max-width: 72ch;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 .yn-meta {
   display: flex;
@@ -660,7 +686,7 @@ h3 {
   padding: 8px 0;
   border-top: 1px solid var(--yn-hairline);
   border-bottom: 1px solid var(--yn-hairline);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-meta > div {
   display: flex;
@@ -690,7 +716,7 @@ h3 {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
@@ -737,7 +763,7 @@ h3 {
   color: var(--yn-neutral-text);
 }
 .yn-chip-icon {
-  font-size: 10px;
+  font-size: calc(10px * var(--yn-fs));
 }
 /* ヘルプ（他部署の人。§71）: 応援（塗り）と見分けられるよう枠線だけ */
 .yn-chip-help {
@@ -760,7 +786,7 @@ h3 {
   border-radius: var(--yn-radius-sm);
   background: var(--yn-card);
   color: var(--yn-text-1);
-  font: 600 13px/1.4 var(--sans-serif);
+  font: 600 calc(13px * var(--yn-fs))/1.4 var(--sans-serif);
   cursor: pointer;
   text-decoration: none;
 }
@@ -780,13 +806,13 @@ h3 {
 .yn-btn-sm {
   min-height: 32px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-btn-icon {
   padding: 0;
   width: 36px;
   justify-content: center;
-  font-size: 20px;
+  font-size: calc(20px * var(--yn-fs-big));
   line-height: 1;
 }
 .yn-select,
@@ -797,7 +823,7 @@ h3 {
   border-radius: var(--yn-radius-sm);
   background: var(--yn-card);
   color: var(--yn-text-1);
-  font: 14px var(--sans-serif);
+  font: calc(14px * var(--yn-fs)) var(--sans-serif);
 }
 .yn-input {
   width: 100%;
@@ -819,7 +845,7 @@ h3 {
   border-right: 1px solid var(--yn-hairline);
   background: transparent;
   color: var(--yn-text-2);
-  font: 500 13px var(--sans-serif);
+  font: 500 calc(13px * var(--yn-fs)) var(--sans-serif);
   cursor: pointer;
 }
 .yn-seg-btn:last-child {
@@ -895,7 +921,7 @@ h3 {
 .yn-filter legend,
 .yn-filter label,
 .yn-filter-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-weight: 600;
   color: var(--yn-text-2);
   padding: 0;
@@ -915,7 +941,7 @@ h3 {
   color: var(--yn-text-muted);
 }
 .yn-filter-help {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
   font-weight: 400;
 }
@@ -928,7 +954,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px !important;
+  font-size: calc(13px * var(--yn-fs)) !important;
   font-weight: 500 !important;
   color: var(--yn-text-1) !important;
   cursor: pointer;
@@ -960,7 +986,7 @@ h3 {
   border: 1px solid var(--yn-hairline-strong);
   border-radius: 999px;
   background: var(--yn-card);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   cursor: pointer;
 }
 .yn-toggle-chip:has(input:checked) {
@@ -1009,7 +1035,7 @@ h3 {
   box-shadow: inset 0 3px 0 var(--yn-danger);
 }
 .yn-kpi-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-weight: 600;
   color: var(--yn-text-2);
   line-height: 1.4;
@@ -1022,7 +1048,7 @@ h3 {
   min-height: 36px;
 }
 .yn-kpi-value {
-  font-size: 24px;
+  font-size: calc(24px * var(--yn-fs-big));
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -1030,29 +1056,29 @@ h3 {
   white-space: nowrap;
 }
 .yn-kpi-long .yn-kpi-value {
-  font-size: 18px !important;
+  font-size: calc(18px * var(--yn-fs-big)) !important;
 }
 .yn-kpi-xlong .yn-kpi-value {
-  font-size: 15px !important;
+  font-size: calc(15px * var(--yn-fs)) !important;
 }
 .yn-kpi-wrap .yn-kpi-value {
   white-space: normal;
-  font-size: 20px;
+  font-size: calc(20px * var(--yn-fs-big));
 }
 @container (max-width: 1179px) {
   .yn-kpi-value {
-    font-size: 22px;
+    font-size: calc(22px * var(--yn-fs-big));
   }
 }
 .yn-kpi-sub {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .yn-kpi-compare-row {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
   margin-top: auto;
   padding-top: 4px;
@@ -1067,7 +1093,7 @@ h3 {
   color: var(--yn-text-2);
 }
 .yn-kpi-arrow {
-  font-size: 10px;
+  font-size: calc(10px * var(--yn-fs));
   margin-right: 2px;
 }
 
@@ -1118,13 +1144,13 @@ h3 {
 .yn-section-title {
   overflow-wrap: anywhere;
   min-width: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--yn-fs-big));
   font-weight: 700;
   margin: 0;
 }
 .yn-section-hint {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
   max-width: 80ch;
 }
@@ -1150,7 +1176,7 @@ h3 {
   border-radius: 50%;
   background: transparent;
   color: var(--yn-text-muted);
-  font: 700 11px/1 var(--sans-serif);
+  font: 700 calc(11px * var(--yn-fs))/1 var(--sans-serif);
   cursor: help;
 }
 .yn-tip-btn:hover,
@@ -1175,7 +1201,7 @@ h3 {
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   font-weight: 400;
   line-height: 1.6;
   white-space: normal;
@@ -1215,7 +1241,7 @@ h3 {
   gap: 4px 16px;
   margin: 0 0 8px;
   padding: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-legend li {
@@ -1257,13 +1283,13 @@ h3 {
 }
 .yn-details > summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   font-weight: 600;
   color: var(--yn-text-2);
   padding: 4px 0;
 }
 .yn-note {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
   margin: 8px 0;
   padding: 8px 12px;
@@ -1294,7 +1320,7 @@ h3 {
   display: grid;
   place-items: center;
   background: var(--yn-wash-strong);
-  font-size: 18px;
+  font-size: calc(18px * var(--yn-fs-big));
   font-weight: 700;
   color: var(--yn-text-2);
 }
@@ -1310,7 +1336,7 @@ h3 {
   margin: 0 auto;
   max-width: 60ch;
   color: var(--yn-text-2);
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 .yn-state-actions {
   margin: 12px 0 0;
@@ -1400,7 +1426,7 @@ h3 {
   align-items: center;
   gap: 8px 12px;
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-table-toolbar .yn-export {
@@ -1420,7 +1446,7 @@ h3 {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font: 13px/1.4 var(--sans-serif);
+  font: calc(13px * var(--yn-fs))/1.4 var(--sans-serif);
   margin: 0;
 }
 .yn-table th,
@@ -1524,7 +1550,7 @@ h3 {
   opacity: 1;
 }
 .yn-scroll-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 /* 長い案件名（顧客 / 案件）が多いので、広い画面では名前列を広げて省略を減らす（全文は title） */
@@ -1556,13 +1582,13 @@ h3 {
   white-space: nowrap;
 }
 .yn-cell-sub {
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   font-weight: 400;
   color: var(--yn-text-muted);
 }
 .yn-cell-id {
   font-family: var(--monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-chip-row {
@@ -1572,7 +1598,7 @@ h3 {
   gap: 2px;
 }
 .yn-table .yn-chip {
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   padding: 1px 6px;
 }
 .yn-cell-forecast {
@@ -1585,7 +1611,7 @@ h3 {
 }
 @container (max-width: 820px) {
   .yn-table {
-    font-size: 12px;
+    font-size: calc(12px * var(--yn-fs));
   }
   .yn-table th,
   .yn-table td {
@@ -1603,7 +1629,7 @@ h3 {
 }
 @container (max-width: 700px) {
   .yn-table {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--yn-fs));
   }
   .yn-table th,
   .yn-table td {
@@ -1623,7 +1649,7 @@ h3 {
 .yn-table-compact th,
 .yn-table-compact td {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-table-compact tfoot td {
   position: static;
@@ -1658,7 +1684,7 @@ h3 {
   width: 100%;
 }
 .yn-sort-icon {
-  font-size: 10px;
+  font-size: calc(10px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 th[aria-sort="ascending"] .yn-sort,
@@ -1695,7 +1721,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   color: var(--yn-text-2);
   cursor: pointer;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   vertical-align: middle;
 }
 .yn-tree-toggle:hover {
@@ -1735,7 +1761,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   .yn-table th,
   .yn-table td {
     padding: 8px 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--yn-fs));
   }
 }
 
@@ -1773,7 +1799,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-dialog-title {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 16px;
+  font-size: calc(16px * var(--yn-fs));
   font-weight: 700;
   margin: 0;
   line-height: 1.4;
@@ -1788,14 +1814,14 @@ th[aria-sort="descending"] .yn-sort-icon {
   justify-content: space-between;
   padding: 12px 16px;
   border-top: 1px solid var(--yn-hairline);
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-bd-subtitle {
   overflow-wrap: anywhere;
   margin: 0 0 12px;
   color: var(--yn-text-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-bd-formula {
   display: flex;
@@ -1808,7 +1834,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-bd-formula code {
   font-family: var(--monospace);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   white-space: pre-wrap;
 }
 .yn-bd-rows {
@@ -1823,7 +1849,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   gap: 16px;
   padding: 6px 0;
   border-bottom: 1px solid var(--yn-hairline);
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 .yn-bd-rows > div.is-emphasis {
   font-weight: 700;
@@ -1840,18 +1866,18 @@ th[aria-sort="descending"] .yn-sort-icon {
   display: block;
   color: var(--yn-text-muted);
   font-weight: 400;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-bd-section {
   margin: 16px 0 0;
 }
 .yn-bd-section-title {
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   font-weight: 700;
   margin: 0 0 6px;
 }
 .yn-bd-text {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
   margin: 0 0 6px;
 }
@@ -1871,10 +1897,10 @@ th[aria-sort="descending"] .yn-sort-icon {
   background: var(--yn-card);
   border: 1px solid var(--yn-hairline);
   border-radius: var(--yn-radius);
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 .yn-facts dt {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-facts dd {
@@ -1904,11 +1930,11 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-forecast-title {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--yn-fs));
 }
 .yn-forecast-desc {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-forecast-value {
@@ -1919,7 +1945,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-forecast-facts {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-forecast-facts > div {
   display: flex;
@@ -1942,7 +1968,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   margin-top: 12px;
 }
 .yn-fact-line {
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 
 /* ---------------------------------------------------------------------------
@@ -1950,16 +1976,16 @@ th[aria-sort="descending"] .yn-sort-icon {
  * ------------------------------------------------------------------------- */
 .yn-prose {
   max-width: 80ch;
-  font-size: 15px;
+  font-size: calc(15px * var(--yn-fs));
 }
 .yn-prose h2 {
-  font-size: 18px;
+  font-size: calc(18px * var(--yn-fs-big));
   margin: 32px 0 8px;
   padding-top: 8px;
   border-top: 1px solid var(--yn-hairline);
 }
 .yn-prose table {
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   margin: 8px 0 16px;
 }
 .yn-prose th,
@@ -1971,7 +1997,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-prose pre {
   margin: 8px 0 16px;
   background: var(--yn-wash);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-prose code {
   font-family: var(--monospace);
@@ -1989,7 +2015,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   list-style: none;
   background: var(--yn-wash);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
 }
 .yn-prose-toc li {
   margin: 2px 0;
@@ -2041,7 +2067,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 /* グラフ下の注記（年度外の月など） */
 .yn-chart-note {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 
@@ -2049,7 +2075,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 .yn-th-sub {
   display: block;
   flex-basis: 100%;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--yn-fs));
   font-weight: 500;
   color: var(--yn-text-muted);
   line-height: 1.2;
@@ -2061,7 +2087,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   line-height: 1.25;
 }
 .yn-cell-count {
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   white-space: nowrap;
 }
 
@@ -2096,11 +2122,11 @@ th[aria-sort="descending"] .yn-sort-icon {
   cursor: pointer;
 }
 .yn-me-small {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-me-path {
-  font: 12px var(--monospace);
+  font: calc(12px * var(--yn-fs)) var(--monospace);
   font-weight: 400;
   color: var(--yn-text-muted);
 }
@@ -2112,7 +2138,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   border-radius: var(--yn-radius);
 }
 .yn-me-intro-title {
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   font-weight: 700;
   cursor: pointer;
 }
@@ -2132,15 +2158,15 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-me-intro-grid dt {
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-intro-grid dd {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-me-intro-rule {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   margin: 8px 0;
   max-width: none;
 }
@@ -2151,7 +2177,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   list-style: none;
   padding: 0;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-flow li {
   display: inline-flex;
@@ -2166,7 +2192,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   border-radius: 50%;
   background: var(--yn-accent-bg);
   font-weight: 700;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-me-banner {
   margin: 0 0 16px;
@@ -2174,10 +2200,10 @@ th[aria-sort="descending"] .yn-sort-icon {
   border: 1px solid var(--yn-focus);
   border-radius: var(--yn-radius);
   background: var(--yn-accent-bg);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-banner-title {
-  font-size: 15px;
+  font-size: calc(15px * var(--yn-fs));
   margin: 0 0 4px;
 }
 .yn-me-banner p {
@@ -2215,7 +2241,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   border-radius: var(--yn-radius-sm) var(--yn-radius-sm) 0 0;
   background: transparent;
   color: var(--yn-text-2);
-  font: 600 14px var(--sans-serif);
+  font: 600 calc(14px * var(--yn-fs)) var(--sans-serif);
   cursor: pointer;
   margin-bottom: -1px;
 }
@@ -2229,14 +2255,14 @@ th[aria-sort="descending"] .yn-sort-icon {
   box-shadow: inset 0 3px 0 var(--yn-focus);
 }
 .yn-me-tab-file {
-  font: 400 11px var(--monospace);
+  font: 400 calc(11px * var(--yn-fs)) var(--monospace);
   color: var(--yn-text-muted);
 }
 .yn-me-panel-head .yn-section-title {
   margin: 0 0 4px;
 }
 .yn-me-help {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
   margin: 2px 0;
   max-width: none;
@@ -2250,7 +2276,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-me-toolbar .yn-table-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-me-search {
@@ -2274,7 +2300,7 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-me-hint {
   display: block;
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-text-muted);
   max-width: 14em;
   overflow: hidden;
@@ -2305,7 +2331,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--yn-fs));
 }
 .yn-me-issues li {
   margin: 2px 0;
@@ -2349,7 +2375,7 @@ th[aria-sort="descending"] .yn-sort-icon {
   background: var(--yn-warn-bg);
   color: var(--yn-text-1);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   text-align: left;
   text-decoration: none;
 }
@@ -2382,7 +2408,7 @@ a.yn-me-issue-link:visited {
   margin-right: 6px;
 }
 .yn-me-issue-where {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   white-space: nowrap;
 }
@@ -2419,14 +2445,14 @@ li.is-jumped,
   padding: 2px 8px;
 }
 .yn-me-subtitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   margin: 16px 0 6px;
 }
 .yn-me-removed ul {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-removed li {
   display: flex;
@@ -2444,7 +2470,7 @@ li.is-jumped,
   margin: 24px 0 0;
 }
 .yn-me-check {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -2456,11 +2482,11 @@ li.is-jumped,
   min-width: 12em;
 }
 .yn-me-empty {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-me-save-body {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   max-width: 880px;
 }
 .yn-me-save-body p {
@@ -2475,10 +2501,10 @@ li.is-jumped,
 .yn-me-field > label,
 .yn-me-label {
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-field-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-me-inline {
@@ -2513,7 +2539,7 @@ li.is-jumped,
   padding: 12px 16px;
   border-radius: var(--yn-radius);
   border: 1px solid var(--yn-hairline-strong);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   max-width: 880px;
 }
 .yn-me-outcome p {
@@ -2543,7 +2569,7 @@ li.is-jumped,
 }
 .yn-me-outcome-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   margin: 0 0 4px;
 }
 .yn-me-outcome-title.is-warning {
@@ -2587,7 +2613,7 @@ li.is-jumped,
   color: var(--yn-text-muted);
 }
 .yn-me-colname {
-  font: 400 11px var(--monospace);
+  font: 400 calc(11px * var(--yn-fs)) var(--monospace);
   color: var(--yn-text-muted);
 }
 .yn-me-form-msg:not(:empty) {
@@ -2597,7 +2623,7 @@ li.is-jumped,
   color: var(--yn-warn-text);
   font-weight: 600;
   border-radius: var(--yn-radius-sm);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-form-foot {
   display: flex;
@@ -2611,14 +2637,14 @@ li.is-jumped,
   border-left: 3px solid var(--yn-warn-text);
   background: var(--yn-warn-bg);
   border-radius: 0 var(--yn-radius-sm) var(--yn-radius-sm) 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-impact-none {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-me-change-list {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-before {
   text-decoration: line-through;
@@ -2631,7 +2657,7 @@ li.is-jumped,
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 4px 16px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   margin: 0 0 8px;
 }
 .yn-me-dl > div {
@@ -2658,7 +2684,7 @@ li.is-jumped,
   }
   .yn-me-tab {
     padding: 6px 8px;
-    font-size: 13px;
+    font-size: calc(13px * var(--yn-fs));
     margin-bottom: 0;
     border: 1px solid var(--yn-hairline);
     border-radius: var(--yn-radius-sm);
@@ -2742,7 +2768,7 @@ li.is-jumped,
   }
   .yn-unit-slot .yn-seg-btn {
     padding: 2px 6px;
-    font-size: 12px;
+    font-size: calc(12px * var(--yn-fs));
   }
 }
 
@@ -2776,7 +2802,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-conv {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   margin-top: 2px;
 }
@@ -2785,7 +2811,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-plan-label {
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-plan-toolbar .yn-select {
   max-width: min(100%, 420px);
@@ -2801,7 +2827,7 @@ html:has(dialog.yn-dialog[open]) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
@@ -2825,7 +2851,7 @@ html:has(dialog.yn-dialog[open]) {
   min-width: 28px;
 }
 .yn-me-plan-unit {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
   margin: 4px 0 8px;
 }
@@ -2858,7 +2884,7 @@ html:has(dialog.yn-dialog[open]) {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   min-width: 0;
 }
 .yn-me-plan-alert-name {
@@ -2883,7 +2909,7 @@ html:has(dialog.yn-dialog[open]) {
   border-radius: 7px;
   background: var(--yn-danger);
   color: #fff;
-  font-size: 10px;
+  font-size: calc(10px * var(--yn-fs));
   font-weight: 700;
   line-height: 14px;
   text-align: center;
@@ -2911,7 +2937,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-team-org {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 /* 横スクロールする表の中で、行全体にまたがる説明（行のエラー・リソース計画の明細）は左端に貼り付ける。
@@ -2959,7 +2985,7 @@ html:has(dialog.yn-dialog[open]) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-me-plan-who .yn-chip {
@@ -3119,7 +3145,7 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-card);
   color: var(--yn-text-1);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   line-height: 1.5;
   pointer-events: none;
 }
@@ -3170,7 +3196,7 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-card);
   color: var(--yn-text-1);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-plan-pop::backdrop {
   background: transparent;
@@ -3193,7 +3219,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-plan-pop-title {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -3334,7 +3360,7 @@ html:has(dialog.yn-dialog[open]) {
   border-radius: var(--yn-radius-sm);
   background: var(--yn-card);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-combo-list[hidden] {
   display: none;
@@ -3358,7 +3384,7 @@ html:has(dialog.yn-dialog[open]) {
   overflow-wrap: anywhere;
 }
 .yn-combo-sub {
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-text-muted);
   overflow-wrap: anywhere;
 }
@@ -3369,7 +3395,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-combo-empty,
 .yn-combo-more {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 .yn-combo-more {
@@ -3397,7 +3423,7 @@ html:has(dialog.yn-dialog[open]) {
   border-radius: 9px;
   background: var(--yn-link);
   color: var(--yn-on-accent);
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -3468,7 +3494,7 @@ html:has(dialog.yn-dialog[open]) {
   padding: 8px 12px;
   border-radius: var(--yn-radius-sm);
   color: var(--yn-text-1) !important;
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   text-decoration: none;
   white-space: nowrap;
 }
@@ -3485,7 +3511,7 @@ html:has(dialog.yn-dialog[open]) {
   height: 16px;
   margin-left: 0;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: calc(10px * var(--yn-fs));
   box-shadow: 0 0 0 2px var(--yn-card);
   pointer-events: none;
 }
@@ -3510,7 +3536,7 @@ html:has(dialog.yn-dialog[open]) {
   width: 100%;
   max-width: none;
   min-height: 160px;
-  font: 13px/1.5 var(--monospace);
+  font: calc(13px * var(--yn-fs))/1.5 var(--monospace);
   white-space: pre;
   overflow: auto;
   resize: vertical;
@@ -3553,7 +3579,7 @@ html:has(dialog.yn-dialog[open]) {
   border-radius: 10px;
   background: var(--yn-link);
   color: var(--yn-on-accent);
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-weight: 700;
   vertical-align: 2px;
 }
@@ -3587,7 +3613,7 @@ html:has(dialog.yn-dialog[open]) {
   align-items: center;
   gap: 4px 12px;
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   max-width: none;
 }
@@ -3609,14 +3635,14 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-mr-file-title {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-mr-rows,
 .yn-mr-summary {
   margin: 0;
   padding-left: 0;
   list-style: none;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-mr-summary {
   padding-left: 20px;
@@ -3648,7 +3674,7 @@ html:has(dialog.yn-dialog[open]) {
   grid-template-columns: max-content 1fr;
   gap: 4px 16px;
   margin: 8px 0 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-settings-target div {
   display: contents;
@@ -3673,7 +3699,7 @@ html:has(dialog.yn-dialog[open]) {
   display: inline-flex;
   align-items: flex-start;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   cursor: pointer;
 }
 .yn-settings-check-label input {
@@ -3689,7 +3715,7 @@ html:has(dialog.yn-dialog[open]) {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-settings-theme {
   display: flex;
@@ -3712,7 +3738,7 @@ html:has(dialog.yn-dialog[open]) {
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   background: var(--yn-card);
-  font-size: 14px;
+  font-size: calc(14px * var(--yn-fs));
   cursor: pointer;
 }
 .yn-seg-radio input {
@@ -3767,7 +3793,7 @@ html:has(dialog.yn-dialog[open]) {
 #observablehq-main .yn-me-ledger .yn-me-hist > th,
 #observablehq-main .yn-me-ledger .yn-me-hist > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   padding-top: 4px;
   padding-bottom: 4px;
 }
@@ -3819,7 +3845,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-next {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-link);
   white-space: nowrap;
 }
@@ -3834,7 +3860,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-sub > th,
 .yn-me-plan-sub > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-plan-sub > th {
   padding-left: 44px !important;
@@ -3849,7 +3875,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-sub .yn-plan-cell-btn,
 .yn-me-plan-sub > td.num {
   color: var(--yn-text-2);
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-me-plan-sub .yn-me-row-actions .yn-btn {
   border-color: transparent;
@@ -3880,7 +3906,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-plan-sub.is-empty > td {
   padding-left: 44px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
 }
 .yn-me-plan-hist > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
@@ -3898,7 +3924,7 @@ html:has(dialog.yn-dialog[open]) {
   padding: 0;
   display: grid;
   gap: 2px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-plan-entry {
   display: flex;
@@ -3955,7 +3981,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-plan-foot-sub th,
 .yn-me-plan-foot-sub td {
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   font-weight: 400;
 }
@@ -3979,7 +4005,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-chg-scope legend {
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   margin-bottom: 4px;
 }
 .yn-radio-col {
@@ -3998,7 +4024,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-chg-preview {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   font-weight: 600;
   color: var(--yn-text-2);
   min-height: 1.4em;
@@ -4008,7 +4034,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-me-hist-name {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   white-space: normal;
 }
 .yn-me-hist-toggle { font-weight: 500; }
@@ -4032,7 +4058,7 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-text-2);
 }
 .yn-chart-zoom-btn span {
-  font-size: 15px;
+  font-size: calc(15px * var(--yn-fs));
   line-height: 1;
 }
 .yn-chart-plot {
@@ -4056,7 +4082,7 @@ html:has(dialog.yn-dialog[open]) {
   padding: 12px 16px 16px;
 }
 .yn-chart-zoom-legend .yn-legend {
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
 }
 .yn-chart-zoom-plot {
   flex: 1 1 auto;
@@ -4073,7 +4099,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-chart-zoom-rotate {
   display: none;
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-muted);
 }
 @media (max-width: 640px) {
@@ -4118,7 +4144,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-chart-zoom-sub {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   overflow-wrap: anywhere;
 }
@@ -4165,7 +4191,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-target-status {
   display: inline-flex;
   gap: 3px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-weight: 600;
   white-space: nowrap;
 }
@@ -4216,7 +4242,7 @@ html:has(dialog.yn-dialog[open]) {
   border-spacing: 0;
   width: 100%;
   max-width: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   font-variant-numeric: tabular-nums;
 }
 .yn-dg th,
@@ -4342,7 +4368,7 @@ html:has(dialog.yn-dialog[open]) {
   border: 1px solid var(--yn-hairline-strong);
   border-radius: var(--yn-radius-sm);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   font-weight: 400;
   text-align: left;
   white-space: normal;
@@ -4555,7 +4581,7 @@ html:has(dialog.yn-dialog[open]) {
   flex-wrap: wrap;
   gap: 4px 14px;
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-org-legend-item {
@@ -4575,7 +4601,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-org-status {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 /* 色: 計画の 1.0 超 = 黄、1.0 未満 = 青系、ちょうど = 緑、計画なし = 地（リソース計画 §41・§58 と同じ） */
@@ -4648,10 +4674,10 @@ a.yn-org-head:hover {
   overflow-wrap: anywhere;
 }
 .yn-org-node[data-depth="0"] > .yn-org-head .yn-org-name {
-  font-size: 15px;
+  font-size: calc(15px * var(--yn-fs));
 }
 .yn-org-level {
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
   color: var(--yn-text-2);
   white-space: nowrap;
 }
@@ -4659,7 +4685,7 @@ a.yn-org-head:hover {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -4696,7 +4722,7 @@ a.yn-org-head:hover {
   padding: 2px 8px;
   border: 1px solid var(--yn-hairline-strong);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   line-height: 1.4;
   text-decoration: none;
 }
@@ -4725,7 +4751,7 @@ a.yn-org-person:hover {
 }
 .yn-org-person .yn-chip {
   padding: 0 6px;
-  font-size: 11px;
+  font-size: calc(11px * var(--yn-fs));
 }
 .yn-org-mark {
   font-weight: 700;
@@ -4788,7 +4814,7 @@ a.yn-org-person:hover {
 }
 .yn-org-spot {
   flex-basis: 100%;
-  font-size: 12px;
+  font-size: calc(12px * var(--yn-fs));
   color: var(--yn-text-2);
 }
 .yn-org-spot > summary {
@@ -4863,7 +4889,7 @@ a.yn-org-person:hover {
 }
 
 /* ---------------------------------------------------------------------------
- * リソース計画: 人の行と作業の行の見分け・開閉（SPEC §111）
+ * リソース計画: 人の行と作業の行の見分け・開閉（SPEC §112）
  * 人の行 = ▸/▾ と名前を押して開閉（名前の欄全体が押せる）。作業の行 = 一段下げて枝の線でつなぐ。
  * 開いたまとまりの上下は太い線で区切り、隣の人の行と混ざらないようにする
  * ------------------------------------------------------------------------- */
@@ -4895,7 +4921,7 @@ a.yn-org-person:hover {
   display: inline-block;
   width: 1em;
   color: var(--yn-text-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--yn-fs));
   text-align: center;
 }
 .yn-me-plan-row .yn-me-plan-name {
@@ -4912,8 +4938,8 @@ a.yn-org-person:hover {
   border-radius: 999px;
   background: var(--yn-neutral-bg);
   color: var(--yn-neutral-text);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: calc(11px * var(--yn-fs));
+  line-height: 1.45;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

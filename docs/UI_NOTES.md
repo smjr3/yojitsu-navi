@@ -24,7 +24,7 @@ src/
     filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
     dom.js         h(tag, attrs, ...children): 表の行・マスなど数の多い部品を document.createElement で直接作る（html`` と同じ DOM。SPEC §107）
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
-  style.css        デザイントークン（ライト／ダーク・テーマカラー）とスタイル
+  style.css        デザイントークン（ライト／ダーク・テーマカラー・文字の大きさ）とスタイル
 ```
 
 ## ナビゲーション（上部ヘッダ）
@@ -124,6 +124,7 @@ dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実
 ## スタイル（style.css）
 
 - `observablehq:default.css` と air テーマを読み込んだ上で `--theme-*` と `--yn-*` トークンを上書き。表示モードとテーマカラーは §53: head のスクリプト（`src/components/appearance.js`）が描画前に `<html data-theme data-accent>` を決める（設定画面 → GitLab → PC の設定 → ライト／ブルー）。ダークの面はネイビー寄りのグレー（ページ `#161c27`・カード `#1e2533`）。テーマカラーはリンク・フォーカス・選択中・主ボタン・ロゴだけに使い、グラフの系列色は変えない。グラフの配色（Framework の `dark`）は `color-scheme` を見て自動で追従する。
+- 文字の大きさ（§111）: 文字サイズは px を直書きせず `calc(Npx * var(--yn-fs))`（18px 以上は `var(--yn-fs-big)`、1.1 倍まで）で書く（`tests/unit/style-css.test.ts` が検査）。グラフ（Plot）の文字・余白は `scaledPx()`（`src/components/appearance.js`）で倍率を掛ける。上部（`#observablehq-header`）は倍率 1 に固定。
 - フォント: 同梱の BIZ UDPゴシック（`src/fonts/`、SPEC §46）。`--sans-serif` は `"YN BIZ UDPGothic", "BIZ UDPGothic", system-ui, …`。同梱版は「1」の幅を他の数字にそろえてあるので、数字はどこでも桁がそろう。数値列・KPI は `tabular-nums`（フォールバックのシステムフォント用）。フォントの作り直しは `scripts/fonts/build_fonts.py`。
 - 8px グリッド、カード角 8px、KPI は `auto-fit minmax(230px)`（コンテナ 1180px 以上で 5 列）。
 - 文字の赤は `#b32d2d`（ライト 6.1:1）/ `#ee7a7a`（ダーク 6.4:1）。マークの赤は `#d03b3b`。
@@ -223,7 +224,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §99 並べ替え・絞り込み | リソース計画の見出し | マスタ編集の台帳と同じ見出しの部品（`sortFilterHead`、並べ替えのボタン＋漏斗。`createFilterPopover`）。月の列は狭いので `th.num.has-filter` の左右の余白を詰め、見出しは「n月」のまま（吹き出し・読み上げは「YYYY年n月」）。開いた明細・変更の履歴は人の行について動く |
 | §66 内訳の見分け | リソース計画の開いた内訳 | `.yn-me-plan-sub` は左端の帯（inset box-shadow）・12px の控えめな数値・枠なしの文字ボタン。`renderPanel` は同じ表の描き直しで `.yn-me-table-wrap` のスクロール位置を引き継ぐ |
 | §65 変更の影響 | リソース計画の保存の前 | 差分の下・保存の上に「変更の影響」（`renderImpact`、計算は `core/planImpact.ts`）。アサイン・メンバー・単価に変更があるときだけ出す。前の値は muted、後の値は通常の色、マイナスの残予算・増えた着地は赤。表の中の読み上げ用「から」（`position: absolute`）が枠の外へ出て 390px で横スクロールになったので、`.yn-me-impact .yn-table-wrap` に `position: relative` |
-| §111 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（▸/▾ `.yn-me-plan-caret`・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
+| §112 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（▸/▾ `.yn-me-plan-caret`・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
 | §110 目標の警告 | リソース計画の表・グラフの上 | `planAlertsEl`（計算は `core/planTargets.ts`）。未達見込みの目標を 1 件 1 行（`h()` で作る）、3 件まで＋「ほか n件」。月の見出しに `.yn-me-plan-target-mark`。描き直しが多いので `planTargetAlertsFor` で組織・組織の月・`validation` が同じなら前の結果を使う。390px では 1 件が折り返して 3 行になる |
 | 単価の表示 | 単位 | 金額の表示単位（円／千円／百万円）の切替に関係なく、CSV の値（円）をそのまま表示・入力する |
 

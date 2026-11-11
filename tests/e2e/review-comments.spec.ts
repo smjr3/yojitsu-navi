@@ -174,7 +174,7 @@ test("設定画面は「表示」が一番上、リソース計画の人の行�
   await expect(page.locator(".yn-me-plan-row").filter({ hasText: "運用保守以外" }).locator('[data-fk^="plan:toggle:"]')).toHaveCount(0);
 });
 
-test("リソース計画の人の行の開閉は名前の ▸ と作業の数 n。n は案件と、表示中の期間に計画か実績がある運用保守以外の種別の数（§57・§50.3・§111）", async ({ page }) => {
+test("リソース計画の人の行の開閉は名前の ▸ と作業の数 n。n は案件と、表示中の期間に計画か実績がある運用保守以外の種別の数（§57・§50.3・§112）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   const toggles = page.locator('[data-fk^="plan:toggle:"]');
   await expect(toggles.first().locator(".yn-me-plan-caret")).toHaveText("▸");
