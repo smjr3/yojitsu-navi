@@ -89,7 +89,7 @@ test("保存前の変更内容: リソース計画のセル 1 つの変更は「
   await gotoPage(page, "/plan?member=M011");
   await page.locator('[data-fk^="plan:cell:M011:p:"][data-fk$=":2026-11"]').first().click();
   const pop = page.locator("dialog.yn-plan-pop[open]");
-  await pop.locator("#yn-plan-pop-new").fill("0.5");
+  await pop.getByRole("textbox", { name: /倉庫管理システム保守 の/ }).fill("0.5");
   await pop.getByRole("button", { name: "反映" }).click();
   const item = page.locator(".yn-me-diff-summary li");
   await expect(item).toHaveCount(1);
