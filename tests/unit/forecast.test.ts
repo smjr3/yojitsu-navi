@@ -162,7 +162,7 @@ describe("着地見込み (SPEC §10)", () => {
     expect(f.forecastCost).toBe(0);
   });
 
-  it("assignment: allocation × 標準時間 × 当月単価、月ごとの単価改定を反映", () => {
+  it("assignment: allocation × 1人月の時間 × 当月単価、月ごとの単価改定を反映", () => {
     const f = forecastContract(
       ctx({ assignments: [assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-04", endMonth: "2027-03", allocation: 0.5 }), assignment({ memberId: "M1", contractId: "OTHER" })] }),
       C,

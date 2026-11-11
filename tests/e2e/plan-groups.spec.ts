@@ -119,8 +119,9 @@ test("作業の行は一段下げて枝の線、最後の作業の行で線が�
 
 test("変更の履歴を最後の作業の行の下に開いても、枝の線は最後の作業の行で止まる", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
-  await toggle(page, "M010").click();
-  const last = page.locator('tr.yn-me-plan-sub.is-last[data-parent="M010"]');
+  // M010 の最後の作業の行は計画が無く「履歴」が出ないので、最後の行に履歴がある M012 で確かめる（§115）
+  await toggle(page, "M012").click();
+  const last = page.locator('tr.yn-me-plan-sub.is-last[data-parent="M012"]');
   await last.locator('[data-fk^="plan:hist:"]').click();
   const hist = page.locator("tr.yn-me-plan-hist").last();
   await expect(hist).toHaveClass(/is-after-last/);

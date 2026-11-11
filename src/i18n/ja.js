@@ -250,6 +250,8 @@ export default {
     filterClose: "閉じる",
     filterClearAll: "絞り込みを解除",
     // 列の表示・並び順（SPEC §106）
+    columnsFixed: "固定",
+    columnsExtra: "別の列",
     columnsButton: "列",
     columnsTitle: "表示する列と並び順",
     columnsReset: "元に戻す",
@@ -329,6 +331,7 @@ export default {
     assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から不在ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
     worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から不在ですが、翌月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
+    gitlabUsernameDuplicate: "{file}: GitLab ユーザー名 {username} が複数のメンバー（{members}）に付いています。ヘッダーの「今月の残り」はこの人たちに出ません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
     rateNotNumber: "{file} {row} 行目: {key} の hourly_rate が数値ではありません",
@@ -1229,6 +1232,26 @@ export default {
     gapToPlan: "リソース計画へ",
   },
 
+  // ── 今月の残り時間（§113。ヘッダー右上の吹き出しとメンバー詳細）──────────
+  myHours: {
+    title: "自分の今月",
+    chip: "今月の残り",
+    chipOver: "今月の超過",
+    remaining: "残り {hours}",
+    over: "超過 {hours}",
+    overCell: "超過 {hours}",
+    sub: "計画 {planned} ・ 実績 {actual}",
+    caption: "案件ごとの今月の計画と実績",
+    colProject: "案件",
+    colPlanned: "計画",
+    colActual: "実績",
+    colRemaining: "残り",
+    toMember: "メンバー詳細へ ›",
+    noPlan: "今月の計画も実績もありません",
+    sectionTitle: "今月の残り（{month}）",
+    sectionHint: "リソース計画の今月の時間（運用保守以外の予定を含む）から、今月の作業実績（速報）を引いた時間です。GitLab のトークンを登録し、メンバーマスタに GitLab ユーザー名がある人は、右上にも自分の残りが出ます。",
+  },
+
   // ── メンバー詳細 ──────────────────────────────────
   member: {
     factsLabel: "メンバーの基本情報",
@@ -1459,6 +1482,7 @@ export default {
     colTeamId: "所属チーム",
     colEffectiveFrom: "適用開始月",
     colStatus: "在籍",
+    colGitlabUsername: "GitLab ユーザー名",
     rates: "単価",
     colRateKey: "役職名 または メンバー",
     // アサインのメンバー欄（ID ではなく名前で選ぶ。§31）
@@ -1729,6 +1753,8 @@ export default {
     targetPlaceholder: "チーム・顧客・案件の名前で検索",
     hintTarget: "チーム・顧客・案件から選びます",
     hintEndMonth: "この月までの累計で判定します（YYYY-MM）",
+    issueOtherRow: "別の行と同じ",
+    issueFileTab: "「{label}」タブ",
     hintRemainingRate: "%（例: 20。超過を減らす目標は -50）。100 以下",
     hintTargetStart: "空なら終了月を含む年度の最初の月。月ごとの目標は終了月と同じ月",
     statusActive: "在籍",
@@ -1764,6 +1790,10 @@ export default {
     diffRowCol: "行（",
     diffValuesCol: "変わる値",
     noDiff: "変更はありません。",
+    diffRowsToggle: "保存される行（{n} 行）",
+    diffSummaryAria: "変更の要約（人・作業・月ごと）",
+    diffSummaryNone: "月ごとの人月は変わりません（行の分け方だけの変更）",
+    diffSummaryZero: "なし",
     diffTitle: "変更内容（保存前の確認）",
     diffNote: "保存されるのはこの一覧の変更だけです。変更していない行は元のファイルのまま残ります。",
     discardAllTitle: "編集をすべて取り消しますか？",
@@ -1844,14 +1874,15 @@ export default {
     unknownMember: "（存在しないメンバー）",
     unitNote: "・ リーダー: {leader}",
     unitHelp: "組織を選ぶと、配下の組織とメンバーを含めて表示します（他の組織から、この組織の案件に入る人は「応援」）。",
-    targetAlertHelp: "<strong>目標:</strong> 今の計画（編集中は編集後）の着地見込み（計画値）で、目標（マスタ編集の「目標」）の残予算率を下回る見込みのものを表の上に出します。組織を選ぶと、配下の組織と担当案件の目標が対象です。月の見出しの ! は、その月の計画が予算 ×（1 − 目標の残予算率）を超える月です。保存は止めません。",
+    targetAlertHelp: "<strong>目標:</strong> 今の計画（編集中は編集後）の着地見込み（計画値）で、目標（マスタ編集の「目標」）の残予算率を下回る見込みのものを表の上に出します。組織を選ぶと、配下の組織と担当案件の目標が対象です。月の見出しの「目標」は、その月の計画が予算 ×（1 − 目標の残予算率）を超える月です。保存は止めません。",
     // 目標の警告（§110）
     targetAlert: {
       aria: "目標を下回る見込み {n}件",
-      goal: "目標 {target}",
+      goal: "残予算率の目標 {target}",
       forecast: "見込み {rate}",
       forecastAria: "{name} の残予算率（見込み）{rate}。計算根拠を表示",
-      months: "超える月 {months}",
+      months: "計画が多い月 {months}",
+      monthMark: "目標",
       more: "ほか {n}件",
       less: "閉じる",
       monthTitle: "{month} は目標の上限を超える見込み: {names}",
@@ -1875,8 +1906,8 @@ export default {
     // 表の上の月別の合計グラフ（§58）
     chartTitle: "月別の合計",
     chartCapacity: "人数 × 1.0",
-    chartOver: "!{n}人",
-    chartOverShort: "!{n}",
+    chartOver: "1.0超 {n}人",
+    chartOverShort: "{n}人",
     chartOverTip: "1.0 超",
     chartAria: "月別の合計。運用保守と運用保守以外の人月の積み上げ棒と、人数 × 1.0 人月の破線。1.0 人月を超える人がいる月はその人数。値は下の表の合計行で確認できます。",
     cellTitle: "{month}: {pm} 人月",
@@ -1933,7 +1964,7 @@ export default {
     colHistory: "変更の履歴",
     leadLabel: "{name}",
     since: "{month} から",
-    historyCount: "変更 {n}件",
+    historyCount: "{month} から・履歴 {n}",
     toggleAria: "{key} の変更の履歴（{n} 件）",
     upcoming: "予定 {n}",
     notYet: "{month}から",
@@ -1965,8 +1996,9 @@ export default {
 
   // ── リソース計画: 人 × 案件の行と変更の履歴・運用保守以外の予定（§36） ──
   planEdit: {
-    title: "リソース計画",
-    helpHistory: "<strong>変更の持ち方:</strong> 人ごとに 1 行。開くと案件ごとの行と、運用保守以外の種別（提案・会社業務など）ごとの行が出ます。途中で人月が変わるときは、その行の「＋ 変更」で「何月から何人月」を入れると、画面が期間を分けて保存します（同じ案件が 2 行に増えません）。「変更 n件」を開くと、いつから何人月に変わったかの一覧で確かめ・直せます。",
+    // ページの見出し（リソース計画）と同じ言葉を重ねない（§117）
+    title: "メンバーごとの計画",
+    helpHistory: "<strong>変更の持ち方:</strong> 人ごとに 1 行。開くと案件ごとの行と、運用保守以外の種別（提案・会社業務など）ごとの行が出ます。途中で人月が変わるときは、その行の「＋ 変更」で「何月から何人月」を入れると、画面が期間を分けて保存します（同じ案件が 2 行に増えません）。「履歴 n」を開くと、いつから何人月に変わったかの一覧で確かめ・直せます。",
     toggleAria: "{name} の作業ごとの計画（{n} 件）",
     countTitle: "作業 {n}件",
     expandAll: "すべて開く",
@@ -1979,7 +2011,7 @@ export default {
     outsideTypeSub: "運用保守以外",
     outsideTypeTip: "運用保守以外: {type}",
     outsideOverlapHint: "この月に複数の行があります。変更の履歴から直してください",
-    histToggle: "変更 {n}件",
+    histToggle: "履歴 {n}",
     // 変更の履歴の各行: 誰がいつ保存したか（§54）
     stamp: "{at}・{by}",
     stampOne: "{v}",

@@ -1,7 +1,7 @@
 /**
  * メンバー別の計画と実績（SPEC §18.1）
  *
- * 計画（予）= 配分人月 × 基準時間 × 単価、実績（実）= その人の工数原価（CostLine）。
+ * 計画（予）= 配分人月 × 1人月の時間（営業日数 × 1 日の時間。§114）× 単価、実績（実）= その人の工数原価（CostLine）。
  * buildModel で Model.memberMonths（メンバー×月、契約別の内訳付き）を作り、
  * 画面は aggregateMembers / memberMonthlySeries で期間を合算する（Model はプレーンな JSON のままで動く）。
  * 単価は §6 の rateFor をそのまま使う（原価・着地見込みと同じ関数）。

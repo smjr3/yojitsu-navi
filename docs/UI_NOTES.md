@@ -95,6 +95,7 @@ src/
 
 数値は `numberButton(text, spec)` で描く（`<button class="yn-num">`）。`spec` は `{title, formula[], rows[{label,value,note}], sections[{title,text,table,lazy}], note}`。関数を渡すと開いたときに計算する（表の全セルで事前計算しない）。
 spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMonthSpec`（実績行 → 作業ログを遅延読み込み）/ `costAggregateSpec` / `grossProfitSpec` / `marginSpec` / `burnRateSpec` / `forecastSpec`（方式・月・平均・アサイン明細）/ `forecastTotalsSpec` / `hoursSpec`。
+表（`renderTable`、`.yn-bd-table`）: 先頭列は `td.yn-primary-cell`（見出しと同じく `position: sticky`、最大 260px で「…」）、2 列目以降の文字の列は `td.yn-cell-clip`（§106 と同じ上限）。どちらも全文を `title` に入れる。いちばん長い文字の列（12 文字超）は `is-grow`（`width: 100%; max-width: 0; min-width: 12em`）で表の余った幅を受け取る。ダイアログは `.yn-bd-dialog` で最大 1040px（1280px で 7 列が横スクロール無しで収まる）。ダイアログは `#observablehq-main` の外なので、Framework の既定 `table { max-width: 640px }` を `.yn-dialog table` で外している（外さないと表が幅いっぱいに広がらない）。
 `<dialog>` は 1 つを使い回す。`showModal()` なので Esc で閉じる・フォーカスがダイアログ内に閉じる・閉じたら元のボタンに戻るのはブラウザ標準。
 
 ## 表（table.js）
@@ -226,6 +227,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §65 変更の影響 | リソース計画の保存の前 | 差分の下・保存の上に「変更の影響」（`renderImpact`、計算は `core/planImpact.ts`）。アサイン・メンバー・単価に変更があるときだけ出す。前の値は muted、後の値は通常の色、マイナスの残予算・増えた着地は赤。表の中の読み上げ用「から」（`position: absolute`）が枠の外へ出て 390px で横スクロールになったので、`.yn-me-impact .yn-table-wrap` に `position: relative` |
 | §112 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（▸/▾ `.yn-me-plan-caret`・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
 | §110 目標の警告 | リソース計画の表・グラフの上 | `planAlertsEl`（計算は `core/planTargets.ts`）。未達見込みの目標を 1 件 1 行（`h()` で作る）、3 件まで＋「ほか n件」。月の見出しに `.yn-me-plan-target-mark`。描き直しが多いので `planTargetAlertsFor` で組織・組織の月・`validation` が同じなら前の結果を使う。390px では 1 件が折り返して 3 行になる |
+| §113 今月の残り | ヘッダー右上・メンバー詳細 | カードは `myHoursCard`（`components/my-hours.js`。ヘッダーの head のスクリプトでも使うので素の DOM で書き、外の変数を参照しない）。ヘッダーのボタンは `.yn-tools` の先頭に足し、`.yn-topbar.has-my-hours` で「作業実績の取得」を隠す。吹き出しは 640px 以上はボタンの右端に合わせ、それ未満は `position: fixed` で画面の幅（左右 8px）、縦はボタンの下（開くときに `--yn-my-hours-top` を入れる）。案件名は折り返す |
 | 単価の表示 | 単位 | 金額の表示単位（円／千円／百万円）の切替に関係なく、CSV の値（円）をそのまま表示・入力する |
 
 ### テスト
@@ -253,7 +255,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | ページ | 問い | 構成 |
 |---|---|---|
 | `/members` メンバー別（上部タブ） | 誰が計画どおりに動いているか | KPI 4 枚（計画額・実績・差額・稼働率）→ 検索 → 一覧（並べ替え・Excel・合計行） |
-| `/member?id=` メンバー詳細（タブには出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・所属組織＝事業本部・部・課、所属・役職の変遷は折りたたみ）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
+| `/member?id=` メンバー詳細（タブには出さない） | この人の計画と実績はどうか | 基本情報（所属・役職・所属組織＝事業本部・部・課、所属・役職の変遷は折りたたみ）→ 今月の残り（§113）→ KPI 4 枚 → 月次推移（計画時間＝青・実績時間＝橙の棒 ＋ 月表）→ 契約別 → 単価の変遷 |
 
 ### データの流れ
 

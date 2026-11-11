@@ -352,6 +352,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     effectiveFrom: r.get("effective_from"),
     // 省略可の列（§35）。空・「在籍」は在籍（項目を持たない）
     ...memberStatus(r.get("status")),
+    // 省略可の列（§113）。空なら項目を持たない
+    ...(r.get("gitlab_username").trim() ? { gitlabUsername: r.get("gitlab_username").trim() } : {}),
   }));
 
   const rates: RateRecord[] = parseTable("masters/rates.csv", files.rates, REQUIRED_COLUMNS.rates, issues).rows.map((r) => ({

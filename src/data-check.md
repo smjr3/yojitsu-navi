@@ -27,6 +27,8 @@ const issuesData = await loadJson(FileAttachment("./data/dataset-issues.json"));
 
 ```js
 // マスタ編集へ移る（§103）。「案件に登録」は分かっている値を入れた追加のダイアログ、ほかは該当の行を検索・絞り込んで開く
+// 長い文（警告・検証の内容）は省略せず折り返す（§115）
+const msgCell = (text) => html`<span class="yn-cell-msg">${text}</span>`;
 const linkButton = (href, text, aria) => html`<a class="yn-btn yn-btn-sm yn-row-action" href=${href} aria-label=${aria}>${text}</a>`;
 const officialByName = officialProjectLookup(issuesData?.officialProjects);
 const registerHref = (row) => registerContractHref(row, officialByName);
@@ -141,7 +143,7 @@ if (model) {
         columns: [
           { key: "customerName", label: T.dataCheck.colWorklogCustomer, type: "text", empty: T.dataCheck.empty },
           { key: "projectName", label: T.dataCheck.colWorklogProject, type: "text", empty: T.dataCheck.empty },
-          { key: "contractText", label: T.dataCheck.colContractId, type: "text", hideOnPhone: true },
+          { key: "contractText", label: T.dataCheck.colContractId, type: "text", optional: true, exportAlways: true },
           { key: "contractPeriod", label: T.dataCheck.colContractPeriod, type: "text" },
           { key: "workPeriod", label: T.dataCheck.colWorkPeriod, type: "text", sortValue: (r) => r.lastDate },
           peopleColumn(model),
@@ -452,10 +454,10 @@ if (model) {
       dataTable({
         columns: [
           { key: "label", label: T.dataCheck.colKind, type: "text", sortValue: (r) => r.code },
-          { key: "message", label: T.dataCheck.colMessage, type: "text" },
+          { key: "message", label: T.dataCheck.colMessage, type: "custom", render: (r) => msgCell(r.message), exportValue: (r) => r.message },
           { key: "hours", label: T.columns.hours, type: "hours" },
           { key: "count", label: T.dataCheck.colCount, type: "int" },
-          { key: "ref", label: T.dataCheck.colRef, type: "text", hideOnPhone: true },
+          { key: "ref", label: T.dataCheck.colRef, type: "text", exportOnly: true },
         ],
         rows,
         caption: T.dataCheck.warningsCaption,
@@ -478,10 +480,10 @@ if (model) {
         dataTable({
           columns: [
             { key: "severityChip", label: T.dataCheck.colSeverity, type: "status", sortValue: (r) => (r.severity === "error" ? 0 : 1) },
-            { key: "code", label: T.dataCheck.colCode, type: "text" },
-            { key: "file", label: T.dataCheck.colFile, type: "text" },
-            { key: "row", label: T.dataCheck.colRow, type: "int" },
-            { key: "message", label: T.dataCheck.colMessage, type: "text" },
+            { key: "message", label: T.dataCheck.colMessage, type: "custom", render: (r) => msgCell(r.message), exportValue: (r) => r.message },
+            { key: "file", label: T.dataCheck.colFile, type: "text", optional: true, exportAlways: true },
+            { key: "row", label: T.dataCheck.colRow, type: "int", optional: true, exportAlways: true },
+            { key: "code", label: T.dataCheck.colCode, type: "text", exportOnly: true },
           ],
           rows,
           caption: T.dataCheck.issuesCaption,

@@ -45,6 +45,7 @@ function parseCsv(text) {
 }
 import ja from "./src/i18n/ja.js";
 import { badgeConfig, mrBadgeScript } from "./src/components/header-badge.js";
+import { myHoursConfig, myHoursScript } from "./src/components/my-hours.js";
 import { appearanceConfig, appearanceScript } from "./src/components/appearance.js";
 import { withGitLabEnv } from "./src/components/gitlab-env.js";
 import { faviconLink } from "./src/components/favicon.js";
@@ -258,6 +259,8 @@ const MORE_SCRIPT = `(() => {
   addEventListener("pageshow", (e) => { if (e.persisted) set(false); });
 })();`;
 const BADGE_SCRIPT = mrBadgeScript(badgeConfig(masterEditConfig(), ja.app.mrBadge));
+// ヘッダー右上の「今月の残り」（§113）
+const MY_HOURS_SCRIPT = myHoursScript(myHoursConfig(masterEditConfig(), ja.myHours));
 /**
  * バージョン情報（設定画面に出す、§59）: package.json の version・ビルドしたコミット・ビルド日時（JST）。
  * コミットは CI の変数か git から取る。取れなければ空（設定画面ではその行を出さない）
@@ -283,7 +286,7 @@ function buildInfo() {
 }
 const BUILD = buildInfo();
 const BUILD_META = `<meta name="yn-build" data-version="${escapeHtml(BUILD.version)}" data-commit="${escapeHtml(BUILD.commit)}" data-built-at="${escapeHtml(BUILD.builtAt)}">`;
-const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script><script>${PRERENDER_SCRIPT}</script><script type="speculationrules">${SPECULATION_RULES}</script>`;
+const head = `${faviconLink()}${BUILD_META}<meta name="color-scheme" content="light dark">${FONT_LINKS}<script>${FONT_SCRIPT}</script><script>${THEME_SCRIPT}</script><script>${BADGE_SCRIPT}</script><script>${MY_HOURS_SCRIPT}</script><script>${SCROLL_SCRIPT}</script><script>${MORE_SCRIPT}</script><script>${PRERENDER_SCRIPT}</script><script type="speculationrules">${SPECULATION_RULES}</script>`;
 
 export default {
   title: ja.app.name,
@@ -305,7 +308,8 @@ export default {
   ],
   // 契約ごとの作業ログ明細（src/data/worklogs/[contractId].json.js）を dist/data/worklogs/<id>.json に出力する
   // ファイル名は worklogKey(id)（英数字以外の ID は "~"＋16進。ローダ・画面の fetchWorklogs も同じ関数を使う）
-  dynamicPaths: contractIds().map((id) => `/data/worklogs/${worklogKey(id)}.json`),
+  // ヘッダー右上の「今月の残り」（§113）は全ページの head のスクリプトが読むので、固定のパス dist/data/my-month.json に出す
+  dynamicPaths: [...contractIds().map((id) => `/data/worklogs/${worklogKey(id)}.json`), "/data/my-month.json"],
   head,
   toc: false,
   pager: false,

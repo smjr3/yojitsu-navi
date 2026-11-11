@@ -1,7 +1,7 @@
 /**
  * リソース計画 /plan（SPEC §23・§36）と、組織の種別・リーダーの表示（§21・§22）
  */
-import { test, expect, gotoPage, pickCombo, usePlanFiscalYear } from "./helpers/app.js";
+import { test, expect, gotoPage, pickCombo, usePlanFiscalYear, teamValue } from "./helpers/app.js";
 import { AS_OF, ROOT_DIR } from "./constants.js";
 import { buildMastersPayload } from "../../src/data/_masters.js";
 import { addRow, parseMasterDoc, planSourcesFromDocs, serializeMasterDoc } from "../../src/core/masterEdit.js";
@@ -36,7 +36,7 @@ test("リソース計画: 組織（第1課）を指定して開くと、配下�
   // リソース計画は 1 画面（タブは出さない）
   await expect(page.getByRole("tab")).toHaveCount(0);
   await expect(page.locator(".yn-tools a", { hasText: "リソース計画" })).toHaveAttribute("aria-current", "page");
-  await expect(page.locator("#yn-me-plan-team")).toHaveValue("S11");
+  await expect(teamValue(page, "plan")).toHaveValue("S11");
   await expect(page.locator(".yn-me-plan-unit")).toContainText("リーダー: 田中 さくら");
   const expected = planView(planSourcesFromDocs(docs(), PAYLOAD.context.contracts), "S11", FY);
   const rows = page.locator("tr.yn-me-plan-row");
@@ -61,7 +61,7 @@ test("リソース計画: 組織（第1課）を指定して開くと、配下�
 
 test("リソース計画: 時間で入力すると人月に直して保存し、表示は人月", async ({ page }) => {
   await gotoPage(page, "/plan?member=M011");
-  await expect(page.locator("#yn-me-plan-team")).toHaveValue("T111");
+  await expect(teamValue(page, "plan")).toHaveValue("T111");
   const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
   await expect(row).toHaveClass(/is-focus/);
   await row.getByRole("button", { name: /計画を追加/ }).click();
@@ -72,6 +72,8 @@ test("リソース計画: 時間で入力すると人月に直して保存し、
   await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-start_month").fill("2026-11");
   await d.locator("#yn-me-f-end_month").fill("2027-03");
+  // 終了月の説明は計画用（目標の「累計で判定」は出さない）
+  await expect(d.locator("#yn-me-f-end_month-hint")).toHaveText("YYYY-MM（この月を含む）");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   // 1 人月の時間は開始月の営業日数 × 8h（§114。ダミーの祝日表で 2026-11 は 19 日 = 152h）
   await d.locator("#yn-me-f-allocation").fill("15.2");
@@ -193,13 +195,13 @@ test("上部の「リソース計画」ボタンは、ほかの画面で選ん�
   await gotoPage(page, "/contracts?team=S21");
   await page.locator("#observablehq-header a.yn-tool").click();
   await page.waitForURL(/\/plan/);
-  await expect(page.locator("#yn-me-plan-team")).toHaveValue("S21");
+  await expect(teamValue(page, "plan")).toHaveValue("S21");
   // URL の指定が優先
   await gotoPage(page, "/plan?team=T211");
-  await expect(page.locator("#yn-me-plan-team")).toHaveValue("T211");
+  await expect(teamValue(page, "plan")).toHaveValue("T211");
   // 未設定のチームは引き継がない
   await gotoPage(page, "/contracts?team=__unassigned__");
   await page.locator("#observablehq-header a.yn-tool").click();
   await page.waitForURL(/\/plan/);
-  await expect(page.locator("#yn-me-plan-team")).toHaveValue("");
+  await expect(teamValue(page, "plan")).toHaveValue("");
 });

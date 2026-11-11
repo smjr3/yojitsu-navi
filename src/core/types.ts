@@ -295,7 +295,7 @@ export interface Assignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 配分人月（0 以上。1.0 = 基準時間。1.0 超も可） */
+  /** 配分人月（0 以上。1.0 = その月の営業日ぶんの時間。§114。1.0 超も可） */
   allocation: number;
 }
 
@@ -343,6 +343,8 @@ export interface MemberRecord {
    * 省略・空・「在籍」 = 在籍。CSV にそれ以外の値があれば "left"
    */
   status?: string;
+  /** GitLab のユーザー名（任意の列 gitlab_username。§113）。ヘッダーの「今月の残り」で閲覧者本人を見つけるのに使う。空なら項目を持たない */
+  gitlabUsername?: string;
 }
 
 export interface RateRecord {
@@ -799,7 +801,7 @@ export interface MemberContractMonth {
   actualCost: number;
 }
 
-/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 基準時間 × 単価、実績 = 工数原価） */
+/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 1人月の時間 × 単価、実績 = 工数原価） */
 export interface MemberMonth {
   memberId: string;
   month: YearMonth;

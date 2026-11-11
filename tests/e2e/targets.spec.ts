@@ -96,14 +96,15 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   const rows = page.locator("table.yn-me-table tbody tr.yn-me-group");
   const before = parseMasterDoc("targets", TARGETS_TEXT).rows.length;
   await expect(rows).toHaveCount(before);
-  // 誰がいつ入れたか（§56 と同じ記録。ダミーは全行に例がある）
-  await expect(rows.first().locator('[data-role="stamp"]')).toHaveText(/^\d{4}-\d{2}-\d{2}・[a-z.]+$/);
+  // 誰がいつ入れたか（§56 と同じ記録。ダミーは全行に例がある）。変更者は氏名で（§117）
+  await expect(rows.first().locator('[data-role="stamp"]')).toHaveText(/^\d{4}-\d{2}-\d{2}・(佐藤 健一|鈴木 美咲|高橋 大輔)$/);
   await page.getByRole("button", { name: "＋ 新しい目標" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
   // 対象の種類は対象の欄でまとめて選ぶ（別の欄は無い）
   await expect(d.locator("#yn-me-f-target_type")).toHaveCount(0);
   await pickCombo(d.locator("#yn-me-f-target_id"), "ネットワーク", /ネットワーク保守チーム/);
   await d.locator("#yn-me-f-end_month").fill("2027-03");
+  await expect(d.locator("#yn-me-f-end_month-hint")).toContainText("この月までの累計で判定します");
   await d.locator("#yn-me-f-remaining_rate").fill("18");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);

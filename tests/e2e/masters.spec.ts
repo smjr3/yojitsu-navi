@@ -133,7 +133,7 @@ test("初期表示: 「⋯」のメニューの先頭に「マスタ編集」（
   // 主任は 2 件の履歴（2025-04 8000 → 2026-04 8500）。開くと前 → 後
   await selectTab(page, "単価");
   await expect(group(page, "主任")).toContainText("8500");
-  await expect(group(page, "主任").locator(".yn-me-hist-toggle")).toContainText("変更 2件");
+  await expect(group(page, "主任").locator(".yn-me-hist-toggle")).toContainText("履歴 2");
   const h = await history(page, "主任");
   await expect(h).toHaveCount(2);
   await expect(h.nth(0)).toContainText("2025-04 から");
@@ -198,7 +198,7 @@ test("過去に影響する追加・修正・削除は確認画面で影響月�
   await expect(d).toHaveCount(0);
   // 2026-04 からの値が今の値になる
   await expect(group(page, "一般")).toContainText("6500");
-  await expect(group(page, "一般").locator(".yn-me-hist-toggle")).toContainText("変更 2件");
+  await expect(group(page, "一般").locator(".yn-me-hist-toggle")).toContainText("履歴 2");
 
   // 今の値の修正: 変わる値と影響を表示
   const row = group(page, "課長");

@@ -13,7 +13,7 @@
  */
 import { createRequire } from "node:module";
 import { aggregateMembers, contractsForTeam, groupByCustomer } from "../../src/core/index.js";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, rowKeys, parseNumber, query } from "./helpers/app.js";
+import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, rowKeys, parseNumber, query, pickTeam, teamValue } from "./helpers/app.js";
 import { aggregate, contractResult, fiscalPeriod, getModel, treeAt, yen } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
@@ -253,16 +253,16 @@ test.describe("L2 / L3 顧客詳細", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(inFy(scoped).cost));
     const note = page.locator(".yn-note", { hasText: "案件だけで集計しています" });
     await expect(note).toContainText(`全 ${g.contractIds.length} 件のうち ${scoped.length} 件`);
-    await expect(page.locator("#yn-filter-team")).toHaveValue("D1");
+    await expect(teamValue(page)).toHaveValue("D1");
 
     // 含まない系統（D2 など）: 警告つきで 0 件、画面は壊れない
     const other = "D2";
-    await page.locator("#yn-filter-team").selectOption(other);
+    await pickTeam(page, other);
     const noneIds = new Set(contractsForTeam(model, other, tree).map((c) => c.contractId));
     const n = g.contractIds.filter((id) => noneIds.has(id)).length;
     await expect(page.locator(".yn-note", { hasText: "案件だけで集計しています" })).toContainText(`全 ${g.contractIds.length} 件のうち ${n} 件`);
 
-    await page.locator("#yn-filter-team").selectOption("");
+    await pickTeam(page, "");
     await expect(page.locator(".yn-note", { hasText: "案件だけで集計しています" })).toHaveCount(0);
     await expect(kpiValue(page, 0)).toHaveText(yen(inFy(g.contractIds).budget));
   });

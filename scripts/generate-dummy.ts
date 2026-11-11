@@ -59,6 +59,8 @@ export interface MemberRow {
   effective_from: YearMonth;
   /** 在籍状態（空 = 在籍、"退職" = この月から在籍しない。SPEC §35） */
   status: string;
+  /** GitLab のユーザー名（任意。§113）。デモの利用者（gitlab-mock の DEMO_USER）を 1 人に付ける */
+  gitlab_username?: string;
 }
 
 export interface RateRow {
@@ -164,9 +166,9 @@ function member(
 
 const membersOf = (c: FyCalendar): MemberRow[] => [
   // 本部・事業部長（工数は付けない）
-  member("M001", "佐藤 健一", "employee", "本部長", "HQ", c.m(-1, 4)),
-  member("M002", "鈴木 美咲", "employee", "部長", "D1", c.m(-1, 4)),
-  member("M003", "高橋 大輔", "employee", "部長", "D2", c.m(-1, 4)),
+  { ...member("M001", "佐藤 健一", "employee", "本部長", "HQ", c.m(-1, 4)), gitlab_username: "sato.k" },
+  { ...member("M002", "鈴木 美咲", "employee", "部長", "D1", c.m(-1, 4)), gitlab_username: "suzuki.a" },
+  { ...member("M003", "高橋 大輔", "employee", "部長", "D2", c.m(-1, 4)), gitlab_username: "takahashi.m" },
   // 課長（課に所属。末端チームではない）
   member("M004", "田中 さくら", "employee", "課長", "S11", c.m(-1, 4)),
   member("M005", "伊藤 翔太", "employee", "課長", "S12", c.m(-1, 4)),
@@ -184,7 +186,7 @@ const membersOf = (c: FyCalendar): MemberRow[] => [
   member("P001", "岡田 浩二", "partner", "パートナー", "T112", c.m(-1, 4)),
   // T121 業務システム保守チーム
   member("M015", "山口 健太", "employee", "主任", "T121", c.m(-1, 4)),
-  member("M016", "松本 彩", "employee", "一般", "T121", c.m(-1, 4)),
+  { ...member("M016", "松本 彩", "employee", "一般", "T121", c.m(-1, 4)), gitlab_username: "demo-user" }, // デモの「今月の残り」（§113）
   member("M017", "井上 大地", "employee", "一般", "T121", c.m(-1, 10)), // 前年度 10 月入社
   member("P002", "藤井 隆", "partner", "パートナー", "T121", c.m(-1, 10)),
   // T211 Web保守チーム
@@ -766,6 +768,7 @@ function csv<T extends object>(rows: T[], columns: Array<keyof T & string>): str
 }
 
 /** 変更者・変更日（§56）の例: 今年度に始まる行は開始の前月 25 日（基準日より後なら基準日）に入れた体。前年度以前に始まる行は記録が始まる前に入れた体で空欄 */
+/** 変更者は GitLab のユーザー名。M001〜M003 の gitlab_username と同じにして、画面では氏名で出す（§117） */
 const STAMP_USERS = ["sato.k", "suzuki.a", "takahashi.m"];
 function withStamps<T extends { start_month: YearMonth }>(rows: readonly T[], asOf: string): Array<T & { updated_by: string; updated_at: string }> {
   const fyStart = new FyCalendar(asOf).m(0, 4);
@@ -842,7 +845,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
-  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status"]));
+  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status", "gitlab_username"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
   writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "match", "note"]));
 
