@@ -1654,9 +1654,31 @@ h3 {
 .yn-table-compact tfoot td {
   position: static;
 }
+/* 計算根拠の表: 先頭列（案件・メンバー・月など）は見出しと同じく横スクロールで固定する。
+ * 本文だけ流れると、固定された見出しの先頭が他の列の見出しに重なって読めなくなる */
+.yn-bd-table tbody td.yn-primary-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--yn-card);
+}
+/* いちばん長い文字の列は余った幅を受け取る（max-width: 0 + width: 100% で内容の長さに引っ張られず、表を幅いっぱいに使う） */
+.yn-bd-table td.is-grow {
+  width: 100%;
+  min-width: 12em;
+  max-width: 0;
+}
+.yn-bd-table tfoot td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.yn-bd-table tbody tr:hover td.yn-primary-cell {
+  background: color-mix(in srgb, var(--yn-card), var(--yn-text-1) 4%);
+}
 /* 計算根拠の表（スマホ幅）: 先頭列の長い案件名・メンバー名は折り返し、金額の列を画面外へ押し出さない */
 @media (max-width: 640px) {
-  .yn-bd-section .yn-table-compact td:first-child:not(.num) {
+  .yn-bd-table td.yn-primary-cell {
     white-space: normal;
     overflow-wrap: anywhere;
     min-width: 8em;
@@ -1780,6 +1802,10 @@ th[aria-sort="descending"] .yn-sort-icon {
 }
 .yn-dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);
+}
+/* 計算根拠は列の多い表を出すので、他のダイアログより広く使う（1280px で横スクロールを出さない） */
+.yn-dialog.yn-bd-dialog {
+  width: min(1040px, calc(100vw - 32px));
 }
 .yn-dialog-inner {
   min-width: 0;
@@ -2780,6 +2806,10 @@ li.is-jumped,
 .yn-dialog .yn-table-wrap-inline thead th {
   position: sticky;
   top: 0;
+}
+/* ダイアログは #observablehq-main の外（body 直下）なので、Framework の既定 table { max-width: 640px } を外す */
+.yn-dialog table {
+  max-width: none;
 }
 /* ダイアログを開いている間は背景のページをスクロールさせない */
 html:has(dialog.yn-dialog[open]) {

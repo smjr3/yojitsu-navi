@@ -104,6 +104,7 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await expect(d.locator("#yn-me-f-target_type")).toHaveCount(0);
   await pickCombo(d.locator("#yn-me-f-target_id"), "ネットワーク", /ネットワーク保守チーム/);
   await d.locator("#yn-me-f-end_month").fill("2027-03");
+  await expect(d.locator("#yn-me-f-end_month-hint")).toContainText("この月までの累計で判定します");
   await d.locator("#yn-me-f-remaining_rate").fill("18");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
