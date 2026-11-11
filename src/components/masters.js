@@ -409,14 +409,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const sort = v?.sort && typeof v.sort.key === "string" && (v.sort.dir === "asc" || v.sort.dir === "desc") ? { key: v.sort.key, dir: v.sort.dir } : null;
       const open = new Set(Array.isArray(v?.open) ? v.open.filter((x) => typeof x === "string") : []);
       if (initialMember) open.add(initialMember);
-      return { cols, sort, open };
+      return { cols, sort, open, emptyOnly: v?.emptyOnly === true && !initialMember };
     } catch {
-      return { cols: {}, sort: null, open: new Set(initialMember ? [initialMember] : []) };
+      return { cols: {}, sort: null, open: new Set(initialMember ? [initialMember] : []), emptyOnly: false };
     }
   }
   // メンバーを指定して開いたとき（他の画面から）は、その人が隠れないように列の絞り込みを外す
   if (initialMember) plan.cols = {};
-  const savePlanList = () => session.set(PLAN_LIST_KEY, JSON.stringify({ cols: plan.cols, sort: plan.sort, open: [...plan.open] }));
+  const savePlanList = () => session.set(PLAN_LIST_KEY, JSON.stringify({ cols: plan.cols, sort: plan.sort, open: [...plan.open], emptyOnly: plan.emptyOnly }));
   /** 表示する月の範囲を変える。save = 人が選んだ範囲（このブラウザに覚える。問題への移動などで動かしたときは覚えない） */
   function applyPlanRange(r, save = false) {
     plan.range = r;
@@ -1634,12 +1634,25 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
     /** 人の行の月合計の色: 1.0 超は黄、0 より多く 1.0 未満は青系（§41）。0（計画なし）は色を付けない */
     const allocLevel = (v) => (v > 1 + 1e-9 ? "over" : v > 1e-9 && v < 1 - 1e-9 ? "under" : null);
+    /**
+     * 計画が何も入っていない人（§116）: 表示中の今月以降で、在籍して組織に所属している月が 1 つ以上あり、そのどの月も案件・運用保守以外とも 0。
+     * その月の番号を返す（該当しなければ空）。月ごとの空きで判定すると、年度の切り替わりで次の年度の計画がまだ無い全員が出てしまうので人ごと
+     */
+    const emptyMonthIdx = (r, monthly) => {
+      const need = months.flatMap((m, i) => (m >= asOfMonth && r.planNeededMonths[i] ? [i] : []));
+      return need.length > 0 && need.every((i) => monthly[i] <= 1e-9) ? need : [];
+    };
 
     /** 月のセル（クリックでその場の修正。target を渡すとその対象の欄から始める） */
     const cellButton = (r, m, v, label, focusTarget, level = null) => {
       const fk = `plan:cell:${r.memberId}:${focusTarget ? targetId(focusTarget) : "all"}:${m}`;
       // 人 × 月の数だけ作るので html`` でなく直接作る（§107）
-      const btn = h("button", { type: "button", class: editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly", "data-fk": fk, "aria-label": fmt(T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) }), "aria-haspopup": editable ? "dialog" : null }, v > 0 ? pm(v) : h("span", { class: "yn-muted", "aria-hidden": "true" }, "—"));
+      const empty = level === "empty";
+      const btn = h(
+        "button",
+        { type: "button", class: editable ? "yn-plan-cell-btn" : "yn-plan-cell-btn is-readonly", "data-fk": fk, "aria-label": fmt(empty ? T.plan.cellEmptyAria : T.plan.cellAria, { name: label, month: monthJa(m), pm: pm(v) }), "aria-haspopup": editable ? "dialog" : null },
+        v > 0 ? pm(v) : empty ? T.plan.cellEmpty : h("span", { class: "yn-muted", "aria-hidden": "true" }, "—"),
+      );
       const tip = () => tooltip.show(btn, cellTip(r, m));
       btn.addEventListener("mouseenter", tip);
       btn.addEventListener("mouseleave", tooltip.hide);
@@ -1662,8 +1675,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const oRows = memberPeriodRows("outside", r.memberId);
       const outsideMonthly = months.map((m) => valueAt(oRows, m));
       const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
-      return { r, oRows, outsideMonthly, monthly, total: monthly.reduce((a, b) => a + b, 0), name: r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId }) };
+      return { r, oRows, outsideMonthly, monthly, empty: new Set(emptyMonthIdx(r, monthly)), total: monthly.reduce((a, b) => a + b, 0), name: r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId }) };
     });
+    const emptyPeople = people.filter((d) => d.empty.size > 0).length;
+    // 絞り込んでいた人がいなくなったら（全員に計画を入れた）外す
+    if (plan.emptyOnly && emptyPeople === 0) {
+      plan.emptyOnly = false;
+      savePlanList();
+    }
     // 列ごとの絞り込み・並べ替え（一覧表と同じ部品。§99）。名前は値の一覧、月・期間計は人月の範囲
     const pcols = [
       { key: "__name", label: T.plan.colMember, type: "text", filterValue: (d) => d.name, sortValue: (d) => d.name },
@@ -1703,6 +1722,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const terms = plan.q.normalize("NFKC").toLowerCase().split(/\s+/).filter(Boolean);
     let rowsShown = people.filter((d) => {
       const r = d.r;
+      if (plan.emptyOnly && d.empty.size === 0) return false;
       if (terms.length) {
         const projectsText = memberPeriodRows("assignments", r.memberId).map((x) => contractText(x.contractId)).join(" ");
         const text = `${r.name ?? ""} ${r.teamId ? (tNames.get(r.teamId) ?? "") : ""} ${r.memberId} ${projectsText}`.normalize("NFKC").toLowerCase();
@@ -1781,7 +1801,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       });
     };
 
-    const body = rowsShown.flatMap(({ r, oRows, outsideMonthly, monthly, name }) => {
+    /** 計画が入っていない人だけに絞る（§116）。いなければ出さない */
+    const emptyToggle = () => {
+      if (emptyPeople === 0) return null;
+      const btn = h(
+        "button",
+        { type: "button", class: `yn-btn yn-btn-sm yn-me-plan-empty-toggle${plan.emptyOnly ? " is-on" : ""}`, "data-fk": "plan:empty-only", "aria-pressed": plan.emptyOnly ? "true" : "false", title: T.plan.emptyToggleTitle },
+        fmt(T.plan.emptyToggle, { n: integer(emptyPeople) }),
+      );
+      btn.addEventListener("click", () => {
+        plan.emptyOnly = !plan.emptyOnly;
+        savePlanList();
+        renderPanel();
+        focusKey("plan:empty-only");
+      });
+      return btn;
+    };
+
+    const body = rowsShown.flatMap(({ r, oRows, outsideMonthly, monthly, empty, name }) => {
       const open = plan.open.has(r.memberId);
       const detailId = `yn-me-plan-d-${r.memberId}`;
       const aRows = memberPeriodRows("assignments", r.memberId);
@@ -1810,9 +1847,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
-        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
+        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addWork}</button>
@@ -1940,6 +1977,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-toolbar yn-me-plan-filter">
         ${search}
         ${rowsShown.length ? expandAll(rowsShown.map((d) => d.r.memberId)) : null}
+        ${emptyToggle()}
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(rowsShown.length), total: integer(view.rows.length), unit: T.ledger.unit.members })}</span>
         ${clearCols}
       </div>

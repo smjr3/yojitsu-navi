@@ -53,6 +53,8 @@ export interface PlanMemberRow {
   afterLeftMonths: YearMonth[];
   /** months と同じ順の稼働（その月の台帳の行があり、不在していない。不在した月も計画か実績があれば稼働。復職後は在籍に戻る。§58 の人数 × 1.0） */
   activeMonths: boolean[];
+  /** months と同じ順の「計画が入っているべき月」（§116。在籍（不在の行でない）で、その月に選んだ組織か配下に所属。応援の人・所属組織の無い人・配下の組織を持つ組織の直属の人（部長など）・入社前・不在は false） */
+  planNeededMonths: boolean[];
 }
 
 export interface PlanView {
@@ -85,10 +87,14 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   for (const k of src.worklogMonths ?? []) workedKeys.add(k);
   const working = (id: string, m: YearMonth) => isWorkingAt(at, id, m, (i, mo) => workedKeys.has(memberMonthKey(i, mo)));
   const scopeAt = new Map<YearMonth, Set<string> | null>();
+  // 配下の組織を持つ組織（月ごと。§116 の計画なしの対象外: 部長など上位の組織の直属）
+  const parentTeamsAt = new Map<YearMonth, Set<string>>();
   for (const m of ms) {
+    const tree = teamTreeAt({ teams: src.teams as TeamRecord[] }, m).tree;
+    parentTeamsAt.set(m, new Set(Object.values(tree).filter((n) => n.children.length > 0).map((n) => n.teamId)));
     if (teamId === null) scopeAt.set(m, null);
     else {
-      const node = teamTreeAt({ teams: src.teams as TeamRecord[] }, m).tree[teamId];
+      const node = tree[teamId];
       scopeAt.set(m, new Set(node ? node.descendantIds : []));
     }
   }
@@ -155,6 +161,11 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       leftFrom,
       afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m)) && !working(memberId, m)),
       activeMonths: ms.map((m) => working(memberId, m)),
+      planNeededMonths: ms.map((m) => {
+        const rec = memberIdx.at(memberId, m);
+        // 所属組織の無い人（他部署のヘルプなど。§71）・配下の組織を持つ組織の直属の人（部長など）は計画を入れる対象でない
+        return !!rec && !isLeftRecord(rec) && !!rec.teamId && !parentTeamsAt.get(m)!.has(rec.teamId) && inScope(rec.teamId, m);
+      }),
     };
   });
   return { months: ms, rows, totals };
