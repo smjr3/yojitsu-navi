@@ -60,7 +60,8 @@ export function namerFor(describe, files) {
     else if (fileId === "targets") {
       const kind = cell(rec, "target_type");
       const id = cell(rec, "target_id");
-      parts = [T.targets.kinds[kind] ?? kind, (describe?.target ? describe.target(kind, id) : "") || (kind === "project" && contracts.get(id)) || id];
+      const local = kind === "team" ? teams.get(id) : kind === "project" ? contracts.get(id) : null;
+      parts = [T.targets.kinds[kind] ?? kind, local || (describe?.target ? describe.target(kind, id) : "") || id];
     } else parts = def.keyColumns.map((k) => value(fileId, k, cell(rec, k)));
     return [...parts, cell(rec, timeColumnOf(def))].filter((v) => v !== "").join(" / ");
   };

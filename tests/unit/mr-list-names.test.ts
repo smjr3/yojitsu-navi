@@ -30,5 +30,7 @@ describe("namerFor", () => {
     const n = namerFor(describeNow, files);
     expect(n.lead("assignments", MASTER_FILES.assignments, rec({ member_id: "M900", contract_id: "C900", start_month: "2026-05" }))).toBe("新人 太郎 / 顧客Z / 新案件 / 2026-05");
     expect(n.value("members", "team_id", "T900")).toBe("新チーム");
+    expect(n.lead("targets", MASTER_FILES.targets, rec({ target_type: "team", target_id: "T900", end_month: "2027-03" }))).toBe("チーム / 新チーム / 2027-03");
+    expect(n.lead("targets", MASTER_FILES.targets, rec({ target_type: "project", target_id: "C900", end_month: "2027-03" }))).toBe("案件 / 顧客Z / 新案件 / 2027-03");
   });
 });
