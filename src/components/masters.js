@@ -2578,7 +2578,6 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     title: T.masters.hintTitle,
     status: T.masters.statusHint,
     target_id: T.masters.hintTarget,
-    end_month: T.masters.hintEndMonth,
     remaining_rate: T.masters.hintRemainingRate,
   };
 
@@ -2693,7 +2692,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
             ${fieldFor(fileId, c, value, disabled, { withOutside })}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "targets" && c.name === "end_month" ? T.masters.hintEndMonth : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;
         })}
       </div>
