@@ -152,7 +152,7 @@ test("＋ 変更: 0 で計画を外すと「計画なし」。この月だけ・
   await expect(d).toHaveCount(0);
 });
 
-test("変更の履歴から直接修正・削除できる（削除後はフォーカスが履歴の開閉ボタンへ）", async ({ page }) => {
+test("変更の履歴から直接修正・削除できる（最後の 1 件を消すとフォーカスは「＋ 変更」へ）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   const out = await subRow(page, "M010", "outside:提案");
   const entries = await historyOf(page, out);
@@ -182,14 +182,16 @@ test("変更の履歴から直接修正・削除できる（削除後はフォ�
   await entries.nth(0).getByRole("button", { name: /を削除/ }).click();
   await d.locator('[data-role="confirm-delete"]').click();
   await expect(cell(page, "M010", "2026-12")).toHaveText("0.90");
-  await expect(out.locator('[data-fk^="plan:hist:"]')).toBeFocused();
+  // 履歴が 0 件になると「履歴」は消えるので、フォーカスは同じ行の「＋ 変更」へ（§115）
+  await expect(out.locator('[data-fk^="plan:change:"]')).toBeFocused();
   await expect(page.locator(".yn-me-removed")).toContainText("次期更改の提案");
 });
 
 test("契約外予定: ＋ 変更で入れる → 1.0 超の表示、ダウンロードは outside-plans.csv（予算・着地見込みには入らない）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   const out = await subRow(page, "M011", "outside:提案");
-  await expect(out.locator('[data-fk^="plan:hist:"]')).toContainText("変更 0件");
+  // 履歴が無い行は「履歴」を出さない（§115）
+  await expect(out.locator('[data-fk^="plan:hist:"]')).toHaveCount(0);
   await out.getByRole("button", { name: /人月を、ある月から変える/ }).click();
   const d = dialog(page);
   await expect(d.locator(".yn-me-chg-preview")).toContainText("今の計画: 0.00 人月");

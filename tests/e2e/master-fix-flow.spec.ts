@@ -25,7 +25,10 @@ test("データ確認: 契約期間外の実績は契約期間と実績の期間
   const row = dataRows(table).first();
   expect(await cellText(row, col(head, "契約期間"))).toMatch(/年\d+月〜/);
   expect(await cellText(row, col(head, "実績の期間"))).toMatch(/^\d{4}-\d{2}-\d{2}/);
-  const contractId = await cellText(row, col(head, "案件ID"));
+  // 案件ID の列は既定で出さない（Excel だけ、§115）。開く先の検索語で確かめる
+  const href = (await row.getByRole("link", { name: /案件をマスタ編集で開く/ }).getAttribute("href"))!;
+  const contractId = new URL(href, "http://x/").searchParams.get("q")!;
+  expect(contractId).toMatch(/^C\d+/);
   // 時間を押すと月ごと
   await cell(row, col(head, "時間")).locator("button").click();
   const dialog = page.locator("dialog[open]");

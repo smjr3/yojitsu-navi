@@ -69,7 +69,7 @@ test("エラーは赤・警告は黄。エラーを先に並べ、押すとそ�
 test("存在しないメンバーのアサインも名前（ID）で示し、押すとその行へ", async ({ page }) => {
   await gotoPage(page, "/plan?team=S11");
   await appendAssignments(page, ["GHOST,C002,2026-04,2026-04,0.1"]);
-  const err = item(page, "members.csv に存在しません");
+  const err = item(page, "「メンバー」タブ に存在しません");
   await expect(err.locator(".yn-me-issue-subject")).toContainText("GHOST");
   await err.getByRole("button").click();
   // 組織の案件に入っている人は「応援」の行として出るので、その履歴の行へ

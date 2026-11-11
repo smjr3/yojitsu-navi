@@ -52,10 +52,12 @@ test("案件一覧: 広い画面では名前列の上限が広がり、省略さ
   const clippedAt = async (width: number) => {
     await page.setViewportSize({ width, height: 900 });
     await gotoPage(page, "/contracts");
-    return page.locator(".yn-table tbody .yn-cell-main").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
+    // PC 幅の案件名は 2 行まで折り返し、それを超えると「…」（§115）。横・縦どちらにはみ出しても省略
+    return page.locator(".yn-table tbody .yn-cell-main").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).length);
   };
   const narrow = await clippedAt(1440);
   const wide = await clippedAt(2560);
   expect(narrow).toBeGreaterThan(0);
-  expect(wide).toBeLessThan(narrow);
+  // 2 行まで折り返すようになって（§115）1440px でも省略は極端に長い名前だけ。広い画面で増えないこと
+  expect(wide).toBeLessThanOrEqual(narrow);
 });

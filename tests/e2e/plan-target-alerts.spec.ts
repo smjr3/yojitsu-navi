@@ -64,7 +64,7 @@ test("組織を選ぶと配下込みの目標だけ。目標・見込み・超�
   await expect(li).toContainText("案件 青葉物流 / 倉庫管理システム保守（2026年12月）");
   await expect(li).toContainText(`目標 ${Math.round(a.evaluation.target.remainingRate * 100)}%`);
   await expect(li).toContainText(`見込み ${(a.evaluation.rate! * 100).toFixed(1)}%`);
-  await expect(li).toContainText("超える月 2026年10月〜2026年12月");
+  await expect(li).toContainText("計画が多い月 2026年10月〜2026年12月");
   expect(await markedMonths(page)).toEqual(a.overMonths);
   await expect(page.locator(".yn-me-plan-target-mark").first()).toHaveAttribute("title", /目標の上限を超える見込み: 案件 青葉物流/);
   await li.locator("button.yn-num").click();
@@ -100,7 +100,7 @@ test("計画を編集すると編集後の計画で出し直す（12月を 0 に
   await input.fill("0");
   await input.press("Enter");
   await expect(page.locator("dialog.yn-plan-pop[open]")).toHaveCount(0);
-  await expect(items(page).first()).toContainText("超える月 2026年10月〜2026年11月");
+  await expect(items(page).first()).toContainText("計画が多い月 2026年10月〜2026年11月");
   await expect(items(page).first()).toContainText(`見込み ${(exp[0]!.evaluation.rate! * 100).toFixed(1)}%`);
   expect(await markedMonths(page)).toEqual(["2026-10", "2026-11"]);
   // 検証のエラーにはしない
@@ -111,7 +111,9 @@ test("390px・ダーク: 横スクロールなし", async ({ page }) => {
   await useDarkTheme(page);
   await page.setViewportSize({ width: 390, height: 800 });
   await gotoPage(page, "/plan");
-  await expect(items(page)).toHaveCount(3);
+  // スマホ幅は 1 件だけ出し、残りは「ほか n件」（表を押し下げない。§115）
+  await expect(items(page)).toHaveCount(1);
+  await expect(page.locator('[data-fk="plan:alerts"]')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   const box = await alertBox(page).boundingBox();
