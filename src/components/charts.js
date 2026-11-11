@@ -5,6 +5,7 @@
  */
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
+import { scaledPx } from "./appearance.js";
 import { T, fmt } from "../i18n/index.js";
 import { STATUS_LABELS, formatHours, formatPercent, maxFractionFormat, millions, money, monthJa, monthShort } from "./format.js";
 import { dataTable } from "./table.js";
@@ -66,7 +67,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
   // 左余白は最も長い目盛り（負の粗利を含む）に合わせる。固定だと桁が増えたとき符号が切れる
   const low = Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
-  const marginLeft = Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1));
+  const marginLeft = scaledPx(Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1)));
   const barW = Math.max(6, Math.min(24, ((width - 90) / n) * 0.42));
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
   const gap = 0.03;
@@ -76,10 +77,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
     width,
     height,
     marginLeft,
-    marginRight: 20,
-    marginTop: 28,
-    marginBottom: 32,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    marginRight: scaledPx(20),
+    marginTop: scaledPx(28),
+    marginBottom: scaledPx(32),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, label: null, line: false },
     // 値がすべて 0（契約 0 件など）だと y の domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, ...(peak === 0 && low === 0 ? { domain: [0, axisUnit.div] } : {}) },
@@ -112,10 +113,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
           x: "i",
           y: yMax,
           preferredAnchor: "bottom",
-          dy: -6,
+          dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : T.charts.suffixForecast }),
             [T.charts.tipBudget]: (d) => money(d.budget, unit),
@@ -194,11 +195,11 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   const plot = Plot.plot({
     width,
     height,
-    marginLeft: 48,
-    marginRight: 16,
-    marginTop: 24,
-    marginBottom: 32,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    marginLeft: scaledPx(48),
+    marginRight: scaledPx(16),
+    marginTop: scaledPx(24),
+    marginBottom: scaledPx(32),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
     // すべて 0h（不在の期間など）だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: T.charts.hoursAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.plannedHours > 0) && !(d.actualHours > 0)) ? { domain: [0, 10] } : {}) },
@@ -215,10 +216,10 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
           x: "i",
           y: (d) => Math.max(d.plannedHours, d.actualHours),
           preferredAnchor: "bottom",
-          dy: -6,
+          dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" }),
             [T.charts.tipPlan]: (d) => formatHours(d.plannedHours),

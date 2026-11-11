@@ -1,5 +1,5 @@
 /**
- * 配色（SPEC §53）: 表示モード（ライト／ダーク）とテーマカラー
+ * 配色（SPEC §53）: 表示モード（ライト／ダーク）とテーマカラー。文字の大きさ（§111）も同じ仕組みで描画前に当てる
  *
  * 決め方（上から順に、決まったものを使う）
  *   表示モード: 設定画面で選んだライト／ダーク → GitLab（旧ダークテーマ・API が返す場合のカラーモード）→ PC（OS）の設定 → ライト
@@ -18,6 +18,21 @@ export const THEME_PREFS = ["auto", "light", "dark"];
 /** テーマカラー（色の値は style.css の :root[data-accent]） */
 export const ACCENTS = ["blue", "indigo", "green", "red", "gray"];
 export const DEFAULT_ACCENT = "blue";
+/** 文字の大きさ（§111）。倍率は style.css の :root[data-text-size]。閲覧者ごとに localStorage に置く */
+export const TEXT_SIZE_KEY = "yn-text-size";
+export const TEXT_SIZES = ["s", "m", "l", "xl", "xxl"];
+export const DEFAULT_TEXT_SIZE = "m";
+export const TEXT_SCALES = { s: 0.9, m: 1, l: 1.1, xl: 1.25, xxl: 1.4 };
+
+/** 今の文字の倍率（グラフの文字の大きさ用。ブラウザ以外では 1） */
+export function textScale(doc = typeof document === "undefined" ? null : document) {
+  const v = doc?.documentElement?.dataset?.textSize;
+  return TEXT_SCALES[v] ?? 1;
+}
+/** px の文字サイズに今の倍率を掛ける（グラフ用） */
+export function scaledPx(px, doc) {
+  return Math.round(px * textScale(doc) * 10) / 10;
+}
 
 /**
  * GitLab の GET /user → { mode, accent }（決まらない項目は null）
@@ -98,7 +113,11 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
   }
   if (!token) token = lget("yojitsu-navi:gitlab-token") || "";
   // 状態（ストレージが使えないときもページ内では切り替わるよう、選んだ値を持っておく）
-  var pref = { theme: lget("yn-theme"), accent: lget("yn-accent") };
+  var SIZES = ["s", "m", "l", "xl", "xxl"];
+  var pref = { theme: lget("yn-theme"), accent: lget("yn-accent"), textSize: lget("yn-text-size") };
+  function textSize() {
+    return SIZES.indexOf(pref.textSize) >= 0 ? pref.textSize : "m";
+  }
   var mem = { gitlab: token ? cached() : null };
   function state() {
     return { theme: pref.theme, accent: pref.accent, gitlab: mem.gitlab, osDark: osDark() };
@@ -110,6 +129,8 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
     if (root) {
       root.dataset.theme = r.theme;
       root.dataset.accent = r.accent;
+      if (textSize() === "m") delete root.dataset.textSize;
+      else root.dataset.textSize = textSize();
     }
     if (notify) {
       try {
@@ -130,6 +151,7 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
         accentFrom: r.accentFrom,
         themePref: pref.theme === "light" || pref.theme === "dark" ? pref.theme : "auto",
         accentPref: ACC.indexOf(pref.accent) >= 0 ? pref.accent : "auto",
+        textSize: textSize(),
         // 「自動」を選んだときの配色（設定画面のラベル用）
         auto: resolve({ theme: null, accent: null, gitlab: mem.gitlab, osDark: osDark() }),
       };
@@ -142,6 +164,11 @@ export function runAppearance(fromGitlab, resolve, cfg, w) {
     setAccent: function (a) {
       pref.accent = ACC.indexOf(a) >= 0 ? a : "auto";
       lset("yn-accent", pref.accent);
+      apply(true);
+    },
+    setTextSize: function (v) {
+      pref.textSize = SIZES.indexOf(v) >= 0 ? v : "m";
+      lset("yn-text-size", pref.textSize === "m" ? null : pref.textSize);
       apply(true);
     },
     /** GitLab の GET /user の結果（null = 接続をやめた） */
