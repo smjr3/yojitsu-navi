@@ -222,7 +222,8 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
   const marginLeft = Math.min(Math.max(scaledPx(64), longest * cw + 8), Math.round(width * 0.4));
   const plot = Plot.plot({
     width,
-    height: shown.length * (height ? Math.min(40, Math.max(28, Math.floor((height - 48) / shown.length))) : 28) + 48,
+    // 上下の余白は文字の大きさ（§111）で増えるので、行の高さとは別に足す
+    height: shown.length * (height ? Math.min(40, Math.max(28, Math.floor((height - scaledPx(48)) / shown.length))) : 28) + scaledPx(48),
     marginLeft,
     marginRight: scaledPx(24),
     marginTop: scaledPx(height ? 32 : 24),
