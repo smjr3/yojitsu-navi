@@ -1581,11 +1581,12 @@ h3 {
     min-width: min(16em, 30vw);
   }
   .yn-table .yn-primary-cell:has(.yn-cell-2line) {
-    min-width: min(22vw, 300px);
+    min-width: min(16vw, 300px);
     max-width: min(28vw, 400px);
   }
+  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする */
   .yn-table .yn-primary-cell .yn-cell-2line {
-    max-width: 100%;
+    max-width: 17vw;
     display: flex;
   }
   .yn-table .yn-primary-cell .yn-cell-main {
@@ -1593,6 +1594,12 @@ h3 {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     white-space: normal;
+  }
+}
+/* 1024px 前後は列が多い表（メンバー一覧など）が収まる幅を優先し、それより広い画面で名前の列を広げる */
+@media (min-width: 1200px) {
+  .yn-table .yn-primary-cell .yn-cell-2line {
+    max-width: min(26vw, 370px);
   }
 }
 /* 本文の最大幅を外したので（§88）、さらに広い画面では名前列の上限も広げて省略を減らす */
@@ -4402,6 +4409,10 @@ html:has(dialog.yn-dialog[open]) {
   content: "";
   position: absolute;
   inset: -8px -5px;
+}
+/* 右端の列は表の外へはみ出して横スクロールを生まないように、右へは広げない */
+.yn-table th:last-child .yn-filter-btn::after {
+  right: 0;
 }
 .yn-filter-btn:hover,
 .yn-filter-btn[aria-expanded="true"] {
