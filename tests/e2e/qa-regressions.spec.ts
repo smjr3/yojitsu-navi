@@ -207,6 +207,35 @@ test("スマホ幅の計算根拠: 長い案件名は折り返し、表の横幅
   expect(w).toBeLessThan(260);
 });
 
+test("計算根拠の表: 長い案件名は「…」で他の列の見出しを潰さず、横スクロールしても先頭列は見出しと本文がそろって固定される", async ({ page }) => {
+  for (const width of [1280, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    await gotoPage(page, "/contract?id=C160");
+    await page.locator('button[aria-label*="計算根拠"]').first().click();
+    const wrap = page.locator("dialog[open] .yn-bd-section .yn-table-wrap").first();
+    const first = wrap.locator("tbody td").first();
+    await expect(first).toBeVisible();
+    // 全文は title。幅は上限まで（他の列の見出しが見える）
+    await expect(first).toHaveAttribute("title", /シングルサインオン連携基盤の維持管理業務/);
+    expect(await first.evaluate((td) => td.getBoundingClientRect().width)).toBeLessThanOrEqual(300);
+    const heads = await wrap.locator("thead th").evaluateAll((ths) => ths.map((th) => th.getBoundingClientRect().width));
+    for (const hw of heads) expect(hw).toBeGreaterThan(20);
+    // 1280px は横スクロール無し。狭い幅で横に送っても、先頭列の見出しと本文は同じ位置に固定
+    const [sw, cw] = await wrap.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    if (width === 1280) expect(sw).toBeLessThanOrEqual(cw);
+    else {
+      await wrap.evaluate((el) => (el.scrollLeft = 200));
+      const x = async (sel: string) => wrap.locator(sel).first().evaluate((el) => Math.round(el.getBoundingClientRect().left));
+      expect(await x("tbody td")).toBe(await x("thead th"));
+      // 2 列目の見出しは先頭列の右に見えている（重ならない）
+      const firstRight = await wrap.locator("thead th").first().evaluate((el) => el.getBoundingClientRect().right);
+      const visibleHead = await wrap.locator("thead th").evaluateAll((ths, r) => ths.slice(1).some((th) => th.getBoundingClientRect().left >= r - 1), firstRight);
+      expect(visibleHead).toBe(true);
+    }
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("案件一覧の Excel: 見出しに同じ名前の列が無い（顧客 / 案件・顧客・案件）", async ({ page }) => {
   await gotoPage(page, "/contracts");
   const dl = page.waitForEvent("download");

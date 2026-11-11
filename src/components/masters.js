@@ -3228,7 +3228,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           <tbody>${r.rows.map((x) => {
             const d = x.after.forecastCost - x.before.forecastCost;
             return html`<tr data-contract=${x.contractId} class=${x.after.forecastGrossProfit < 0 || x.endAfter.forecastGrossProfit < 0 ? "is-danger" : null}>
-              <th scope="row"><a href=${href(x.contractId)}>${x.customerName} / ${x.projectName}</a></th>
+              <th scope="row" class="yn-primary-cell" title=${`${x.customerName} / ${x.projectName}`}><a href=${href(x.contractId)}>${x.customerName} / ${x.projectName}</a></th>
               <td class="num"><span class=${d > 0 ? "is-neg" : null}>${moneySigned(d, unit)}</span></td>
               <td class="num">${pair(x.before.forecastGrossProfit, x.after.forecastGrossProfit, amount)}</td>
               <td class="num hide-phone">${pair(rate(x.before.forecastGrossProfit, x.before.targetBudget), rate(x.after.forecastGrossProfit, x.after.targetBudget), pct)}</td>
@@ -3262,7 +3262,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
             <th scope="col">${T.plan.impact.colStatus}</th>
           </tr></thead>
           <tbody>${r.targets.map((t) => html`<tr class=${t.after.status === "atRisk" ? "is-danger" : null}>
-            <th scope="row">${targetName(t)}</th>
+            <th scope="row" class="yn-primary-cell" title=${targetName(t)}>${targetName(t)}</th>
             <td class="num">${formatPercent(t.before.target.remainingRate)}</td>
             <td class="num">${pair(t.before.rate, t.after.rate, pct)}</td>
             <td class="num hide-phone">${pointsSigned(t.after.gap)}</td>

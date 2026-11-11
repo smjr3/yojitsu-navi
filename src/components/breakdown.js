@@ -29,7 +29,7 @@ let lastOpener = null;
 
 function ensureDialog() {
   if (dialogEl && dialogEl.isConnected) return dialogEl;
-  const dialog = html`<dialog class="yn-dialog" aria-labelledby="yn-dialog-title">
+  const dialog = html`<dialog class="yn-dialog yn-bd-dialog" aria-labelledby="yn-dialog-title">
     <div class="yn-dialog-inner">
       <header class="yn-dialog-head">
         <h2 id="yn-dialog-title" class="yn-dialog-title"></h2>
@@ -55,13 +55,24 @@ function ensureDialog() {
   return dialog;
 }
 
+/**
+ * 計算根拠の表（§13）。先頭列（案件・メンバー・月など）は見出しと同じく横スクロールで固定し、
+ * 文字の列は長くても他の列を潰さないよう上限で「…」にして全文は title で出す（§106 と同じ考え方）
+ */
 function renderTable(table) {
   const cols = table.columns ?? [];
-  return html`<div class="yn-table-wrap yn-table-wrap-inline"><table class="yn-table yn-table-compact">
+  const bodyCell = (cell, i) => {
+    const num = cols[i]?.align === "num";
+    const td = h("td", { class: num ? "num" : i === 0 ? "yn-primary-cell" : "yn-cell-clip" }, cell ?? EMPTY_VALUE);
+    if (!num) {
+      const text = td.textContent.trim();
+      if (text && text !== EMPTY_VALUE) td.title = text;
+    }
+    return td;
+  };
+  return html`<div class="yn-table-wrap yn-table-wrap-inline"><table class="yn-table yn-table-compact yn-bd-table">
     <thead><tr>${cols.map((c) => html`<th scope="col" class=${c.align === "num" ? "num" : ""}>${c.label}</th>`)}</tr></thead>
-    <tbody>${table.rows.map(
-      (r) => html`<tr>${r.map((cell, i) => html`<td class=${cols[i]?.align === "num" ? "num" : ""}>${cell ?? EMPTY_VALUE}</td>`)}</tr>`,
-    )}</tbody>
+    <tbody>${table.rows.map((r) => h("tr", null, r.map(bodyCell)))}</tbody>
     ${table.foot ? html`<tfoot><tr>${table.foot.map((cell, i) => html`<td class=${cols[i]?.align === "num" ? "num" : ""}>${cell ?? ""}</td>`)}</tr></tfoot>` : null}
   </table></div>`;
 }

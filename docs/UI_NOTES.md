@@ -95,6 +95,7 @@ src/
 
 数値は `numberButton(text, spec)` で描く（`<button class="yn-num">`）。`spec` は `{title, formula[], rows[{label,value,note}], sections[{title,text,table,lazy}], note}`。関数を渡すと開いたときに計算する（表の全セルで事前計算しない）。
 spec の組み立て関数: `budgetMonthSpec` / `budgetAggregateSpec` / `costMonthSpec`（実績行 → 作業ログを遅延読み込み）/ `costAggregateSpec` / `grossProfitSpec` / `marginSpec` / `burnRateSpec` / `forecastSpec`（方式・月・平均・アサイン明細）/ `forecastTotalsSpec` / `hoursSpec`。
+表（`renderTable`、`.yn-bd-table`）: 先頭列は `td.yn-primary-cell`（見出しと同じく `position: sticky`、最大 260px で「…」）、2 列目以降の文字の列は `td.yn-cell-clip`（§106 と同じ上限）。どちらも全文を `title` に入れる。ダイアログは `.yn-bd-dialog` で最大 1040px（1280px で 7 列が横スクロール無しで収まる）。
 `<dialog>` は 1 つを使い回す。`showModal()` なので Esc で閉じる・フォーカスがダイアログ内に閉じる・閉じたら元のボタンに戻るのはブラウザ標準。
 
 ## 表（table.js）
