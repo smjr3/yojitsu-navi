@@ -30,6 +30,8 @@ test("行は 1 行に詰め、ID は出さない（名前と所属だけ）", as
 
 test("セルにマウスを載せると内訳の吹き出し、フォーカスでも出る", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
+  // 表の上に目標の警告（§110）が出て行が画面の下端に近いので、先に画面の中ほどへ（載せた後のスクロールで吹き出しは閉じる）
+  await cell(page, "M010", "2026-10").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await cell(page, "M010", "2026-10").hover();
   const tip = page.locator("#yn-plan-tip");
   await expect(tip).toBeVisible();

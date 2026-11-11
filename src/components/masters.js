@@ -3152,7 +3152,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
             focusKey("plan:alerts");
           }}>${plan.alertsAll ? T.plan.targetAlert.less : fmt(T.plan.targetAlert.more, { n: integer(alerts.length - PLAN_ALERTS_SHOWN) })}</button>`
         : null;
-    return html`<div class="yn-me-plan-alerts" data-role="plan-target-alerts" role="group" aria-label=${fmt(T.plan.targetAlert.aria, { n: integer(alerts.length) })}>
+    return html`<div class="yn-me-plan-alerts is-warning" data-role="plan-target-alerts" role="group" aria-label=${fmt(T.plan.targetAlert.aria, { n: integer(alerts.length) })}>
       <ul class="yn-me-plan-alert-list">${items}</ul>${more}
     </div>`;
   }
