@@ -1,7 +1,7 @@
 /**
  * メンバー別（SPEC §18）: 一覧 /members と詳細 /member?id=
  *   - 数値が core（aggregateMembers / memberMonthlySeries）と一致（比較は経過月）
- *   - 内訳パネル（計画 = 配分 × 基準時間 × 単価、実績 = 実績行 → 作業ログ）
+ *   - 内訳パネル（計画 = 配分 × 1人月の時間 × 単価、実績 = 実績行 → 作業ログ）
  *   - 遷移（一覧 → 詳細 → 案件詳細、案件詳細 → メンバー詳細）、チーム絞り込み、検索
  *   - Excel 出力、a11y（見出し・キーボード）、赤を使わない、ダーク、390px
  * 金額は既定単位に依存しないよう URL に unit=yen を付ける。
@@ -98,7 +98,7 @@ test.describe("メンバー一覧 /members", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(0));
   });
 
-  test("内訳: 計画額は 配分 × 基準時間 × 単価 の明細、実績は実績行と作業ログ、稼働率・合計行も根拠を持つ", async ({ page }) => {
+  test("内訳: 計画額は 配分 × 1人月の時間 × 単価 の明細、実績は実績行と作業ログ、稼働率・合計行も根拠を持つ", async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     const agg = aggregateMembers(model, { period: CMP });
     const m = agg.members.find((x) => x.memberId === "M011")!;
@@ -108,7 +108,7 @@ test.describe("メンバー一覧 /members", () => {
 
     await cell(row, col(h, "計画額")).locator("button.yn-num").click();
     await expect(dialog(page)).toBeVisible();
-    await expect(dialog(page).locator(".yn-bd-formula")).toContainText("配分人月 × 基準時間");
+    await expect(dialog(page).locator(".yn-bd-formula")).toContainText("配分人月 × 1人月の時間");
     expect(await dialogRow(page, "計画額")).toBe(yen(m.plannedCost));
     expect(await dialogRow(page, "計画時間")).toBe(hoursText(m.plannedHours));
     await expect(dialog(page).locator("table")).toContainText("役職「主任」（2026-04〜）");

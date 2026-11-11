@@ -115,6 +115,7 @@ costs[labor] = cost
 - `businessDays(m)` = m の暦日のうち土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§49）を除いた日数。
 - 人月（標準）= hours ÷ `standardHoursPerMonth`。
 - 人月（カレンダー）= hours ÷ (businessDays(m) × `hoursPerBusinessDay`)。複数月の合計は月ごとの人月を合算。
+- 月の稼働時間 `monthHours(m)` = businessDays(m) × `hoursPerBusinessDay`。リソース計画の 1.0 人月の時間（§114）。
 
 ## 10. 着地見込み（案件＝契約ごと・対象の月ごと）
 
@@ -130,7 +131,7 @@ actualCost      = Σ cost(c, m)    for m in actualMonths
 残り月の実績の出し方（方式）:
 - `recent3`: 契約期間内で `m < asOfMonth` の月（年度をまたいでよい）のうち直近 `forecastRecentMonths` か月の実績の平均 × 残り月数。基礎月が 0 → 平均 0、`noActuals = true`。基礎月が 3 未満ならある分で平均。
 - `all`: 契約開始月から `m < asOfMonth` までの全月の実績の平均 × 残り月数。基礎月 0 → `noActuals`。
-- `assignment`: Σ(残り月 m, アサイン a: a.memberId, a.contractId == c, a.startMonth <= m <= a.endMonth) allocation × `standardHoursPerMonth` × 単価(a.memberId, m)。アサインが0件 → `noAssignments = true`、残り見込み 0。
+- `assignment`: Σ(残り月 m, アサイン a: a.memberId, a.contractId == c, a.startMonth <= m <= a.endMonth) allocation × `monthHours(m)`（§9・§114）× 単価(a.memberId, m)。アサインが0件 → `noAssignments = true`、残り見込み 0。
 
 ```
 forecastCost        = actualCost + remainingCost
@@ -237,7 +238,7 @@ isDeficit           = forecastGrossProfit < 0
 ### 18.1 計算
 メンバー x、月 m、契約 c:
 ```
-plannedHours(x,c,m) = Σ_{a: a.memberId=x, a.contractId=c, a.startMonth<=m<=a.endMonth} a.allocation × standardHoursPerMonth
+plannedHours(x,c,m) = Σ_{a: a.memberId=x, a.contractId=c, a.startMonth<=m<=a.endMonth} a.allocation × monthHours(m)   // §9・§114
 plannedCost(x,c,m)  = round(plannedHours(x,c,m) × 単価(x,m))        // §6 の単価。行(x,c,m)ごとに四捨五入
 actualHours(x,c,m)  = 契約 c・月 m の CostLine のうち memberId=x の hours
 actualCost(x,c,m)   = 同 CostLine の amount
@@ -365,9 +366,9 @@ actualCost(x,c,m)   = 同 CostLine の amount
 
 ### 23.2 人月と時間の入力（2026-10-28 決定）
 - **保存・管理・表示は人月に統一**。時間は入力のときだけ使える。
-- アサインの追加・修正ダイアログの配分欄に「人月／時間」の切替を付ける。時間で入れた値は `allocation = 時間 ÷ standardHoursPerMonth`（既定 160h）で人月に直して保存する。入力欄の下に換算結果（例「16 時間 = 0.1 人月」）を出す。
+- アサインの追加・修正ダイアログの配分欄に「人月／時間」の切替を付ける。時間で入れた値は `allocation = 時間 ÷ monthHours(開始月)`（§114）で人月に直して保存する。入力欄の下に換算結果（例「16 時間 = 0.1 人月（2月は 160 時間 = 1 人月）として保存」）を出す。
 - 換算した人月は小数 4 桁に四捨五入して書く（例 10h → 0.0625、1h → 0.0063）。末尾の 0 は書かない。
-- 時間の基準は標準（`standardHoursPerMonth`）。月ごとの営業日（カレンダー基準）では換算しない（§18 の計画時間と同じ基準にするため）。
+- 時間の基準は開始月の稼働時間（§114 で標準 `standardHoursPerMonth` から変更）。§18 の計画時間と同じ基準。
 
 ---
 
@@ -454,7 +455,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
   - `amount` = 契約内のみ。契約・月・メンバーの実績行（CostLine）の金額を作業種別ごとの時間で **最大剰余法で按分**（円の整数。作業種別の合計が契約の実績と 1 円単位で一致する）。契約外は `null`。
   - 顧客 = 契約に紐付いたものは契約の顧客名、紐付かない契約外は作業ログの顧客名（§17 の `customerKey` で束ねる）。
   - 所属チーム（`teamId`）= その月のメンバーの所属（§5 の有効レコード）。
-- 人月 = 時間 ÷ `standardHoursPerMonth`（§18 と同じ標準基準）。
+- 人月 = 時間 ÷ `standardHoursPerMonth`（実績の人月は標準基準のまま。計画の時間は §114 で月の営業日に連動）。
 
 ### 30.3 稼働実績画面 `/workload`（上部タブ「稼働実績」。§51 で「工数」から改名）
 人員配置・組織体制の検討用。期間・単位はフィルタバーと共通。
@@ -769,7 +770,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ### 50.4 予実の「運用保守以外を含む」切替（メンバー別・メンバー詳細）
 - フィルタバーの「運用保守以外を含む」（URL `outside=1`。既定は含まない＝URL に書かない。localStorage にも覚える）。メンバー別 `/members` とメンバー詳細 `/member` に置く。
 - 含むとき、**計画にも実績にも** 契約外を足す（片方だけに足すと差額・稼働率がずれるため）。
-  - 計画 = 契約外予定の人月 × 基準時間（`standardHoursPerMonth`）× 単価。実績 = 契約外の作業時間 × 単価（§6 と同じ単価。メンバー・月・種別ごとに円に丸める）。
+  - 計画 = 契約外予定の人月 × 月の稼働時間（`monthHours(m)`。§114）× 単価。実績 = 契約外の作業時間 × 単価（§6 と同じ単価。メンバー・月・種別ごとに円に丸める）。
   - 種別は §4.1 の `normalizeName` で正規化して突き合わせる（全角・半角、大文字・小文字の違いは同じ種別の 1 行。表示名は最初に出てきた表記）。検証・リソース計画と同じ扱い。
 - 選べる期間（`meta.minMonth`〜`meta.maxMonth`）は、契約の期間に **運用保守以外の予定・実績の月** を足した範囲。契約が終わった後の月の予定（翌年度の会社業務など）もメンバー別で選べる。
   - 契約外の作業時間は種別（47.1 の `group`）ごとに束ね、同じ種別の予定と比べる。予定の無い種別の実績は「計画なし」（アサイン外と同じ扱い）。
@@ -1789,3 +1790,19 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
   - 開いたまとまり（人の行＋作業の行＋変更の履歴）の上と、まとまりの次の人の行の上に**太い区切り線**。まとまりの中の線は薄くする。
 - 行が多いので、「すべて開く」のボタンは `h()` で作る（§107）。
 - 再発防止: `tests/e2e/plan-groups.spec.ts`。
+
+## 114. リソース計画を月の営業日数に連動させる（2026-11-11 依頼者）
+
+依頼: リソース計画を、実際の営業日に応じて変わるようにしたい。
+
+### 114.1 1 人月の時間
+- リソース計画の 1.0 人月の時間 = **その月の営業日数 × `hoursPerBusinessDay`**（`monthHours(m)`。§9）。営業日は土日と祝日（`holidays.csv`。行の無い年は国民の祝日で補う。§49）を除いた日。
+- 計画データ（`assignments.csv`・`outside-plans.csv` の人月）の意味は変えない。人月は「その月のフルタイムに対する割合」で、時間と金額が月ごとに変わる。
+- 祝日・会社の休日を足す・消すと、その月の計画の時間・額も変わる。マスタ編集で祝日を編集中なら、リソース計画の時間表示・変更の影響・目標の警告は編集中の祝日で数える。
+
+### 114.2 使うところ
+- 計画の時間・計画額（§18.1）、運用保守以外の予定の時間・額（§50.3）、計画値の着地見込み（§10 `assignment`）、変更の影響（§65）、目標の警告（§110）、今月の進捗のメンバーごとの計画（§61）、体制図の負荷（§76。その月の時間で人月に直す）。
+- リソース計画画面: セルの吹き出しの合計時間はその月の時間。時間で入力した値は**開始月**の時間で人月に直す（期間の途中の月は、同じ人月のまま時間が変わる）。換算の表示に基準の月と時間を出す。
+- 変えないもの: 実績の人月（稼働実績画面・作業種別の内訳。§30）は `standardHoursPerMonth` のまま。`standardHoursPerMonth` は設定に残す（実績の人月（標準）に使う）。
+- 計算は `createMonthHours(holidays, hoursPerBusinessDay)`（`src/core/monthHours.ts`）。`MemberMonth.monthHours` にその月の時間を持つ。
+

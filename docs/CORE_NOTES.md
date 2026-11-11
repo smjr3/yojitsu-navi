@@ -126,3 +126,7 @@
 ## 目標の警告（SPEC §110）— `src/core/planTargets.ts`
 
 `planTargetAlerts(model, after, { teamId, tree })` は、組織に関わる目標（終了月が基準月以降）を先に絞り、`after`（編集後のマスタとアサイン）があればその目標に入る案件だけ `assignmentPlanOf` で計画を作り直してから `evaluateTarget(…, "assignment")` を呼ぶ（判定は §63 と共有、重複実装なし）。未達見込みだけ返す。超える月は計画の明細（`assignmentPlan.lines`）の月ごとの額と、`ContractMonth.budget` ×（1 − 目標）を比べる。`after = null` なら Model の計画のまま（編集が無いときは作り直さない）。
+
+## 月の稼働時間（SPEC §114）— `src/core/monthHours.ts`
+
+`createMonthHours(holidays, hoursPerBusinessDay)` は「月 → 営業日数 × 1 日の時間」の関数を返す（月ごとにキャッシュ）。`holidays` は csv の行（`Holiday[]`）か作成済みの `HolidaySet`（行の無い年を国民の祝日で補う数え方を Model と揃える）。Model は `ForecastContext.monthHours` と `buildMemberMonths(…, monthHours)` に同じ関数を渡す。画面（変更の影響・目標の警告）は `PlanInputs.holidays`（編集中の祝日）があればそれで作り直す（`monthHoursOfInputs`）。リソース計画画面は編集中の `holidays` 文書から作り、文書が変わったときだけ作り直す。

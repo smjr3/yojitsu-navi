@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 import { buildModel } from "../../src/core/model.js";
 import { parseDataset, type DatasetFiles } from "../../src/core/csv.js";
 import { createMasterIndex } from "../../src/core/masters.js";
-import { fiscalYearMonths } from "../../src/core/calendar.js";
+import { fiscalYearMonths, monthRange } from "../../src/core/calendar.js";
 import { planImpact, type PlanInputs } from "../../src/core/planImpact.js";
-import { baseConfig } from "./fixtures.js";
+import { baseConfig, weekdayHours } from "./fixtures.js";
 
 const A_HEADER = "member_id,contract_id,start_month,end_month,allocation\n";
 
@@ -37,7 +37,8 @@ const inputs = (assignments: string): PlanInputs => {
 };
 const modelOf = (targets?: string) => buildModel(parseDataset(files(BASE, targets)).dataset, { asOf: "2026-10-15", generatedAt: "t" });
 const FY = fiscalYearMonths(2026, 4);
-const std = baseConfig.standardHoursPerMonth;
+/** 月の稼働時間の合計（祝日なし = 平日 × 8h。§114） */
+const hoursOf = (from: string, to: string) => monthRange(from, to).reduce((a, m) => a + weekdayHours(m), 0);
 
 describe("planImpact", () => {
   it("変更が無ければ何も出さない", () => {
@@ -52,12 +53,25 @@ describe("planImpact", () => {
     const r = planImpact(model, inputs(BASE), inputs(after), FY);
     expect(r.rows.map((x) => x.contractId)).toEqual(["C1"]);
     const row = r.rows[0]!;
-    // 期間（年度）では 2027-01〜03 の 3 か月、終了時点では 2027-01〜09 の 9 か月 × 0.5 人月 × 5,000 円
-    expect(row.after.forecastCost - row.before.forecastCost).toBe(3 * 0.5 * std * 5000);
-    expect(row.endAfter.forecastCost - row.endBefore.forecastCost).toBe(9 * 0.5 * std * 5000);
+    // 期間（年度）では 2027-01〜03 の 3 か月、終了時点では 2027-01〜09 の 9 か月 × 0.5 人月 × 月の稼働時間 × 5,000 円
+    expect(row.after.forecastCost - row.before.forecastCost).toBe(0.5 * hoursOf("2027-01", "2027-03") * 5000);
+    expect(row.endAfter.forecastCost - row.endBefore.forecastCost).toBe(0.5 * hoursOf("2027-01", "2027-09") * 5000);
     expect(row.before.forecastCost).toBe(model.contracts[0]!.forecasts.assignment.forecastCost);
-    expect(row.after.forecastGrossProfit).toBe(row.before.forecastGrossProfit - 3 * 0.5 * std * 5000);
+    expect(row.after.forecastGrossProfit).toBe(row.before.forecastGrossProfit - 0.5 * hoursOf("2027-01", "2027-03") * 5000);
     expect(row.customerName).toBe("A社");
+  });
+
+  it("編集中の祝日で月の稼働時間が変わると、計画が同じでも着地が変わる（§114）", () => {
+    const model = modelOf();
+    // 2026-11-02（月）を休みにすると 11 月は 21 日 → 20 日。C1・C2 の 0.5 人月 × 8h 分だけ計画値が減る
+    const after: PlanInputs = { ...inputs(BASE), holidays: [{ date: "2026-11-02", name: "創立記念日" }] };
+    // 期間は 11 月だけで見る（祝日表に行のある年は 2026 年だけになり、2027 年は国民の祝日で補われる。§49）
+    const r = planImpact(model, inputs(BASE), after, ["2026-11"]);
+    expect(r.rows.map((x) => x.contractId).sort()).toEqual(["C1", "C2"]);
+    const c1 = r.rows.find((x) => x.contractId === "C1")!;
+    expect(c1.after.forecastCost - c1.before.forecastCost).toBe(-0.5 * 8 * 5000);
+    const c2 = r.rows.find((x) => x.contractId === "C2")!;
+    expect(c2.after.forecastCost - c2.before.forecastCost).toBe(-0.5 * 8 * 8000);
   });
 
   it("期間の外の月だけ変えたときも、案件終了時点が変われば出す", () => {

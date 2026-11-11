@@ -35,7 +35,7 @@ test("セルにマウスを載せると内訳の吹き出し、フォーカス�
   await cell(page, "M010", "2026-10").hover();
   const tip = page.locator("#yn-plan-tip");
   await expect(tip).toBeVisible();
-  await expect(tip).toContainText("2026年10月 合計 0.90 人月（144 時間）");
+  await expect(tip).toContainText("2026年10月 合計 0.90 人月（151.2 時間）");
   await expect(tip).toContainText("青葉物流 / 倉庫管理システム保守");
   await expect(tip).toContainText("空き 0.10 人月");
   await expect(tip).not.toContainText("C002");

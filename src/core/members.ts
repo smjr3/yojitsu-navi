@@ -10,6 +10,7 @@ import { isValidYearMonth, monthRange } from "./calendar.js";
 import { normalizeName } from "./normalize.js";
 import { roundYen } from "./cost.js";
 import { createEffectiveIndex, createMasterIndex, isLeftRecord, leftMonthOf, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
+import type { MonthHours } from "./monthHours.js";
 import { monthStatusFromMeta } from "./status.js";
 import { isOutsideRow, outsideRowId } from "./workTypes.js";
 import type {
@@ -59,7 +60,7 @@ export function buildMemberMonths(
   results: readonly ContractResult[],
   assignments: readonly Assignment[],
   masters: MasterIndex,
-  standardHoursPerMonth: number,
+  monthHours: MonthHours,
   outside: MemberOutsideInput = {},
 ): MemberMonth[] {
   // (member, month) → (contract → 集計)
@@ -130,6 +131,7 @@ export function buildMemberMonths(
     const byContractMap = cells.get(key) as Map<string, CellAcc>;
     const rate = rateFor(masters, memberId, month);
     const rec = memberAt(masters, memberId, month);
+    const hoursOfMonth = monthHours(month);
     let worklogName: string | null = null;
     const byContract: MemberContractMonth[] = [];
     let plannedHours = 0;
@@ -141,7 +143,7 @@ export function buildMemberMonths(
     for (const contractId of [...byContractMap.keys()].sort()) {
       const acc = byContractMap.get(contractId) as CellAcc;
       worklogName ??= acc.worklogName;
-      const ph = acc.allocation * standardHoursPerMonth;
+      const ph = acc.allocation * hoursOfMonth;
       const pc = roundYen(ph * rate.hourlyRate);
       if (acc.outsideType !== undefined) {
         // 契約外の実績額 = 時間 × 単価（§6 と同じ単価。種別・月ごとに円に丸める）。月の合計には入れない
@@ -186,7 +188,7 @@ export function buildMemberMonths(
       hourlyRate: rate.hourlyRate,
       rateSource: rate.rateSource,
       rateMissing: rate.rateMissing,
-      standardHoursPerMonth,
+      monthHours: hoursOfMonth,
       plannedHours,
       plannedCost,
       actualHours,

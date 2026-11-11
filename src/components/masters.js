@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, createMonthHours, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -380,7 +380,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 古い土台の下書きを当て直して復元したファイル → { applied, resolved }（表の上に注記する） */
   let rebasedInfo = {};
   let active = VIEW_IDS.includes(initialView) ? initialView : VIEW_IDS[0];
-  const std = config.standardHoursPerMonth;
+  // 月の稼働時間（1.0 人月の時間 = 営業日 × 1 日の時間。§114）。祝日タブを編集中なら編集中の祝日で数える
+  let monthHoursCache = { doc: null, fn: null };
+  function hoursOfMonth(m) {
+    if (monthHoursCache.doc !== docs.holidays) {
+      const rows = parseCsvTable(serializeMasterDoc(docs.holidays).text)
+        .rows.map((r) => ({ date: r.get("date"), name: r.get("name") }))
+        .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date));
+      monthHoursCache = { doc: docs.holidays, fn: createMonthHours(rows, config.hoursPerBusinessDay) };
+    }
+    return monthHoursCache.fn(m);
+  }
+  /** 時間で入れた計画を人月に直す基準の月 = フォームの開始月（無ければ表示中の最初の月）（§114） */
+  function hoursBaseMonth(root) {
+    const f = root?.closest?.("form");
+    const v = String(f?.elements?.namedItem?.("start_month")?.value ?? f?.querySelector?.("#yn-me-chg-from")?.value ?? "").trim();
+    return /^\d{4}-\d{2}$/.test(v) ? v : plan.months[0];
+  }
   // リソース計画タブの状態: 組織（null = すべて）・表示する月の範囲（§71）・強調するメンバー・開いているメンバー
   const initialRange = parsePlanRange(local.get(PLAN_RANGE_KEY), asOfMonth);
   const plan = {
@@ -603,14 +619,18 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
 
   /** 表示用の補足（時間換算・区分名・契約の期間・個人単価） */
-  function cellHint(fileId, column, value) {
+  function cellHint(fileId, column, value, record = null) {
     if (value === "") return null;
     // 祝日（§80）は曜日を添える（土日を入れても営業日は変わらない）
     if (fileId === "holidays" && column === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
       const d = new Date(`${value}T00:00:00Z`);
       return Number.isNaN(d.getTime()) ? null : T.masters.weekdays[d.getUTCDay()];
     }
-    if (column === "allocation" && Number.isFinite(Number(value))) return fmt(T.plan.equalsHours, { hours: hoursFromAllocation(Number(value), std) });
+    if (column === "allocation" && Number.isFinite(Number(value))) {
+      // 開始月の稼働時間で換算する（§114）。開始月が分からなければ出さない
+      const m = String(record?.start_month ?? "").trim();
+      return /^\d{4}-\d{2}$/.test(m) ? fmt(T.plan.equalsHours, { hours: hoursFromAllocation(Number(value), hoursOfMonth(m)) }) : null;
+    }
     if (column === "contract_id" && fileId !== "contracts") {
       const c = cIndex().byId.get(value);
       return c ? `${c.startMonth}〜${c.endMonth}` : null;
@@ -1191,7 +1211,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         lead,
         ...columns.map((c) => {
           const raw = g.shown.record[c.name] ?? "";
-          const hint = cellHint(fileId, c.name, raw);
+          const hint = cellHint(fileId, c.name, raw, g.shown.record);
           // 案件の担当チームが空で顧客の既定があれば、そのチームを薄く出す（§103）
           const inherited = fileId === "contracts" && c.name === "team_id" && raw.trim() === "" ? inheritedTeam(g.shown.record) : "";
           if (inherited) return html`<td class="is-val"><span class="yn-me-val is-same">${displayValue(fileId, "team_id", inherited)}</span><span class="yn-me-hint">${T.masters.customerDefaultHint}</span></td>`;
@@ -1892,7 +1912,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const total = aRows.reduce((s, x) => s + (Number.isFinite(x.value) ? x.value : 0), 0) + out;
       const free = 1 - total;
       return html`<div class="yn-plan-tip-inner">
-        <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, std) })}</p>
+        <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, hoursOfMonth(m)) })}</p>
         ${aRows.length || out > 0
           ? html`<ul class="yn-plan-tip-list">${aRows.map((x) => html`<li><span>${contractText(x.contractId)}</span><span class="num">${Number.isFinite(x.value) ? pm(x.value) : "?"}</span></li>`)}${outs.map((o) => html`<li class="is-outside"><span>${o.type ? fmt(T.planEdit.outsideTypeTip, { type: o.type }) : T.masterFiles.outside}</span><span class="num">${pm(o.v)}</span></li>`)}</ul>`
           : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
@@ -1912,7 +1932,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}<span class="yn-me-path"> ${data.files.assignments.path} ・ ${data.files.outside.path}</span></h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -2072,7 +2092,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const submitBtn = html`<button type="submit" class="yn-btn yn-btn-primary">${T.planEdit.applyChange}</button>`;
     const valueInput = () => valueField.querySelector?.("input") ?? null;
     const unitSel = () => valueField.querySelector?.("select") ?? null;
-    const readValue = () => allocationFromInput(String(valueInput()?.value ?? ""), unitSel()?.value ?? "personMonth", std);
+    const readValue = () => allocationFromInput(String(valueInput()?.value ?? ""), unitSel()?.value ?? "personMonth", hoursOfMonth(/^\d{4}-\d{2}$/.test(fromInput.value) ? fromInput.value : plan.months[0]));
     const span = () => {
       const from = fromInput.value;
       const to = scope === "month" ? from : scope === "until" ? toInput.value : planEnd(from);
@@ -2337,7 +2357,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       commitMany(result.changes, fk);
     });
 
-    const isNum = (text) => text.trim() === "" || Number.isFinite(parseNumberCell(allocationFromInput(text, "personMonth", std)));
+    const isNum = (text) => text.trim() === "" || Number.isFinite(parseNumberCell(allocationFromInput(text, "personMonth", 0)));
     const inRange = (text) => {
       const n = parseNumberCell(text);
       return text.trim() === "" || (Number.isFinite(n) && n >= 0);
@@ -2347,7 +2367,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     function buildCellEdit() {
       let doc = docs.assignments;
       const touched = new Set();
-      const num = (text) => allocationFromInput(text, "personMonth", std);
+      const num = (text) => allocationFromInput(text, "personMonth", 0);
       for (const { input } of inputs) if (!isNum(input.value)) return { error: T.plan.notNumber, focus: input };
       if (!isNum(newNum.value)) return { error: T.plan.notNumber, focus: newNum };
       for (const o of outs) {
@@ -2488,20 +2508,32 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </select>`;
       const input = html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode="decimal" aria-describedby=${`${id}-hint ${id}-conv`}>`;
       const conv = html`<span class="yn-me-conv" id=${`${id}-conv`} aria-live="polite"></span>`;
+      // 時間 ⇔ 人月は開始月の稼働時間（営業日 × 1 日の時間）で換算する（§114）
+      const baseMonth = () => hoursBaseMonth(input);
       const update = () => {
+        const m = baseMonth();
+        const std = hoursOfMonth(m);
         const out = allocationFromInput(input.value, unitSel.value, std);
         const n = parseNumberCell(out);
-        conv.textContent = out === "" || !Number.isFinite(n) ? "" : unitSel.value === "hours" ? fmt(T.plan.convFromHours, { hours: input.value.trim(), pm: out, std }) : fmt(T.plan.convFromPm, { pm: out, hours: hoursFromAllocation(n, std) });
+        conv.textContent = out === "" || !Number.isFinite(n) ? "" : unitSel.value === "hours" ? fmt(T.plan.convFromHours, { hours: input.value.trim(), pm: out, std, month: monthJa(m) }) : fmt(T.plan.convFromPm, { pm: out, hours: hoursFromAllocation(n, std), month: monthJa(m) });
       };
       let lastUnit = "personMonth";
       unitSel.addEventListener("change", () => {
         // 単位を切り替えたら、入っている値を新しい単位に換算して見せる
         const n = parseNumberCell(input.value);
+        const std = hoursOfMonth(baseMonth());
         if (input.value.trim() !== "" && Number.isFinite(n)) input.value = lastUnit === "personMonth" ? String(hoursFromAllocation(n, std)) : allocationFromInput(String(n), "hours", std);
         lastUnit = unitSel.value;
         update();
       });
       input.addEventListener("input", update);
+      // 開始月を変えたら換算し直す（フォームに入ってから付ける）
+      queueMicrotask(() => {
+        input.closest?.("form")?.addEventListener("input", (ev) => {
+          if (ev.target !== input && (ev.target?.name === "start_month" || ev.target?.id === "yn-me-chg-from")) update();
+        });
+        update();
+      });
       update();
       return html`<span class="yn-me-alloc">${input}<label class="visually-hidden" for=${`${id}-unit`}>${T.plan.unitSelectLabel}</label>${unitSel}</span>${conv}`;
     }
@@ -2735,7 +2767,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         } else values[c.name] = v;
       }
       const unitSel = form.querySelector('[name="__allocation_unit"]');
-      if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, std);
+      if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, hoursOfMonth(/^\d{4}-\d{2}$/.test(values.start_month ?? "") ? values.start_month : plan.months[0]));
       return values;
     };
     const backToForm = () => {

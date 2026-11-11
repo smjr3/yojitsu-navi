@@ -214,7 +214,7 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     const base = (ids: string[]) => ids.filter((id) => BASE_IDS.has(id));
     expect(base(forecastTotals(model, undefined, "recent3").deficitContractIds)).toEqual(["C008"]);
     expect(base(forecastTotals(model, undefined, "all").deficitContractIds)).toEqual(["C008"]);
-    // assignment 方式では C013（月 10,000 円の予算）も赤字: M016 の配分 0.05 × 160h = 8h × 一般 6,000 円 = 48,000 円/月 × 残り 6 か月
+    // assignment 方式では C013（月 10,000 円の予算）も赤字: M016 の配分 0.05 × 月の稼働時間（約 8h）× 一般 6,000 円 = 約 48,000 円/月 × 残り 6 か月
     expect(base(forecastTotals(model, undefined, "assignment").deficitContractIds)).toEqual(["C008", "C013"]);
     const fy = model.contracts.filter((r) => r.forecasts.recent3.targetBudget > 0);
     const deficit = forecastTotals(model, undefined, "recent3").deficitContractIds.length;
@@ -222,8 +222,10 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(deficit / fy.length).toBeLessThan(0.5);
     const c013 = byId("C013").forecasts.assignment;
     expect(c013.breakdown.assignmentLines).toHaveLength(6);
-    expect(c013.breakdown.assignmentLines.every((l) => l.memberId === "M016" && l.allocation === 0.05 && l.hours === 8 && l.hourlyRate === 6000 && l.amount === 48_000)).toBe(true);
-    expect(c013.breakdown.remainingCost).toBe(48_000 * 6);
+    expect(c013.breakdown.assignmentLines.every((l) => l.memberId === "M016" && l.allocation === 0.05 && l.hourlyRate === 6000 && l.amount === Math.round(l.hours * 6000))).toBe(true);
+    // 時間は月の営業日で変わる（§114。ダミーの祝日表で 10〜3 月 = 168・152・160・152・144・176h）
+    expect(c013.breakdown.assignmentLines.map((l) => [l.month, l.hours])).toEqual([["2026-10", 0.05 * 168], ["2026-11", 0.05 * 152], ["2026-12", 0.05 * 160], ["2027-01", 0.05 * 152], ["2027-02", 0.05 * 144], ["2027-03", 0.05 * 176]]);
+    expect(c013.breakdown.remainingCost).toBe(Math.round(0.05 * (168 + 152 + 160 + 152 + 144 + 176) * 6000)); // 285,600
     expect(c013.targetBudget).toBe(120_000);
     // 前年度 C015（9,000,000）は黒字（FY2026 には掛からないので targetBudget 0）
     expect(byId("C015").forecasts.recent3).toMatchObject({ targetBudget: 0, forecastCost: 0, isDeficit: false });

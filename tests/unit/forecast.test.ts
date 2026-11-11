@@ -26,7 +26,8 @@ function months(c: Contract, costByMonth: Record<string, number>, budget = 100_0
 const masters = createMasterIndex(dataset({ members: [member({ memberId: "M1", title: "SE" })], rates: [rate("SE", 5000), rate("SE", 6000, "2027-01")] }));
 
 function ctx(overrides: Partial<ForecastContext> = {}): ForecastContext {
-  return { asOfMonth: "2026-10", config: baseConfig, masters, assignments: [], ...overrides };
+  // 月の稼働時間は既定で 160h 固定（営業日の連動は「月の稼働時間」の describe で見る。§114）
+  return { asOfMonth: "2026-10", config: baseConfig, masters, assignments: [], monthHours: () => 160, ...overrides };
 }
 
 describe("着地見込み (SPEC §10)", () => {

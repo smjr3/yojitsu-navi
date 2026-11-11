@@ -400,7 +400,7 @@ export function forecastSpec({ forecast, contract, unit, config, model = null, s
   const sections = [];
   if (method === "assignment") {
     formula.splice(1, 0, T.breakdown.fcFormulaAssignment);
-    rows.push({ label: T.breakdown.standardHours, value: `${config.standardHoursPerMonth}h` });
+    rows.push({ label: T.breakdown.standardHours, value: fmt(T.breakdown.monthHoursValue, { hours: config.hoursPerBusinessDay }) });
     rows.push({ label: T.breakdown.remainingCost, value: money(b.remainingCost, unit), note: b.noAssignments ? T.breakdown.noAssignments : null });
     if (b.assignmentLines.length) {
       sections.push({
@@ -528,11 +528,14 @@ function contractCell(model, contractId, contractHref, row = null) {
   return contractHref ? html`<a href=${contractHref(contractId)}>${label}</a>` : label;
 }
 
-/** 計画（時間・原価）の根拠: 契約×月ごとに 配分 × 基準時間 × 単価 */
+/** 計画（時間・原価）の根拠: 契約×月ごとに 配分 × 1人月の時間（その月の営業日 × 1 日の時間。§114）× 単価 */
 export function memberPlanSpec({ model, member, months, contractIds = null, includeOutside = false, unit, measure = "cost", subtitle = null, contractHref = null }) {
   unit = memberUnit(unit);
   const rows = memberRows(months, contractIds, includeOutside).filter(({ row }) => row.assignmentCount > 0);
-  const std = months[0]?.standardHoursPerMonth ?? model?.config?.standardHoursPerMonth ?? 0;
+  // 1人月の時間は月ごとに違う（§114）。期間の最小〜最大で出す
+  const monthHours = [...new Set(rows.map(({ mm }) => mm.monthHours).filter((x) => Number.isFinite(x)))].sort((a, b) => a - b);
+  const perDay = model?.config?.hoursPerBusinessDay ?? 8;
+  const hoursRange = monthHours.length === 0 ? EMPTY_VALUE : monthHours.length === 1 ? `${formatHours(monthHours[0])}` : `${formatHours(monthHours[0])}〜${formatHours(monthHours[monthHours.length - 1])}`;
   const hours = rows.reduce((s, { row }) => s + row.plannedHours, 0);
   const cost = rows.reduce((s, { row }) => s + row.plannedCost, 0);
   const missing = rows.some(({ mm }) => mm.rateMissing);
@@ -540,10 +543,10 @@ export function memberPlanSpec({ model, member, months, contractIds = null, incl
   return {
     title: fmt(T.breakdown.memberTitle, { label, name: member.memberName, id: member.memberId }),
     subtitle,
-    formula: [fmt(T.breakdown.planHoursFormula, { hours: std }), T.breakdown.planCostFormula, fmt(T.breakdown.planSumFormula, { label, label2: label })],
+    formula: [fmt(T.breakdown.planHoursFormula, { hours: perDay }), T.breakdown.planCostFormula, fmt(T.breakdown.planSumFormula, { label, label2: label })],
     rows: [
       { label: T.breakdown.assignmentRows, value: fmt(T.breakdown.count, { n: rows.length }) },
-      { label: T.breakdown.baseHours, value: `${std}h` },
+      { label: T.breakdown.baseHours, value: hoursRange },
       { label: T.breakdown.plannedHours, value: formatHours(hours), emphasis: measure === "hours" },
       { label: T.breakdown.plannedCost, value: money(cost, unit), emphasis: measure !== "hours", note: missing ? T.breakdown.rateMissingZero : null },
     ],

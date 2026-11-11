@@ -45,12 +45,12 @@ describe("planTargetAlerts", () => {
     expect(planTargetAlerts(modelOf(), null, all)).toEqual([]);
   });
 
-  it("計画値の着地で残予算率が目標を下回る目標だけ出す（C1: 年度の予算 1,200 万円・計画 6 か月 × 40 万円 → 80%）", () => {
+  it("計画値の着地で残予算率が目標を下回る目標だけ出す（C1: 年度の予算 1,200 万円・計画 0.5 人月 × 10〜3 月の 1,040h × 5,000 円 = 260 万円 → 約 78%）", () => {
     const m = modelOf("project,C1,2027-03,90,,\nproject,C1,2027-09,50,2026-04,\n");
     const r = planTargetAlerts(m, null, all);
     expect(ids(r)).toEqual(["project:C1:2027-03"]);
     expect(r[0]!.evaluation.status).toBe("atRisk");
-    expect(r[0]!.evaluation.rate).toBeCloseTo(0.8, 9);
+    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 2_600_000 / 12_000_000, 9);
     // 月の目安の上限 = 100 万円 × (1 − 90%) = 10 万円 < 計画 40 万円 → 基準月から終了月まで全部
     expect(r[0]!.overMonths).toEqual(FY_REST);
   });
@@ -76,10 +76,10 @@ describe("planTargetAlerts", () => {
     // C1 は 80% なので -10% の目標は達成見込み。人月を増やして着地が予算の 110% を超えると下回る
     expect(planTargetAlerts(modelOf("project,C1,2027-03,-10,,\n"), null, all)).toEqual([]);
     const r = planTargetAlerts(modelOf("project,C1,2027-03,-10,,\n"), inputs("M1,C1,2026-04,2027-09,2.0\nM2,C2,2026-04,2027-09,0.1\n"), all);
-    // 6 か月 × 160 万円 = 960 万円 → 20%。まだ達成見込み
+    // 2.0 人月 × 1,040h × 5,000 円 = 1,040 万円 → 約 13%。まだ達成見込み
     expect(r).toEqual([]);
     const r2 = planTargetAlerts(modelOf("project,C1,2027-03,-10,,\n"), inputs("M1,C1,2026-04,2027-09,3.0\nM2,C2,2026-04,2027-09,0.1\n"), all);
-    // 6 か月 × 240 万円 = 1,440 万円 → -20% < -10%。月の上限は 110 万円
+    // 3.0 人月 × 1,040h × 5,000 円 = 1,560 万円 → -30% < -10%。月の上限は 110 万円
     expect(ids(r2)).toEqual(["project:C1:2027-03"]);
     expect(r2[0]!.overMonths).toEqual(FY_REST);
   });
@@ -90,7 +90,7 @@ describe("planTargetAlerts", () => {
     expect(planTargetAlerts(m, inputs(BASE), all)).toEqual([]);
     const r = planTargetAlerts(m, inputs("M1,C1,2026-04,2027-09,1.0\nM2,C2,2026-04,2027-09,0.1\n"), all);
     expect(ids(r)).toEqual(["project:C1:2027-03"]);
-    expect(r[0]!.evaluation.rate).toBeCloseTo(0.6, 9);
+    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 5_200_000 / 12_000_000, 9);
     // 減らせば消える
     expect(planTargetAlerts(modelOf("project,C1,2027-03,90,,\n"), inputs("M1,C1,2026-04,2027-09,0.1\nM2,C2,2026-04,2027-09,0.1\n"), all)).toEqual([]);
   });
@@ -105,7 +105,7 @@ describe("planTargetAlerts", () => {
   });
 
   it("上位のチームの目標は配下の案件をまとめて判定する（T2 の余裕で T1 の超過を吸収できれば出さない）", () => {
-    // C1 80%（0.5 人月）・C2 は 0.1 人月 × 8,000 円 = 12.8 万円/月 → 約 93.6%。合計 約 86.8%
+    // C1 約 78%（0.5 人月）・C2 は 0.1 人月 × 1,040h × 8,000 円 = 83.2 万円 → 約 93.1%。合計 約 85.7%
     const m = modelOf("team,HQ,2027-03,85,,\nteam,T1,2027-03,85,,\n");
     expect(ids(planTargetAlerts(m, null, all))).toEqual(["team:T1:2027-03"]);
   });
