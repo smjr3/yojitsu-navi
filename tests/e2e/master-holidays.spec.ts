@@ -105,7 +105,7 @@ test("祝日を足すと、リソース計画の 1 人月の時間・変更の�
   const m = /合計 ([\d.]+) 人月（([\d.,]+) 時間）/.exec((await tip.textContent()) ?? "");
   expect(m).not.toBeNull();
   expect(Number(m![1])).toBeGreaterThan(0);
-  expect(Number(m![2].replace(/,/g, ""))).toBeCloseTo(Number(m![1]) * 144, 0);
+  expect(Number(m![2]!.replace(/,/g, ""))).toBeCloseTo(Number(m![1]) * 144, 0);
   // 祝日だけの編集でも変更の影響を出す（計画値の着地が減る）
   const section = page.locator(".yn-me-impact");
   await expect(section.locator('[data-role="impact-rows"] tbody tr').first()).toBeVisible();
