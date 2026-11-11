@@ -1,7 +1,7 @@
 /**
  * 数値の突合: 画面の KPI・一覧の行・案件詳細の月行が、計算コア（aggregate / forecastTotals / ContractMonth）と一致する
  */
-import { test, expect, gotoPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cellText, query } from "./helpers/app.js";
+import { test, expect, gotoPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cellText, query, pickTeam, teamValue } from "./helpers/app.js";
 import {
   UNASSIGNED_TEAM_ID,
   contractResult,
@@ -173,8 +173,8 @@ test.describe("全体サマリー", () => {
   for (const teamId of ["S11", "T111", "D2", UNASSIGNED_TEAM_ID]) {
     test(`チーム ${teamId} で絞ると core の contractsForTeam の集計になる`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
-      await page.locator("#yn-filter-team").selectOption(teamId);
-      await expect(page.locator("#yn-filter-team")).toHaveValue(teamId);
+      await pickTeam(page, teamId);
+      await expect(teamValue(page)).toHaveValue(teamId);
       const { totals } = await expectKpis(page, FY, teamId, DEFAULT_METHOD, "yen");
       const ids = teamContractIds(teamId, FY, model)!;
       expect(totals.contractCount).toBeLessThanOrEqual(ids.length);
@@ -201,7 +201,7 @@ test.describe("全体サマリー", () => {
     await gotoPage(page, url);
     const period = { from: "2026-06", to: "2026-09" };
     await expectKpis(page, period, "T111", "all", "k");
-    await expect(page.locator("#yn-filter-team")).toHaveValue("T111");
+    await expect(teamValue(page)).toHaveValue("T111");
     await expect(page.locator("#yn-method-all")).toBeChecked();
     await expect(page.locator(".yn-seg-btn[data-unit=k]")).toHaveAttribute("aria-pressed", "true");
     await page.reload();

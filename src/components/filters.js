@@ -6,29 +6,32 @@ import { html } from "htl";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, isWorklogStale, monthRange } from "../core/index.js";
 import { METHOD_LABELS, UNITS, dateTimeJst, methodDescription, monthJa } from "./format.js";
 import { periodPresets } from "./state.js";
+import { combobox } from "./combobox.js";
 import { T } from "../i18n/index.js";
 
 function monthOptions(model, selected) {
   return monthRange(model.meta.minMonth, model.meta.maxMonth).map((m) => html`<option value=${m} selected=${m === selected}>${monthJa(m)}</option>`);
 }
 
-function teamOptions(model, selected) {
-  const opts = [html`<option value="" selected=${selected === ""}>${T.filters.allTeams}</option>`];
+/**
+ * 組織の候補（文字で探せる選択欄の候補。§117）。木の順に並べ、段を depth で字下げ。
+ * 上位の組織の名前でも探せる（search）。過去の組織・未設定は最後
+ */
+export function teamComboOptions(model) {
+  const opts = [{ value: "", label: T.filters.allTeams }];
   const seen = new Set();
-  const visit = (id, depth) => {
+  const visit = (id, depth, path) => {
     const node = model.teamTree[id];
-    if (!node) return;
+    if (!node || seen.has(id)) return;
     seen.add(id);
-    opts.push(html`<option value=${id} selected=${selected === id}>${"　".repeat(depth)}${node.name}</option>`);
-    for (const child of node.children) visit(child, depth + 1);
+    opts.push({ value: id, label: node.name, depth, path: path.join(" / "), search: path.join(" ") });
+    for (const child of node.children) visit(child, depth + 1, [...path, node.name]);
   };
-  for (const id of model.rootTeamIds) visit(id, 0);
+  for (const id of model.rootTeamIds) visit(id, 0, []);
   const past = [];
   for (const t of model.teams) if (!seen.has(t.teamId) && !past.some((p) => p.teamId === t.teamId)) past.push(t);
-  if (past.length) {
-    opts.push(html`<optgroup label=${T.filters.pastTeams}>${past.map((t) => html`<option value=${t.teamId} selected=${selected === t.teamId}>${t.name}</option>`)}</optgroup>`);
-  }
-  opts.push(html`<option value=${UNASSIGNED_TEAM_ID} selected=${selected === UNASSIGNED_TEAM_ID}>${UNASSIGNED_TEAM_LABEL}${T.filters.unassignedSuffix}</option>`);
+  for (const t of past) opts.push({ value: t.teamId, label: t.name, sub: T.filters.pastTeams });
+  opts.push({ value: UNASSIGNED_TEAM_ID, label: `${UNASSIGNED_TEAM_LABEL}${T.filters.unassignedSuffix}` });
   return opts;
 }
 
@@ -102,12 +105,13 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("team")) {
-    const sel = html`<select class="yn-select" id="yn-filter-team">${teamOptions(model, state().team)}</select>`;
-    sel.addEventListener("change", () => store.set({ team: sel.value }));
+    // 組織は数十件あるので、文字で探せる選択欄にする（§117）
+    const sel = combobox({ id: "yn-filter-team", name: "__filter_team", options: teamComboOptions(model), value: state().team, emptyLabel: T.filters.allTeams, max: Infinity, selectOnFocus: true, unknownLabel: (v) => v, onChange: (v) => store.set({ team: v }) });
+    sel.classList.add("yn-team-combo");
     form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? T.filters.team}</label>${sel}<small class="yn-filter-help visually-hidden">${T.filters.teamHelp}</small></div>`);
-    sel.title = T.filters.teamHelp;
+    sel.input.title = T.filters.teamHelp;
     syncers.push((s) => {
-      sel.value = s.team;
+      sel.setValue(s.team);
     });
   }
 

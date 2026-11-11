@@ -782,6 +782,7 @@ export function dataTable({
     ? columnsButton({
         id: colPrefsId,
         columns: baseCols.slice(1).map((c) => ({ key: c.key, label: c.label, optional: !!c.optional })),
+        lead: baseCols[0]?.label ?? null,
         onChange: (prefs) => {
           colPrefs = prefs;
           visibleCols = arrange(baseCols);

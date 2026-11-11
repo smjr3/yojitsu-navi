@@ -152,7 +152,9 @@ test("リソース計画: 人の行の「＋ 作業」から「その他」な�
   const next = model.meta.fiscalYearMonths.find((m) => m > ASOF) ?? ASOF;
   await expect(page.locator(`[data-fk="plan:cell:M002:o:その他:${next}"]`)).toHaveText("0.20");
   await expect(page.locator(".yn-me-diff-slot")).toContainText("その他");
-  await expect(page.locator(".yn-me-diff-slot")).toContainText("outside-plans.csv");
+  // 見出しはファイル名でなく画面の名前（§117）。要約は「人・作業・月 前 → 後」
+  await expect(page.locator(".yn-me-diff-slot h3")).not.toContainText("outside-plans.csv");
+  await expect(page.locator(".yn-me-diff-summary")).toContainText("その他");
   // 運用保守以外の「その他」は分類表に無くても検証の警告にならない
   await expect(page.getByText(/種別「その他」/)).toHaveCount(0);
   // 同じ種別をもう一度入れると、重ねずに置き換える（行は 1 つのまま）

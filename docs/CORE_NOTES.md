@@ -130,3 +130,7 @@
 ## 計画なしの人（SPEC §116）— `src/core/plan.ts`
 - `planView` の行に `planNeededMonths`（月ごとに「計画が入っているべきか」）。在籍（不在の行でない）で、所属組織があり、その月に選んだ組織か配下に所属している月だけ true。応援の人（他組織から）・所属組織の無い人（他部署のヘルプ）・入社前（部長など上位の組織の直属は対象）・不在の月は false。
 - 「今月以降」と「月の合計が 0」は画面側（運用保守以外の予定は編集中の値で足すため）。人ごとに、対象の月がすべて 0 のときだけ印を付ける（月ごとの空きで出すと、年度の切り替わりで次の年度の計画がまだ無い全員に付く）。
+
+## 今月の残り時間（SPEC §113）— `src/core/myHours.ts`
+
+`myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。

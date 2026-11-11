@@ -2,7 +2,7 @@
  * チーム詳細（/team?id=）: 数値は core と一致、パンくず、配下チーム、案件一覧（列順）、メンバー別実績、組織の変遷、空状態、遷移、Excel、a11y
  */
 import { createRequire } from "node:module";
-import { test, expect, useDarkTheme, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, waitForPage, kpiValue, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, dialog, dialogRow, teamValue } from "./helpers/app.js";
 import { UNASSIGNED_TEAM_ID, contractsInPeriod, contractRowExpected, fiscalPeriod, forecastFor, formatPercent, getModel, teamContractIds, totalsFor, treeAt, yen } from "./helpers/core.js";
 import { ownTeamScope, teamMemberCosts, teamOrgChanges } from "../../src/core/index.js";
 
@@ -127,7 +127,7 @@ test("案件一覧: 期間内の案件だけ。列順は案件一覧と同じ。
   await page.getByRole("link", { name: "案件一覧で絞り込む" }).click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe("S21");
-  await expect(page.locator("#yn-filter-team")).toHaveValue("S21");
+  await expect(teamValue(page)).toHaveValue("S21");
   expect(new Set(await rowKeys(tableByCaption(page, "案件一覧")))).toEqual(new Set(expected.map((r) => r.contract.contractId)));
 });
 

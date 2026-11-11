@@ -12,7 +12,8 @@ title: メンバー詳細
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { aggregateMembers, isLeftRecord, leftMonthOf, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
+import { myHoursCard } from "./components/my-hours.js";
+import { aggregateMembers, myHoursRows, isLeftRecord, leftMonthOf, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { teamName, treeAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note, withToday } from "./components/layout.js";
@@ -149,6 +150,17 @@ if (vm) {
 
 ```js
 if (store && exists) mountFilterBar(store, model, { show: ["period", "outside", "unit"] });
+```
+
+```js
+// 今月の残り（§113）。期間の絞り込み・運用保守以外のチェックに関係なく、今月（開いた人の今日の月）の計画と実績
+if (vm) {
+  const month = model.meta.asOfMonth;
+  const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
+  const rows = myHoursRows(allMonths.find((mm) => mm.month === month), (id) => contracts.get(id));
+  display(sectionTitle(fmt(T.myHours.sectionTitle, { month: monthJa(month) }), T.myHours.sectionHint));
+  display(myHoursCard(document, { rows }, T.myHours));
+}
 ```
 
 ```js

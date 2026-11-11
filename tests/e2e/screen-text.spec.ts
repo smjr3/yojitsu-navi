@@ -97,7 +97,7 @@ test("説明文の量: 別のタブで開いて下書きの復元を聞かれて
   await pop.getByRole("button", { name: "反映" }).click();
   // 過去の月なら影響を見せてからもう一度押す
   if (await pop.isVisible()) await pop.getByRole("button", { name: /反映/ }).click();
-  await expect(page.locator(".yn-me-diff-table")).toBeVisible();
+  await expect(page.locator(".yn-me-diff-summary")).toBeVisible();
   const other = await context.newPage();
   await gotoPage(other, "/plan?team=S11");
   await expect(other.getByRole("button", { name: "下書きを復元する" })).toBeVisible();

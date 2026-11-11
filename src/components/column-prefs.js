@@ -102,7 +102,7 @@ const COLS_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="
  * columns: 設定できる列 [{key, label}]（先頭の固定列は含めない）、id: 覚える名前、
  * onChange(prefs): 変えたとき（表を描き直す）、anchor(): 描き直しで替わったボタンを探す（既定はこのボタン）
  */
-export function columnsButton({ id, columns, onChange, anchor = null, fk = null }) {
+export function columnsButton({ id, columns, onChange, anchor = null, fk = null, lead = null }) {
   const btn = html`<button type="button" class="yn-btn yn-btn-sm yn-cols-btn" aria-haspopup="dialog" aria-expanded="false" title=${T.table.columnsButton}></button>`;
   btn.innerHTML = `${COLS_ICON}<span class="yn-cols-btn-text"></span>`;
   btn.querySelector(".yn-cols-btn-text").textContent = T.table.columnsButton;
@@ -118,12 +118,12 @@ export function columnsButton({ id, columns, onChange, anchor = null, fk = null 
   btn.addEventListener("click", (ev) => {
     ev.stopPropagation();
     if (open && open.id === id) closeColumnPop();
-    else openPop({ id, columns, onChange, anchor: getAnchor, mark });
+    else openPop({ id, columns, onChange, anchor: getAnchor, mark, lead });
   });
   return btn;
 }
 
-function openPop({ id, columns, onChange, anchor, mark }) {
+function openPop({ id, columns, onChange, anchor, mark, lead = null }) {
   closeColumnPop();
   const pop = html`<div class="yn-filter-pop yn-cols-pop" role="dialog" aria-label=${T.table.columnsTitle}></div>`;
   const list = html`<ul class="yn-cols-list"></ul>`;
@@ -143,7 +143,10 @@ function openPop({ id, columns, onChange, anchor, mark }) {
     const ordered = orderColumns(columns, prefs);
     const hidden = hiddenKeys(columns, prefs);
     const shownCount = ordered.filter((c) => !hidden.has(c.key)).length;
+    // 先頭の固定列も一覧に出す（固定と分かるように）。選べる列には「別の列」の印（先頭の列の中に同じ情報があっても別に出す列。§115）
+    const leadItem = lead ? html`<li class="yn-cols-item is-fixed"><label class="yn-filter-item"><input type="checkbox" checked disabled><span class="yn-filter-item-text">${lead}<span class="yn-cols-tag">${T.table.columnsFixed}</span></span></label></li>` : null;
     list.replaceChildren(
+      ...(leadItem ? [leadItem] : []),
       ...ordered.map((c, i) => {
         const on = !hidden.has(c.key);
         const box = html`<input type="checkbox" checked=${on}>`;
@@ -174,7 +177,7 @@ function openPop({ id, columns, onChange, anchor, mark }) {
           });
           return b;
         };
-        const li = html`<li class=${`yn-cols-item${on ? "" : " is-off"}`} data-col=${String(i)} data-key=${c.key}><label class="yn-filter-item">${box}<span class="yn-filter-item-text">${c.label}</span></label>${move(-1, "↑")}${move(1, "↓")}</li>`;
+        const li = html`<li class=${`yn-cols-item${on ? "" : " is-off"}`} data-col=${String(i)} data-key=${c.key}><label class="yn-filter-item">${box}<span class="yn-filter-item-text">${c.label}${c.optional && lead ? html`<span class="yn-cols-tag">${T.table.columnsExtra}</span>` : null}</span></label>${move(-1, "↑")}${move(1, "↓")}</li>`;
         return li;
       }),
     );

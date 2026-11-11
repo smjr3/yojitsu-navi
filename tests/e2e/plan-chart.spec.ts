@@ -21,7 +21,7 @@ async function overCountsFromTable(page: Page): Promise<number[]> {
 }
 
 async function overLabels(page: Page): Promise<string[]> {
-  return chart(page).locator("svg text").evaluateAll((els) => els.map((e) => e.textContent ?? "").filter((t) => t.startsWith("!")));
+  return chart(page).locator("svg text").evaluateAll((els) => els.map((e) => e.textContent ?? "").filter((t) => /^1\.0超 \d+人$|^\d+人$/.test(t)));
 }
 
 test("月別の合計: 表の上に出て、1.0 超の人数が表の黄色のセルの数と一致する", { tag: "@smoke" }, async ({ page }) => {
@@ -31,7 +31,7 @@ test("月別の合計: 表の上に出て、1.0 超の人数が表の黄色の�
   await expect(chart(page).locator(".yn-legend")).toContainText("人数 × 1.0");
   const counts = await overCountsFromTable(page);
   expect(counts.some((n) => n > 0)).toBe(true);
-  expect(await overLabels(page)).toEqual(counts.filter((n) => n > 0).map((n) => `!${n}人`));
+  expect(await overLabels(page)).toEqual(counts.filter((n) => n > 0).map((n) => `1.0超 ${n}人`));
   // グラフは表より上
   const g = await chart(page).boundingBox();
   const t = await page.locator(".yn-me-plan-table").boundingBox();
@@ -44,7 +44,7 @@ test("月別の合計: 絞り込むとグラフも絞り込んだ人だけ。該
   await search.fill("山田 智也");
   await expect(page.locator("tr.yn-me-plan-row")).toHaveCount(1);
   const counts = await overCountsFromTable(page);
-  await expect.poll(() => overLabels(page)).toEqual(counts.filter((n) => n > 0).map((n) => `!${n}人`));
+  await expect.poll(() => overLabels(page)).toEqual(counts.filter((n) => n > 0).map((n) => `1.0超 ${n}人`));
   await search.fill("該当しない名前ZZZ");
   await expect(page.locator("tr.yn-me-plan-row")).toHaveCount(0);
   await expect(chart(page)).toHaveCount(0);
@@ -73,7 +73,7 @@ for (const [width, dark] of [[390, false], [768, true], [1280, true]] as const) 
     expect(s.x + s.width).toBeLessThanOrEqual(f.x + f.width + 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const boxes = await fig.locator("svg text").evaluateAll((els) =>
-      els.filter((e) => (e.textContent ?? "").startsWith("!")).map((e) => {
+      els.filter((e) => /^1\.0超 \d+人$|^\d+人$/.test(e.textContent ?? "")).map((e) => {
         const r = e.getBoundingClientRect();
         return { l: r.left, r: r.right };
       }),

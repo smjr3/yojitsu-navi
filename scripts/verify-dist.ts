@@ -129,6 +129,16 @@ export function verifyDist(rootDir: string, fp: Fingerprint, distDir: string = j
     if (v.notFound) problems.push(`${rel(p)} は契約 ${id} を見つけられませんでした`);
   }
   for (const name of actual) if (!expected.has(name)) problems.push(`dist/data/worklogs/${name} は contracts.csv に無い契約の明細です`);
+  // ヘッダー右上の「今月の残り」（§113）。全ページの head のスクリプトが固定のパスで読む
+  const myMonth = join(distDir, "data", "my-month.json");
+  if (!existsSync(myMonth)) problems.push("dist/data/my-month.json がありません（observablehq.config.js の dynamicPaths）");
+  else {
+    const v = read(myMonth);
+    if (v !== undefined) {
+      checkStamp(myMonth, v, true);
+      checkRecorded(myMonth, "data/my-month.json");
+    }
+  }
   return problems;
 }
 

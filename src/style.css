@@ -560,6 +560,15 @@ body {
   .yn-filterbar-slot .yn-filter {
     flex: none;
   }
+  /* 組織の候補は横スクロールの行で切れないよう画面に固定（top は開くときに欄の下に合わせる。§117） */
+  .yn-filterbar-slot .yn-team-combo .yn-combo-list {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    max-height: 50vh;
+  }
 }
 /* Framework の code・pre の文字（既定 14px）も文字の大きさに合わせる */
 pre,
@@ -1568,6 +1577,42 @@ h3 {
 @media (min-width: 1200px) {
   .yn-cell-2line {
     max-width: min(20vw, 320px);
+  }
+}
+/* PC 幅では名前列（先頭の固定列）に最低幅を持たせ、長い名前は 2 行まで折り返す。
+ * 表の自動レイアウトは省略できる列を最小まで縮めるので、最低幅が無いと数値列が余白だらけのまま名前だけ切れる（§115） */
+@media (min-width: 1024px) {
+  .yn-table .yn-primary-cell {
+    max-width: min(22vw, 320px);
+  }
+  .yn-table .yn-primary-cell:has(a) {
+    min-width: min(14vw, 175px);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .yn-task-name {
+    min-width: min(16em, 30vw);
+  }
+  .yn-table .yn-primary-cell:has(.yn-cell-2line) {
+    min-width: min(16vw, 300px);
+    max-width: min(28vw, 400px);
+  }
+  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする */
+  .yn-table .yn-primary-cell .yn-cell-2line {
+    max-width: 17vw;
+    display: flex;
+  }
+  .yn-table .yn-primary-cell .yn-cell-main {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}
+/* 1024px 前後は列が多い表（メンバー一覧など）が収まる幅を優先し、それより広い画面で名前の列を広げる */
+@media (min-width: 1200px) {
+  .yn-table .yn-primary-cell .yn-cell-2line {
+    max-width: min(26vw, 370px);
   }
 }
 /* 本文の最大幅を外したので（§88）、さらに広い画面では名前列の上限も広げて省略を減らす */
@@ -2938,8 +2983,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-target-mark {
   display: inline-block;
   margin-left: 2px;
-  min-width: 14px;
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: 7px;
   background: var(--yn-danger);
   color: #fff;
@@ -3429,6 +3473,10 @@ html:has(dialog.yn-dialog[open]) {
   padding: 5px 10px;
   cursor: pointer;
 }
+/* 木の段（組織の選択。§117） */
+.yn-combo-opt[style*="--depth"] {
+  padding-left: calc(10px + var(--depth) * 1.2em);
+}
 .yn-combo-opt.is-active {
   background: var(--yn-accent-bg);
   box-shadow: inset 3px 0 0 var(--yn-focus);
@@ -3831,6 +3879,225 @@ html:has(dialog.yn-dialog[open]) {
     margin-left: 0;
     padding-left: 0;
     border-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 今月の残り時間（§113）: ヘッダー右上のボタンと吹き出し、メンバー詳細のカード
+ * ------------------------------------------------------------------------- */
+.yn-my-hours {
+  position: relative;
+  display: inline-flex;
+}
+.yn-my-hours-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  box-sizing: border-box;
+  height: var(--yn-topbar-ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: calc(var(--yn-topbar-ctl-h) / 2);
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  font: inherit;
+  font-size: calc(13px * var(--yn-fs));
+  line-height: calc(var(--yn-topbar-ctl-h) - 2px);
+  white-space: nowrap;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-btn b {
+  font-size: calc(15px * var(--yn-fs));
+}
+.yn-my-hours-btn:hover {
+  background: var(--yn-wash);
+}
+.yn-my-hours-btn[aria-expanded="true"] {
+  border-color: var(--yn-focus);
+}
+.yn-my-hours-btn.is-over {
+  border-color: var(--yn-danger);
+  background: var(--yn-danger-bg);
+  color: var(--yn-danger-text);
+}
+/* 「今月の残り」は右上に置くので、ヘッダーの「作業実績の取得」は外す（各画面の見出しの下にも出ている） */
+.yn-topbar.has-my-hours .yn-filter-fetched {
+  display: none;
+}
+.yn-my-hours-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  text-align: left;
+  white-space: normal;
+}
+.yn-my-hours-pop[hidden] {
+  display: none;
+}
+.yn-my-hours-pop .yn-my-hours-card {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.yn-my-hours-pop .yn-my-hours-table-wrap {
+  margin-top: 12px;
+}
+.yn-my-hours-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 28px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--yn-hairline);
+  border-left: 4px solid var(--yn-accent);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+}
+.yn-my-hours-main {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+.yn-my-hours-who {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-title {
+  color: var(--yn-text-1);
+  font-weight: 600;
+}
+.yn-my-hours-big {
+  margin: 2px 0 6px;
+  font-size: calc(26px * var(--yn-fs-big));
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-big.is-over,
+.yn-my-hours-table .is-over {
+  color: var(--yn-danger-text);
+}
+.yn-my-hours-table .is-over {
+  font-weight: 600;
+}
+.yn-my-hours-bar {
+  display: flex;
+  width: 200px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--yn-wash-strong);
+}
+.yn-my-hours-bar i {
+  display: block;
+  height: 100%;
+}
+.yn-my-hours-bar-used {
+  background: var(--yn-series-cost);
+}
+/* 計画を超えた分。計画の分との境目が分かるよう 2px 空ける */
+.yn-my-hours-bar-over {
+  margin-left: 2px;
+  background: var(--yn-danger);
+}
+.yn-my-hours-sub {
+  margin-top: 6px;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-table-wrap {
+  flex: 1 1 320px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.yn-my-hours-table {
+  width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-table th,
+.yn-my-hours-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--yn-hairline);
+  text-align: left;
+  vertical-align: top;
+}
+.yn-my-hours-table th {
+  color: var(--yn-text-muted);
+  font-weight: 500;
+}
+.yn-my-hours-table th:first-child,
+.yn-my-hours-table td:first-child {
+  padding-left: 0;
+}
+.yn-my-hours-table .is-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* 案件名は長いので折り返す（他の列を潰さない）。下に顧客名を小さく */
+.yn-my-hours-project {
+  overflow-wrap: anywhere;
+}
+.yn-my-hours-project-name,
+.yn-my-hours-project-sub {
+  display: block;
+}
+.yn-my-hours-project-sub {
+  color: var(--yn-text-muted);
+  font-size: calc(11px * var(--yn-fs));
+  line-height: 1.3;
+}
+.yn-my-hours-empty {
+  margin: 4px 0 0;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-link {
+  align-self: flex-end;
+  margin-left: auto;
+  font-size: calc(13px * var(--yn-fs));
+  white-space: nowrap;
+}
+.yn-my-hours-pop .yn-my-hours-link {
+  display: inline-block;
+  margin-top: 10px;
+}
+@media (max-width: 639px) {
+  .yn-my-hours-main {
+    flex-basis: 100%;
+  }
+  .yn-my-hours-bar {
+    width: 100%;
+  }
+  .yn-my-hours-btn {
+    padding: 0 10px;
+  }
+  /* スマホは吹き出しを画面の幅いっぱいに（右端のボタンからはみ出さない）。縦の位置は開くときにボタンの下に合わせる */
+  .yn-my-hours-pop {
+    position: fixed;
+    top: var(--yn-my-hours-top, 96px);
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100vh - var(--yn-my-hours-top, 96px) - 16px);
   }
 }
 
@@ -4392,6 +4659,19 @@ html:has(dialog.yn-dialog[open]) {
   opacity: 0.55;
   cursor: pointer;
 }
+/* 見た目の幅は変えずに、押せる範囲を上下左右に広げる（小さくて押しにくい。§115） */
+.yn-filter-btn {
+  position: relative;
+}
+.yn-filter-btn::after {
+  content: "";
+  position: absolute;
+  inset: -8px -5px;
+}
+/* 右端の列は表の外へはみ出して横スクロールを生まないように、右へは広げない */
+.yn-table th:last-child .yn-filter-btn::after {
+  right: 0;
+}
 .yn-filter-btn:hover,
 .yn-filter-btn[aria-expanded="true"] {
   opacity: 1;
@@ -4926,10 +5206,28 @@ a.yn-org-person:hover {
 .yn-cols-item.is-off .yn-filter-item-text {
   color: var(--yn-text-muted);
 }
+.yn-cols-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--yn-wash-strong);
+  color: var(--yn-text-2);
+  font-size: calc(10.5px * var(--yn-fs));
+}
+.yn-cols-item.is-fixed .yn-filter-item-text {
+  color: var(--yn-text-2);
+}
 .yn-cols-move {
   flex: none;
   min-width: 28px;
   padding-inline: 4px;
+}
+/* データ確認の警告・検証の内容は省略せず折り返す（§115） */
+.yn-cell-msg {
+  display: inline-block;
+  min-width: min(28em, 60vw);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* 文字の列（案件名・作業名など）は他の列を潰さないよう上限で「…」（全文は title） */
 .yn-table td.yn-cell-clip:not(.is-col-sized) {
@@ -5050,4 +5348,88 @@ a.yn-org-person:hover {
 .yn-me-plan-sub.is-empty > td:first-child,
 .yn-me-plan-hist > td {
   position: relative;
+}
+
+/* リソース計画: 操作の列（＋ 作業・履歴）は右端に貼り付け、文字を大きくして表が横にはみ出しても隠れないようにする（§115）。
+ * スマホ幅は左の名前の列と合わせると月のセルが隠れるので貼り付けない */
+@media (min-width: 768px) {
+  .yn-me-plan-table thead th:last-child,
+  .yn-me-plan-table td.yn-me-actions-cell {
+    position: sticky;
+    right: 0;
+    box-shadow: inset 1px 0 0 var(--yn-hairline);
+  }
+  .yn-me-plan-table thead th:last-child {
+    z-index: 3;
+    background: var(--yn-card);
+  }
+  .yn-me-plan-table td.yn-me-actions-cell {
+    z-index: 1;
+  }
+  .yn-me-plan-table tbody tr:not(.yn-me-plan-sub) > td.yn-me-actions-cell {
+    background: var(--yn-card);
+  }
+}
+
+/* 入力が足りない欄に印（§115） */
+.yn-me-dialog :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--yn-danger);
+  box-shadow: 0 0 0 1px var(--yn-danger);
+}
+
+/* 組織の選択（文字で探せる選択欄。§117）。候補は欄より広く、木が見えるように縦も長め */
+.yn-team-combo .yn-combo-list {
+  right: auto;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: min(60vh, 420px);
+}
+.yn-filterbar-slot .yn-filter-team .yn-team-combo {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 240px;
+}
+.yn-filterbar-slot .yn-team-combo .yn-combo-input {
+  min-height: 32px;
+}
+.yn-me-plan-toolbar .yn-team-combo {
+  width: min(100%, 22em);
+}
+@media (min-width: 1280px) and (max-width: 1365px) {
+  .yn-filterbar-slot .yn-filter-team .yn-team-combo {
+    max-width: 160px;
+  }
+}
+
+/* 保存前の変更内容の要約（人 × 作業 × 月。§117） */
+.yn-me-diff-summary {
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-me-diff-summary li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--yn-hairline);
+}
+.yn-me-diff-who {
+  font-weight: 600;
+}
+.yn-me-diff-what {
+  color: var(--yn-text-2);
+}
+.yn-me-diff-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+.yn-me-diff-rows > summary {
+  cursor: pointer;
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+  margin: 4px 0;
 }
