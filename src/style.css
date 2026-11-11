@@ -1573,7 +1573,7 @@ h3 {
     max-width: min(22vw, 320px);
   }
   .yn-table .yn-primary-cell:has(a) {
-    min-width: min(15vw, 190px);
+    min-width: min(14vw, 175px);
     white-space: normal;
     overflow-wrap: anywhere;
   }
@@ -5311,22 +5311,25 @@ a.yn-org-person:hover {
   position: relative;
 }
 
-/* リソース計画: 操作の列（＋ 作業・履歴）は右端に貼り付け、文字を大きくして表が横にはみ出しても隠れないようにする（§115） */
-.yn-me-plan-table thead th:last-child,
-.yn-me-plan-table td.yn-me-actions-cell {
-  position: sticky;
-  right: 0;
-  box-shadow: inset 1px 0 0 var(--yn-hairline);
-}
-.yn-me-plan-table thead th:last-child {
-  z-index: 3;
-  background: var(--yn-card);
-}
-.yn-me-plan-table td.yn-me-actions-cell {
-  z-index: 1;
-}
-.yn-me-plan-table tbody tr:not(.yn-me-plan-sub) > td.yn-me-actions-cell {
-  background: var(--yn-card);
+/* リソース計画: 操作の列（＋ 作業・履歴）は右端に貼り付け、文字を大きくして表が横にはみ出しても隠れないようにする（§115）。
+ * スマホ幅は左の名前の列と合わせると月のセルが隠れるので貼り付けない */
+@media (min-width: 768px) {
+  .yn-me-plan-table thead th:last-child,
+  .yn-me-plan-table td.yn-me-actions-cell {
+    position: sticky;
+    right: 0;
+    box-shadow: inset 1px 0 0 var(--yn-hairline);
+  }
+  .yn-me-plan-table thead th:last-child {
+    z-index: 3;
+    background: var(--yn-card);
+  }
+  .yn-me-plan-table td.yn-me-actions-cell {
+    z-index: 1;
+  }
+  .yn-me-plan-table tbody tr:not(.yn-me-plan-sub) > td.yn-me-actions-cell {
+    background: var(--yn-card);
+  }
 }
 
 /* 入力が足りない欄に印（§115） */
