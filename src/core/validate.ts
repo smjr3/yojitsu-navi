@@ -4,6 +4,7 @@
  * error  = CI で止める（契約・マッピング・アサイン・チーム・メンバー・単価・形式）
  * warning = 止めずに表示（未紐付け工数、単価なし、未知メンバーの工数）
  */
+import { duplicateGitlabUsernames } from "./myHours.js";
 import { contractInvalidReason } from "./budget.js";
 import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
 import { mapWorklogs } from "./mapping.js";
@@ -288,6 +289,10 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
     }
     if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
   });
+  // 同じ GitLab のユーザー名が複数の人に付いている（§113）。ヘッダーの「今月の残り」でどの人か決められないので出さない
+  for (const d of duplicateGitlabUsernames(dataset.members)) {
+    push({ severity: "warning", code: "GITLAB_USERNAME_DUPLICATE", message: fmt(T.checks.gitlabUsernameDuplicate, { file, username: d.username, members: d.memberIds.join("、") }), file, ref: { username: d.username, members: d.memberIds.join(",") } });
+  }
 }
 
 /** 不在した月より後に残っているアサイン（§35。終了月の直し忘れ。不在した月は計画があれば稼働とみなす）。計画の人月・着地見込みに入ってしまうので警告。メンバーごとにまとめる */

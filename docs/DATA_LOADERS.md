@@ -33,6 +33,7 @@
 - ローダの出力の記録（`src/.observablehq/cache/.yojitsu-outputs.json`）が今回の指紋のもので、`dist/` の各出力の中身（sha256）が記録と一致する
 - 必須の出力（`model`・`member-months`・`masters`・`dataset-issues`・`daily`）がちょうど 1 つずつある
 - `model` の契約数が `contracts.csv` と一致し、作業ログ（`dist/data/worklogs/<契約ID>.json`）が契約ごとに 1 つずつある
+- ヘッダー右上の「今月の残り」のデータ `dist/data/my-month.json`（`src/data/my-month.json.ts`。全ページの head のスクリプトがハッシュの無い固定のパスで読むので `dynamicPaths` に入れる。SPEC §113）があり、指紋・記録と一致する
 - ビルド中に入力が変わっていない（ビルド後に指紋を取り直して比べる）
 
 単体でも `npm run verify:dist` で実行できます。キャッシュを使ったビルドが検証で落ちたら、`npm run build` は 1 回だけフルビルドでやり直します（それでも落ちたら `dist/` を消して失敗）。

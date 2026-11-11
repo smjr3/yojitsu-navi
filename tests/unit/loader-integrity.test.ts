@@ -287,6 +287,7 @@ describe("ビルド結果の検証（verifyDist）", () => {
     const outputs: Record<string, string> = {};
     for (const n of readdirSync(join(d, "_file", "data"))) outputs[`data/${n.replace(/\.[0-9a-f]{8}\.json$/, ".json")}`] = sha(join(d, "_file", "data", n));
     for (const n of readdirSync(join(d, "data", "worklogs"))) outputs[`data/worklogs/${n}`] = sha(join(d, "data", "worklogs", n));
+    if (existsSync(join(d, "data", "my-month.json"))) outputs["data/my-month.json"] = sha(join(d, "data", "my-month.json"));
     return { version: 1, hash: HASH, codeHash: FP.codeHash, asOf: FP.asOf, outputs, stats: { aggregates: 6, details: ids.length, written: 0, detailsWritten: 0, unchanged: 0, removed: 0 } };
   }
   const verify = (m: OutputManifest | null = manifest) => verifyDist(dir, FP, join(dir, "dist"), m);
@@ -303,8 +304,15 @@ describe("ビルド結果の検証（verifyDist）", () => {
     writeFileSync(join(d, "_file", "data", "model.0123abcd.json"), JSON.stringify({ meta: { asOf: "2026-10-27" }, contracts: ids.map((id) => ({ id })), _build: stamp }));
     for (const n of ["member-months", "masters", "dataset-issues", "work-hours", "daily"]) writeFileSync(join(d, "_file", "data", `${n}.0123abcd.json`), JSON.stringify({ _build: stamp }));
     for (const id of ids) writeFileSync(join(d, "data", "worklogs", `${worklogKey(id)}.json`), JSON.stringify({ contractId: id, months: [], _build: detailStamp }));
+    writeFileSync(join(d, "data", "my-month.json"), JSON.stringify({ users: {}, members: {}, _build: stamp }));
     manifest = record();
   }
+
+  it("ヘッダー右上の「今月の残り」のデータ（固定のパス）が無ければ失敗（§113）", () => {
+    seedRoot();
+    rmSync(join(dir, "dist", "data", "my-month.json"));
+    expect(verify().some((p) => p.includes("dist/data/my-month.json がありません"))).toBe(true);
+  });
 
   it("正しい dist は問題なし", () => {
     seedRoot();

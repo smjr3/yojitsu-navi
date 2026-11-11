@@ -331,6 +331,7 @@ export default {
     assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から不在ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
     worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から不在ですが、翌月以降の作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
+    gitlabUsernameDuplicate: "{file}: GitLab ユーザー名 {username} が複数のメンバー（{members}）に付いています。ヘッダーの「今月の残り」はこの人たちに出ません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
     rateNotNumber: "{file} {row} 行目: {key} の hourly_rate が数値ではありません",
@@ -1230,6 +1231,26 @@ export default {
     gapToPlan: "リソース計画へ",
   },
 
+  // ── 今月の残り時間（§113。ヘッダー右上の吹き出しとメンバー詳細）──────────
+  myHours: {
+    title: "自分の今月",
+    chip: "今月の残り",
+    chipOver: "今月の超過",
+    remaining: "残り {hours}",
+    over: "超過 {hours}",
+    overCell: "超過 {hours}",
+    sub: "計画 {planned} ・ 実績 {actual}",
+    caption: "案件ごとの今月の計画と実績",
+    colProject: "案件",
+    colPlanned: "計画",
+    colActual: "実績",
+    colRemaining: "残り",
+    toMember: "メンバー詳細へ ›",
+    noPlan: "今月の計画も実績もありません",
+    sectionTitle: "今月の残り（{month}）",
+    sectionHint: "リソース計画の今月の時間（運用保守以外の予定を含む）から、今月の作業実績（速報）を引いた時間です。GitLab のトークンを登録し、メンバーマスタに GitLab ユーザー名がある人は、右上にも自分の残りが出ます。",
+  },
+
   // ── メンバー詳細 ──────────────────────────────────
   member: {
     factsLabel: "メンバーの基本情報",
@@ -1460,6 +1481,7 @@ export default {
     colTeamId: "所属チーム",
     colEffectiveFrom: "適用開始月",
     colStatus: "在籍",
+    colGitlabUsername: "GitLab ユーザー名",
     rates: "単価",
     colRateKey: "役職名 または メンバー",
     // アサインのメンバー欄（ID ではなく名前で選ぶ。§31）

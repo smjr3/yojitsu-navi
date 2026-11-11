@@ -126,3 +126,7 @@
 ## 目標の警告（SPEC §110）— `src/core/planTargets.ts`
 
 `planTargetAlerts(model, after, { teamId, tree })` は、組織に関わる目標（終了月が基準月以降）を先に絞り、`after`（編集後のマスタとアサイン）があればその目標に入る案件だけ `assignmentPlanOf` で計画を作り直してから `evaluateTarget(…, "assignment")` を呼ぶ（判定は §63 と共有、重複実装なし）。未達見込みだけ返す。超える月は計画の明細（`assignmentPlan.lines`）の月ごとの額と、`ContractMonth.budget` ×（1 − 目標）を比べる。`after = null` なら Model の計画のまま（編集が無いときは作り直さない）。
+
+## 今月の残り時間（SPEC §113）— `src/core/myHours.ts`
+
+`myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。
