@@ -123,11 +123,29 @@ describe("buildMyHoursPayload", () => {
       memberMonths: [mm("M1", "2026-10", [line("C1", 80, 10)]), mm("M1", "2026-11", [line("C1", 80, 0)]), mm("M1", "2026-12", [line("C1", 80, 0)]), mm("M2", "2026-10", [line("C1", 8, 0)])],
       projectName: (id) => names[id],
     });
-    expect(p.users).toEqual({ taro: "M1" });
+    expect(p.users).toEqual({ "2026-10": { taro: "M1" }, "2026-11": { taro: "M1" } });
     expect(Object.keys(p.members)).toEqual(["M1"]);
     expect(p.members.M1!.name).toBe("太郎");
     expect(Object.keys(p.members.M1!.months)).toEqual(["2026-10", "2026-11"]);
     expect(p.members.M1!.months["2026-10"]).toEqual([{ label: "勘定系保守", contractId: "C1", plannedHours: 80, actualHours: 10 }]);
+  });
+
+  it("ユーザー名の付け替えは月ごとに引く（翌月から別の人に付けたら翌月はその人）", () => {
+    const p = buildMyHoursPayload({
+      asOf: "2026-10-27",
+      asOfFixed: false,
+      asOfMonth: "2026-10",
+      members: [
+        member({ memberId: "M1", name: "太郎", effectiveFrom: "2026-04", gitlabUsername: "taro" }),
+        member({ memberId: "M1", name: "太郎", effectiveFrom: "2026-11" }),
+        member({ memberId: "M2", name: "次郎", effectiveFrom: "2026-04" }),
+        member({ memberId: "M2", name: "次郎", effectiveFrom: "2026-11", gitlabUsername: "taro" }),
+      ],
+      memberMonths: [],
+      projectName: () => undefined,
+    });
+    expect(p.users).toEqual({ "2026-10": { taro: "M1" }, "2026-11": { taro: "M2" } });
+    expect(Object.keys(p.members)).toEqual(["M1", "M2"]);
   });
 });
 
@@ -157,7 +175,7 @@ describe("ヘッダーのスクリプト（runMyHours）", () => {
   const payload = {
     asOf: "2026-10-27",
     asOfFixed: true,
-    users: { taro: "M1" },
+    users: { "2026-10": { taro: "M1" } } as Record<string, Record<string, string>>,
     members: { M1: { name: "太郎", months: { "2026-10": [{ label: "勘定系保守", contractId: "C1", plannedHours: 80, actualHours: 70 }] } } },
   };
   const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -203,6 +221,57 @@ describe("ヘッダーのスクリプト（runMyHours）", () => {
     expect(again.some((u) => u.endsWith("/user"))).toBe(false);
     expect(document.querySelector(".yn-my-hours-btn")).not.toBeNull();
   });
+  it("設定画面でトークンを消す・別の人のトークンにすると、出し直す", async () => {
+    // 他のテストの登録が残らないよう、別のウィンドウで動かす
+    const store = () => {
+      const m = new Map<string, string>();
+      return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k), clear: () => m.clear() };
+    };
+    const doc = document.implementation.createHTMLDocument("");
+    doc.body.innerHTML = `<div class="yn-topbar"><nav class="yn-tools"></nav></div>`;
+    Object.defineProperty(doc, "readyState", { value: "complete" });
+    let who = "Taro";
+    const w = Object.assign(new EventTarget(), {
+      document: doc,
+      sessionStorage: store(),
+      localStorage: store(),
+      URL,
+      CustomEvent,
+      location: { href: "https://example.invalid/" },
+      fetch: async (url: string) =>
+        url.endsWith("/user") ? { ok: true, status: 200, json: async () => ({ username: who }) } : { ok: true, status: 200, json: async () => payload },
+    });
+    w.sessionStorage.setItem(TOKEN_STORAGE_KEY, "glpat-aaaa");
+    runMyHours(cfg, w, myHoursCard);
+    await tick();
+    await tick();
+    const count = () => w.document.querySelectorAll(".yn-my-hours").length;
+    expect(count()).toBe(1);
+    // 消す（clearToken は yn-mr-count に null を送る）
+    w.sessionStorage.clear();
+    w.dispatchEvent(new w.CustomEvent("yn-mr-count", { detail: null }));
+    await tick();
+    expect(count()).toBe(0);
+    expect(w.document.querySelector(".yn-topbar")?.classList.contains("has-my-hours")).toBe(false);
+    // 別の人のトークン（マスタに無い人）→ 出さない
+    who = "someone";
+    w.sessionStorage.setItem(TOKEN_STORAGE_KEY, "glpat-bbbb");
+    w.dispatchEvent(new w.CustomEvent("yn-mr-count", { detail: undefined }));
+    await tick();
+    await tick();
+    expect(count()).toBe(0);
+    // 本人のトークンに戻す → 出る（重ならない）。件数の通知（数）だけでは出し直さない
+    who = "Taro";
+    w.localStorage.clear();
+    w.sessionStorage.setItem(TOKEN_STORAGE_KEY, "glpat-cccc");
+    w.dispatchEvent(new w.CustomEvent("yn-mr-count", { detail: undefined }));
+    await tick();
+    await tick();
+    w.dispatchEvent(new w.CustomEvent("yn-mr-count", { detail: 3 }));
+    await tick();
+    await tick();
+    expect(count()).toBe(1);
+  });
   it("トークンが無い・マスタにユーザー名が無い・接続先が無いときは何も出さない", async () => {
     setup(null, "taro");
     runMyHours(cfg, window, myHoursCard);
@@ -222,13 +291,13 @@ describe("ヘッダーのスクリプト（runMyHours）", () => {
   it("デモはデモの利用者として出す（GitLab を呼ばない）", async () => {
     expect(DEMO_USERNAME).toBe(DEMO_USER.username);
     const calls = setup("demo", null);
-    payload.users = { [DEMO_USERNAME]: "M1" } as never;
+    payload.users = { "2026-10": { [DEMO_USERNAME]: "M1" } };
     runMyHours(myHoursConfig({ mode: "demo" }, T.myHours), window, myHoursCard);
     await tick();
     await tick();
     expect(calls.some((u) => u.endsWith("/user"))).toBe(false);
     expect(document.querySelector(".yn-my-hours-btn")).not.toBeNull();
-    payload.users = { taro: "M1" };
+    payload.users = { "2026-10": { taro: "M1" } };
   });
   it("埋め込みスクリプトに </script> を含めない", () => {
     expect(myHoursScript({ ...cfg, labels: { ...T.myHours, title: "</script>" } })).not.toContain("</script>");

@@ -24,8 +24,8 @@ export interface MyHoursRow {
 export interface MyHoursPayload {
   asOf: string;
   asOfFixed: boolean;
-  /** GitLab のユーザー名（normalizeGitlabUsername 済み）→ 社員番号 */
-  users: Record<string, string>;
+  /** 月 → GitLab のユーザー名（normalizeGitlabUsername 済み）→ 社員番号。月ごとの有効な行（§5）で引く（月が替わってユーザー名が付け替わっても合わせる） */
+  users: Record<YearMonth, Record<string, string>>;
   /** 社員番号 → 名前と月ごとの行（ビルドの基準月と翌月。翌月は月が替わってから次の取り込みまでの間に使う） */
   members: Record<string, { name: string; months: Record<YearMonth, MyHoursRow[]> }>;
 }
@@ -125,10 +125,15 @@ export function buildMyHoursPayload(input: {
   memberMonths: readonly MemberMonth[];
   projectName: (contractId: string) => string | undefined;
 }): MyHoursPayload {
-  const users = gitlabUsernameIndex(input.members, input.asOfMonth);
-  const current = currentRecords(input.members, input.asOfMonth);
-  const ids = new Set(users.values());
   const months = [input.asOfMonth, addMonths(input.asOfMonth, 1)];
+  const users: MyHoursPayload["users"] = {};
+  const ids = new Set<string>();
+  for (const month of months) {
+    const index = gitlabUsernameIndex(input.members, month);
+    users[month] = Object.fromEntries(index);
+    for (const id of index.values()) ids.add(id);
+  }
+  const current = currentRecords(input.members, input.asOfMonth);
   const members: MyHoursPayload["members"] = {};
   for (const id of [...ids].sort()) {
     const name = current.get(id)?.name || id;
@@ -139,5 +144,5 @@ export function buildMyHoursPayload(input: {
     }
     members[id] = { name, months: byMonth };
   }
-  return { asOf: input.asOf, asOfFixed: input.asOfFixed, users: Object.fromEntries(users), members };
+  return { asOf: input.asOf, asOfFixed: input.asOfFixed, users, members };
 }

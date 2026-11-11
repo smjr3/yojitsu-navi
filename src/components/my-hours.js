@@ -119,21 +119,26 @@ export function runMyHours(cfg, w, card) {
       /* 無視 */
     }
   }
-  var token = sget("sessionStorage", KEY_TOKEN) || sget("localStorage", KEY_TOKEN) || "";
-  if (!cfg.enabled || !token || typeof w.fetch !== "function") return;
-  // トークンが替わったら読み直す（トークンそのものは覚えない。末尾と長さだけで見分ける）
-  var tokenMark = token.length + ":" + token.slice(-4);
+  if (!cfg.enabled || typeof w.fetch !== "function") return;
+  function readToken() {
+    return sget("sessionStorage", KEY_TOKEN) || sget("localStorage", KEY_TOKEN) || "";
+  }
+  // トークンそのものは覚えない。末尾と長さだけで見分ける（替わったらユーザー名を読み直す）
+  function markOf(t) {
+    return t ? t.length + ":" + t.slice(-4) : "";
+  }
   function norm(u) {
     return String(u || "")
       .trim()
       .replace(/^@+/, "")
       .toLowerCase();
   }
-  function username() {
+  function username(token) {
     if (cfg.demo) return Promise.resolve(norm(cfg.demoUser));
+    var mark = markOf(token);
     try {
       var c = JSON.parse(sget("localStorage", KEY_ME) || "null");
-      if (c && c.t === tokenMark && Date.now() - Number(c.at) < TTL && typeof c.u === "string") return Promise.resolve(c.u);
+      if (c && c.t === mark && Date.now() - Number(c.at) < TTL && typeof c.u === "string") return Promise.resolve(c.u);
     } catch (e) {
       /* 読み直す */
     }
@@ -145,12 +150,14 @@ export function runMyHours(cfg, w, card) {
       })
       .then(function (u) {
         var name = u && typeof u.username === "string" ? norm(u.username) : "";
-        if (name) sset("localStorage", KEY_ME, JSON.stringify({ u: name, t: tokenMark, at: Date.now() }));
+        if (name) sset("localStorage", KEY_ME, JSON.stringify({ u: name, t: mark, at: Date.now() }));
         return name;
       });
   }
   // ビルド済みサイトは data/my-month.json、開発プレビュー（npm run dev）は _file/data/my-month.json
+  var dataPromise = null;
   function data() {
+    if (dataPromise) return dataPromise;
     var urls = [new w.URL("data/my-month.json", w.location.href).href, new w.URL("_file/data/my-month.json", w.location.href).href];
     function next(i) {
       if (i >= urls.length) return Promise.resolve(null);
@@ -158,7 +165,11 @@ export function runMyHours(cfg, w, card) {
         return r.ok ? r.json() : r.status === 404 ? next(i + 1) : null;
       });
     }
-    return next(0);
+    dataPromise = next(0).catch(function () {
+      dataPromise = null;
+      return null;
+    });
+    return dataPromise;
   }
   // 今月 = 開いた人の今日（日本時間）の月。基準日を固定したデータ（デモ・テスト）はその月（§75）
   function monthOf(d) {
@@ -166,13 +177,26 @@ export function runMyHours(cfg, w, card) {
     var asOf = typeof d.asOf === "string" ? d.asOf : "";
     return (d.asOfFixed || today < asOf ? asOf : today).slice(0, 7);
   }
+  // 今出しているボタン（無ければ null）と、出したときのトークン
+  var shown = null;
+  var shownMark = "";
+  var seq = 0;
+  function unmount() {
+    if (shown && shown.wrap.parentNode) shown.wrap.parentNode.removeChild(shown.wrap);
+    shown = null;
+    var bar = doc.querySelector(".yn-topbar");
+    if (bar) bar.classList.remove("has-my-hours");
+  }
   function mount(d, user) {
-    var id = d && d.users ? d.users[user] : null;
+    var month = monthOf(d);
+    // ユーザー名 → 社員番号は月ごと（月が替わって付け替えたときも、その月の持ち主を出す）
+    var users = d && d.users ? d.users[month] : null;
+    var id = users ? users[user] : null;
     var m = id && d.members ? d.members[id] : null;
-    var rows = m && m.months ? m.months[monthOf(d)] : null;
+    var rows = m && m.months ? m.months[month] : null;
     if (!rows) return;
     var tools = doc.querySelector(".yn-tools");
-    if (!tools || tools.querySelector(".yn-my-hours")) return;
+    if (!tools) return;
     var planned = 0;
     var actual = 0;
     for (var i = 0; i < rows.length; i++) {
@@ -209,33 +233,46 @@ export function runMyHours(cfg, w, card) {
     tools.insertBefore(wrap, tools.firstChild);
     var bar = doc.querySelector(".yn-topbar");
     if (bar) bar.classList.add("has-my-hours");
-    function open(on) {
-      if (on) pop.style.setProperty("--yn-my-hours-top", Math.round(btn.getBoundingClientRect().bottom + 8) + "px");
-      pop.hidden = !on;
-      btn.setAttribute("aria-expanded", on ? "true" : "false");
-    }
     btn.addEventListener("click", function () {
       open(pop.hidden);
     });
-    doc.addEventListener("click", function (e) {
-      if (!pop.hidden && !wrap.contains(e.target)) open(false);
-    });
-    doc.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !pop.hidden) {
-        open(false);
-        btn.focus();
-      }
-    });
+    shown = { wrap: wrap, btn: btn, pop: pop };
   }
+  function open(on) {
+    if (!shown) return;
+    if (on) shown.pop.style.setProperty("--yn-my-hours-top", Math.round(shown.btn.getBoundingClientRect().bottom + 8) + "px");
+    shown.pop.hidden = !on;
+    shown.btn.setAttribute("aria-expanded", on ? "true" : "false");
+  }
+  doc.addEventListener("click", function (e) {
+    if (shown && !shown.pop.hidden && !shown.wrap.contains(e.target)) open(false);
+  });
+  doc.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && shown && !shown.pop.hidden) {
+      open(false);
+      shown.btn.focus();
+    }
+  });
   function start() {
-    Promise.all([username(), data()])
+    var token = readToken();
+    var mark = markOf(token);
+    var my = ++seq;
+    unmount();
+    shownMark = mark;
+    if (!token) return;
+    Promise.all([username(token), data()])
       .then(function (res) {
-        if (res[0] && res[1]) mount(res[1], res[0]);
+        // 待つ間にトークンが替わったら、古い結果は出さない
+        if (my === seq && res[0] && res[1]) mount(res[1], res[0]);
       })
       .catch(function () {
         /* 出せなければ何も出さない */
       });
   }
+  // 設定画面でトークンを登録・削除したら（gitlab-client.js の setToken / clearToken が yn-mr-count を送る）、出し直す・消す
+  w.addEventListener("yn-mr-count", function () {
+    if (markOf(readToken()) !== shownMark) start();
+  });
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", start);
   else start();
 }
