@@ -400,6 +400,7 @@ actualCost(x,c,m)   = 同 CostLine の amount
 - 対象 = `targetBranch` 向けで開いている MR のうち、ソースブランチが `masters/` で始まるもの（この画面で作った MR）。`GET /projects/:id/merge_requests?state=opened&target_branch=<targetBranch>&per_page=100` を画面で絞る。
 - 各 MR: タイトル、作成者、作成日時、検証（MR のパイプラインの状態。あれば）、マージできるか。「内容を見る」で、そのMRで変わる行を §19 の差分と同じ形（追加・変更・削除、変わった列）で出す。差分は MR の `diff_refs.base_sha` と `head_sha` の各マスタファイルを取得し、§25 の対応付けで求める（GitLab の行差分より読みやすいため）。
   - 行は ID ではなく人が読める名前で出す（2026-11-11 依頼者）: 見出しはメンバー・組織 = 名前、案件 = 「顧客 / 案件名」、目標 = 種類 / 対象の名前、アサイン・運用保守以外・個人単価 = 氏名（・「顧客 / 案件名」）、それぞれ適用開始月を添える。値の社員番号・組織ID・契約ID も名前にする（§31.1 と同じ。名前が引けないものは ID のまま）。同じ MR で追加・変更したメンバー・組織・案件の名前を先に使う。§19.2 の衝突の選択の見出しも同じ。
+  - 見出しは MR のタイトルのファイル名（`rates.csv` など）をタブの名前（単価など）に置き換えて出す（表示だけ。タイトルは変えない）。MR の番号は見出しに付けず、作成者の横に「番号 n」と小さく出す（アプリの警告の「!」と紛らわしいため）。確認ダイアログ・結果の文も番号ではなくタイトルで出す。
 - **マージは特定のリーダー層だけ**: 権限の判定は GitLab に任せる（画面では強制できない）。MR の `user.can_merge`（`GET /projects/:id/merge_requests/:iid`）が true の人にだけ「マージ」ボタンを出し、それ以外の人には「マージはリーダーが行います」と出す。
   - GitLab 側の設定（docs/DEPLOY_GITLAB.md）: `targetBranch` を保護ブランチにし「Allowed to merge = Maintainers」「Allowed to push = No one」。リーダー層 = Maintainer、編集する人 = Developer。
 - マージ: `PUT /projects/:id/merge_requests/:iid/merge`（`sha` に表示中の head を付け、見ている内容と違う変更がマージされないようにする。ソースブランチは削除）。確認ダイアログで変更件数を示してから実行する。

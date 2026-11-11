@@ -82,7 +82,7 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     const mr = page.locator(".yn-mr");
     await expect(mr.locator(".yn-mr-item")).toHaveCount(1);
     await expect(mr).toContainText("1 件");
-    await expect(mr).toContainText("マスタ更新: rates.csv");
+    await expect(mr).toContainText("マスタ更新: 単価");
     await expect(mr).toContainText("検証: 成功");
     await expect(badge(page)).toBeVisible();
     await expect(badge(page)).toContainText("1");
@@ -106,7 +106,7 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(item.getByRole("button", { name: /をマージ$/ })).toBeFocused();
     await item.getByRole("button", { name: /をマージ$/ }).click();
     await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
-    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("!1 をマージしました");
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("「マスタ更新: 単価」をマージしました");
     await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toBeFocused();
     await expect(page.locator(".yn-mr")).toContainText("マージ待ちの変更はありません");
     await expect(badge(page)).toBeHidden();
@@ -140,7 +140,7 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await saveRateViaCsv(page);
     await page.locator(".yn-mr-item").first().getByRole("button", { name: /を取り下げ$/ }).click();
     await page.locator("dialog[open]").getByRole("button", { name: "取り下げる" }).click();
-    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("!1 を取り下げました");
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("「マスタ更新: 単価」を取り下げました");
     await expect(page.locator(".yn-mr-item")).toHaveCount(0);
   });
 

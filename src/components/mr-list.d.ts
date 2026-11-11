@@ -11,4 +11,5 @@ export interface MrNamer {
   lead(fileId: string, def: unknown, rec: Record<string, string>): string;
 }
 export function namerFor(describe: MrDescribe | null, files: MrFileChange[]): MrNamer;
+export function mrTitleText(title: string): string;
 export function mergeRequestsPanel(opts: { cfg: unknown; fetchImpl: unknown; now?: () => Date; describe?: MrDescribe | null }): { el: HTMLElement; refresh(opts?: { notice?: unknown }): Promise<void> };

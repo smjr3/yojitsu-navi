@@ -90,6 +90,17 @@ function valuesText(fileId, def, rec, namer) {
     .join(" / ");
 }
 
+/** MR の見出し: 既定のタイトル（「マスタ更新: rates.csv, targets.csv」）のファイル名をタブの名前にする（表示だけ） */
+export function mrTitleText(title) {
+  let t = String(title ?? "");
+  for (const id of MASTER_FILE_IDS) {
+    const path = MASTER_FILES[id].path;
+    const base = path.slice(path.lastIndexOf("/") + 1);
+    t = t.split(path).join(MASTER_FILES[id].label).split(base).join(MASTER_FILES[id].label);
+  }
+  return t;
+}
+
 export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null }) {
   const el = html`<div class="yn-mr-slot"></div>`;
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-mr-dialog-title"></dialog>`;
@@ -174,7 +185,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">
-        <p>${fmt(isMerge ? T.mr.confirmMergeText : T.mr.confirmCloseText, { iid: d.iid, title: d.title, branch: cfg.gitlab.targetBranch })}</p>
+        <p>${fmt(isMerge ? T.mr.confirmMergeText : T.mr.confirmCloseText, { iid: d.iid, title: mrTitleText(d.title), branch: cfg.gitlab.targetBranch })}</p>
         ${isMerge && item.changes?.status === "ok" ? html`<ul class="yn-mr-summary">${summaryLines(item)}</ul>` : isMerge ? html`<p class="yn-me-small">${T.mr.confirmMergeCheck}</p>` : null}
         <div class="yn-me-form-foot">
           <button type="button" class="yn-btn" onclick=${() => dialog.close()}>${T.mr.cancel}</button>
@@ -197,7 +208,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     try {
       if (kind === "merge") await mergeMergeRequest(fetchImpl, cfg, getToken(), d.iid, d.headSha);
       else await closeMergeRequest(fetchImpl, cfg, getToken(), d.iid);
-      const text = kind === "merge" ? fmt(cfg.mode === "demo" ? T.mr.mergedDemo : T.mr.merged, { iid: d.iid }) : fmt(T.mr.closed, { iid: d.iid });
+      const text = fmt(kind === "merge" ? (cfg.mode === "demo" ? T.mr.mergedDemo : T.mr.merged) : T.mr.closed, { iid: d.iid, title: mrTitleText(d.title) });
       await refresh({ notice: { kind: "ok", text } });
     } catch (e) {
       state = { ...state, busy: null, notice: { kind: "error", text: e?.message ?? String(e), detail: e?.detail ?? "" } };
@@ -243,9 +254,10 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     const mine = d.author.username !== "" && d.author.username === me;
     return html`<li class="yn-mr-item" data-iid=${d.iid}>
       <div class="yn-mr-head">
-        <p class="yn-mr-title"><span class="yn-mr-iid">!${d.iid}</span> ${d.title}</p>
+        <p class="yn-mr-title">${mrTitleText(d.title)}</p>
         <p class="yn-mr-meta">
           <span>${fmt(T.mr.by, { name: d.author.name || d.author.username })}</span>
+          <span class="yn-mr-iid">${fmt(T.mr.number, { iid: d.iid })}</span>
           ${d.createdAt ? html`<span>${fmt(T.mr.createdAt, { at: dateTimeJst(d.createdAt) })}</span>` : null}
           ${pipe ? html`<span class=${`yn-chip ${PIPE_CHIP[d.pipelineStatus] ?? "yn-chip-neutral"}`}>${T.mr.pipeline}: ${pipe}</span>` : null}
           ${d.hasConflicts ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${T.mr.conflict}</span>` : null}
@@ -255,9 +267,9 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
       <div class="yn-mr-actions">
         <button type="button" class="yn-btn yn-btn-sm" aria-expanded=${String(item.open)} data-fk=${`mr:toggle:${d.iid}`} onclick=${() => toggle(item)}>${item.open ? T.mr.hideChanges : T.mr.showChanges}</button>
         ${d.canMerge
-          ? html`<button type="button" class="yn-btn yn-btn-sm yn-btn-primary" data-fk=${`mr:merge:${d.iid}`} aria-label=${fmt(T.mr.mergeAria, { iid: d.iid, title: d.title })} disabled=${!!state.busy} onclick=${(e) => confirm("merge", item, e.currentTarget)}>${busy === "merge" ? T.mr.merging : T.mr.merge}</button>`
+          ? html`<button type="button" class="yn-btn yn-btn-sm yn-btn-primary" data-fk=${`mr:merge:${d.iid}`} aria-label=${fmt(T.mr.mergeAria, { iid: d.iid, title: mrTitleText(d.title) })} disabled=${!!state.busy} onclick=${(e) => confirm("merge", item, e.currentTarget)}>${busy === "merge" ? T.mr.merging : T.mr.merge}</button>`
           : html`<span class="yn-me-small yn-mr-nomerge">${T.mr.cannotMerge}</span>`}
-        ${d.canMerge || mine ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`mr:close:${d.iid}`} aria-label=${fmt(T.mr.closeAria, { iid: d.iid, title: d.title })} disabled=${!!state.busy} onclick=${(e) => confirm("close", item, e.currentTarget)}>${busy === "close" ? T.mr.closing : T.mr.close}</button>` : null}
+        ${d.canMerge || mine ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`mr:close:${d.iid}`} aria-label=${fmt(T.mr.closeAria, { iid: d.iid, title: mrTitleText(d.title) })} disabled=${!!state.busy} onclick=${(e) => confirm("close", item, e.currentTarget)}>${busy === "close" ? T.mr.closing : T.mr.close}</button>` : null}
       </div>
       ${item.open ? html`<div class="yn-mr-changes">${renderChanges(item)}</div>` : null}
     </li>`;

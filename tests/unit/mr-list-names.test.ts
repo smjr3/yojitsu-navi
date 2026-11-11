@@ -2,7 +2,7 @@
  * マージ待ちの内容（SPEC §26）: ID ではなく氏名・組織名・「顧客 / 案件名」で出す
  */
 import { describe, expect, it } from "vitest";
-import { namerFor } from "../../src/components/mr-list.js";
+import { mrTitleText, namerFor } from "../../src/components/mr-list.js";
 import { MASTER_FILES } from "../../src/core/masterEdit.js";
 
 const names: Record<string, string> = { M001: "佐藤 健一", T01: "第1チーム", C001: "顧客A / 保守" };
@@ -32,5 +32,13 @@ describe("namerFor", () => {
     expect(n.value("members", "team_id", "T900")).toBe("新チーム");
     expect(n.lead("targets", MASTER_FILES.targets, rec({ target_type: "team", target_id: "T900", end_month: "2027-03" }))).toBe("チーム / 新チーム / 2027-03");
     expect(n.lead("targets", MASTER_FILES.targets, rec({ target_type: "project", target_id: "C900", end_month: "2027-03" }))).toBe("案件 / 顧客Z / 新案件 / 2027-03");
+  });
+});
+
+describe("mrTitleText", () => {
+  it("既定のタイトルのファイル名をタブの名前にする（番号は出さない）", () => {
+    expect(mrTitleText("マスタ更新: rates.csv, targets.csv")).toBe("マスタ更新: 単価, 目標");
+    expect(mrTitleText("data/masters/members.csv を直す")).toBe("メンバー を直す");
+    expect(mrTitleText("自由なタイトル")).toBe("自由なタイトル");
   });
 });
