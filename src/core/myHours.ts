@@ -6,14 +6,16 @@
  *  - ヘッダー右上（B）: GitLab のトークンの持ち主（GET /user の username）を members.csv の gitlab_username で探し、本人の行を出す
  * どちらも行は案件（契約）と運用保守以外の種別ごと。計画も実績も無い行は出さない
  */
-import { T, fmt } from "../i18n/index.js";
+import { T } from "../i18n/index.js";
 import { addMonths } from "./calendar.js";
 import type { MemberContractMonth, MemberMonth, MemberRecord, YearMonth } from "./types.js";
 
 /** 1 行（案件 または 運用保守以外の種別） */
 export interface MyHoursRow {
-  /** 案件名（運用保守以外は「運用保守以外: 種別」） */
+  /** 案件名（運用保守以外は種別。種別なしは「運用保守以外の予定」） */
   label: string;
+  /** 名前の下に小さく出す: 案件は顧客名、運用保守以外は「運用保守以外」（リソース計画の作業の行と同じ） */
+  sub: string;
   /** 案件の行だけ: 契約ID（運用保守以外は null） */
   contractId: string | null;
   plannedHours: number;
@@ -51,23 +53,24 @@ export function normalizeGitlabUsername(value: string | null | undefined): strin
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** 運用保守以外の行の名前（breakdown.js の outsideRowLabel と同じ） */
-function outsideLabel(type: string): string {
-  return type ? fmt(T.breakdown.outsideRow, { type }) : T.masterFiles.outside;
-}
+/** 案件の名前（契約ID → 案件名・顧客名。無ければ契約ID だけ） */
+export type MyHoursContractOf = (contractId: string) => { projectName: string; customerName: string } | undefined;
 
 /**
- * メンバーの 1 か月の行。計画も実績も無い行は除く。並びは計画の多い順（同じなら名前順）
- * @param projectName 契約ID → 案件名（無ければ契約ID を出す）
+ * メンバーの 1 か月の行。計画も実績も無い行は除く。並びは計画の多い順（同じなら名前順）。
+ * 名前はリソース計画の作業の行と同じ書き方（案件 = 案件名＋顧客名、運用保守以外 = 種別＋「運用保守以外」）
  */
-export function myHoursRows(mm: MemberMonth | null | undefined, projectName: (contractId: string) => string | undefined): MyHoursRow[] {
+export function myHoursRows(mm: MemberMonth | null | undefined, contractOf: MyHoursContractOf): MyHoursRow[] {
   if (!mm) return [];
   const rows: MyHoursRow[] = [];
   for (const c of mm.byContract as MemberContractMonth[]) {
     if (!(c.plannedHours > 0) && !(c.actualHours > 0)) continue;
     const outside = typeof c.outsideType === "string";
+    const k = outside ? undefined : contractOf(c.contractId);
+    const type = c.outsideType ?? "";
     rows.push({
-      label: outside ? outsideLabel(c.outsideType ?? "") : projectName(c.contractId) || c.contractId,
+      label: outside ? type || T.masterFiles.outside : k?.projectName || c.contractId,
+      sub: outside ? (type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub) : (k?.customerName ?? ""),
       contractId: outside ? null : c.contractId,
       plannedHours: round2(c.plannedHours),
       actualHours: round2(c.actualHours),
@@ -123,7 +126,7 @@ export function buildMyHoursPayload(input: {
   asOfMonth: YearMonth;
   members: readonly MemberRecord[];
   memberMonths: readonly MemberMonth[];
-  projectName: (contractId: string) => string | undefined;
+  contractOf: MyHoursContractOf;
 }): MyHoursPayload {
   const months = [input.asOfMonth, addMonths(input.asOfMonth, 1)];
   const users: MyHoursPayload["users"] = {};
@@ -140,7 +143,7 @@ export function buildMyHoursPayload(input: {
     const byMonth: Record<YearMonth, MyHoursRow[]> = {};
     for (const month of months) {
       const mm = input.memberMonths.find((x) => x.memberId === id && x.month === month);
-      byMonth[month] = myHoursRows(mm, input.projectName);
+      byMonth[month] = myHoursRows(mm, input.contractOf);
     }
     members[id] = { name, months: byMonth };
   }

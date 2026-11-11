@@ -156,8 +156,8 @@ if (store && exists) mountFilterBar(store, model, { show: ["period", "outside", 
 // 今月の残り（§113）。期間の絞り込み・運用保守以外のチェックに関係なく、今月（開いた人の今日の月）の計画と実績
 if (vm) {
   const month = model.meta.asOfMonth;
-  const names = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract.projectName]));
-  const rows = myHoursRows(allMonths.find((mm) => mm.month === month), (id) => names.get(id));
+  const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
+  const rows = myHoursRows(allMonths.find((mm) => mm.month === month), (id) => contracts.get(id));
   display(sectionTitle(fmt(T.myHours.sectionTitle, { month: monthJa(month) }), T.myHours.sectionHint));
   display(myHoursCard(document, { rows }, T.myHours));
 }

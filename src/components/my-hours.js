@@ -10,7 +10,7 @@
 /**
  * 残り時間のカード
  * @param {Document} doc
- * @param {{ name?: string, memberHref?: string, rows: Array<{ label: string, plannedHours: number, actualHours: number }> }} data
+ * @param {{ name?: string, memberHref?: string, rows: Array<{ label: string, sub?: string, plannedHours: number, actualHours: number }> }} data
  * @param {Record<string, string>} L 文言（T.myHours）
  */
 export function myHoursCard(doc, data, L) {
@@ -45,11 +45,20 @@ export function myHoursCard(doc, data, L) {
   }
   var big = el("div", "yn-my-hours-big" + (remaining < 0 ? " is-over" : ""), remainText(remaining));
   main.appendChild(big);
+  // 計画に対する実績の割合。超えたら、計画の分（橙）と超えた分（赤）に分けて全体を実績にする
   var bar = el("div", "yn-my-hours-bar" + (remaining < 0 ? " is-over" : ""));
   bar.setAttribute("aria-hidden", "true");
-  var fill = el("i");
-  fill.style.width = (planned > 0 ? Math.min(100, (actual / planned) * 100) : actual > 0 ? 100 : 0) + "%";
-  bar.appendChild(fill);
+  var used = el("i", "yn-my-hours-bar-used");
+  if (remaining < 0) {
+    used.style.width = (actual > 0 ? (planned / actual) * 100 : 0) + "%";
+    var over = el("i", "yn-my-hours-bar-over");
+    over.style.width = (actual > 0 ? ((actual - planned) / actual) * 100 : 0) + "%";
+    bar.appendChild(used);
+    bar.appendChild(over);
+  } else {
+    used.style.width = (planned > 0 ? Math.min(100, (actual / planned) * 100) : 0) + "%";
+    bar.appendChild(used);
+  }
   main.appendChild(bar);
   main.appendChild(el("div", "yn-my-hours-sub", L.sub.replace("{planned}", hours(planned)).replace("{actual}", hours(actual))));
   card.appendChild(main);
@@ -73,8 +82,11 @@ export function myHoursCard(doc, data, L) {
       var r = rows[k];
       var rem = Math.round((r.plannedHours - r.actualHours) * 100) / 100;
       var tr = el("tr");
-      var name = el("td", "yn-my-hours-project", r.label);
-      name.title = r.label;
+      // 名前の下に顧客名（運用保守以外は「運用保守以外」）。リソース計画の作業の行と同じ書き方
+      var name = el("td", "yn-my-hours-project");
+      name.appendChild(el("span", "yn-my-hours-project-name", r.label));
+      if (r.sub) name.appendChild(el("span", "yn-my-hours-project-sub", r.sub));
+      name.title = r.sub ? r.label + "（" + r.sub + "）" : r.label;
       tr.appendChild(name);
       tr.appendChild(el("td", "is-num", hours(r.plannedHours)));
       tr.appendChild(el("td", "is-num", hours(r.actualHours)));

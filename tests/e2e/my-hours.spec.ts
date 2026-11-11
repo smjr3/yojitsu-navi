@@ -15,8 +15,8 @@ import { gitlabUsernameIndex, myHoursRows, myHoursTotals, formatHours } from "..
 const model = getModel();
 const dataset = loadDataset(ROOT_DIR).dataset;
 const month = model.meta.asOfMonth;
-const names = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract.projectName]));
-const rowsOf = (memberId: string) => myHoursRows(model.memberMonths.find((mm) => mm.memberId === memberId && mm.month === month), (id) => names.get(id));
+const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
+const rowsOf = (memberId: string) => myHoursRows(model.memberMonths.find((mm) => mm.memberId === memberId && mm.month === month), (id) => contracts.get(id));
 const demoMember = gitlabUsernameIndex(dataset.members, month).get("demo-user")!;
 const remainText = (r: number) => (r < 0 ? `超過 ${formatHours(-r)}` : `残り ${formatHours(r)}`);
 
@@ -43,7 +43,9 @@ test("メンバー詳細に今月の残りと案件ごとの行（GitLab の接�
   await expect(card).toBeVisible();
   await expect(card.locator(".yn-my-hours-big")).toHaveText(remainText(myHoursTotals(rows).remainingHours));
   await expect(card.locator("tbody tr")).toHaveCount(rows.length);
-  await expect(card.locator("tbody tr").first().locator("td").first()).toHaveText(rows[0]!.label);
+  const first = card.locator("tbody tr").first().locator("td").first();
+  await expect(first.locator(".yn-my-hours-project-name")).toHaveText(rows[0]!.label);
+  await expect(first.locator(".yn-my-hours-project-sub")).toHaveText(rows[0]!.sub);
   // ヘッダー右上には出ない（トークンが無い）
   await expect(page.locator(".yn-my-hours-btn")).toHaveCount(0);
 });

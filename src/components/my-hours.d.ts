@@ -1,5 +1,6 @@
 export interface MyHoursCardRow {
   label: string;
+  sub?: string;
   plannedHours: number;
   actualHours: number;
 }

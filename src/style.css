@@ -3892,7 +3892,7 @@ html:has(dialog.yn-dialog[open]) {
   font-weight: 600;
 }
 .yn-my-hours-bar {
-  position: relative;
+  display: flex;
   width: 200px;
   height: 8px;
   overflow: hidden;
@@ -3900,11 +3900,15 @@ html:has(dialog.yn-dialog[open]) {
   background: var(--yn-wash-strong);
 }
 .yn-my-hours-bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
+  display: block;
+  height: 100%;
+}
+.yn-my-hours-bar-used {
   background: var(--yn-series-cost);
 }
-.yn-my-hours-bar.is-over i {
+/* 計画を超えた分。計画の分との境目が分かるよう 2px 空ける */
+.yn-my-hours-bar-over {
+  margin-left: 2px;
   background: var(--yn-danger);
 }
 .yn-my-hours-sub {
@@ -3944,9 +3948,18 @@ html:has(dialog.yn-dialog[open]) {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-/* 案件名は長いので折り返す（他の列を潰さない） */
+/* 案件名は長いので折り返す（他の列を潰さない）。下に顧客名を小さく */
 .yn-my-hours-project {
   overflow-wrap: anywhere;
+}
+.yn-my-hours-project-name,
+.yn-my-hours-project-sub {
+  display: block;
+}
+.yn-my-hours-project-sub {
+  color: var(--yn-text-muted);
+  font-size: calc(11px * var(--yn-fs));
+  line-height: 1.3;
 }
 .yn-my-hours-empty {
   margin: 4px 0 0;

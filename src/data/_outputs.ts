@@ -64,7 +64,7 @@ function memberMonthsOutput(ctx: OutputContext) {
 function myMonthOutput(ctx: OutputContext) {
   const parsed = ctx.parsed();
   const model = ctx.model();
-  const names = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract.projectName]));
+  const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
   return {
     ...buildMyHoursPayload({
       asOf: model.meta.asOf,
@@ -72,7 +72,7 @@ function myMonthOutput(ctx: OutputContext) {
       asOfMonth: model.meta.asOfMonth,
       members: parsed.dataset.members,
       memberMonths: model.memberMonths,
-      projectName: (id) => names.get(id),
+      contractOf: (id) => contracts.get(id),
     }),
     _build: buildStamp(),
   };

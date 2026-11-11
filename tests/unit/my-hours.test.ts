@@ -28,26 +28,27 @@ const line = (contractId: string, plannedHours: number, actualHours: number, out
 });
 const mm = (memberId: string, month: string, byContract: ReturnType<typeof line>[]): MemberMonth => ({ memberId, month, byContract }) as unknown as MemberMonth;
 const names: Record<string, string> = { C1: "勘定系保守", C2: "契約管理保守", C3: "学習管理保守" };
+const contractOf = (id: string) => (names[id] ? { projectName: names[id]!, customerName: `顧客${id}` } : undefined);
 
 describe("myHoursRows / myHoursTotals", () => {
-  it("計画も実績も無い行を除き、計画の多い順。運用保守以外は種別の名前", () => {
-    const rows = myHoursRows(mm("M1", "2026-10", [line("C1", 80, 68.75), line("C2", 0, 0), line("C3", 8, 11.5), line("~outside:提案", 16, 2, "提案"), line("~outside:", 0, 1, "")]), (id) => names[id]);
-    expect(rows.map((r) => [r.label, r.plannedHours, r.actualHours])).toEqual([
-      ["勘定系保守", 80, 68.75],
-      ["運用保守以外: 提案", 16, 2],
-      ["学習管理保守", 8, 11.5],
-      [T.masterFiles.outside, 0, 1],
+  it("計画も実績も無い行を除き、計画の多い順。名前はリソース計画の作業の行と同じ（案件名＋顧客名、種別＋運用保守以外）", () => {
+    const rows = myHoursRows(mm("M1", "2026-10", [line("C1", 80, 68.75), line("C2", 0, 0), line("C3", 8, 11.5), line("~outside:提案", 16, 2, "提案"), line("~outside:", 0, 1, "")]), contractOf);
+    expect(rows.map((r) => [r.label, r.sub, r.plannedHours, r.actualHours])).toEqual([
+      ["勘定系保守", "顧客C1", 80, 68.75],
+      ["提案", T.planEdit.outsideTypeSub, 16, 2],
+      ["学習管理保守", "顧客C3", 8, 11.5],
+      [T.masterFiles.outside, T.planEdit.outsideSub, 0, 1],
     ]);
     expect(rows.map((r) => r.contractId)).toEqual(["C1", null, "C3", null]);
     expect(myHoursTotals(rows)).toEqual({ plannedHours: 104, actualHours: 83.25, remainingHours: 20.75 });
   });
   it("案件名が無ければ契約ID。その月のデータが無ければ空", () => {
-    expect(myHoursRows(mm("M1", "2026-10", [line("C9", 8, 0)]), () => undefined)[0]?.label).toBe("C9");
+    expect(myHoursRows(mm("M1", "2026-10", [line("C9", 8, 0)]), () => undefined)[0]).toMatchObject({ label: "C9", sub: "" });
     expect(myHoursRows(undefined, () => undefined)).toEqual([]);
     expect(myHoursTotals([])).toEqual({ plannedHours: 0, actualHours: 0, remainingHours: 0 });
   });
   it("計画を超えたら残りはマイナス", () => {
-    expect(myHoursTotals(myHoursRows(mm("M1", "2026-10", [line("C1", 8, 10.25)]), () => "x")).remainingHours).toBe(-2.25);
+    expect(myHoursTotals(myHoursRows(mm("M1", "2026-10", [line("C1", 8, 10.25)]), contractOf)).remainingHours).toBe(-2.25);
   });
 });
 
@@ -121,13 +122,13 @@ describe("buildMyHoursPayload", () => {
       asOfMonth: "2026-10",
       members: [member({ memberId: "M1", name: "太郎", gitlabUsername: "Taro" }), member({ memberId: "M2", name: "花子" })],
       memberMonths: [mm("M1", "2026-10", [line("C1", 80, 10)]), mm("M1", "2026-11", [line("C1", 80, 0)]), mm("M1", "2026-12", [line("C1", 80, 0)]), mm("M2", "2026-10", [line("C1", 8, 0)])],
-      projectName: (id) => names[id],
+      contractOf,
     });
     expect(p.users).toEqual({ "2026-10": { taro: "M1" }, "2026-11": { taro: "M1" } });
     expect(Object.keys(p.members)).toEqual(["M1"]);
     expect(p.members.M1!.name).toBe("太郎");
     expect(Object.keys(p.members.M1!.months)).toEqual(["2026-10", "2026-11"]);
-    expect(p.members.M1!.months["2026-10"]).toEqual([{ label: "勘定系保守", contractId: "C1", plannedHours: 80, actualHours: 10 }]);
+    expect(p.members.M1!.months["2026-10"]).toEqual([{ label: "勘定系保守", sub: "顧客C1", contractId: "C1", plannedHours: 80, actualHours: 10 }]);
   });
 
   it("ユーザー名の付け替えは月ごとに引く（翌月から別の人に付けたら翌月はその人）", () => {
@@ -142,7 +143,7 @@ describe("buildMyHoursPayload", () => {
         member({ memberId: "M2", name: "次郎", effectiveFrom: "2026-11", gitlabUsername: "taro" }),
       ],
       memberMonths: [],
-      projectName: () => undefined,
+      contractOf: () => undefined,
     });
     expect(p.users).toEqual({ "2026-10": { taro: "M1" }, "2026-11": { taro: "M2" } });
     expect(Object.keys(p.members)).toEqual(["M1", "M2"]);
@@ -151,20 +152,25 @@ describe("buildMyHoursPayload", () => {
 
 describe("myHoursCard", () => {
   it("残り・計画・実績と案件ごとの行。超えた行は「超過」", () => {
-    const el = myHoursCard(document, { name: "太郎", memberHref: "./member?id=M1", rows: [{ label: "勘定系保守", plannedHours: 80, actualHours: 68.75 }, { label: "学習管理保守", plannedHours: 8, actualHours: 11.5 }] }, T.myHours);
+    const el = myHoursCard(document, { name: "太郎", memberHref: "./member?id=M1", rows: [{ label: "勘定系保守", sub: "あおば銀行", plannedHours: 80, actualHours: 68.75 }, { label: "学習管理保守", plannedHours: 8, actualHours: 11.5 }] }, T.myHours);
     expect(el.querySelector(".yn-my-hours-big")?.textContent).toBe("残り 7.75h");
     expect(el.querySelector(".yn-my-hours-sub")?.textContent).toBe("計画 88h ・ 実績 80.25h");
     const cells = [...el.querySelectorAll("tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map((td) => td.textContent));
     expect(cells).toEqual([
-      ["勘定系保守", "80h", "68.75h", "11.25h"],
+      ["勘定系保守あおば銀行", "80h", "68.75h", "11.25h"],
       ["学習管理保守", "8h", "11.5h", "超過 3.5h"],
     ]);
+    expect(el.querySelector(".yn-my-hours-project-sub")?.textContent).toBe("あおば銀行");
+    expect(el.querySelector(".yn-my-hours-bar-over")).toBeNull();
     expect(el.querySelector("a")?.getAttribute("href")).toBe("./member?id=M1");
   });
   it("全体で超えたら赤。行が無ければ「計画も実績もありません」", () => {
     const over = myHoursCard(document, { rows: [{ label: "a", plannedHours: 1, actualHours: 2 }] }, T.myHours);
     expect(over.querySelector(".yn-my-hours-big")?.className).toContain("is-over");
     expect(over.querySelector(".yn-my-hours-big")?.textContent).toBe("超過 1h");
+    // バーは計画の分と超えた分に分ける（計画 1h・実績 2h → 半分ずつ）
+    expect(over.querySelector<HTMLElement>(".yn-my-hours-bar-used")?.style.width).toBe("50%");
+    expect(over.querySelector<HTMLElement>(".yn-my-hours-bar-over")?.style.width).toBe("50%");
     const empty = myHoursCard(document, { rows: [] }, T.myHours);
     expect(empty.querySelector("table")).toBeNull();
     expect(empty.textContent).toContain(T.myHours.noPlan);
