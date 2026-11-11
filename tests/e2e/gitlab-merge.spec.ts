@@ -66,6 +66,16 @@ async function saveRateViaCsv(page: Page, line = "部長,14000,2026-11"): Promis
 }
 
 test.describe("デモ: 保存 → マージ待ち → マージ", () => {
+  test("内容は ID ではなく氏名で出す（個人単価の行 = 氏名 / 適用開始月）", async ({ page }) => {
+    await useDemo(page);
+    await saveRateViaCsv(page, "M002,14000,2026-11");
+    const item = page.locator(".yn-mr-item").first();
+    await item.getByRole("button", { name: "内容を見る" }).click();
+    const changes = item.locator(".yn-mr-changes");
+    await expect(changes).toContainText("鈴木 美咲 / 2026-11");
+    await expect(changes).not.toContainText("M002");
+  });
+
   test("CSV で編集して保存すると MR になり、一覧とヘッダーの件数に出る。内容を見てマージすると消える", { tag: "@smoke" }, async ({ page }) => {
     await useDemo(page);
     await saveRateViaCsv(page);
