@@ -223,6 +223,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §99 並べ替え・絞り込み | リソース計画の見出し | マスタ編集の台帳と同じ見出しの部品（`sortFilterHead`、並べ替えのボタン＋漏斗。`createFilterPopover`）。月の列は狭いので `th.num.has-filter` の左右の余白を詰め、見出しは「n月」のまま（吹き出し・読み上げは「YYYY年n月」）。開いた明細・変更の履歴は人の行について動く |
 | §66 内訳の見分け | リソース計画の開いた内訳 | `.yn-me-plan-sub` は左端の帯（inset box-shadow）・12px の控えめな数値・枠なしの文字ボタン。`renderPanel` は同じ表の描き直しで `.yn-me-table-wrap` のスクロール位置を引き継ぐ |
 | §65 変更の影響 | リソース計画の保存の前 | 差分の下・保存の上に「変更の影響」（`renderImpact`、計算は `core/planImpact.ts`）。アサイン・メンバー・単価に変更があるときだけ出す。前の値は muted、後の値は通常の色、マイナスの残予算・増えた着地は赤。表の中の読み上げ用「から」（`position: absolute`）が枠の外へ出て 390px で横スクロールになったので、`.yn-me-impact .yn-table-wrap` に `position: relative` |
+| §111 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（▸/▾ `.yn-me-plan-caret`・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
 | §110 目標の警告 | リソース計画の表・グラフの上 | `planAlertsEl`（計算は `core/planTargets.ts`）。未達見込みの目標を 1 件 1 行（`h()` で作る）、3 件まで＋「ほか n件」。月の見出しに `.yn-me-plan-target-mark`。描き直しが多いので `planTargetAlertsFor` で組織・組織の月・`validation` が同じなら前の結果を使う。390px では 1 件が折り返して 3 行になる |
 | 単価の表示 | 単位 | 金額の表示単位（円／千円／百万円）の切替に関係なく、CSV の値（円）をそのまま表示・入力する |
 

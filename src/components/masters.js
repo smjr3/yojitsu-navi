@@ -388,7 +388,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     range: initialRange,
     months: monthRange(initialRange.from, initialRange.to),
     focusMember: initialMember,
-    open: new Set(initialMember ? [initialMember] : []),
+    /** 開いている（作業ごとの行を出している）メンバー。タブ単位で覚える（再読み込みしても開いたまま） */
+    open: new Set(),
     /** 変更の履歴を開いている「メンバー|対象」 */
     hist: new Set(),
     /** 名前・所属・案件での絞り込み（数百人の組織で人を探す） */
@@ -405,14 +406,16 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const v = JSON.parse(session.get(PLAN_LIST_KEY) ?? "null");
       const cols = v && typeof v.cols === "object" && v.cols ? Object.fromEntries(Object.entries(v.cols).filter(([, f]) => isActiveFilter(f))) : {};
       const sort = v?.sort && typeof v.sort.key === "string" && (v.sort.dir === "asc" || v.sort.dir === "desc") ? { key: v.sort.key, dir: v.sort.dir } : null;
-      return { cols, sort };
+      const open = new Set(Array.isArray(v?.open) ? v.open.filter((x) => typeof x === "string") : []);
+      if (initialMember) open.add(initialMember);
+      return { cols, sort, open };
     } catch {
-      return { cols: {}, sort: null };
+      return { cols: {}, sort: null, open: new Set(initialMember ? [initialMember] : []) };
     }
   }
   // メンバーを指定して開いたとき（他の画面から）は、その人が隠れないように列の絞り込みを外す
   if (initialMember) plan.cols = {};
-  const savePlanList = () => session.set(PLAN_LIST_KEY, JSON.stringify({ cols: plan.cols, sort: plan.sort }));
+  const savePlanList = () => session.set(PLAN_LIST_KEY, JSON.stringify({ cols: plan.cols, sort: plan.sort, open: [...plan.open] }));
   /** 表示する月の範囲を変える。save = 人が選んだ範囲（このブラウザに覚える。問題への移動などで動かしたときは覚えない） */
   function applyPlanRange(r, save = false) {
     plan.range = r;
@@ -1566,6 +1569,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const toggle = (memberId) => {
       if (plan.open.has(memberId)) plan.open.delete(memberId);
       else plan.open.add(memberId);
+      savePlanList();
       renderPanel();
       focusKey(`plan:toggle:${memberId}`);
     };
@@ -1575,6 +1579,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       else plan.hist.add(k);
       renderPanel();
       focusKey(`plan:hist:${k}`);
+    };
+
+    /** 表示中の人をまとめて開く・閉じる（1 人でも閉じていれば「すべて開く」） */
+    const expandAll = (ids) => {
+      const allOpen = ids.every((id) => plan.open.has(id));
+      const btn = h(
+        "button",
+        { type: "button", class: "yn-btn yn-btn-sm yn-me-plan-expand-all", "data-fk": "plan:expand-all", "aria-label": allOpen ? T.planEdit.collapseAllAria : T.planEdit.expandAllAria },
+        h("span", { class: "yn-me-plan-caret", "aria-hidden": "true" }, allOpen ? "▾" : "▸"),
+        allOpen ? T.planEdit.collapseAll : T.planEdit.expandAll,
+      );
+      btn.addEventListener("click", () => {
+        for (const id of ids) allOpen ? plan.open.delete(id) : plan.open.add(id);
+        savePlanList();
+        renderPanel();
+        focusKey("plan:expand-all");
+      });
+      return btn;
     };
 
     const editable = !(locked || pendingDraft);
@@ -1777,13 +1799,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
-          <span class="yn-me-plan-name" title=${teamName ? `${name} ・ ${teamName}` : name}>${name}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}
+          <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
           ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, allocLevel(monthly[i])))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(workCount) })} ${open ? "▴" : "▾"}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addWork}</button>
         </div></td>
       </tr>`;
@@ -1818,12 +1839,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const outRows = outTypes.flatMap((type) =>
         subRows({ kind: "outside", type }, oRows.filter((x) => sameType(x.type, type)), outsideLabel(type), type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub, "is-outside"),
       );
-      return [
+      const group = [
         main,
         ...projRows.map((x) => ((x.dataset.parent = r.memberId), x)),
         ...(projectList.length ? [] : [html`<tr class="yn-me-plan-sub is-empty" data-parent=${r.memberId}><td colspan=${months.length + 3}><span class="yn-muted">${T.plan.noItems}</span></td></tr>`]),
         ...outRows.map((x) => ((x.dataset.parent = r.memberId), x)),
       ].map((x, i) => (i === 1 && !x.id ? ((x.id = detailId), x) : x));
+      // 枝の線（人の行から作業の行へ）: 最後の作業の行で止める。その後ろの履歴には線を引かない
+      const lastSub = group.findLastIndex((x) => x.classList.contains("yn-me-plan-sub"));
+      group[lastSub]?.classList.add("is-last");
+      group.slice(lastSub + 1).forEach((x) => x.classList.add("is-after-last"));
+      return group;
     });
 
     /**
@@ -1903,6 +1929,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </div>
       <div class="yn-me-toolbar yn-me-plan-filter">
         ${search}
+        ${rowsShown.length ? expandAll(rowsShown.map((d) => d.r.memberId)) : null}
         <span class="yn-table-count" aria-live="polite">${fmt(T.ledger.count, { n: integer(rowsShown.length), total: integer(view.rows.length), unit: T.ledger.unit.members })}</span>
         ${clearCols}
       </div>
