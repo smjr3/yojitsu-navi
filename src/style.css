@@ -556,6 +556,15 @@ body {
   .yn-filterbar-slot .yn-filter {
     flex: none;
   }
+  /* 組織の候補は横スクロールの行で切れないよう画面に固定（top は開くときに欄の下に合わせる。§116） */
+  .yn-filterbar-slot .yn-team-combo .yn-combo-list {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    max-height: 50vh;
+  }
 }
 /* Framework の code・pre の文字（既定 14px）も文字の大きさに合わせる */
 pre,

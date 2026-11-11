@@ -127,8 +127,16 @@ export function combobox({ id, name, options, value = "", required = false, disa
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
     render(query);
+    // 横にスクロールする入れ物の中（スマホ幅の絞り込みの行）では、候補を画面に固定して欄の下に出す（入れ物で切れないように。§116）
+    // ページを動かしたら閉じる（欄から離れてしまうため）
+    if (getComputedStyle(list).position === "fixed") {
+      list.style.top = `${input.getBoundingClientRect().bottom + 2}px`;
+      window.addEventListener("scroll", onScroll, { passive: true });
+    }
   };
+  const onScroll = () => closeList();
   const closeList = () => {
+    window.removeEventListener("scroll", onScroll);
     open = false;
     list.hidden = true;
     input.setAttribute("aria-expanded", "false");
