@@ -1843,6 +1843,18 @@ export default {
     unknownMember: "（存在しないメンバー）",
     unitNote: "・ リーダー: {leader}",
     unitHelp: "組織を選ぶと、配下の組織とメンバーを含めて表示します（他の組織から、この組織の案件に入る人は「応援」）。",
+    targetAlertHelp: "<strong>目標:</strong> 今の計画（編集中は編集後）の着地見込み（計画値）で、目標（マスタ編集の「目標」）の残予算率を下回る見込みのものを表の上に出します。組織を選ぶと、配下の組織と担当案件の目標が対象です。月の見出しの ! は、その月の計画が予算 ×（1 − 目標の残予算率）を超える月です。保存は止めません。",
+    // 目標の警告（§110）
+    targetAlert: {
+      aria: "目標を下回る見込み {n}件",
+      goal: "目標 {target}",
+      forecast: "見込み {rate}",
+      forecastAria: "{name} の残予算率（見込み）{rate}。計算根拠を表示",
+      months: "超える月 {months}",
+      more: "ほか {n}件",
+      less: "閉じる",
+      monthTitle: "{month} は目標の上限を超える見込み: {names}",
+    },
     sortFilterHelp: "見出しを押すと並べ替え、漏斗で列ごとに絞り込めます（月・期間計は人月の範囲。例: 1.01 以上で 1.0 超の人、0.99 以下で空きのある人）。",
     rangeLabel: "{first}〜{last}（{n}か月）",
     rangeFrom: "表示する最初の月",

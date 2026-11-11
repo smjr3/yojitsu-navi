@@ -2832,6 +2832,63 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-table th[scope="row"] {
   min-width: 180px;
 }
+/* 目標の警告（§110）: 未達見込みの目標を 1 件 1 行。左端の赤い線で目立たせ、本文の色は変えない */
+.yn-me-plan-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--yn-danger);
+  background: var(--yn-danger-bg);
+  border-radius: 4px;
+}
+.yn-me-plan-alert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.yn-me-plan-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.yn-me-plan-alert-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.yn-me-plan-alert-rate,
+.yn-me-plan-alert-months {
+  color: var(--yn-text-2);
+  white-space: nowrap;
+}
+.yn-me-plan-alert-months {
+  white-space: normal;
+}
+/* 月の見出しの「!」: 目安の上限を超える見込みの月 */
+.yn-me-plan-target-mark {
+  display: inline-block;
+  margin-left: 2px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--yn-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  cursor: help;
+}
 .yn-me-plan-name {
   font-weight: 600;
 }

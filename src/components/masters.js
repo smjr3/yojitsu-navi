@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
+import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -70,7 +70,8 @@ import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from ".
 import { docFromCsvText } from "../core/csvEdit.js";
 import { dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
-import { targetChip } from "./targets.js";
+import { targetChip, targetPct, targetSpec } from "./targets.js";
+import { numberButton } from "./breakdown.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
@@ -240,6 +241,8 @@ const PLAN_LIST_KEY = "yojitsu-navi:plan-list";
 // リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
 const PLAN_RANGE_KEY = "yojitsu-navi:plan-range";
 const PLAN_NAME_W_MIN = 100;
+/** 目標の警告（§110）を最初に出す件数（多いときは「ほか n件」で開く） */
+const PLAN_ALERTS_SHOWN = 3;
 const PLAN_NAME_W_MAX = 480;
 function clampPlanNameW(w) {
   if (w == null || !Number.isFinite(w)) return null;
@@ -390,6 +393,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     hist: new Set(),
     /** 名前・所属・案件での絞り込み（数百人の組織で人を探す） */
     q: "",
+    /** 目標の警告（§110）をすべて出すか */
+    alertsAll: false,
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
     /** 列ごとの絞り込み（列 key → 絞り込み。月の列は "m:YYYY-MM"）と並べ替え（§99）。タブ単位で覚える */
@@ -1869,11 +1874,19 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </div>`;
     }
 
+    // 目標の警告（§110）: 未達見込みの目標と、目安の上限を超える月（月の見出しに !）
+    const alerts = planTargetAlertsFor(plan.teamId, tree, treeMonth);
+    const overByMonth = new Map();
+    for (const a of alerts) for (const m of a.overMonths) overByMonth.set(m, [...(overByMonth.get(m) ?? []), alertTargetName(a)]);
+    const monthMark = (m) => {
+      const t = fmt(T.plan.targetAlert.monthTitle, { month: monthJa(m), names: overByMonth.get(m).join("、") });
+      return h("span", { class: "yn-me-plan-target-mark", role: "img", "aria-label": t, title: t }, "!");
+    };
     parts.panel.replaceChildren(html`<section id="yn-me-panel" class="yn-me-panel yn-me-plan">
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}<span class="yn-me-path"> ${data.files.assignments.path} ・ ${data.files.outside.path}</span></h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { std: integer(std) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -1894,13 +1907,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ${clearCols}
       </div>
       ${unit ? html`<p class="yn-me-plan-unit">${unit.name}${unit.level ? html` <span class="yn-chip yn-chip-neutral">${unit.level}</span>` : null} ${fmt(T.plan.unitNote, { leader: leaderText(unit.leaderMemberId) })}</p>` : null}
+      ${planAlertsEl(alerts)}
       ${rowsShown.length ? planChart() : null}
       <div class="yn-table-wrap yn-me-table-wrap" tabindex="0" role="region" aria-label=${T.plan.tableAria} onkeydown=${gridKeys}>
         <table class=${`yn-table yn-table-compact yn-me-table yn-me-plan-table${plan.nameW ? " is-name-sized" : ""}`} style=${plan.nameW ? `--yn-plan-name-w: ${plan.nameW}px` : ""}>
           <caption class="visually-hidden">${fmt(T.plan.caption, { unit: unit ? unit.name : T.plan.allUnits, fy: fyLabel })}</caption>
           <thead><tr>
             <th scope="col" class=${planThCls("__name", "yn-me-plan-name-th ")} aria-sort=${planAriaSort("__name")}>${planHead("__name", T.plan.colMember)}${planNameResizer()}</th>
-            ${months.map((m, i) => html`<th scope="col" class=${planThCls(`m:${m}`, "num ")} aria-sort=${planAriaSort(`m:${m}`)}>${planHead(`m:${m}`, fmt(T.plan.colMonth, { m: Number(m.slice(5)) }), i === 0 || m.endsWith("-01") ? fmt(T.plan.colYear, { y: m.slice(0, 4) }) : null)}</th>`)}
+            ${months.map((m, i) => html`<th scope="col" class=${planThCls(`m:${m}`, "num ")} aria-sort=${planAriaSort(`m:${m}`)}>${planHead(`m:${m}`, fmt(T.plan.colMonth, { m: Number(m.slice(5)) }), i === 0 || m.endsWith("-01") ? fmt(T.plan.colYear, { y: m.slice(0, 4) }) : null)}${overByMonth.has(m) ? monthMark(m) : null}</th>`)}
             <th scope="col" class=${planThCls("__total", "num ")} aria-sort=${planAriaSort("__total")}>${planHead("__total", T.plan.colFyTotal, T.plan.unitPersonMonth)}</th>
             <th scope="col">${T.masters.colActions}</th>
           </tr></thead>
@@ -3076,6 +3090,72 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 編集前のマスタで作る計画の材料（土台は変わらないので 1 回だけ） */
   let impactBase = null;
   const planInputsOf = (dataset) => ({ masters: createMasterIndex(dataset), assignments: dataset.assignments });
+
+  // ---- 目標の警告（§110） ----------------------------------------------------
+  /** 前回の結果（組織・組織の月・編集の内容が同じなら計算し直さない。リソース計画は描き直しが多いため） */
+  let alertMemo = null;
+  /** 今の計画（編集中は編集後）で未達見込みになる目標。目標が無ければ空 */
+  function planTargetAlertsFor(teamId, tree, treeMonth) {
+    if (!model || !(model.targets ?? []).length) return [];
+    const edited = IMPACT_FILES.some((id) => diffMasterDoc(docs[id]).count > 0) ? validation : null;
+    const key = `${teamId ?? ""}|${treeMonth}`;
+    if (alertMemo && alertMemo.key === key && alertMemo.edited === edited) return alertMemo.value;
+    const value = planTargetAlerts(model, edited ? planInputsOf(edited.dataset) : null, { teamId, tree });
+    alertMemo = { key, edited, value };
+    return value;
+  }
+  /** 目標の名前（種類・名前・終了月） */
+  function alertTargetName(a) {
+    const t = a.evaluation.target;
+    return fmt(T.plan.impact.targetName, { kind: T.targets.kinds[a.kind], name: goalTargetName(a.kind, t.targetId.trim()), due: monthJa(t.endMonth) });
+  }
+  /** 続いた月は「最初の月〜最後の月」にまとめ、離れた月は「・」でつなぐ */
+  function monthRuns(months) {
+    const runs = [];
+    for (const m of months) {
+      const last = runs.at(-1);
+      if (last && addMonths(last.to, 1) === m) last.to = m;
+      else runs.push({ from: m, to: m });
+    }
+    return runs.map((r) => (r.from === r.to ? monthJa(r.from) : `${monthJa(r.from)}〜${monthJa(r.to)}`)).join("・");
+  }
+  /** 表の上の警告（未達見込みの目標を 1 件 1 行。見込みの率を押すと計算根拠） */
+  function planAlertsEl(alerts) {
+    if (alerts.length === 0) return null;
+    const st = savedState(model);
+    const href = (id) => buildHref("./contract", st, { id });
+    const shown = plan.alertsAll ? alerts : alerts.slice(0, PLAN_ALERTS_SHOWN);
+    const items = shown.map((a) => {
+      const ev = { ...a.evaluation, method: "assignment" };
+      const name = alertTargetName(a);
+      const rate = formatPercent(ev.rate);
+      return h(
+        "li",
+        { class: "yn-me-plan-alert", "data-target-kind": a.kind, "data-target-id": ev.target.targetId },
+        targetChip(ev),
+        h("span", { class: "yn-me-plan-alert-name" }, name),
+        h(
+          "span",
+          { class: "yn-me-plan-alert-rate" },
+          fmt(T.plan.targetAlert.goal, { target: targetPct(ev.target.remainingRate) }),
+          " ・ ",
+          numberButton(fmt(T.plan.targetAlert.forecast, { rate }), () => targetSpec({ model, ev, name, unit: st.unit, detailHref: href }), { ariaLabel: fmt(T.plan.targetAlert.forecastAria, { name, rate }) }),
+        ),
+        a.overMonths.length ? h("span", { class: "yn-me-plan-alert-months" }, fmt(T.plan.targetAlert.months, { months: monthRuns(a.overMonths) })) : null,
+      );
+    });
+    const more =
+      alerts.length > PLAN_ALERTS_SHOWN
+        ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk="plan:alerts" aria-expanded=${plan.alertsAll ? "true" : "false"} onclick=${() => {
+            plan.alertsAll = !plan.alertsAll;
+            renderPanel();
+            focusKey("plan:alerts");
+          }}>${plan.alertsAll ? T.plan.targetAlert.less : fmt(T.plan.targetAlert.more, { n: integer(alerts.length - PLAN_ALERTS_SHOWN) })}</button>`
+        : null;
+    return html`<div class="yn-me-plan-alerts" data-role="plan-target-alerts" role="group" aria-label=${fmt(T.plan.targetAlert.aria, { n: integer(alerts.length) })}>
+      <ul class="yn-me-plan-alert-list">${items}</ul>${more}
+    </div>`;
+  }
   function renderImpact() {
     // リソース計画の画面だけ。計画の明細に効くファイル（アサイン・メンバー・単価）に変更が無ければ出さない
     if (!model || !VIEW_IDS.includes(PLAN_VIEW_ID) || !IMPACT_FILES.some((id) => diffMasterDoc(docs[id]).count > 0)) {
