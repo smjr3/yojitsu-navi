@@ -185,3 +185,18 @@ export async function pickCombo(input: Locator, text: string, option?: string | 
   }
   await expect(list).toBeHidden();
 }
+
+/** 組織の選択欄（文字で探せる選択欄。§117）。全ページの絞り込み = "filter"、リソース計画 = "plan" */
+const TEAM_COMBO = { filter: "#yn-filter-team", plan: "#yn-me-plan-team" } as const;
+/** 組織の選択欄の値（チーム ID。空 = すべて） */
+export function teamValue(page: Page, which: keyof typeof TEAM_COMBO = "filter"): Locator {
+  return page.locator(TEAM_COMBO[which]).locator("xpath=..").locator('input[type="hidden"]');
+}
+/** 組織の選択欄で選ぶ（欄を押して候補を出し、その組織を押す。value "" = すべて） */
+export async function pickTeam(page: Page, value: string, which: keyof typeof TEAM_COMBO = "filter"): Promise<void> {
+  const input = page.locator(TEAM_COMBO[which]);
+  await input.click();
+  const list = input.locator("xpath=..").locator(".yn-combo-list");
+  await list.locator(`li[data-value="${value}"]`).click();
+  await expect(teamValue(page, which)).toHaveValue(value);
+}

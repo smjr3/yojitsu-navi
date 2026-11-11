@@ -51,8 +51,10 @@ test("エラーは赤・警告は黄。エラーを先に並べ、押すとそ�
   // 別の組織・表示する月（§71）・絞り込みにしてから押しても、その行が出る
   await page.locator("#yn-me-plan-from").selectOption("2026-04");
   await page.locator("#yn-me-plan-to").selectOption("2026-09");
-  const other = await page.locator("#yn-me-plan-team option", { hasText: "ネットワーク保守チーム" }).first().getAttribute("value");
-  await page.locator("#yn-me-plan-team").selectOption(other!);
+  // 組織は文字で探して選ぶ（§117）
+  await page.locator("#yn-me-plan-team").fill("ネットワーク保守チーム");
+  await page.locator("#yn-me-plan-team-listbox li", { hasText: "ネットワーク保守チーム" }).first().click();
+  await expect(page.locator("#yn-me-plan-team")).toHaveValue(/ネットワーク保守チーム/);
   await page.locator("#yn-me-plan-q").fill("該当なしの名前");
   await expect(page.locator(".yn-me-plan-table tbody")).toContainText("条件に合う人がいません");
   await err.getByRole("button").click();

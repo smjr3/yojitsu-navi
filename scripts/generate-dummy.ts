@@ -166,9 +166,9 @@ function member(
 
 const membersOf = (c: FyCalendar): MemberRow[] => [
   // 本部・事業部長（工数は付けない）
-  member("M001", "佐藤 健一", "employee", "本部長", "HQ", c.m(-1, 4)),
-  member("M002", "鈴木 美咲", "employee", "部長", "D1", c.m(-1, 4)),
-  member("M003", "高橋 大輔", "employee", "部長", "D2", c.m(-1, 4)),
+  { ...member("M001", "佐藤 健一", "employee", "本部長", "HQ", c.m(-1, 4)), gitlab_username: "sato.k" },
+  { ...member("M002", "鈴木 美咲", "employee", "部長", "D1", c.m(-1, 4)), gitlab_username: "suzuki.a" },
+  { ...member("M003", "高橋 大輔", "employee", "部長", "D2", c.m(-1, 4)), gitlab_username: "takahashi.m" },
   // 課長（課に所属。末端チームではない）
   member("M004", "田中 さくら", "employee", "課長", "S11", c.m(-1, 4)),
   member("M005", "伊藤 翔太", "employee", "課長", "S12", c.m(-1, 4)),
@@ -768,6 +768,7 @@ function csv<T extends object>(rows: T[], columns: Array<keyof T & string>): str
 }
 
 /** 変更者・変更日（§56）の例: 今年度に始まる行は開始の前月 25 日（基準日より後なら基準日）に入れた体。前年度以前に始まる行は記録が始まる前に入れた体で空欄 */
+/** 変更者は GitLab のユーザー名。M001〜M003 の gitlab_username と同じにして、画面では氏名で出す（§117） */
 const STAMP_USERS = ["sato.k", "suzuki.a", "takahashi.m"];
 function withStamps<T extends { start_month: YearMonth }>(rows: readonly T[], asOf: string): Array<T & { updated_by: string; updated_at: string }> {
   const fyStart = new FyCalendar(asOf).m(0, 4);

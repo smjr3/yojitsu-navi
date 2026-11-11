@@ -556,6 +556,15 @@ body {
   .yn-filterbar-slot .yn-filter {
     flex: none;
   }
+  /* 組織の候補は横スクロールの行で切れないよう画面に固定（top は開くときに欄の下に合わせる。§117） */
+  .yn-filterbar-slot .yn-team-combo .yn-combo-list {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    max-height: 50vh;
+  }
 }
 /* Framework の code・pre の文字（既定 14px）も文字の大きさに合わせる */
 pre,
@@ -3438,6 +3447,10 @@ html:has(dialog.yn-dialog[open]) {
   padding: 5px 10px;
   cursor: pointer;
 }
+/* 木の段（組織の選択。§117） */
+.yn-combo-opt[style*="--depth"] {
+  padding-left: calc(10px + var(--depth) * 1.2em);
+}
 .yn-combo-opt.is-active {
   background: var(--yn-accent-bg);
   box-shadow: inset 3px 0 0 var(--yn-focus);
@@ -5336,4 +5349,61 @@ a.yn-org-person:hover {
 .yn-me-dialog :is(input, select, textarea)[aria-invalid="true"] {
   border-color: var(--yn-danger);
   box-shadow: 0 0 0 1px var(--yn-danger);
+}
+
+/* 組織の選択（文字で探せる選択欄。§117）。候補は欄より広く、木が見えるように縦も長め */
+.yn-team-combo .yn-combo-list {
+  right: auto;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: min(60vh, 420px);
+}
+.yn-filterbar-slot .yn-filter-team .yn-team-combo {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 240px;
+}
+.yn-filterbar-slot .yn-team-combo .yn-combo-input {
+  min-height: 32px;
+}
+.yn-me-plan-toolbar .yn-team-combo {
+  width: min(100%, 22em);
+}
+@media (min-width: 1280px) and (max-width: 1365px) {
+  .yn-filterbar-slot .yn-filter-team .yn-team-combo {
+    max-width: 160px;
+  }
+}
+
+/* 保存前の変更内容の要約（人 × 作業 × 月。§117） */
+.yn-me-diff-summary {
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-me-diff-summary li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--yn-hairline);
+}
+.yn-me-diff-who {
+  font-weight: 600;
+}
+.yn-me-diff-what {
+  color: var(--yn-text-2);
+}
+.yn-me-diff-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+.yn-me-diff-rows > summary {
+  cursor: pointer;
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+  margin: 4px 0;
 }

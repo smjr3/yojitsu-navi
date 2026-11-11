@@ -161,7 +161,7 @@ test("変更の履歴から直接修正・削除できる（最後の 1 件を�
   await expect(entries.nth(0)).toContainText("0.20 人月");
   await expect(entries.nth(0)).toContainText("次期更改の提案");
   // 誰がいつ入れたか（§56）。計画なしの行（ファイルの行ではない）には出さない
-  await expect(entries.nth(0).locator('[data-role="stamp"]')).toHaveText("2026-10-25・sato.k");
+  await expect(entries.nth(0).locator('[data-role="stamp"]')).toHaveText("2026-10-25・佐藤 健一");
   await expect(entries.nth(1)).toContainText("計画なし");
   await expect(entries.nth(1).locator('[data-role="stamp"]')).toHaveCount(0);
   // 修正: 人月を 0.1 に

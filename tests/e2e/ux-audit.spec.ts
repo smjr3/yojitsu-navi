@@ -1,5 +1,5 @@
 /**
- * 画面の分かりにくさ・操作しにくさの点検（SPEC §115）
+ * 画面の分かりにくさ・操作しにくさの点検（SPEC §115・§117）
  * - 一覧の名前の列が数値の列に押されて切れない（PC 幅）
  * - マスタ編集・リソース計画の見出しにファイル名・CSV の列名を出さない。検証の文に行番号・案件 ID を出さない
  * - データ確認の参照・コードは画面に出さない（Excel だけ）
@@ -8,7 +8,7 @@
  * - 列の設定に固定の列と「別の列」の印
  * - 必須の欄が空ならその欄に印
  */
-import { test, expect, gotoPage } from "./helpers/app.js";
+import { test, expect, gotoPage, teamValue } from "./helpers/app.js";
 
 test("案件一覧（1280px）: 案件の列が 250px 以上あり、数値の列に押されて縮まない", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -81,4 +81,51 @@ test("行の追加: 必須の欄が空なら、その欄に印を付け、入力
   await expect(d.locator("#yn-me-f-name")).toHaveAttribute("aria-invalid", "true");
   await d.locator("#yn-me-f-name").fill("試験 太郎");
   await expect(d.locator("#yn-me-f-name")).not.toHaveAttribute("aria-invalid", "true");
+});
+
+// ---- 点検の追加分（SPEC §117） ----
+
+test("保存前の変更内容: リソース計画のセル 1 つの変更は「人・作業・月 前 → 後」で出し、CSV の行は開いて見る", async ({ page }) => {
+  await gotoPage(page, "/plan?member=M011");
+  await page.locator('[data-fk^="plan:cell:M011:p:"][data-fk$=":2026-11"]').first().click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  await pop.getByRole("textbox", { name: /倉庫管理システム保守 の/ }).fill("0.5");
+  await pop.getByRole("button", { name: "反映" }).click();
+  const item = page.locator(".yn-me-diff-summary li");
+  await expect(item).toHaveCount(1);
+  await expect(item).toContainText("小林 玲奈");
+  await expect(item).toContainText("青葉物流 / 倉庫管理システム保守");
+  await expect(item).toContainText(/11月 0\.90 → 0\.50/);
+  await expect(page.locator(".yn-me-diff-rows")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".yn-me-diff-rows summary")).toContainText("3 行");
+  await expect(page.locator(".yn-me-diff-slot h3")).not.toContainText(".csv");
+});
+
+test("組織の選択: 文字で探せて、上位の組織名を添えて出す。選ぶと絞り込みに入る", async ({ page }) => {
+  await gotoPage(page, "/");
+  const input = page.locator("#yn-filter-team");
+  await expect(input).toHaveValue(/全体/);
+  await input.click();
+  await page.keyboard.type("ネットワーク保守");
+  const opt = page.locator("#yn-filter-team-listbox li.yn-combo-opt").first();
+  await expect(opt).toContainText("ネットワーク保守チーム");
+  await expect(opt.locator(".yn-combo-sub")).toContainText("第1事業部");
+  await page.keyboard.press("Enter");
+  await expect(teamValue(page)).toHaveValue("T112");
+  await expect(page).toHaveURL(/team=T112/);
+  // リソース計画の組織もリーダー名で探せる
+  await gotoPage(page, "/plan");
+  await page.locator("#yn-me-plan-team").fill("中村 拓也");
+  await expect(page.locator("#yn-me-plan-team-listbox li.yn-combo-opt").first()).toContainText("インフラ保守チーム");
+});
+
+test("リソース計画: 見出しを重ねない。メンバー詳細から来たらその人の行を画面の中に出す", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await gotoPage(page, "/member?id=M011");
+  await page.locator("#yn-member-plan-link").click();
+  await expect(page.locator("h1")).toContainText("リソース計画");
+  await expect(page.locator("#yn-me-panel h2").first()).not.toHaveText("リソース計画");
+  const row = page.locator('tr.yn-me-plan-row[data-member="M011"]');
+  await expect(row).toHaveClass(/is-focus/);
+  await expect(row).toBeInViewport();
 });
