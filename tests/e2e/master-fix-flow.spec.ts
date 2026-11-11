@@ -75,6 +75,31 @@ test("マスタに無い正式な案件の「案件に登録」: 正式な案件
   await expect(page.locator(".yn-me-ledger tbody tr:not(.is-added)").first().getByRole("button", { name: /削除/ })).toHaveCount(0);
 });
 
+test("マスタに無い正式な案件: 正式な案件IDの無い案件の候補なら「同じ案件名の案件」にその顧客名（案件ID）を出す", async ({ page }) => {
+  await gotoPage(page, "/data-check");
+  const unlinked = tableByCaption(page, "正式な案件IDの無い案件");
+  const uh = await headerIndex(unlinked);
+  const withCandidate = dataRows(unlinked).filter({ hasText: /PJ-\d+/ }).first();
+  const candidate = (await cellText(withCandidate, col(uh, "候補の正式な案件ID"))).split(/[,、]\s*/)[0] ?? "";
+  const table = tableByCaption(page, "マスタに無い正式な案件");
+  const head = await headerIndex(table);
+  const row = dataRows(table).filter({ hasText: candidate }).first();
+  expect(await cellText(row, col(head, "同じ案件名の案件"))).toMatch(/（C\d{3}）/);
+  // 候補になっていない案件は空
+  const other = dataRows(table).filter({ hasNotText: candidate }).first();
+  expect(await cellText(other, col(head, "同じ案件名の案件"))).toBe("");
+});
+
+test("「案件に登録」の開始月: URL の start_month がダイアログに入る（未紐付けの未登録の案件から来たとき）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=contracts&new=1&customer_name=" + encodeURIComponent("新しい顧客") + "&project_name=" + encodeURIComponent("新しい保守") + "&start_month=2026-08");
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog.getByRole("heading", { name: /新しい案件/ })).toBeVisible();
+  await expect(dialog.locator("#yn-me-f-customer_name")).toHaveValue("新しい顧客");
+  await expect(dialog.locator("#yn-me-f-project_name")).toHaveValue("新しい保守");
+  await expect(dialog.locator("#yn-me-f-start_month")).toHaveValue("2026-08");
+  await expect(dialog.locator("#yn-me-f-end_month")).toHaveValue("");
+});
+
 test("未設定・仮の値: データ確認の「マスタで直す」で担当チーム未設定の案件だけに絞って開く。顧客の既定を入れると未設定から外れる", async ({ page }) => {
   await gotoPage(page, "/data-check");
   const table = tableByCaption(page, "未設定・仮の値");
