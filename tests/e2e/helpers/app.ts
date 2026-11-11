@@ -186,7 +186,7 @@ export async function pickCombo(input: Locator, text: string, option?: string | 
   await expect(list).toBeHidden();
 }
 
-/** 組織の選択欄（文字で探せる選択欄。§116）。全ページの絞り込み = "filter"、リソース計画 = "plan" */
+/** 組織の選択欄（文字で探せる選択欄。§117）。全ページの絞り込み = "filter"、リソース計画 = "plan" */
 const TEAM_COMBO = { filter: "#yn-filter-team", plan: "#yn-me-plan-team" } as const;
 /** 組織の選択欄の値（チーム ID。空 = すべて） */
 export function teamValue(page: Page, which: keyof typeof TEAM_COMBO = "filter"): Locator {

@@ -9,7 +9,7 @@
  * - 選んだ値は name の hidden input に入る（フォームの読み取りは従来どおり name で引ける）
  * - 候補に無い文字のまま離れたら、直前の値に戻す。allowCustom なら打った文字を値にする
  * - WAI-ARIA の combobox（listbox ポップアップ）。↑↓ で移動、Enter で決定、Esc で閉じる
- * - 絞り込みの欄として使うとき（組織の選択。§116）: emptyLabel は値が空（すべて）のときに欄に出す名前、
+ * - 絞り込みの欄として使うとき（組織の選択。§117）: emptyLabel は値が空（すべて）のときに欄に出す名前、
  *   max は一度に出す候補の数（組織の木はすべて出す）、候補の depth は字下げ（木の段）と path（上位の名前。絞り込み中に補足として出す）、selectOnFocus は欄に入ったら文字を選択（打てばすぐ探せる）
  */
 import { html } from "htl";
@@ -127,7 +127,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
     render(query);
-    // 横にスクロールする入れ物の中（スマホ幅の絞り込みの行）では、候補を画面に固定して欄の下に出す（入れ物で切れないように。§116）
+    // 横にスクロールする入れ物の中（スマホ幅の絞り込みの行）では、候補を画面に固定して欄の下に出す（入れ物で切れないように。§117）
     // ページを動かしたら閉じる（欄から離れてしまうため）
     if (getComputedStyle(list).position === "fixed") {
       list.style.top = `${input.getBoundingClientRect().bottom + 2}px`;

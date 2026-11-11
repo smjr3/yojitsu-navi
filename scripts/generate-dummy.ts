@@ -768,7 +768,7 @@ function csv<T extends object>(rows: T[], columns: Array<keyof T & string>): str
 }
 
 /** 変更者・変更日（§56）の例: 今年度に始まる行は開始の前月 25 日（基準日より後なら基準日）に入れた体。前年度以前に始まる行は記録が始まる前に入れた体で空欄 */
-/** 変更者は GitLab のユーザー名。M001〜M003 の gitlab_username と同じにして、画面では氏名で出す（§116） */
+/** 変更者は GitLab のユーザー名。M001〜M003 の gitlab_username と同じにして、画面では氏名で出す（§117） */
 const STAMP_USERS = ["sato.k", "suzuki.a", "takahashi.m"];
 function withStamps<T extends { start_month: YearMonth }>(rows: readonly T[], asOf: string): Array<T & { updated_by: string; updated_at: string }> {
   const fyStart = new FyCalendar(asOf).m(0, 4);

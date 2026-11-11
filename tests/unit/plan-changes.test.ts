@@ -1,4 +1,4 @@
-/** 保存前の変更内容の要約（人 × 作業 × 月。SPEC §116） */
+/** 保存前の変更内容の要約（人 × 作業 × 月。SPEC §117） */
 import { describe, expect, it } from "vitest";
 import { addRow, deleteRow, parseMasterDoc, updateRow } from "../../src/core/masterEdit.js";
 import { planChangeSummary } from "../../src/core/index.js";

@@ -14,7 +14,7 @@ function monthOptions(model, selected) {
 }
 
 /**
- * 組織の候補（文字で探せる選択欄の候補。§116）。木の順に並べ、段を depth で字下げ。
+ * 組織の候補（文字で探せる選択欄の候補。§117）。木の順に並べ、段を depth で字下げ。
  * 上位の組織の名前でも探せる（search）。過去の組織・未設定は最後
  */
 export function teamComboOptions(model) {
@@ -105,7 +105,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("team")) {
-    // 組織は数十件あるので、文字で探せる選択欄にする（§116）
+    // 組織は数十件あるので、文字で探せる選択欄にする（§117）
     const sel = combobox({ id: "yn-filter-team", name: "__filter_team", options: teamComboOptions(model), value: state().team, emptyLabel: T.filters.allTeams, max: Infinity, selectOnFocus: true, unknownLabel: (v) => v, onChange: (v) => store.set({ team: v }) });
     sel.classList.add("yn-team-combo");
     form.append(html`<div class="yn-filter yn-filter-team"><label for="yn-filter-team">${model.config.labels?.team ?? T.filters.team}</label>${sel}<small class="yn-filter-help visually-hidden">${T.filters.teamHelp}</small></div>`);
