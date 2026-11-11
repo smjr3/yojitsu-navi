@@ -41,4 +41,17 @@ describe("planChangeSummary", () => {
       ["C3", 0, 0.5],
     ]);
   });
+
+  it("全角の数値も計算と同じに読む", () => {
+    let doc = parseMasterDoc("assignments", TEXT.replace("0.5\n", "０．５\n"));
+    doc = deleteRow(doc, doc.rows[1]!.id);
+    expect(planChangeSummary(doc, COLS)[0]!.runs[0]!.before).toBe(0.5);
+  });
+
+  it("月が誤っている行（2026-13 など）は数えず、例外にしない（検証の一覧で直す）", () => {
+    let doc = parseMasterDoc("assignments", TEXT);
+    doc = updateRow(doc, doc.rows[1]!.id, { start_month: "2026-13" });
+    expect(() => planChangeSummary(doc, COLS)).not.toThrow();
+    expect(planChangeSummary(doc, COLS)[0]!.runs[0]).toMatchObject({ from: "2026-04", to: "2026-09", before: 0.5, after: 0 });
+  });
 });

@@ -4,7 +4,8 @@
  * CSV の行の差分（期間を分けた 3 行など）ではなく、「誰の・どの作業の・何月が・何人月 → 何人月」で見せる。
  * 編集前と編集後の全行から、人 × 作業 × 月の人月を足し上げて比べる（行の分け方が変わっても、月の値が同じなら変更なし）。
  */
-import { addMonths, monthRange } from "./calendar.js";
+import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
+import { parseNumberCell } from "./csv.js";
 import type { YearMonth } from "./types.js";
 import type { MasterDoc } from "./masterEdit.js";
 import { rowRecord, diffMasterDoc } from "./masterEdit.js";
@@ -23,7 +24,6 @@ export interface PlanChange {
   runs: PlanChangeRun[];
 }
 
-const MONTH_RE = /^\d{4}-\d{2}$/;
 /** 人月の比較は小数第 4 位で丸める（0.1 + 0.2 などの誤差で「変更あり」にしない） */
 const round = (v: number): number => Math.round(v * 10000) / 10000;
 
@@ -34,8 +34,9 @@ function monthlyOf(records: ReadonlyArray<Record<string, string>>, targetCol: st
     if (!keys.has(key)) continue;
     const from = (r.start_month ?? "").trim();
     const to = (r.end_month ?? "").trim();
-    const v = Number((r[valueCol] ?? "").trim());
-    if (!MONTH_RE.test(from) || !MONTH_RE.test(to) || from > to || !Number.isFinite(v)) continue;
+    // 数値・年月の読み方は計算・計画の画面と同じ（全角の数字も読む。月が 13 などの誤りは数えず、検証の一覧に任せる）
+    const v = parseNumberCell(r[valueCol] ?? "");
+    if (!isValidYearMonth(from) || !isValidYearMonth(to) || from > to || !Number.isFinite(v)) continue;
     let m = out.get(key);
     if (!m) out.set(key, (m = new Map()));
     for (const month of monthRange(from as YearMonth, to as YearMonth)) m.set(month, round((m.get(month) ?? 0) + v));
