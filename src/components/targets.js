@@ -11,7 +11,7 @@ import * as bd from "./breakdown.js";
 import { formatPercent, money, monthJa, pointsSigned, METHOD_LABELS } from "./format.js";
 
 /** 目標の率（入れた値どおり。20 → "20%"、12.5 → "12.5%"） */
-function targetPct(rate) {
+export function targetPct(rate) {
   return formatPercent(rate, Math.abs(Math.round(rate * 100) - rate * 100) < 1e-9 ? 0 : 1);
 }
 

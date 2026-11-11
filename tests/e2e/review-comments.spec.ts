@@ -112,6 +112,8 @@ test.describe("リソース計画: 名前列の幅", () => {
     await page.addInitScript((k) => localStorage.removeItem(k), WIDTH_KEY);
     await gotoPage(page, "/plan");
     const before = await width(page);
+    // 表の上に目標の警告（§110）があり、表が画面の下にあるので先に見える位置へ
+    await page.locator(".yn-col-resizer").evaluate((el) => el.scrollIntoView({ block: "center" }));
     const box = (await page.locator(".yn-col-resizer").boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

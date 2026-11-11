@@ -122,3 +122,7 @@
 ## 計画と実績のずれ（SPEC §64）— `src/core/planGaps.ts`
 
 `planGaps(model, { period, memberIds, includeOutside })` は、期間を `confirmedPeriodOf`（〜 `meta.lastFinalMonth`）で切ってから `aggregateMembers` の `byContract` を 1 行ずつ `planGapKindOf` で判定するだけ（計画・実績の計算は §18.1 と共有、重複実装なし）。メンバーの絞り込みは画面の `memberIdsInTeam` の結果を渡す（一覧と同じ母集団）。
+
+## 目標の警告（SPEC §110）— `src/core/planTargets.ts`
+
+`planTargetAlerts(model, after, { teamId, tree })` は、組織に関わる目標（終了月が基準月以降）を先に絞り、`after`（編集後のマスタとアサイン）があればその目標に入る案件だけ `assignmentPlanOf` で計画を作り直してから `evaluateTarget(…, "assignment")` を呼ぶ（判定は §63 と共有、重複実装なし）。未達見込みだけ返す。超える月は計画の明細（`assignmentPlan.lines`）の月ごとの額と、`ContractMonth.budget` ×（1 − 目標）を比べる。`after = null` なら Model の計画のまま（編集が無いときは作り直さない）。
