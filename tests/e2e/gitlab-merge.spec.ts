@@ -243,7 +243,7 @@ test.describe("本物の GitLab API の形（モック）", () => {
     await item.getByRole("button", { name: "内容を見る" }).click();
     await expect(item.locator(".yn-mr-changes")).toContainText("単価: 追加 1");
     expect(calls.some((c) => c.url.includes("/repository/files/data%2Fmasters%2Frates.csv/raw?ref=b0"))).toBe(true);
-    await item.getByRole("button", { name: "!7 単価改定 をマージ" }).click();
+    await item.getByRole("button", { name: "単価改定（番号 7）をマージ" }).click();
     await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
     await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("CI が画面を作り直したあと");
     const merge = calls.find((c) => c.method === "PUT")!;
@@ -267,7 +267,7 @@ test.describe("本物の GitLab API の形（モック）", () => {
     await mock(page, { canMerge: true, mergeStatus: 405 });
     await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
     await gotoPage(page, "/masters");
-    await page.getByRole("button", { name: "!7 単価改定 をマージ" }).click();
+    await page.getByRole("button", { name: "単価改定（番号 7）をマージ" }).click();
     await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
     const err = page.locator(".yn-mr .yn-me-outcome.is-error");
     await expect(err).toContainText("今はマージできません");
