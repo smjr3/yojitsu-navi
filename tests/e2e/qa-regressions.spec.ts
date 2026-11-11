@@ -207,7 +207,7 @@ test("スマホ幅の計算根拠: 長い案件名は折り返し、表の横幅
   expect(w).toBeLessThan(260);
 });
 
-test("計算根拠の表: 長い案件名は「…」で他の列の見出しを潰さず、横スクロールしても先頭列は見出しと本文がそろって固定される", async ({ page }) => {
+test("計算根拠の表: 長い案件名は「…」で他の列の見出しを潰さず、表は幅いっぱい。横スクロールしても先頭列は見出しと本文がそろって固定される", async ({ page }) => {
   for (const width of [1280, 768]) {
     await page.setViewportSize({ width, height: 900 });
     await gotoPage(page, "/contract?id=C160");
@@ -217,12 +217,16 @@ test("計算根拠の表: 長い案件名は「…」で他の列の見出しを
     await expect(first).toBeVisible();
     // 全文は title。幅は上限まで（他の列の見出しが見える）
     await expect(first).toHaveAttribute("title", /シングルサインオン連携基盤の維持管理業務/);
-    expect(await first.evaluate((td) => td.getBoundingClientRect().width)).toBeLessThanOrEqual(300);
+    if (width === 768) expect(await first.evaluate((td) => td.getBoundingClientRect().width)).toBeLessThanOrEqual(300);
     const heads = await wrap.locator("thead th").evaluateAll((ths) => ths.map((th) => th.getBoundingClientRect().width));
     for (const hw of heads) expect(hw).toBeGreaterThan(20);
     // 1280px は横スクロール無し。狭い幅で横に送っても、先頭列の見出しと本文は同じ位置に固定
     const [sw, cw] = await wrap.evaluate((el) => [el.scrollWidth, el.clientWidth]);
-    if (width === 1280) expect(sw).toBeLessThanOrEqual(cw);
+    if (width === 1280) {
+      expect(sw).toBeLessThanOrEqual(cw);
+      // 表はダイアログの幅いっぱい（余った幅は案件名の列へ）
+      expect(await wrap.locator("table").evaluate((t) => t.getBoundingClientRect().width)).toBeGreaterThanOrEqual(cw - 2);
+    }
     else {
       await wrap.evaluate((el) => (el.scrollLeft = 200));
       const x = async (sel: string) => wrap.locator(sel).first().evaluate((el) => Math.round(el.getBoundingClientRect().left));

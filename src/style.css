@@ -1662,6 +1662,12 @@ h3 {
   z-index: 1;
   background: var(--yn-card);
 }
+/* いちばん長い文字の列は余った幅を受け取る（max-width: 0 + width: 100% で内容の長さに引っ張られず、表を幅いっぱいに使う） */
+.yn-bd-table td.is-grow {
+  width: 100%;
+  min-width: 12em;
+  max-width: 0;
+}
 .yn-bd-table tfoot td:first-child {
   position: sticky;
   left: 0;
@@ -2800,6 +2806,10 @@ li.is-jumped,
 .yn-dialog .yn-table-wrap-inline thead th {
   position: sticky;
   top: 0;
+}
+/* ダイアログは #observablehq-main の外（body 直下）なので、Framework の既定 table { max-width: 640px } を外す */
+.yn-dialog table {
+  max-width: none;
 }
 /* ダイアログを開いている間は背景のページをスクロールさせない */
 html:has(dialog.yn-dialog[open]) {
