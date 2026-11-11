@@ -17,7 +17,7 @@ import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { formatHours, integer, dateTimeJst, monthJa, WARNING_LABELS, UNMAPPED_REASON_LABELS } from "./components/format.js";
 import { groupedWorklogTable, peopleColumn } from "./components/worklog-people.js";
-import { normalizeName } from "./core/index.js";
+import { mastersHref, officialProjectLookup, registerContractHref, unlinkedByCandidate, contractListText } from "./components/register-links.js";
 ```
 
 ```js
@@ -27,22 +27,9 @@ const issuesData = await loadJson(FileAttachment("./data/dataset-issues.json"));
 
 ```js
 // マスタ編集へ移る（§103）。「案件に登録」は分かっている値を入れた追加のダイアログ、ほかは該当の行を検索・絞り込んで開く
-const mastersHref = (view, params) => {
-  const q = new URLSearchParams({ view });
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, v);
-  return `./masters?${q}`;
-};
 const linkButton = (href, text, aria) => html`<a class="yn-btn yn-btn-sm yn-row-action" href=${href} aria-label=${aria}>${text}</a>`;
-/** 案件名が同じ正式な案件（§98）がちょうど 1 件なら、その案件 */
-const officialByName = (() => {
-  const map = new Map();
-  for (const p of issuesData?.officialProjects ?? []) {
-    const k = normalizeName(p.projectName);
-    map.set(k, map.has(k) ? null : p);
-  }
-  return (name) => map.get(normalizeName(name ?? "")) ?? null;
-})();
-const registerHref = ({ customerName, projectName, projectId }) => mastersHref("contracts", { new: "1", customer_name: customerName, project_name: projectName, project_id: projectId });
+const officialByName = officialProjectLookup(issuesData?.officialProjects);
+const registerHref = (row) => registerContractHref(row, officialByName);
 ```
 
 ```js
@@ -103,8 +90,7 @@ if (model) {
           get: (r) => (r.reason === "UNREGISTERED_PROJECT" ? T.dataCheck.registerContract : ""),
           render: (r) => {
             if (r.reason !== "UNREGISTERED_PROJECT") return "";
-            const official = officialByName(r.projectName);
-            return linkButton(registerHref({ customerName: official?.customerName ?? r.customerName, projectName: official?.projectName ?? r.projectName, projectId: official?.projectId }), T.dataCheck.registerContract, fmt(T.dataCheck.registerContractAria, { name: [r.customerName, r.projectName].filter(Boolean).join(" / ") }));
+            return linkButton(registerHref(r), T.dataCheck.registerContract, fmt(T.dataCheck.registerContractAria, { name: [r.customerName, r.projectName].filter(Boolean).join(" / ") }));
           },
           exportValue: () => "",
         },
@@ -288,12 +274,15 @@ if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
 }
 if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
   display(sectionTitle(T.dataCheck.unregisteredProjectsTitle, T.dataCheck.unregisteredProjectsHint));
+  // 正式な案件IDの無い案件の候補になっているもの（同じ案件を二重に登録しないように並べる）
+  const sameName = unlinkedByCandidate(projectCheck.unlinked);
   display(
     dataTable({
       columns: [
         { key: "projectId", label: T.dataCheck.colProjectId, type: "text" },
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+        ...(sameName.size > 0 ? [{ key: "sameNameText", label: T.dataCheck.colSameNameContracts, type: "text", empty: "" }] : []),
         {
           key: "action",
           label: T.dataCheck.colAction,
@@ -303,7 +292,7 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
           exportValue: () => "",
         },
       ],
-      rows: projectCheck.unregistered.map((p, i) => ({ key: i, ...p })),
+      rows: projectCheck.unregistered.map((p, i) => ({ key: i, ...p, sameNameText: contractListText(sameName.get(p.projectId)) })),
       caption: T.dataCheck.unregisteredProjectsTitle,
       exportName: "projects_without_contract",
       sort: { key: "projectId", dir: "asc" },
