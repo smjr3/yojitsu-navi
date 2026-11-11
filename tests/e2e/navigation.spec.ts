@@ -2,7 +2,7 @@
  * 遷移・並べ替え・絞り込み・Excel 出力
  */
 import { createRequire } from "node:module";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
+import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, teamValue } from "./helpers/app.js";
 import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen, UNIT_LABEL } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
@@ -30,7 +30,7 @@ test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ �
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe(leaf);
   await expect(page.locator("h1")).toHaveText("案件一覧");
-  await expect(page.locator("#yn-filter-team")).toHaveValue(leaf);
+  await expect(teamValue(page)).toHaveValue(leaf);
   const contracts = tableByCaption(page, "案件一覧");
   const ids = teamContractIds(leaf, FY, model)!;
   const expected = contractsInPeriod(FY, ids, model).map((r) => r.contract.contractId);
@@ -62,12 +62,12 @@ test("チーム一覧 → 末端チーム詳細 → 案件一覧（team=）→ �
   await same.click();
   await expect(page).toHaveURL(/\/contracts\?/);
   expect(query(page).get("team")).toBe(r.contract.teamId);
-  await expect(page.locator("#yn-filter-team")).toHaveValue(r.contract.teamId!);
+  await expect(teamValue(page)).toHaveValue(r.contract.teamId!);
   // パンくずで全体サマリーへ（状態を引き継ぐ）
   await page.locator('nav[aria-label="パンくず"] a', { hasText: "全体サマリー" }).click();
   await expect(page.locator("h1")).toHaveText("全体サマリー");
   expect(query(page).get("team")).toBe(r.contract.teamId);
-  await expect(page.locator("#yn-filter-team")).toHaveValue(r.contract.teamId!);
+  await expect(teamValue(page)).toHaveValue(r.contract.teamId!);
 });
 
 test("チーム一覧の木: 折りたたみで配下が隠れ、開くと戻る。中間の課からも案件一覧へ", async ({ page }) => {

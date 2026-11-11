@@ -9,6 +9,8 @@
  * - 選んだ値は name の hidden input に入る（フォームの読み取りは従来どおり name で引ける）
  * - 候補に無い文字のまま離れたら、直前の値に戻す。allowCustom なら打った文字を値にする
  * - WAI-ARIA の combobox（listbox ポップアップ）。↑↓ で移動、Enter で決定、Esc で閉じる
+ * - 絞り込みの欄として使うとき（組織の選択。§116）: emptyLabel は値が空（すべて）のときに欄に出す名前、
+ *   max は一度に出す候補の数（組織の木はすべて出す）、候補の depth は字下げ（木の段）と path（上位の名前。絞り込み中に補足として出す）、selectOnFocus は欄に入ったら文字を選択（打てばすぐ探せる）
  */
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
@@ -47,7 +49,7 @@ export function filterOptions(options, query) {
 
 let seq = 0;
 
-export function combobox({ id, name, options, value = "", required = false, disabled = false, placeholder = "", describedBy = null, allowCustom = false, unknownLabel = null, onChange = null }) {
+export function combobox({ id, name, options, value = "", required = false, disabled = false, placeholder = "", describedBy = null, allowCustom = false, unknownLabel = null, onChange = null, emptyLabel = "", max = COMBO_MAX, selectOnFocus = false }) {
   const listId = `${id}-listbox`;
   const uid = ++seq;
   let rootEl = null;
@@ -57,7 +59,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
   const lookup = () => (byValue ??= new Map(optionsOf().map((o) => [o.value, o])));
   let current = value;
   const labelOf = (v) => {
-    if (v === "") return "";
+    if (v === "") return emptyLabel;
     const o = lookup().get(v);
     if (o) return o.label;
     return unknownLabel ? unknownLabel(v) : v;
@@ -98,9 +100,12 @@ export function combobox({ id, name, options, value = "", required = false, disa
 
   const render = (query) => {
     const all = filterOptions(optionsOf(), query);
-    shown = all.slice(0, COMBO_MAX);
+    shown = all.slice(0, max);
+    // 木の候補（depth）は、絞り込み中は字下げをやめ、上位の名前（path）を補足に出す（どこの組織か分かるように）
+    const filtering = query.trim() !== "";
     const items = shown.map((o, i) => {
-      const li = html`<li id=${optionId(i)} role="option" class=${o.muted ? "yn-combo-opt is-muted" : "yn-combo-opt"} data-index=${String(i)} aria-selected=${o.value === current ? "true" : "false"}><span class="yn-combo-label">${o.label}</span>${o.sub ? html`<span class="yn-combo-sub">${o.sub}</span>` : null}</li>`;
+      const sub = filtering && o.path ? [o.path, o.sub].filter(Boolean).join(" ・ ") : o.sub;
+      const li = html`<li id=${optionId(i)} role="option" class=${o.muted ? "yn-combo-opt is-muted" : "yn-combo-opt"} style=${o.depth && !filtering ? `--depth:${o.depth}` : null} data-value=${o.value} data-index=${String(i)} aria-selected=${o.value === current ? "true" : "false"}><span class="yn-combo-label">${o.label}</span>${sub ? html`<span class="yn-combo-sub">${sub}</span>` : null}</li>`;
       // mousedown で決める（click だと先に input の blur が走って閉じてしまう）
       li.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
@@ -142,7 +147,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
   /** 欄を離れる・Enter で打った文字を確定する */
   const settle = () => {
     const text = input.value.trim();
-    if (text === "") {
+    if (text === "" || (emptyLabel && text === emptyLabel)) {
       set("");
       return;
     }
@@ -154,6 +159,7 @@ export function combobox({ id, name, options, value = "", required = false, disa
   };
 
   input.addEventListener("input", () => openList(input.value));
+  if (selectOnFocus) input.addEventListener("focus", () => input.select());
   input.addEventListener("click", () => {
     if (!open) openList("");
   });

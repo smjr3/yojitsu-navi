@@ -1,7 +1,7 @@
 member_id,name,kind,title,division,department,section,team_id,effective_from,status,gitlab_username
-M001,佐藤 健一,employee,本部長,ソリューション事業本部,,,HQ,2025-04,,
-M002,鈴木 美咲,employee,部長,ソリューション事業本部,第1事業部,,D1,2025-04,,
-M003,高橋 大輔,employee,部長,ソリューション事業本部,第2事業部,,D2,2025-04,,
+M001,佐藤 健一,employee,本部長,ソリューション事業本部,,,HQ,2025-04,,sato.k
+M002,鈴木 美咲,employee,部長,ソリューション事業本部,第1事業部,,D1,2025-04,,suzuki.a
+M003,高橋 大輔,employee,部長,ソリューション事業本部,第2事業部,,D2,2025-04,,takahashi.m
 M004,田中 さくら,employee,課長,ソリューション事業本部,第1事業部,第1課,S11,2025-04,,
 M005,伊藤 翔太,employee,課長,ソリューション事業本部,第1事業部,第2課,S12,2025-04,,
 M006,渡辺 直樹,employee,課長,ソリューション事業本部,第2事業部,第3課,S21,2025-04,,

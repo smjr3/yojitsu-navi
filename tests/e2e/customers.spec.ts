@@ -4,7 +4,7 @@
  */
 import { createRequire } from "node:module";
 import type { Page } from "@playwright/test";
-import { test, expect, useDarkTheme, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, kpiValue, dialog, dialogRow, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, pickTeam } from "./helpers/app.js";
 import { aggregate, fiscalPeriod, forecastFor, formatPercent, getModel, teamContractIds, totalsFor, yen } from "./helpers/core.js";
 import { NONE_CUSTOMER_KEY, customerKey, dailyProgress, encodeDaily, groupByCustomer } from "../../src/core/index.js";
 
@@ -140,7 +140,7 @@ test.describe("顧客一覧 /customers", () => {
   test("チーム絞り込み: そのチームの案件だけで顧客を集計する", async ({ page }) => {
     await go(page, "/customers");
     const teamId = "T211";
-    await page.locator("#yn-filter-team").selectOption(teamId);
+    await pickTeam(page, teamId);
     expect(query(page).get("team")).toBe(teamId);
     const ids = teamContractIds(teamId, FY, model)!;
     const expected = listed(ids);

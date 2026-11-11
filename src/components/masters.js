@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -287,10 +287,10 @@ function latestByKey(doc, keyColumn) {
  * @param {string} opts.asOfMonth 計算基準月（これ以前 = 実績が表示されている「過去」）
  * @param {string} opts.minMonth データの最小月（影響月を数える最初の月）
  */
-/** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。記録が無ければ出さない */
-function stampEl(doc, row) {
+/** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。記録が無ければ出さない。変更者は GitLab のユーザー名なので、nameOf で氏名にする（§116） */
+function stampEl(doc, row, nameOf = (u) => u) {
   if (!row || (!doc.header.includes(STAMP_COLUMNS.by) && !doc.header.includes(STAMP_COLUMNS.at))) return null;
-  const by = cellOf(doc, row, STAMP_COLUMNS.by);
+  const by = nameOf(cellOf(doc, row, STAMP_COLUMNS.by));
   const at = cellOf(doc, row, STAMP_COLUMNS.at);
   if (!by && !at) return null;
   return html`<span class="yn-me-hint yn-me-plan-stamp" data-role="stamp">${by && at ? fmt(T.planEdit.stamp, { by, at }) : fmt(T.planEdit.stampOne, { v: by || at })}</span>`;
@@ -582,6 +582,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function memberNames() {
     const latest = latestByKey(docs.members, "member_id");
     return new Map([...latest.entries()].map(([id, v]) => [id, cellOf(docs.members, v.row, "name")]));
+  }
+  /** 変更者（GitLab のユーザー名）→ 氏名。メンバーマスタの gitlab_username（§113）に無ければユーザー名のまま（§116） */
+  function stampName(username) {
+    const u = normalizeGitlabUsername(username);
+    if (!u || !docs.members.header.includes("gitlab_username")) return username;
+    for (const [, v] of latestByKey(docs.members, "member_id")) {
+      if (normalizeGitlabUsername(cellOf(docs.members, v.row, "gitlab_username")) === u) return cellOf(docs.members, v.row, "name") || username;
+    }
+    return username;
   }
   function teamNames() {
     const latest = latestByKey(docs.teams, "team_id");
@@ -1197,9 +1206,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const rawKey = g.shown.record[keyColumn] ?? "";
       const keyHint = cellHint(fileId, keyColumn, rawKey);
       const lead = isGoal
-        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span>${stampEl(doc, rowById.get(g.shown.rowId))}</th>`
+        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${keyText}</span><span class="yn-me-hint">${T.targets.kinds[g.shown.record.target_type] ?? `${g.shown.record.target_type ?? ""}${T.masters.invalidValue}`}</span>${stampEl(doc, rowById.get(g.shown.rowId), stampName)}</th>`
         : isList && nameColumn
-        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${stampEl(doc, rowById.get(g.shown.rowId))}</th>`
+        ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${stampEl(doc, rowById.get(g.shown.rowId), stampName)}</th>`
         : nameColumn
         ? html`<th scope="row"><span class="yn-me-val yn-me-lead-name">${g.shown.record[nameColumn] || html`<span class="yn-muted">${T.masters.emptyValue}</span>`}</span><span class="yn-me-hint">${rawKey || T.masters.emptyValue}</span>${nextEl(nameColumn)}</th>`
         : html`<th scope="row">${valueEl(keyColumn, rawKey, "yn-me-val yn-me-lead-name")}${keyHint ? html`<span class="yn-me-hint">${keyHint}</span>` : null}</th>`;
@@ -1550,7 +1559,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const tNames = teamNames();
     const unit = plan.teamId ? tree[plan.teamId] : null;
     const leaderText = (id) => (id ? names.get(id) || fmt(T.masters.unknownMemberValue, { id }) : T.plan.leaderUnset);
-    const optLabel = (n) => `${"　".repeat(n.depth)}${n.name}${n.level ? `［${n.level}］` : ""}${n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) || T.plan.unknownMember }) : ""}`;
+    const optSub = (n) => [n.level, n.leaderMemberId ? fmt(T.plan.optLeader, { name: names.get(n.leaderMemberId) || T.plan.unknownMember }).trim().replace(/^・\s*/, "") : ""].filter(Boolean).join(" ・ ");
     const fyLabel = fmt(T.plan.rangeLabel, { first: monthJa(months[0]), last: monthJa(last), n: months.length });
     const changeRange = (r, fk) => {
       applyPlanRange(r, true);
@@ -1567,17 +1576,38 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     };
     const fromSel = monthSelect("yn-me-plan-from", "plan:from", plan.range.from, T.plan.rangeFrom, (v) => setPlanRangeFrom(plan.range, v));
     const toSel = monthSelect("yn-me-plan-to", "plan:to", plan.range.to, T.plan.rangeTo, (v) => setPlanRangeTo(plan.range, v));
-    const teamSel = html`<select id="yn-me-plan-team" class="yn-select" data-fk="plan:team">
-      <option value="" selected=${plan.teamId === null}>${T.plan.allUnits}</option>
-      ${flat.map((n) => html`<option value=${n.teamId} selected=${plan.teamId === n.teamId}>${optLabel(n)}</option>`)}
-      ${plan.teamId !== null && !tree[plan.teamId] ? html`<option value=${plan.teamId} selected>${tNames.get(plan.teamId) ?? plan.teamId}${T.plan.notInYear}</option>` : null}
-    </select>`;
-    teamSel.addEventListener("change", () => {
-      plan.teamId = teamSel.value || null;
-      plan.focusMember = null;
-      renderPanel();
-      focusKey("plan:team");
+    // 組織は数十件あるので、文字で探せる選択欄にする（組織名・種別・リーダー名で探せる。§116）
+    const teamOpts = [
+      { value: "", label: T.plan.allUnits },
+      ...(() => {
+        // 木の順（深さ優先）なので、段ごとの名前を積んで上位の名前（絞り込み中の補足）を作る
+        const stack = [];
+        return flat.map((n) => {
+          stack.length = n.depth;
+          const path = stack.join(" / ");
+          stack.push(n.name);
+          return { value: n.teamId, label: n.name, depth: n.depth, sub: optSub(n), path, search: path };
+        });
+      })(),
+      ...(plan.teamId !== null && !tree[plan.teamId] ? [{ value: plan.teamId, label: `${tNames.get(plan.teamId) ?? plan.teamId}${T.plan.notInYear}` }] : []),
+    ];
+    const teamSel = combobox({
+      id: "yn-me-plan-team",
+      name: "__plan_team",
+      options: teamOpts,
+      value: plan.teamId ?? "",
+      emptyLabel: T.plan.allUnits,
+      max: Infinity,
+      selectOnFocus: true,
+      onChange: (v) => {
+        plan.teamId = v || null;
+        plan.focusMember = null;
+        renderPanel();
+        focusKey("plan:team");
+      },
     });
+    teamSel.classList.add("yn-team-combo");
+    teamSel.input.dataset.fk = "plan:team";
     const defaultStart = () => {
       const next = addMonths(asOfMonth, 1);
       return next >= months[0] && next <= last ? next : months[0];
@@ -1997,7 +2027,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 「YYYY-MM から計画なし」は、その月より後に始まる最初の履歴の手前（無ければ最後）に置く（重なりのある履歴の間に挟まないため）
     const ends = [];
     /** 誰がいつ変えたか（保存時に書いた変更者・変更日。§56）。無ければ出さない */
-    const stampOf = (row) => stampEl(doc, row);
+    const stampOf = (row) => stampEl(doc, row, stampName);
     const items = entries.flatMap((e) => {
       const row = doc.rows.find((x) => x.id === e.rowId);
       const st = row ? rowState(doc, row) : "unchanged";
@@ -3116,6 +3146,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
 
   // ---- 差分 ---------------------------------------------------------------
+  /** 変更の要約（人 × 作業 × 月）を作るファイルと列（§116） */
+  const PLAN_SUMMARY_COLS = { assignments: { targetCol: "contract_id", valueCol: "allocation" }, outside: { targetCol: "type", valueCol: "person_months" } };
+  function planSummaryEl(fileId, summary) {
+    if (summary.length === 0) return html`<p class="yn-me-hint">${T.masters.diffSummaryNone}</p>`;
+    const names = memberNames();
+    const pmText = (v) => (v === 0 ? T.masters.diffSummaryZero : pm(v));
+    const monthsText = (r) => (r.from === r.to ? monthJa(r.from) : `${monthJa(r.from)}〜${monthJa(r.to)}`);
+    return html`<ul class="yn-me-diff-summary" aria-label=${T.masters.diffSummaryAria}>${summary.map((c) => {
+      const who = names.get(c.memberId) || c.memberId;
+      const proj = fileId === "assignments" ? projectOfContract(c.target) : null;
+      const what = proj ? (proj.sub ? `${proj.sub} / ${proj.label}` : proj.label) : c.target;
+      return html`<li><span class="yn-me-diff-who">${who}</span><span class="yn-me-diff-what">${what}</span><span class="yn-me-diff-runs">${c.runs.map((r) => html`<span class="yn-me-diff-run">${monthsText(r)} <span class="yn-num-text">${pmText(r.before)}</span> → <strong class="yn-num-text">${pmText(r.after)}</strong></span>`)}</span></li>`;
+    })}</ul>`;
+  }
   function renderDiff() {
     const diffs = MASTER_FILE_IDS.map((id) => diffMasterDoc(docs[id])).filter((d) => d.count > 0);
     const body = diffs.length
@@ -3129,13 +3173,18 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
             ...d.changed.map((c) => ({ kind: T.masters.changed, chip: "yn-chip-neutral", sign: "✎", key: c.rowId, text: line(c.before), detail: c.columns.map((col) => fmt(T.masters.diffValue, { col: label(col), before: displayValue(d.fileId, col, (c.before[col] ?? "").trim()) || T.masters.emptyValue, after: displayValue(d.fileId, col, (c.after[col] ?? "").trim()) || T.masters.emptyValue })).join(" / ") })),
             ...d.removed.map((r) => ({ kind: T.masters.deleteKind, chip: "yn-chip-neutral", sign: "−", key: r.rowId, text: line(r.before), detail: null })),
           ];
-          return html`<div class="yn-me-diff-file">
-            <h3 class="yn-me-subtitle">${def.label} <span class="yn-me-path">${def.path}</span> <span class="yn-me-small">${T.masters.added} ${integer(d.added.length)} ${T.masters.diffChanged} ${integer(d.changed.length)} ${T.masters.diffRemoved} ${integer(d.removed.length)}</span></h3>
-            <div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-me-diff-table">
+          const table = html`<div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-me-diff-table">
               <caption class="visually-hidden">${def.label}${T.masters.diffCaption}</caption>
               <thead><tr><th scope="col">${T.dataCheck.colKind}</th><th scope="col">${T.masters.diffRowCol}${cols.map((c) => c.label).join(" ・ ")}）</th><th scope="col">${T.masters.diffValuesCol}</th></tr></thead>
               <tbody>${rows.map((r) => html`<tr data-key=${r.key}><th scope="row"><span class=${`yn-chip ${r.chip}`}>${r.sign} ${r.kind}</span></th><td>${r.text}</td><td>${r.detail ?? (r.kind === T.masters.added ? T.masters.newRow : T.masters.wholeRowDeleted)}</td></tr>`)}</tbody>
-            </table></div>
+            </table></div>`;
+          // リソース計画は期間を分けて保存するので、セル 1 つの変更が CSV の何行にもなる。
+          // 「誰の・どの作業の・何月が・何人月 → 何人月」の要約を先に出し、行ごとの変更は開いて見る（§116）
+          const summary = PLAN_SUMMARY_COLS[d.fileId] ? planChangeSummary(docs[d.fileId], PLAN_SUMMARY_COLS[d.fileId]) : null;
+          return html`<div class="yn-me-diff-file">
+            <h3 class="yn-me-subtitle">${def.label} <span class="yn-me-small">${T.masters.added} ${integer(d.added.length)} ${T.masters.diffChanged} ${integer(d.changed.length)} ${T.masters.diffRemoved} ${integer(d.removed.length)}</span></h3>
+            ${summary ? planSummaryEl(d.fileId, summary) : null}
+            ${summary ? html`<details class="yn-me-diff-rows"><summary>${fmt(T.masters.diffRowsToggle, { n: integer(rows.length) })}</summary>${table}</details>` : table}
           </div>`;
         })
       : html`<p class="yn-me-empty">${T.masters.noDiff}</p>`;
@@ -3586,6 +3635,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const issue = validation.issues.find((i) => i.fileId === fileId && i.row === row) ?? { fileId, row, rowId: docs[fileId].rows[row - 2]?.id ?? null };
     // 画面に入ってから（スクロールとフォーカスのため）
     requestAnimationFrame(() => revealIssue(issue));
+  }
+  // メンバー詳細の「この人のリソース計画を入力」から来たとき（?member=）は、その人の行（開いた状態）を画面の中ほどに出す（§116）
+  if (initialMember && active === PLAN_VIEW_ID && !jm) {
+    requestAnimationFrame(() => {
+      const tr = root.querySelector(`tr.yn-me-plan-row[data-member="${CSS.escape(initialMember)}"]`);
+      if (tr) tr.scrollIntoView({ block: "center" });
+    });
   }
   // データ確認の「案件に登録」「単価を登録」から来たとき（?new=1&列名=値）は、値を入れた追加のダイアログを開く（§103。保存は人が決める）
   if (initialAdd && active !== PLAN_VIEW_ID && VIEW_IDS.includes(active)) {
