@@ -147,8 +147,8 @@ export const FILE_HELP = {
 export const PLAN_VIEW_ID = "plan";
 export const LEDGER_VIEWS = Object.freeze(["members", "rates", "teams", "contracts", "customerTeams", "targets", "holidays"]);
 export const PLAN_VIEWS = Object.freeze([PLAN_VIEW_ID]);
-/** 計画の明細（着地見込みの計画値）に効くファイル（§65） */
-const IMPACT_FILES = Object.freeze(["assignments", "members", "rates"]);
+/** 計画の明細（着地見込みの計画値）に効くファイル（§65）。祝日は 1 人月の時間を変える（§114） */
+const IMPACT_FILES = Object.freeze(["assignments", "members", "rates", "holidays"]);
 /** 画面 → その画面で編集するファイル */
 const VIEW_FILES = { members: ["members"], rates: ["rates"], teams: ["teams"], contracts: ["contracts"], customerTeams: ["customerTeams"], holidays: ["holidays"], targets: ["targets"], plan: ["assignments", "outside"] };
 /** 人ごとの検証（案件の行ではなく人の行で見せる） */
@@ -3148,7 +3148,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   // ---- 変更の影響（§65） -----------------------------------------------------
   /** 編集前のマスタで作る計画の材料（土台は変わらないので 1 回だけ） */
   let impactBase = null;
-  const planInputsOf = (dataset) => ({ masters: createMasterIndex(dataset), assignments: dataset.assignments });
+  // 祝日も渡す（編集中の祝日で 1 人月の時間を数える。§114）
+  const planInputsOf = (dataset) => ({ masters: createMasterIndex(dataset), assignments: dataset.assignments, holidays: dataset.holidays });
 
   // ---- 目標の警告（§110） ----------------------------------------------------
   /** 前回の結果（組織・組織の月・編集の内容が同じなら計算し直さない。リソース計画は描き直しが多いため） */
@@ -3216,7 +3217,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     </div>`;
   }
   function renderImpact() {
-    // リソース計画の画面だけ。計画の明細に効くファイル（アサイン・メンバー・単価）に変更が無ければ出さない
+    // リソース計画の画面だけ。計画の明細に効くファイル（アサイン・メンバー・単価・祝日）に変更が無ければ出さない
     if (!model || !VIEW_IDS.includes(PLAN_VIEW_ID) || !IMPACT_FILES.some((id) => diffMasterDoc(docs[id]).count > 0)) {
       parts.impact.replaceChildren();
       return;

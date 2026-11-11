@@ -95,6 +95,16 @@ describe("planTargetAlerts", () => {
     expect(planTargetAlerts(modelOf("project,C1,2027-03,90,,\n"), inputs("M1,C1,2026-04,2027-09,0.1\nM2,C2,2026-04,2027-09,0.1\n"), all)).toEqual([]);
   });
 
+  it("編集中の祝日を渡すと、その祝日で 1 人月の時間を数えて判定する（§114）", () => {
+    // 目標 79%: 祝日なしの計画（約 78.3%）では未達見込み。10〜3 月の平日に会社の休日を 6 日足すと
+    // 計画が 0.5 人月 × 48h × 5,000 円 = 12 万円減って約 79.3% になり、達成見込みに変わる
+    const m = modelOf("project,C1,2027-03,79,,\n");
+    expect(ids(planTargetAlerts(m, null, all))).toEqual(["project:C1:2027-03"]);
+    const days = ["2026-10-30", "2026-11-30", "2026-12-28", "2027-01-29", "2027-02-26", "2027-03-31"];
+    const after: PlanInputs = { ...inputs(BASE), holidays: days.map((date) => ({ date, name: "会社の休日" })) };
+    expect(planTargetAlerts(m, after, all)).toEqual([]);
+  });
+
   it("組織を選ぶと、その組織と配下の組織の目標、担当案件を含む顧客・案件の目標だけ（上位の組織の目標は出さない）", () => {
     const targets = "team,HQ,2027-03,95,,\nteam,T1,2027-03,95,,\nteam,T2,2027-03,95,,\ncustomer,A社,2027-03,95,,\nproject,C2,2027-03,95,,\n";
     const m = modelOf(targets);
