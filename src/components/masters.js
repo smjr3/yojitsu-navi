@@ -301,7 +301,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now });
+  // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
@@ -534,7 +535,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (value === "") return value;
     if (column === "team_id" && fileId !== "teams") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
     if (column === "parent_team_id") return teamNames().get(value) ?? `${value}${T.masters.unknownTeam}`;
-    if ((fileId === "assignments" && column === "member_id") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
+    if ((column === "member_id" && fileId !== "members") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
     if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
     if (column === "contract_id" && fileId !== "contracts") return contractText(value);
     // 金額は CSV の読み込みと同じ読み方（「48,000,000」「４８００００００」「48000000円」も数値。§80）
@@ -546,6 +547,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 仮の値（§103）: 仮なら「仮」、それ以外（空・0 など）は本番の値なので何も出さない
     if (column === "provisional") return isProvisionalCell(value) ? T.masterFiles.provisionalYes : "";
     return value;
+  }
+  /** 行を指す名前（氏名・組織名・「顧客 / 案件名」・目標の対象。ID だけにしない。§26・§31.1） */
+  function rowLeadText(fileId, rec) {
+    const get = (k) => (rec?.[k] ?? "").trim();
+    const def = MASTER_FILES[fileId];
+    if (fileId === "members" || fileId === "teams") return get("name") || get(def.keyColumns[0]);
+    if (fileId === "contracts") return [get("customer_name"), get("project_name")].filter(Boolean).join(" / ") || get("contract_id");
+    if (fileId === "targets") return [displayValue(fileId, "target_type", get("target_type")), goalTargetName(get("target_type"), get("target_id"))].filter(Boolean).join(" / ");
+    return def.keyColumns.map((k) => displayValue(fileId, k, get(k))).join(" / ");
   }
   /** 目標の対象の名前（チーム名・顧客名・「顧客 / 案件名」）と種類 */
   function goalTargetName(kind, id) {
@@ -686,7 +696,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function conflictItem(fileId, c) {
     const def = MASTER_FILES[fileId];
     const cols = def.columns.filter((col) => docs[fileId].header.includes(col.name));
-    const keyText = def.keyColumns.map((k) => displayValue(fileId, k, (c.base[k] ?? "").trim())).join(" / ");
+    const keyText = rowLeadText(fileId, c.base);
     const shown = cols.filter((col) => c.columns.includes(col.name));
     const values = (rec, deletedText) =>
       rec === null
