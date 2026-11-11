@@ -353,7 +353,7 @@ test("下書きの復元待ちのあいだも、行の ＋ 作業・作業の開
   await expect(row.locator('[data-fk="plan:toggle:M010"]')).toBeEnabled();
 });
 
-test("「作業 n ▾」で開いても、表の中のスクロール位置と押した行の位置は変わらない（2026-10-31 試用版のコメント）", async ({ page }) => {
+test("名前の ▸ で開いても、表の中のスクロール位置と押した行の位置は変わらない（2026-10-31 試用版のコメント）", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoPage(page, "/plan");
   const wrap = page.locator("#yn-me-panel .yn-me-table-wrap");

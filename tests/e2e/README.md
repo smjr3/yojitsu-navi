@@ -57,6 +57,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
+| `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の ▸・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
 | `plan-target-alerts.spec.ts` | リソース計画の目標の警告（未達見込みの目標・月の見出しの「!」・組織の配下・編集後の計画で出し直し。SPEC §110） |
 | `issue-list.spec.ts` | 検証の一覧（1.0 超は警告・名前で示す・押すと該当の行へ（組織・年度・絞り込み・他画面）・8 件超・エラー赤／警告黄・各画面幅・ダーク）。SPEC §40 |
 | `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
