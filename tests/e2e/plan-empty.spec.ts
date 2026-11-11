@@ -92,3 +92,17 @@ test("390px・ダーク: 横スクロールせず、計画なしの色は 1.0 �
   expect(empty).not.toBe(await bg(".yn-me-plan-cell.is-under"));
   expect(empty).not.toBe(await bg(".yn-me-plan-cell.is-over"));
 });
+
+test("「計画なし」で絞っていても、検証の一覧から押した人の行へ移る（絞り込みを外す）", async ({ page }) => {
+  await gotoPage(page, "/plan");
+  await emptyToggle(page).click();
+  await expect(row(page, "M010")).toHaveCount(0);
+  await page.getByRole("button", { name: "CSV で編集" }).click();
+  const area = page.getByRole("textbox", { name: /アサイン の CSV/ });
+  await area.fill(`${await area.inputValue()}M010,C002,2026-11,2026-12,0.5\n`);
+  await page.locator('[data-fk="csv:apply:assignments"]').click();
+  await page.getByRole("button", { name: "表で編集" }).click();
+  await page.locator(".yn-me-issue-item", { hasText: "1.0 を超えています" }).getByRole("button").click();
+  await expect(cell(page, "M010", "2026-11")).toBeFocused();
+  await expect(emptyToggle(page)).toHaveAttribute("aria-pressed", "false");
+});

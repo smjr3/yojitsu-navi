@@ -3041,6 +3041,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (/^\d{4}-\d{2}$/.test(start)) applyPlanRange(planRangeIncluding(plan.range, start));
       plan.q = "";
       plan.cols = {};
+      plan.emptyOnly = false;
       savePlanList();
       const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
