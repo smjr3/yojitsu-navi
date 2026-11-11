@@ -72,6 +72,8 @@ test("リソース計画: 時間で入力すると人月に直して保存し、
   await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-start_month").fill("2026-11");
   await d.locator("#yn-me-f-end_month").fill("2027-03");
+  // 終了月の説明は計画用（目標の「累計で判定」は出さない）
+  await expect(d.locator("#yn-me-f-end_month-hint")).toHaveText("YYYY-MM（この月を含む）");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   await d.locator("#yn-me-f-allocation").fill("16");
   await expect(d.locator(".yn-me-conv")).toContainText("16 時間 = 0.1 人月");
