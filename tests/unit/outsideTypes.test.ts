@@ -11,8 +11,10 @@ import {
   isOutsideRow,
   memberMonthlySeries,
   outsideRowId,
+  OTHER_OUTSIDE_TYPE,
   outsideTypes,
   parseDataset,
+  planOutsideTypes,
   validateDataset,
 } from "../../src/core/index.js";
 import type { TaskTypeRule } from "../../src/core/types.js";
@@ -86,8 +88,47 @@ describe("契約外の種別（§50.1）", () => {
     expect(legacy.dataset.taskTypes).toEqual([{ task: "提案", category: "outside" }]);
   });
 
-  it("Model に種別の一覧が載る", () => {
-    expect(buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" }).outsideTypes).toEqual(["提案", "設計", "会社業務", "構築"]);
+  it("Model に計画に使える種別の一覧が載る（分類表の種別 ＋ 受け皿の「その他」。§50.6）", () => {
+    expect(buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" }).outsideTypes).toEqual(["提案", "設計", "会社業務", "構築", "その他"]);
+  });
+});
+
+describe("計画に使える種別と受け皿の「その他」（§50.6）", () => {
+  it("受け皿は「その他」。分類表の種別の後ろに 1 つだけ足す", () => {
+    expect(OTHER_OUTSIDE_TYPE).toBe("その他");
+    expect(planOutsideTypes(TYPES)).toEqual(["提案", "設計", "会社業務", "構築", "その他"]);
+    // 分類表に「その他」があればその位置のまま（全角半角・前後の空白は同じ種別）
+    expect(planOutsideTypes([{ task: "雑務", category: "outside", group: " その他 " }, ...TYPES])).toEqual(["その他", "提案", "設計", "会社業務", "構築"]);
+  });
+  it("分類表に運用保守以外が無くても、作業を運用保守以外に分ける仕組みがあれば「その他」だけ。どちらも無ければ空（種別なしの 1 欄）", () => {
+    expect(planOutsideTypes([{ task: "保守", category: "contract" }], true)).toEqual(["その他"]);
+    expect(planOutsideTypes(undefined, true)).toEqual(["その他"]);
+    expect(planOutsideTypes([{ task: "保守", category: "contract" }])).toEqual([]);
+    expect(planOutsideTypes(undefined)).toEqual([]);
+  });
+  it("分類を増やす（提案・設計など）ときは分類表に行を足すだけ。キーワードに合わない作業は分類表に当たれば種別、当たらなければ「その他」", () => {
+    const base = dataset({
+      contracts: [contract({ contractId: "C1", customerName: "ABC", projectName: "基幹", teamId: "T1", startMonth: m(0), endMonth: m(11), totalAmount: 1_200_000 })],
+      mappings: [{ ...rule("ABC", "基幹", "C1"), taskInclude: ["_保守対応"] }],
+      teams: [team("T1", null)],
+      members: [member({ memberId: "M1", teamId: "T1" })],
+      rates: [rate("SE", 5000)],
+      worklogs: [
+        worklog({ date: day(0, 1), memberId: "M1", customerName: "ABC", projectName: "基幹", task: "定例_保守対応", hours: 1 }),
+        worklog({ date: day(0, 2), memberId: "M1", customerName: "ABC", projectName: "基幹", task: "提案資料作成", hours: 2 }),
+        worklog({ date: day(0, 3), memberId: "M1", customerName: "ABC", projectName: "基幹", task: "社内勉強会", hours: 3 }),
+      ],
+    });
+    // 今: 分類表に運用保守以外の行が無い → キーワードに合わない作業はすべて「その他」
+    const before = buildModel({ ...base, taskTypes: [{ task: "定例", category: "contract" }] }, { asOf: day(2, 20), generatedAt: "x" });
+    expect(before.outsideTypes).toEqual(["その他"]);
+    expect(before.outsideWorkMonths).toEqual([`M1|${m(0)}|その他`]);
+    // 後で「提案」を分ける: 分類表に 1 行足すだけ。「その他」は残り、既存の「その他」の計画もそのまま使える
+    const after = buildModel({ ...base, taskTypes: [{ task: "定例", category: "contract" }, { task: "提案", category: "outside", group: "提案", match: "contains" }] }, { asOf: day(2, 20), generatedAt: "x" });
+    expect(after.outsideTypes).toEqual(["提案", "その他"]);
+    expect(after.outsideWorkMonths).toEqual([`M1|${m(0)}|その他`, `M1|${m(0)}|提案`]);
+    const plans = [{ memberId: "M1", type: "その他", startMonth: m(1), endMonth: m(1), personMonths: 0.2, note: "" }];
+    expect(validateDataset({ ...base, taskTypes: [{ task: "提案", category: "outside", group: "提案" }], outsidePlans: plans }).filter((x) => x.code.startsWith("OUTSIDE_"))).toEqual([]);
   });
 });
 
@@ -186,6 +227,8 @@ describe("契約外予定の検証（§50.1）", () => {
       { memberId: "M1", type: "営業", startMonth: m(0), endMonth: m(0), personMonths: 0.1, note: "" },
       { memberId: "M1", type: "", startMonth: m(0), endMonth: m(0), personMonths: 0.1, note: "" },
     ])).toEqual(["warning:OUTSIDE_UNKNOWN_TYPE@2"]);
+    // 受け皿の「その他」は分類表に無くても警告しない（§50.6）
+    expect(codes([{ memberId: "M1", type: "その他", startMonth: m(0), endMonth: m(0), personMonths: 0.1, note: "" }])).toEqual([]);
     // 分類表に契約外の種別が無ければ種別は問わない
     const d = ds();
     d.taskTypes = [{ task: "保守", category: "contract" }];

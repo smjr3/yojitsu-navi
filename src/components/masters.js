@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, outsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
+import { addMonths, createMasterIndex, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -303,12 +303,17 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
   const memberImported = importMode ? (data.memberImportedColumns ?? ["name"]) : [];
-  // 契約外の種別（§50.1。task-types.csv の契約外の行。無ければ種別なしの 1 行だけ）
-  const outsideTypeList = outsideTypes(
+  // 計画に使える運用保守以外の種別（§50.1・§50.6。task-types.csv の種別 ＋ 受け皿の「その他」。どちらも無ければ種別なしの 1 行だけ）
+  // 受け皿を足すかは model と同じ（作業を運用保守以外に分ける仕組みがあれば model.outsideTypes が空でない）
+  const outsideTypeList = planOutsideTypes(
     parseCsvTable(data.context.taskTypes ?? "")
       .rows.map((r) => ({ task: r.get("task"), category: parseTaskCategory(r.get("category")), group: r.get("group") }))
       .filter((r) => r.category !== null),
+    (model?.outsideTypes ?? []).length > 0,
   );
+  /** 「作業を追加」・計画の追加の候補にする運用保守以外の種別（案件より先。種別は数が少なく、案件の候補に埋もれないように。§50.6） */
+  const outsideOptions = (exclude = []) =>
+    (outsideTypeList.length ? outsideTypeList : [""]).filter((t) => !exclude.some((x) => sameType(x, t))).map((t) => ({ value: `${OUTSIDE_OPTION}${t}`, label: outsideLabel(t), sub: T.planEdit.outsideTypeSub }));
   // 運用保守以外の実績がある種別（メンバー → [月, 種別]。model.outsideWorkMonths。リソース計画で種別の行を出すかの判定）
   const outsideActuals = new Map();
   for (const k of model?.outsideWorkMonths ?? []) {
@@ -1774,7 +1779,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} onclick=${() => toggle(r.memberId)}>${fmt(T.planEdit.toggle, { n: integer(workCount) })} ${open ? "▴" : "▾"}</button>
-          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addProject}</button>
+          <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addWork}</button>
         </div></td>
       </tr>`;
       if (!open) return [main];
@@ -2198,9 +2203,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return { a, input, before: a.text };
     });
     // 追加する作業 = 案件 ＋ まだ出ていない運用保守以外の種別（作業の種類は人によって 100 を超えるので検索して選ぶ）
-    const typeOptions = outsideTypeList.filter((t) => !shownTypes.some((x) => sameType(x, t))).map((t) => ({ value: `${OUTSIDE_OPTION}${t}`, label: t, sub: T.planEdit.outsideTypeSub }));
+    const typeOptions = outsideTypeList.length ? outsideOptions(shownTypes) : [];
     // 案件の候補は反映範囲（この月だけ／この月以降）に契約があるかで印を付ける（§31.6）
-    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: () => [...projectOptions({ from: month, to: scope === "after" && fyLast >= month ? fyLast : month }), ...typeOptions], value: "", placeholder: T.masters.workPlaceholder });
+    const proj = combobox({ id: "yn-plan-pop-project", name: "__plan_project", options: () => [...typeOptions, ...projectOptions({ from: month, to: scope === "after" && fyLast >= month ? fyLast : month })], value: "", placeholder: T.masters.workPlaceholder });
     const newNum = html`<input type="text" class="yn-input yn-plan-pop-num" inputmode="decimal" autocomplete="off" id="yn-plan-pop-new" aria-label=${fmt(T.plan.editRowAria, { project: T.plan.editNewRow, month: monthJa(month) })}>`;
     const msg = html`<p class="yn-me-form-msg" role="alert"></p>`;
     const note = html`<div class="yn-plan-pop-note"></div>`;
@@ -2377,7 +2382,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
 
   // ---- 行の追加・修正ダイアログ --------------------------------------------
-  function fieldFor(fileId, col, value, disabled) {
+  /** withOutside: 案件の欄に運用保守以外の種別も候補に出す（リソース計画の「計画を追加」。§50.6） */
+  function fieldFor(fileId, col, value, disabled, { withOutside = false } = {}) {
     const id = `yn-me-f-${col.name}`;
     const req = col.required;
     if (col.input === "kind") {
@@ -2413,7 +2419,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const to = String(f?.elements?.namedItem?.("end_month")?.value ?? "").trim() || from;
         return /^\d{4}-\d{2}$/.test(from) && /^\d{4}-\d{2}$/.test(to) ? { from, to } : null;
       };
-      return combobox({ id, name: PROJECT_FIELD, options: (root) => projectOptions(periodOf(root)), value: v, required: req, disabled, placeholder: T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
+      return combobox({ id, name: PROJECT_FIELD, options: (root) => (withOutside ? [...outsideOptions(), ...projectOptions(periodOf(root))] : projectOptions(periodOf(root))), value: v, required: req, disabled, placeholder: withOutside ? T.masters.workPlaceholder : T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
     if (col.input === "target") {
       // 目標の対象（§63）: チーム・顧客・案件から 1 つ。値は「種類:ID」
@@ -2592,6 +2598,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const lockImported = (name) => lockedByDef(name) || (memberLocked(name) && !(mode === "edit" && !isOriginal) && !(mode === "add" && !template));
     // 「＋ 変更」（同じ対象の履歴を足す）では対象の ID を変えさせない。変えると別の対象の行になってしまう
     const lockKey = (name) => mode === "add" && !!template && def.history === "effective" && name === def.keyColumns[0];
+    // 計画の追加（アサインの新規）は、案件の欄で運用保守以外の種別も選べる。選ぶと outside-plans.csv に入れる（§50.6）
+    const withOutside = fileId === "assignments" && mode === "add" && !template;
     // 対象は名前で呼ぶ（メンバー・組織。ID は前面に出さない）
     const templateKey = template ? ((fileId === "members" || fileId === "teams") && (initial.name ?? "").trim()) || displayValue(fileId, def.keyColumns[0], (initial[def.keyColumns[0]] ?? "").trim()) : "";
     const title =
@@ -2607,6 +2615,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
             ? T.ledger.addNew[fileId]
             : fileId === "outside"
             ? T.planEdit.addOutsideTitle
+            : withOutside
+            ? T.plan.addTitle
             : T.masters.addAssignmentTitle;
     const lead =
       mode === "edit"
@@ -2623,6 +2633,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
             ? FILE_HELP[fileId].howto
             : fileId === "outside"
             ? T.planEdit.addOutsideLead
+            : withOutside
+            ? T.plan.addLead
             : T.masters.addAssignmentLead;
 
     const fixedValues = fixedColumns.length
@@ -2638,8 +2650,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           const tId = (initial.target_id ?? "").trim();
           const value = c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
           return html`<div class="yn-me-field">
-            <label for=${`yn-me-f-${c.name}`}>${c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
-            ${fieldFor(fileId, c, value, disabled)}
+            <label for=${`yn-me-f-${c.name}`}>${withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
+            ${fieldFor(fileId, c, value, disabled, { withOutside })}
             <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;
         })}
@@ -2699,7 +2711,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const p = pending;
         returnFocusKey = p.focus;
         dialog.close();
-        commit(fileId, p.doc, p.focus);
+        commit(p.fileId ?? fileId, p.doc, p.focus);
         return;
       }
       const values = readValues();
@@ -2710,6 +2722,50 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         return;
       }
       msg.textContent = "";
+      // 運用保守以外の種別を選んだとき: その人・種別の計画として期間の人月を入れる（重なる月は置き換え。§36 の「＋ 変更」と同じ）
+      const picked = withOutside ? (values.contract_id ?? "") : "";
+      if (picked.startsWith(OUTSIDE_OPTION)) {
+        const type = picked.slice(OUTSIDE_OPTION.length);
+        const memberId = values.member_id;
+        const value = values.allocation;
+        const n = parseNumberCell(value);
+        if (!Number.isFinite(n) || n < 0) {
+          msg.textContent = T.planEdit.valueRange;
+          form.querySelector("#yn-me-f-allocation")?.focus();
+          return;
+        }
+        const res = rangeEditDoc(docs.outside, memberId, { kind: "outside", type }, values.start_month, values.end_month, value);
+        if (res.error) {
+          msg.textContent = res.error;
+          return;
+        }
+        if (!res.doc) {
+          dialog.close();
+          return;
+        }
+        const outFocus = `plan:hist:${memberId}|${targetId({ kind: "outside", type })}`;
+        plan.open.add(memberId);
+        const impact = impactBetween(docs.outside, res.doc, range);
+        if (impact.months.length === 0) {
+          returnFocusKey = outFocus;
+          dialog.close();
+          commit("outside", res.doc, outFocus);
+          return;
+        }
+        pending = { fileId: "outside", doc: res.doc, focus: outFocus };
+        form.querySelector(".yn-me-fields").hidden = true;
+        confirmBox.hidden = false;
+        confirmBox.replaceChildren(
+          html`<div>
+            <p><strong>${T.masters.willAdd}</strong></p>
+            ${impactNote("outside", impact, fmt(T.masters.pastNote, { month: monthJa(asOfMonth) }))}
+            <p><button type="button" class="yn-btn" onclick=${backToForm}>${T.masters.backToInput}</button></p>
+          </div>`,
+        );
+        submitBtn.textContent = fmt(T.masters.applyWithImpact, { n: impact.months.length });
+        submitBtn.focus();
+        return;
+      }
       let before = docs[fileId];
       // 列の無いファイルで値を入れた列（§103 の仮の値）は、見出しの末尾に足してから書く
       for (const c of columns) if (c.addOnInput && (values[c.name] ?? "") !== "") before = withColumn(before, c.name);
@@ -2762,7 +2818,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
     dialog.replaceChildren(html`<div class="yn-dialog-inner">
       <header class="yn-dialog-head">
-        <div class="yn-title-with-tip"><h2 id="yn-me-dialog-title" class="yn-dialog-title">${title}<span class="yn-me-path"> ${fileName(def.path)}</span></h2>${infoTip(lead, { label: T.masters.dialogTipLabel })}</div>
+        <div class="yn-title-with-tip"><h2 id="yn-me-dialog-title" class="yn-dialog-title">${title}<span class="yn-me-path"> ${withOutside ? `${fileName(def.path)} ・ ${fileName(MASTER_FILES.outside.path)}` : fileName(def.path)}</span></h2>${infoTip(lead, { label: T.masters.dialogTipLabel })}</div>
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">${form}</div>

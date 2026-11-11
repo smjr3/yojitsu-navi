@@ -138,6 +138,8 @@ export {
   outsideRowId,
   outsideTypeOf,
   outsideTypes,
+  OTHER_OUTSIDE_TYPE,
+  planOutsideTypes,
   memberTeamsAt,
   parseTaskCategory,
   personMonths,

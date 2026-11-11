@@ -17,7 +17,7 @@ import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
-import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
+import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { Contract, ContractMonth, ContractResult, Dataset, ISODate, Model, UnknownMemberWork, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 
@@ -189,7 +189,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     }),
     // 工数の明細（§30.2）
     workRows: buildWorkRows(results, outsideIn, classifier, masters),
-    outsideTypes: outsideTypes(dataset.taskTypes),
+    outsideTypes: planOutsideTypes(dataset.taskTypes, classifier.enabled),
     targets: dataset.targets ?? [],
   };
 }

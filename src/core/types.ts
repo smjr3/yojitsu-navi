@@ -745,7 +745,7 @@ export interface Model {
    * 画面用の model.json では空にし、data/work-hours.json で別に配る
    */
   workRows: WorkRow[];
-  /** 契約外の種別（§50.1。task-types.csv の契約外の行の group の重複なし、ファイルの順） */
+  /** 計画に使える運用保守以外の種別（§50.6 の planOutsideTypes。task-types.csv の種別 ＋ 受け皿の「その他」） */
   outsideTypes: string[];
   /** 目標（§63）。targets.csv の行（検証エラーの行も含む。評価は targets.ts） */
   targets: Target[];
