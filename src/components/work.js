@@ -300,7 +300,7 @@ export function planLoadChart({ data, dark = false, width = 640, height = 200 })
       Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "pm", fill: "kind", order: ["contract", "outside"] })),
       // 人数 × 1.0 人月（不在した月より後は数えない）。月ごとの段で描く
       Plot.link(pts, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "capacity", y2: "capacity", stroke: c.muted, strokeWidth: 1.5, strokeDasharray: "5 4" }),
-      Plot.text(pts.filter((d) => d.over > 0), { x: "i", y: (d) => Math.max(d.total, d.capacity), dy: scaledPx(-9), text: (d) => fmt(slot < 40 ? T.plan.chartOverShort : T.plan.chartOver, { n: d.over }), fill: warn, fontWeight: 700, fontSize: scaledPx(11) }),
+      Plot.text(pts.filter((d) => d.over > 0), { x: "i", y: (d) => Math.max(d.total, d.capacity), dy: scaledPx(-9), text: (d) => fmt(slot < 72 ? T.plan.chartOverShort : T.plan.chartOver, { n: d.over }), fill: warn, fontWeight: 700, fontSize: scaledPx(11) }),
       Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
         pts,

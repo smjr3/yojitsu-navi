@@ -1566,6 +1566,35 @@ h3 {
     max-width: min(20vw, 320px);
   }
 }
+/* PC 幅では名前列（先頭の固定列）に最低幅を持たせ、長い名前は 2 行まで折り返す。
+ * 表の自動レイアウトは省略できる列を最小まで縮めるので、最低幅が無いと数値列が余白だらけのまま名前だけ切れる（§115） */
+@media (min-width: 1024px) {
+  .yn-table .yn-primary-cell {
+    max-width: min(22vw, 320px);
+  }
+  .yn-table .yn-primary-cell:has(a) {
+    min-width: min(15vw, 190px);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .yn-task-name {
+    min-width: min(16em, 30vw);
+  }
+  .yn-table .yn-primary-cell:has(.yn-cell-2line) {
+    min-width: min(22vw, 300px);
+    max-width: min(28vw, 400px);
+  }
+  .yn-table .yn-primary-cell .yn-cell-2line {
+    max-width: 100%;
+    display: flex;
+  }
+  .yn-table .yn-primary-cell .yn-cell-main {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}
 /* 本文の最大幅を外したので（§88）、さらに広い画面では名前列の上限も広げて省略を減らす */
 @media (min-width: 1600px) {
   .yn-cell-2line {
@@ -2934,8 +2963,7 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-target-mark {
   display: inline-block;
   margin-left: 2px;
-  min-width: 14px;
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: 7px;
   background: var(--yn-danger);
   color: #fff;
@@ -4366,6 +4394,15 @@ html:has(dialog.yn-dialog[open]) {
   opacity: 0.55;
   cursor: pointer;
 }
+/* 見た目の幅は変えずに、押せる範囲を上下左右に広げる（小さくて押しにくい。§115） */
+.yn-filter-btn {
+  position: relative;
+}
+.yn-filter-btn::after {
+  content: "";
+  position: absolute;
+  inset: -8px -5px;
+}
 .yn-filter-btn:hover,
 .yn-filter-btn[aria-expanded="true"] {
   opacity: 1;
@@ -4900,10 +4937,28 @@ a.yn-org-person:hover {
 .yn-cols-item.is-off .yn-filter-item-text {
   color: var(--yn-text-muted);
 }
+.yn-cols-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--yn-wash-strong);
+  color: var(--yn-text-2);
+  font-size: calc(10.5px * var(--yn-fs));
+}
+.yn-cols-item.is-fixed .yn-filter-item-text {
+  color: var(--yn-text-2);
+}
 .yn-cols-move {
   flex: none;
   min-width: 28px;
   padding-inline: 4px;
+}
+/* データ確認の警告・検証の内容は省略せず折り返す（§115） */
+.yn-cell-msg {
+  display: inline-block;
+  min-width: min(28em, 60vw);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* 文字の列（案件名・作業名など）は他の列を潰さないよう上限で「…」（全文は title） */
 .yn-table td.yn-cell-clip:not(.is-col-sized) {
@@ -5024,4 +5079,28 @@ a.yn-org-person:hover {
 .yn-me-plan-sub.is-empty > td:first-child,
 .yn-me-plan-hist > td {
   position: relative;
+}
+
+/* リソース計画: 操作の列（＋ 作業・履歴）は右端に貼り付け、文字を大きくして表が横にはみ出しても隠れないようにする（§115） */
+.yn-me-plan-table thead th:last-child,
+.yn-me-plan-table td.yn-me-actions-cell {
+  position: sticky;
+  right: 0;
+  box-shadow: inset 1px 0 0 var(--yn-hairline);
+}
+.yn-me-plan-table thead th:last-child {
+  z-index: 3;
+  background: var(--yn-card);
+}
+.yn-me-plan-table td.yn-me-actions-cell {
+  z-index: 1;
+}
+.yn-me-plan-table tbody tr:not(.yn-me-plan-sub) > td.yn-me-actions-cell {
+  background: var(--yn-card);
+}
+
+/* 入力が足りない欄に印（§115） */
+.yn-me-dialog :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--yn-danger);
+  box-shadow: 0 0 0 1px var(--yn-danger);
 }
