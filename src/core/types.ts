@@ -343,6 +343,8 @@ export interface MemberRecord {
    * 省略・空・「在籍」 = 在籍。CSV にそれ以外の値があれば "left"
    */
   status?: string;
+  /** GitLab のユーザー名（任意の列 gitlab_username。§113）。ヘッダーの「今月の残り」で閲覧者本人を見つけるのに使う。空なら項目を持たない */
+  gitlabUsername?: string;
 }
 
 export interface RateRecord {
