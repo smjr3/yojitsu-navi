@@ -3075,7 +3075,8 @@ html:has(dialog.yn-dialog[open]) {
   flex-wrap: wrap;
   row-gap: 2px;
 }
-.yn-me-plan-table.is-name-sized .yn-me-plan-who .yn-me-plan-name {
+.yn-me-plan-table.is-name-sized .yn-me-plan-who .yn-me-plan-name,
+.yn-me-plan-table.is-name-sized .yn-me-plan-who .yn-me-plan-toggle {
   flex: 0 0 auto;
   max-width: 100%;
 }
@@ -3088,7 +3089,8 @@ html:has(dialog.yn-dialog[open]) {
     flex-wrap: wrap;
     row-gap: 2px;
   }
-  .yn-me-plan-who .yn-me-plan-name {
+  .yn-me-plan-sub-who .yn-me-plan-name,
+  .yn-me-plan-who .yn-me-plan-toggle {
     flex: 1 0 100%;
   }
   .yn-me-plan-row .yn-me-plan-team {
@@ -4067,7 +4069,7 @@ html:has(dialog.yn-dialog[open]) {
   font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-plan-sub > th {
-  padding-left: 22px !important;
+  padding-left: 44px !important;
 }
 /* 開いた内訳は人の行の配下と分かるように: 左端の帯、控えめな数値、枠なしの小さな操作ボタン（押せる範囲は同じ。2026-10-31 試用版のコメント） */
 .yn-me-plan-row.is-open > th,
@@ -4109,12 +4111,12 @@ html:has(dialog.yn-dialog[open]) {
   flex-basis: 100%;
 }
 .yn-me-plan-sub.is-empty > td {
-  padding-left: 22px;
+  padding-left: 44px;
   font-size: calc(12px * var(--yn-fs));
 }
 .yn-me-plan-hist > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
-  padding: 6px 12px 10px 22px;
+  padding: 6px 12px 10px 44px;
 }
 .yn-me-plan-histbox {
   white-space: normal;
@@ -5090,4 +5092,112 @@ a.yn-org-person:hover {
   .yn-table td.yn-cell-clip:not(.is-col-sized) {
     max-width: 200px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * リソース計画: 人の行と作業の行の見分け・開閉（SPEC §112）
+ * 人の行 = ▸/▾ と名前を押して開閉（名前の欄全体が押せる）。作業の行 = 一段下げて枝の線でつなぐ。
+ * 開いたまとまりの上下は太い線で区切り、隣の人の行と混ざらないようにする
+ * ------------------------------------------------------------------------- */
+.yn-me-plan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 0 0 -4px;
+  padding: 3px 6px 3px 4px;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.yn-me-plan-toggle:hover {
+  background: var(--yn-wash-strong);
+}
+.yn-me-plan-toggle:focus-visible {
+  outline: 2px solid var(--yn-focus);
+  outline-offset: 1px;
+}
+.yn-me-plan-caret {
+  flex: none;
+  display: inline-block;
+  width: 1em;
+  color: var(--yn-text-2);
+  font-size: calc(13px * var(--yn-fs));
+  text-align: center;
+}
+.yn-me-plan-row .yn-me-plan-name {
+  font-weight: 700;
+  /* 名前を優先して見せ、所属から先に縮める */
+  flex: 0 0 auto;
+  max-width: 11em;
+}
+/* 開くと出る作業の数（読み上げはボタンの名前で伝える） */
+.yn-me-plan-count {
+  flex: none;
+  min-width: 1.6em;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--yn-neutral-bg);
+  color: var(--yn-neutral-text);
+  font-size: calc(11px * var(--yn-fs));
+  line-height: 1.45;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.yn-me-plan-expand-all .yn-me-plan-caret {
+  width: auto;
+  margin-right: 4px;
+}
+/* 開いたまとまりの区切り: 開いた人の行の上と、まとまりの次の人の行の上に太い線。
+   開閉で押した行の位置が動かないよう、枠線でなく内側の影で描く（行の高さを変えない） */
+.yn-me-plan-table tbody tr.yn-me-plan-row.is-open:not(:first-child) > *,
+.yn-me-plan-table tbody tr.yn-me-plan-sub + tr.yn-me-plan-row > *,
+.yn-me-plan-table tbody tr.yn-me-plan-hist + tr.yn-me-plan-row > * {
+  box-shadow: inset 0 2px 0 var(--yn-hairline-strong);
+}
+.yn-me-plan-table tbody tr.yn-me-plan-row.is-open:not(:first-child) > th,
+.yn-me-plan-table tbody tr.yn-me-plan-row.is-open.is-focus > th {
+  box-shadow: inset 3px 0 0 var(--yn-focus), inset 0 2px 0 var(--yn-hairline-strong);
+}
+/* 作業の行どうしの線は薄く（まとまりの中の区切り） */
+.yn-me-plan-sub > th,
+.yn-me-plan-sub > td,
+.yn-me-plan-row.is-open + .yn-me-plan-sub > *,
+.yn-me-plan-hist > td {
+  border-bottom-color: var(--yn-grid, var(--yn-hairline));
+}
+/* 枝の線: 人の行の ▸ の下から作業の名前へ */
+.yn-me-plan-sub > th::before,
+.yn-me-plan-sub.is-empty > td:first-child::before,
+.yn-me-plan-hist:not(.is-after-last) > td::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 13px;
+  border-left: 1px solid var(--yn-hairline-strong);
+  pointer-events: none;
+}
+.yn-me-plan-sub > th::after,
+.yn-me-plan-sub.is-empty > td:first-child::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  width: 24px;
+  border-top: 1px solid var(--yn-hairline-strong);
+  pointer-events: none;
+}
+.yn-me-plan-sub.is-last > th::before,
+.yn-me-plan-sub.is-last.is-empty > td:first-child::before {
+  bottom: 50%;
+}
+.yn-me-plan-sub.is-empty > td:first-child,
+.yn-me-plan-hist > td {
+  position: relative;
 }
