@@ -93,6 +93,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
       // 在籍状態（§35）。省略可。何か書いてある行（退職・休職など）の effective_from から不在
       { name: "status", label: T.masterFiles.colStatus, input: "status", required: false },
+      // GitLab のユーザー名（§113）。省略可。列が無いファイルは、入力した行を保存するときに見出しの末尾に足す。台帳の一覧には出さない（修正のダイアログで入れる）
+      { name: "gitlab_username", label: T.masterFiles.colGitlabUsername, input: "text", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
     ],
   },
   rates: {

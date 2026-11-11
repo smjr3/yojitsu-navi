@@ -6,7 +6,7 @@
  * Model の計算は 1 回だけ）、結果を Framework のキャッシュに置く。ローダを個別に動かしても、まとめて作っても同じ中身になる
  * （docs/DATA_LOADERS.md「6. 増分ビルド」、SPEC §102）。
  */
-import { checkProjects, encodeDaily, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
+import { buildMyHoursPayload, checkProjects, encodeDaily, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
 import type { ParsedDataset } from "../core/csv.js";
 import { buildMastersPayload } from "./_masters.js";
 import { loadDataset } from "../../scripts/lib/load.js";
@@ -58,6 +58,24 @@ function memberMonthsOutput(ctx: OutputContext) {
   const rateHistory: Record<string, ReturnType<typeof memberRateHistory>> = {};
   for (const id of [...ids].sort()) rateHistory[id] = memberRateHistory(parsed.dataset, id, period);
   return { asOf: model.meta.asOf, memberMonths: model.memberMonths, rateHistory, _build: buildStamp() };
+}
+
+/** ヘッダー右上の「今月の残り」（SPEC §113）。GitLab のユーザー名がある人だけ。画面は固定のパス data/my-month.json で読む（dynamicPaths） */
+function myMonthOutput(ctx: OutputContext) {
+  const parsed = ctx.parsed();
+  const model = ctx.model();
+  const names = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract.projectName]));
+  return {
+    ...buildMyHoursPayload({
+      asOf: model.meta.asOf,
+      asOfFixed: model.meta.asOfFixed === true,
+      asOfMonth: model.meta.asOfMonth,
+      members: parsed.dataset.members,
+      memberMonths: model.memberMonths,
+      projectName: (id) => names.get(id),
+    }),
+    _build: buildStamp(),
+  };
 }
 
 /** 今月の進捗（SPEC §61） */
@@ -118,6 +136,7 @@ export const AGGREGATE_OUTPUTS = {
   model: modelOutput,
   "member-months": memberMonthsOutput,
   daily: dailyOutput,
+  "my-month": myMonthOutput,
   "work-hours": workHoursOutput,
   "dataset-issues": datasetIssuesOutput,
   masters: mastersOutput,

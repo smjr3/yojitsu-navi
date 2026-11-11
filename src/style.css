@@ -3777,6 +3777,212 @@ html:has(dialog.yn-dialog[open]) {
 }
 
 /* ---------------------------------------------------------------------------
+ * 今月の残り時間（§113）: ヘッダー右上のボタンと吹き出し、メンバー詳細のカード
+ * ------------------------------------------------------------------------- */
+.yn-my-hours {
+  position: relative;
+  display: inline-flex;
+}
+.yn-my-hours-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  box-sizing: border-box;
+  height: var(--yn-topbar-ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: calc(var(--yn-topbar-ctl-h) / 2);
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  font: inherit;
+  font-size: calc(13px * var(--yn-fs));
+  line-height: calc(var(--yn-topbar-ctl-h) - 2px);
+  white-space: nowrap;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-btn b {
+  font-size: calc(15px * var(--yn-fs));
+}
+.yn-my-hours-btn:hover {
+  background: var(--yn-wash);
+}
+.yn-my-hours-btn[aria-expanded="true"] {
+  border-color: var(--yn-focus);
+}
+.yn-my-hours-btn.is-over {
+  border-color: var(--yn-danger);
+  background: var(--yn-danger-bg);
+  color: var(--yn-danger-text);
+}
+/* 「今月の残り」は右上に置くので、ヘッダーの「作業実績の取得」は外す（各画面の見出しの下にも出ている） */
+.yn-topbar.has-my-hours .yn-filter-fetched {
+  display: none;
+}
+.yn-my-hours-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  text-align: left;
+  white-space: normal;
+}
+.yn-my-hours-pop[hidden] {
+  display: none;
+}
+.yn-my-hours-pop .yn-my-hours-card {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.yn-my-hours-pop .yn-my-hours-table-wrap {
+  margin-top: 12px;
+}
+.yn-my-hours-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 28px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--yn-hairline);
+  border-left: 4px solid var(--yn-accent);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+}
+.yn-my-hours-main {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+.yn-my-hours-who {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-title {
+  color: var(--yn-text-1);
+  font-weight: 600;
+}
+.yn-my-hours-big {
+  margin: 2px 0 6px;
+  font-size: calc(26px * var(--yn-fs-big));
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-big.is-over,
+.yn-my-hours-table .is-over {
+  color: var(--yn-danger-text);
+}
+.yn-my-hours-table .is-over {
+  font-weight: 600;
+}
+.yn-my-hours-bar {
+  position: relative;
+  width: 200px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--yn-wash-strong);
+}
+.yn-my-hours-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--yn-series-cost);
+}
+.yn-my-hours-bar.is-over i {
+  background: var(--yn-danger);
+}
+.yn-my-hours-sub {
+  margin-top: 6px;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+  font-variant-numeric: tabular-nums;
+}
+.yn-my-hours-table-wrap {
+  flex: 1 1 320px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.yn-my-hours-table {
+  width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-table th,
+.yn-my-hours-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--yn-hairline);
+  text-align: left;
+  vertical-align: top;
+}
+.yn-my-hours-table th {
+  color: var(--yn-text-muted);
+  font-weight: 500;
+}
+.yn-my-hours-table th:first-child,
+.yn-my-hours-table td:first-child {
+  padding-left: 0;
+}
+.yn-my-hours-table .is-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* 案件名は長いので折り返す（他の列を潰さない） */
+.yn-my-hours-project {
+  overflow-wrap: anywhere;
+}
+.yn-my-hours-empty {
+  margin: 4px 0 0;
+  color: var(--yn-text-muted);
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-my-hours-link {
+  align-self: flex-end;
+  margin-left: auto;
+  font-size: calc(13px * var(--yn-fs));
+  white-space: nowrap;
+}
+.yn-my-hours-pop .yn-my-hours-link {
+  display: inline-block;
+  margin-top: 10px;
+}
+@media (max-width: 639px) {
+  .yn-my-hours-main {
+    flex-basis: 100%;
+  }
+  .yn-my-hours-bar {
+    width: 100%;
+  }
+  .yn-my-hours-btn {
+    padding: 0 10px;
+  }
+  /* スマホは吹き出しを画面の幅いっぱいに（右端のボタンからはみ出さない）。縦の位置は開くときにボタンの下に合わせる */
+  .yn-my-hours-pop {
+    position: fixed;
+    top: var(--yn-my-hours-top, 96px);
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100vh - var(--yn-my-hours-top, 96px) - 16px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * 台帳（マスタ編集: 1 対象 1 行＋変更の履歴。SPEC §36）
  * ------------------------------------------------------------------------- */
 .yn-me-ledger .yn-me-group.is-open > th,

@@ -104,6 +104,7 @@ export { applyCustomerTeams, customerTeamIndex, isProvisionalCell, memberStatus,
 export { allocationFromInput, contractSegments, editMonthAllocation, mergeAdjacent, projectKey, type AllocationPiece, type ContractPeriod, type MonthSegment, flattenTeamTree, formatAllocation, hoursFromAllocation, memberTeamAt, planView, type PlanAssignment, type PlanMemberRow, type PlanSources, type PlanView } from "./plan.js";
 export { TARGET_KINDS, evaluateTarget, headlineTarget, isTargetKind, isUsableTarget, sameTargetId, targetContractIds, targetForMonth, targetStartMonth, targetsOf, type TargetEvaluation, type TargetStatus } from "./targets.js";
 export { planImpact, type PlanImpact, type PlanImpactRow, type PlanImpactTarget, type PlanInputs } from "./planImpact.js";
+export { buildMyHoursPayload, duplicateGitlabUsernames, gitlabUsernameIndex, myHoursRows, myHoursTotals, normalizeGitlabUsername, type MyHoursPayload, type MyHoursRow } from "./myHours.js";
 export { planTargetAlerts, type PlanTargetAlert, type PlanTargetScope } from "./planTargets.js";
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";
