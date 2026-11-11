@@ -5,6 +5,7 @@
  */
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
+import { scaledPx } from "./appearance.js";
 import { dailyMembers, dailyProgress, formatHours, formatPercent } from "../core/index.js";
 import { maxFractionFormat } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
@@ -137,11 +138,11 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
   const plot = Plot.plot({
     width,
     height,
-    marginLeft: Math.max(48, 12 + 7.5 * axisFormat(peak).length),
-    marginRight: 20,
-    marginTop: 28,
-    marginBottom: 32,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    marginLeft: scaledPx(Math.max(48, 12 + 7.5 * axisFormat(peak).length)),
+    marginRight: scaledPx(20),
+    marginTop: scaledPx(28),
+    marginBottom: scaledPx(32),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
     x: { domain: [0.5, n + 0.5], ticks, tickFormat: (d) => fmt(T.daily.dayTick, { d }), tickSize: 0, label: null, line: false },
     y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, domain: [0, peak * 1.08] },
     marks: [
@@ -156,7 +157,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       last ? Plot.dot([last], { x: "day", y: "cumulative", fill: c.cost, r: 4, stroke: c.surface, strokeWidth: 2 }) : null,
       // 今日（§75）。取り込みが止まると、累計の線が今日の手前で終わって見分けられる
       todayDay ? Plot.ruleX([todayDay], { stroke: c.muted, strokeWidth: 1, strokeDasharray: "1 3" }) : null,
-      todayDay ? Plot.text([todayDay], { x: (d) => d, frameAnchor: "top", dy: -14, text: () => T.daily.todayMark, fill: c.muted, fontSize: 11 }) : null,
+      todayDay ? Plot.text([todayDay], { x: (d) => d, frameAnchor: "top", dy: scaledPx(-14), text: () => T.daily.todayMark, fill: c.muted, fontSize: scaledPx(11) }) : null,
       Plot.ruleX(pts, Plot.pointerX({ x: "day", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
         pts,
@@ -164,10 +165,10 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
           x: "day",
           y: (d) => Math.max(d.cumulative ?? 0, d.pace),
           preferredAnchor: "bottom",
-          dy: -6,
+          dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.daily.tipDate]: (d) => fmt(T.daily.tipDateValue, { month: monthJa(p.month), d: d.day, off: d.businessDay ? "" : T.daily.offDay }),
             [T.daily.tipDay]: (d) => (d.amount === null ? null : money(d.amount, unit)),

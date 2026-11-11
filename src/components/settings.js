@@ -8,7 +8,7 @@ import { T, fmt } from "../i18n/index.js";
 import { ACCESS_LEVELS, checkConnection, effectiveSaveMode, tokenPageUrl, webProjectUrl } from "../core/gitlab.js";
 import { clearToken, demoCanMerge, getToken, gitlabFetch, publishMrCount, resetDemo, setDemoCanMerge, setToken, tokenRemembered } from "./gitlab-client.js";
 import { infoTip, sectionTitle } from "./layout.js";
-import { ACCENTS } from "./appearance.js";
+import { ACCENTS, TEXT_SIZES } from "./appearance.js";
 
 /** ビルド時に head へ入れたバージョン情報（observablehq.config.js の buildInfo）。無い項目は出さない */
 export function versionSection(doc = document) {
@@ -176,7 +176,7 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
 
   function renderDisplay() {
     const fallback = { theme: "light", accent: "blue", themeFrom: "os", accentFrom: "default" };
-    const look = window.ynAppearance?.get() ?? { ...fallback, themePref: "auto", accentPref: "auto", auto: fallback };
+    const look = window.ynAppearance?.get() ?? { ...fallback, themePref: "auto", accentPref: "auto", textSize: "m", auto: fallback };
     const group = (name, value, items, onPick) =>
       items.map(([v, label, swatch]) => {
         const input = html`<input type="radio" name=${name} value=${v} checked=${value === v}>`;
@@ -194,10 +194,12 @@ export function settingsPanel({ masterEdit, fetchImpl = null }) {
       ["auto", T.settings.auto],
       ...ACCENTS.map((a) => [a, T.settings.accents[a], a]),
     ];
+    const sizes = TEXT_SIZES.map((v) => [v, T.settings.textSizes[v]]);
     displaySlot.replaceChildren(html`<section class="yn-settings-section" aria-label=${T.settings.displayTitle}>
       ${sectionTitle(T.settings.displayTitle, T.settings.displayHint)}
       <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.theme}</legend>${group("yn-set-theme", look.themePref, themes, (v) => window.ynAppearance?.setTheme(v))}</fieldset>
       <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.accent}</legend>${group("yn-set-accent", look.accentPref, accents, (v) => window.ynAppearance?.setAccent(v))}</fieldset>
+      <fieldset class="yn-settings-theme"><legend class="yn-me-label">${T.settings.textSize}</legend>${group("yn-set-text-size", look.textSize, sizes, (v) => window.ynAppearance?.setTextSize(v))}</fieldset>
     </section>`);
   }
 

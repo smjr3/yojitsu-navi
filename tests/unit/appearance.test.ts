@@ -3,7 +3,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ACCENTS, ACCENT_KEY, GITLAB_LOOK_KEY, THEME_KEY, appearanceConfig, appearanceScript, lookFromGitlab, resolveLook, runAppearance } from "../../src/components/appearance.js";
+import { ACCENTS, ACCENT_KEY, GITLAB_LOOK_KEY, TEXT_SCALES, TEXT_SIZES, TEXT_SIZE_KEY, THEME_KEY, appearanceConfig, appearanceScript, lookFromGitlab, resolveLook, runAppearance, scaledPx, textScale } from "../../src/components/appearance.js";
 import type { AppearanceApi } from "../../src/components/appearance.js";
 import { TOKEN_STORAGE_KEY } from "../../src/components/gitlab-client.js";
 import { DEMO_USER } from "../../src/core/gitlab-mock.js";
@@ -95,6 +95,38 @@ describe("runAppearance（描画前スクリプト）", () => {
     api.setTheme("auto");
     expect(f.root.dataset.theme).toBe("light");
   });
+  it("文字の大きさ（§111）: 5 段階、標準は属性なし、保存して次のページでも使う、不正な値は標準", () => {
+    expect(TEXT_SIZES).toHaveLength(5);
+    const f = fakeWindow({});
+    const api = run(f);
+    expect(api.get().textSize).toBe("m");
+    expect(f.root.dataset.textSize).toBeUndefined();
+    api.setTextSize("xxl");
+    expect(f.root.dataset.textSize).toBe("xxl");
+    expect(f.local.map.get(TEXT_SIZE_KEY)).toBe("xxl");
+    expect(f.events).toContain("yn-theme");
+    const g = fakeWindow({ local: Object.fromEntries(f.local.map) });
+    expect(run(g).get().textSize).toBe("xxl");
+    expect(g.root.dataset.textSize).toBe("xxl");
+    api.setTextSize("m");
+    expect(f.root.dataset.textSize).toBeUndefined();
+    expect(f.local.map.has(TEXT_SIZE_KEY)).toBe(false);
+    api.setTextSize("huge");
+    expect(api.get().textSize).toBe("m");
+    expect(run(fakeWindow({ local: { [TEXT_SIZE_KEY]: "bogus" } })).get().textSize).toBe("m");
+  });
+  it("文字の倍率: 段階は小さい順、style.css の倍率と同じ、グラフの px に掛ける", () => {
+    const scales = TEXT_SIZES.map((v) => TEXT_SCALES[v] ?? 0);
+    expect([...scales].sort((a, b) => a - b)).toEqual(scales);
+    expect(TEXT_SCALES.m).toBe(1);
+    const css = readFileSync("src/style.css", "utf8");
+    for (const v of TEXT_SIZES.filter((x) => x !== "m")) expect(css).toMatch(new RegExp(`:root\\[data-text-size="${v}"\\]\\s*\\{\\s*--yn-fs:\\s*${TEXT_SCALES[v]};`));
+    const doc = (v?: string) => ({ documentElement: { dataset: v ? { textSize: v } : {} } });
+    expect(textScale(doc())).toBe(1);
+    expect(textScale(doc("xl"))).toBe(1.25);
+    expect(scaledPx(12, doc("xxl"))).toBe(16.8);
+    expect(scaledPx(12, doc("bogus"))).toBe(12);
+  });
   it("ストレージが使えなくてもページ内では切り替わる", () => {
     const f = fakeWindow({ blocked: true });
     const api = run(f);
@@ -160,7 +192,8 @@ describe("埋め込み", () => {
   });
   it("スクリプト内のキー名は他の部品と同じ", () => {
     const src = runAppearance.toString();
-    for (const k of [THEME_KEY, ACCENT_KEY, GITLAB_LOOK_KEY, TOKEN_STORAGE_KEY]) expect(src).toContain(`"${k}"`);
+    for (const k of [THEME_KEY, ACCENT_KEY, GITLAB_LOOK_KEY, TOKEN_STORAGE_KEY, TEXT_SIZE_KEY]) expect(src).toContain(`"${k}"`);
+    for (const v of TEXT_SIZES) expect(src).toContain(`"${v}"`);
     for (const a of ACCENTS) {
       expect(src).toContain(`"${a}"`);
       expect(resolveLook.toString()).toContain(`"${a}"`);

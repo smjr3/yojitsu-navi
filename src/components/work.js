@@ -8,6 +8,7 @@
  */
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
+import { scaledPx } from "./appearance.js";
 import { T, fmt } from "../i18n/index.js";
 import { personMonths, workByTask } from "../core/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, money, monthJa, monthShort } from "./format.js";
@@ -141,11 +142,11 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
   const plot = Plot.plot({
     width,
     height,
-    marginLeft: 48,
-    marginRight: 16,
-    marginTop: 24,
-    marginBottom: 32,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    marginLeft: scaledPx(48),
+    marginRight: scaledPx(16),
+    marginTop: scaledPx(24),
+    marginBottom: scaledPx(32),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (series[i] ? monthShort(series[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
     // すべて 0 人月だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
@@ -162,10 +163,10 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
           x: "i",
           y: (d) => personMonths(d.contractHours + d.outsideHours, std),
           preferredAnchor: "bottom",
-          dy: -6,
+          dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" }),
             [T.work.contract]: (d) => pm(d.contractHours, config),
@@ -216,16 +217,18 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
     data.push({ label: g.label, kind: "outside", pm: personMonths(g.totals.outsideHours, std), g });
   }
   const longest = Math.max(...shown.map((g) => [...g.label].length));
-  const marginLeft = Math.min(Math.max(64, longest * 12 + 8), Math.round(width * 0.4));
+  // 1 文字の幅（文字の大きさ §111 に合わせる）
+  const cw = scaledPx(12);
+  const marginLeft = Math.min(Math.max(scaledPx(64), longest * cw + 8), Math.round(width * 0.4));
   const plot = Plot.plot({
     width,
     height: shown.length * (height ? Math.min(40, Math.max(28, Math.floor((height - 48) / shown.length))) : 28) + 48,
     marginLeft,
-    marginRight: 24,
-    marginTop: height ? 32 : 24,
-    marginBottom: height ? 8 : 24,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
-    y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / 12) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / 12) - 1).join("")}…` : s) },
+    marginRight: scaledPx(24),
+    marginTop: scaledPx(height ? 32 : 24),
+    marginBottom: scaledPx(height ? 8 : 24),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
+    y: { domain: shown.map((g) => g.label), label: null, tickSize: 0, tickFormat: (s) => ([...s].length > Math.floor((marginLeft - 8) / cw) ? `${[...s].slice(0, Math.floor((marginLeft - 8) / cw) - 1).join("")}…` : s) },
     x: { axis: height ? "top" : "bottom", grid: true, label: T.work.pmAxis, labelAnchor: "right", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
     marks: [
@@ -238,10 +241,10 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
           y: "label",
           x: (g) => personMonths(g.totals.totalHours, std),
           preferredAnchor: "left",
-          dx: 6,
+          dx: scaledPx(6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.work.contract]: (g) => pm(g.totals.contractHours, config),
             [T.work.outside]: (g) => pm(g.totals.outsideHours, config),
@@ -282,11 +285,11 @@ export function planLoadChart({ data, dark = false, width = 640, height = 200 })
   const plot = Plot.plot({
     width,
     height,
-    marginLeft: 40,
-    marginRight: 12,
-    marginTop: 26,
-    marginBottom: 28,
-    style: { background: "transparent", color: c.text, fontSize: "12px", fontFamily: "inherit", overflow: "visible" },
+    marginLeft: scaledPx(40),
+    marginRight: scaledPx(12),
+    marginTop: scaledPx(26),
+    marginBottom: scaledPx(28),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
     x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
     y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", domain: [0, top * 1.12], nice: true, tickSize: 0, line: false },
     color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
@@ -296,7 +299,7 @@ export function planLoadChart({ data, dark = false, width = 640, height = 200 })
       Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "pm", fill: "kind", order: ["contract", "outside"] })),
       // 人数 × 1.0 人月（不在した月より後は数えない）。月ごとの段で描く
       Plot.link(pts, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "capacity", y2: "capacity", stroke: c.muted, strokeWidth: 1.5, strokeDasharray: "5 4" }),
-      Plot.text(pts.filter((d) => d.over > 0), { x: "i", y: (d) => Math.max(d.total, d.capacity), dy: -9, text: (d) => fmt(slot < 40 ? T.plan.chartOverShort : T.plan.chartOver, { n: d.over }), fill: warn, fontWeight: 700, fontSize: 11 }),
+      Plot.text(pts.filter((d) => d.over > 0), { x: "i", y: (d) => Math.max(d.total, d.capacity), dy: scaledPx(-9), text: (d) => fmt(slot < 40 ? T.plan.chartOverShort : T.plan.chartOver, { n: d.over }), fill: warn, fontWeight: 700, fontSize: scaledPx(11) }),
       Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
         pts,
@@ -304,10 +307,10 @@ export function planLoadChart({ data, dark = false, width = 640, height = 200 })
           x: "i",
           y: "total",
           preferredAnchor: "bottom",
-          dy: -6,
+          dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
-          fontSize: 12,
+          fontSize: scaledPx(12),
           channels: {
             [T.charts.tipMonth]: (d) => monthJa(d.month),
             [T.work.contract]: (d) => fix(d.main),
