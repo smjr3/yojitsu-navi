@@ -12,7 +12,7 @@ import { projectMatcherFor, validateProjectAliases } from "./projectFromTask.js"
 import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
 import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
-import { createTaskClassifier, isOutsideWorklog, outsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
+import { createTaskClassifier, isOutsideWorklog, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import { normalizeName } from "./normalize.js";
 import { customerKey } from "./customers.js";
 import { isTargetKind } from "./targets.js";
@@ -170,8 +170,8 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
 function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "outside-plans.csv";
   const seen = new Map<string, number[]>();
-  // 種別は分類表（task-types.csv）の契約外の種別から選ぶ。分類表に契約外の種別が無ければ問わない
-  const types = new Set(outsideTypes(dataset.taskTypes).map((t) => normalizeName(t)));
+  // 種別は分類表（task-types.csv）の契約外の種別と受け皿の「その他」から選ぶ（§50.6）。分類表に契約外の種別が無ければ問わない
+  const types = new Set(planOutsideTypes(dataset.taskTypes).map((t) => normalizeName(t)));
   (dataset.outsidePlans ?? []).forEach((o, i) => {
     const row = rowOf(i);
     if (!memberIds.has(o.memberId)) push({ severity: "error", code: "OUTSIDE_UNKNOWN_MEMBER", message: fmt(T.checks.outsideUnknownMember, { file, row, memberId: o.memberId }), file, row, ref: { memberId: o.memberId } });

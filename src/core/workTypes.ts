@@ -105,9 +105,9 @@ export function createTaskClassifier(rules: readonly TaskTypeRule[] | undefined,
       const base = classify(w.task);
       const m = router.match(w);
       if (m === "hit") c = { category: "contract", group: "", label: base.label, unclassified: false };
-      else if (m === "miss") c = { category: "outside", group: base.category === "outside" ? base.group : T.work.otherType, label: base.label, unclassified: false, keywordMiss: true };
+      else if (m === "miss") c = { category: "outside", group: base.category === "outside" ? base.group : OTHER_OUTSIDE_TYPE, label: base.label, unclassified: false, keywordMiss: true };
       // 作業名に運用保守の目印が無く、紐付けの行も無い（§97）
-      else if (m === "unmarked") c = { category: "outside", group: base.category === "outside" ? base.group : T.work.otherType, label: base.label, unclassified: false };
+      else if (m === "unmarked") c = { category: "outside", group: base.category === "outside" ? base.group : OTHER_OUTSIDE_TYPE, label: base.label, unclassified: false };
       else c = base;
       byWorklog.set(key, c);
       return c;
@@ -161,6 +161,25 @@ export function keywordUnmatchedGroups(worklogs: readonly Worklog[], classifier:
 export function outsideTypeOf(rule: Pick<TaskTypeRule, "task" | "group">): string {
   const g = (rule.group ?? "").trim();
   return g !== "" ? g : rule.task.trim();
+}
+
+/**
+ * 運用保守以外の受け皿の種別「その他」（§50.6）。分類表で種別の決まらない運用保守以外の作業（目印・キーワードに合わない作業）はこの種別に入る。
+ * 分類（提案・設計など）を増やすときは task-types.csv に運用保守以外の行（group）を足すだけでよく、この受け皿は残る
+ */
+export const OTHER_OUTSIDE_TYPE: string = T.work.otherType;
+
+/**
+ * 計画に使える運用保守以外の種別（§50.6）= 分類表の種別（outsideTypes）＋ 受け皿の「その他」（末尾。分類表に同じ種別があればその位置のまま）。
+ * 受け皿を足すのは、作業を運用保守以外に分ける仕組みがある（catchAll）か、分類表に運用保守以外の種別があるとき。
+ * どちらも無ければ空（種別なしの 1 欄。§50.3）。リソース計画の候補・検証・model.outsideTypes はすべてこの一覧を使う
+ */
+export function planOutsideTypes(rules: readonly TaskTypeRule[] | undefined, catchAll = false): string[] {
+  const list = outsideTypes(rules);
+  if (!catchAll && list.length === 0) return list;
+  const other = normalizeName(OTHER_OUTSIDE_TYPE);
+  if (!list.some((t) => normalizeName(t) === other)) list.push(OTHER_OUTSIDE_TYPE);
+  return list;
 }
 
 /** 契約外の種別の一覧（契約外の行の種別。正規化して重複を除き、ファイルの順） */

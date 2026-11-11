@@ -337,7 +337,7 @@ test("修正欄を開いたまま画面を狭く・広くしても、画面の�
   await expect(p.locator("[role=listbox]")).toBeVisible();
 });
 
-test("下書きの復元待ちのあいだも、行の ＋ 案件・案件の開閉は消えない（＋ 案件は押せない）", async ({ page }) => {
+test("下書きの復元待ちのあいだも、行の ＋ 作業・作業の開閉は消えない（＋ 作業は押せない）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   await cell(page, "M010", "2027-02").click();
   await pop(page).locator("#yn-plan-pop-0").fill("0.4");

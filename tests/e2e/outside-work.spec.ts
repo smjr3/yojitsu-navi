@@ -120,3 +120,82 @@ test("リソース計画: 運用保守以外の種別は、表示中の期間に
   await pop.locator("#yn-plan-pop-project").fill("構築");
   await expect(pop.locator(".yn-combo-list [role=option]")).toHaveCount(0);
 });
+
+test("リソース計画: 人の行の「＋ 作業」から「その他」など運用保守以外の作業を新しく入れられる（候補は種別が先。§50.6）", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
+  await gotoPage(page, "/plan?member=M002");
+  const row = page.locator('tr.yn-me-plan-row[data-member="M002"]');
+  // 運用保守以外の行がまだ無い人
+  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M002"]')).toHaveCount(0);
+  await row.locator('[data-fk="plan:add:M002"]').click();
+  const dialog = page.locator("dialog.yn-me-dialog[open]");
+  await expect(dialog.locator("#yn-me-dialog-title")).toContainText("計画を追加");
+  await expect(dialog.locator('label[for="yn-me-f-contract_id"]')).toContainText("案件・作業");
+  // 候補の先頭は運用保守以外の種別（分類表の順 ＋ 受け皿の「その他」）。その後に案件
+  const input = dialog.locator("#yn-me-f-contract_id");
+  await input.click();
+  const list = page.locator(`#${await input.getAttribute("aria-controls")}`);
+  const types = [...model.outsideTypes];
+  expect(types[types.length - 1]).toBe("その他");
+  const labels = list.locator('[role="option"] .yn-combo-label');
+  await expect(labels.first()).toBeVisible();
+  expect((await labels.allInnerTexts()).slice(0, types.length)).toEqual(types);
+  await input.press("Escape");
+  await pickCombo(input, "その他");
+  await expect(input).toHaveValue("その他");
+  await dialog.locator("#yn-me-f-allocation").fill("0.2");
+  await dialog.locator('[data-role="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  // 「その他」の行ができ、開始月から終了月まで 0.2。保存の差分は outside-plans.csv
+  const sub = page.locator('tr.yn-me-plan-sub.is-outside[data-member="M002"]');
+  await expect(sub.locator(".yn-me-plan-name")).toHaveText(["その他"]);
+  const next = model.meta.fiscalYearMonths.find((m) => m > ASOF) ?? ASOF;
+  await expect(page.locator(`[data-fk="plan:cell:M002:o:その他:${next}"]`)).toHaveText("0.20");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("その他");
+  await expect(page.locator(".yn-me-diff-slot")).toContainText("outside-plans.csv");
+  // 運用保守以外の「その他」は分類表に無くても検証の警告にならない
+  await expect(page.getByText(/種別「その他」/)).toHaveCount(0);
+  // 同じ種別をもう一度入れると、重ねずに置き換える（行は 1 つのまま）
+  await row.locator('[data-fk="plan:add:M002"]').click();
+  await pickCombo(dialog.locator("#yn-me-f-contract_id"), "その他");
+  await dialog.locator("#yn-me-f-allocation").fill("0.3");
+  await dialog.locator('[data-role="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(`[data-fk="plan:cell:M002:o:その他:${next}"]`)).toHaveText("0.30");
+  await expect(sub).toHaveCount(1);
+});
+
+test("リソース計画: 過去の月を含む運用保守以外の追加は、影響する月を確認してから入れる（§50.6）", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
+  await gotoPage(page, "/plan?member=M002");
+  await page.locator('[data-fk="plan:add:M002"]').click();
+  const dialog = page.locator("dialog.yn-me-dialog[open]");
+  await pickCombo(dialog.locator("#yn-me-f-contract_id"), "その他");
+  const prev = model.meta.fiscalYearMonths.filter((m) => m < ASOF).pop();
+  test.skip(!prev, "年度の最初の月が基準月");
+  await dialog.locator("#yn-me-f-start_month").fill(prev!);
+  await dialog.locator("#yn-me-f-allocation").fill("0.1");
+  await dialog.locator('[data-role="submit"]').click();
+  await expect(dialog.locator(".yn-me-confirm")).toBeVisible();
+  await expect(dialog.locator('[data-role="submit"]')).toContainText("過去");
+  await dialog.locator('[data-role="submit"]').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('tr.yn-me-plan-sub.is-outside[data-member="M002"] .yn-me-plan-name')).toHaveText(["その他"]);
+});
+
+test("リソース計画: セルの「作業を追加」でも、受け皿の「その他」を案件より先に選べる（§50.6）", async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem("yojitsu-navi:masters-draft:v1"));
+  const next = model.meta.fiscalYearMonths.find((m) => m > ASOF) ?? ASOF;
+  await gotoPage(page, "/plan?member=M002");
+  await page.locator(`[data-fk="plan:cell:M002:all:${next}"]`).click();
+  const pop = page.locator("dialog.yn-plan-pop[open]");
+  const input = pop.locator("#yn-plan-pop-project");
+  await input.click();
+  const list = page.locator(`#${await input.getAttribute("aria-controls")}`);
+  await expect(list.locator('[role="option"]').first()).toContainText(model.outsideTypes[0]!);
+  await pickCombo(input, "その他");
+  await pop.locator("#yn-plan-pop-new").fill("0.1");
+  await pop.getByRole("button", { name: "反映" }).click();
+  await expect(pop).toHaveCount(0);
+  await expect(page.locator(`[data-fk="plan:cell:M002:o:その他:${next}"]`)).toHaveText("0.10");
+});
