@@ -582,12 +582,16 @@ export function restoreRow(doc: MasterDoc, rowId: string): MasterDoc {
   const o = doc.originals[rowId];
   if (!o || doc.rows.some((r) => r.id === rowId)) return doc;
   const rows = doc.rows.slice();
-  // 元の通し番号より後ろにある最初の元行の手前に入れる（追加行は飛ばす）
-  let at = rows.findIndex((r) => {
+  // 元の通し番号より前にある最後の元行のすぐ後ろから、キーの違う追加行だけを飛ばした所に入れる。
+  // 同じキーの追加行はこの行の後ろに足したもの（§120.1）なので、その手前に戻す（「後の行が有効」§5 を変えない）
+  const def = MASTER_FILES[doc.fileId];
+  const key = keyOf(def, doc.header, o.cells);
+  let at = 0;
+  rows.forEach((r, i) => {
     const ro = doc.originals[r.id];
-    return !!ro && ro.index > o.index;
+    if (ro && ro.index < o.index) at = i + 1;
   });
-  if (at < 0) at = rows.length;
+  while (at < rows.length && !doc.originals[rows[at]!.id] && keyOf(def, doc.header, rows[at]!.cells) !== key) at++;
   rows.splice(at, 0, { id: rowId, cells: o.cells.slice() });
   return { ...doc, rows };
 }

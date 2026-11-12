@@ -2186,6 +2186,7 @@ export default {
     keepLatest: "本体の今の内容を残す",
     remakeConfirm: "載せ直す",
     remaking: "載せ直しています…",
+    remakeStale: "この変更は読み込んだあとに更新されたか、閉じられています。「更新」で一覧を読み直してから、もう一度お試しください。",
     remakeDescription: "番号 {iid} の変更を最新に載せ直したものです。",
     remade: "「{title}」を最新に載せ直しました（新しい変更として作り直し、元の変更は取り下げました）。",
     remadeCloseFailed: "「{title}」を最新に載せ直しましたが、元の変更を取り下げられませんでした。元の変更（番号 {iid}）を取り下げてください。",

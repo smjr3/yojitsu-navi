@@ -284,7 +284,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
             return;
           }
           returnFocus = null;
-          const rebased = r;
+          const rebased = { ...r, headSha: remake.plan.headSha ?? null };
           remake = null;
           dialog.close();
           runRemake(item, rebased);
@@ -313,7 +313,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     render();
     try {
       const description = [d.description, fmt(T.mr.remakeDescription, { iid: d.iid })].filter((x) => x && x.trim() !== "").join("\n\n");
-      const { closeError } = await remakeMergeRequest(fetchImpl, cfg, getToken(), d, rebased, { message: d.title, description, now: now() });
+      const { closeError } = await remakeMergeRequest(fetchImpl, cfg, getToken(), d, rebased, { message: d.title, description, now: now(), headSha: rebased.headSha });
       const text = fmt(closeError ? T.mr.remadeCloseFailed : T.mr.remade, { iid: d.iid, title: mrTitleText(d.title) });
       await refresh({ notice: { kind: closeError ? "error" : "ok", text } });
     } catch (e) {

@@ -109,7 +109,9 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   await expect(rows).toHaveCount(before + 1);
-  const added = rows.last();
+  // 足した行は同じ種類（組織）の目標の後ろに入る（§120.1）
+  const added = rows.filter({ hasText: "追加" });
+  await expect(added).toHaveCount(1);
   await expect(added).toContainText("ネットワーク保守チーム");
   await expect(added).toContainText("18%");
   await expect(added).toContainText("追加");
@@ -125,15 +127,15 @@ test("マスタ編集「目標」: 対象を検索して追加 → 一覧に名�
   await d.locator('[data-role="submit"]').click();
   await expect(d).toContainText("対象の種類");
   await d.locator('[data-role="submit"]').click();
-  await expect(rows.last()).toContainText("こもれび出版");
-  await expect(rows.last()).toContainText("顧客");
+  await expect(added).toContainText("こもれび出版");
+  await expect(added).toContainText("顧客");
 
   // 同じ対象・同じ終了月の重複は検証エラー（行に出る）
   await expect(page.locator(".yn-me-check")).toContainText("エラー");
   await expect(page.locator("tr.yn-me-issue-row").first()).toContainText("複数の行");
 
   // 削除すると元に戻る
-  await rows.last().getByRole("button", { name: "削除" }).click();
+  await added.getByRole("button", { name: "削除" }).click();
   await page.locator("dialog.yn-me-dialog[open]").locator('[data-role="confirm-delete"]').click();
   await expect(rows).toHaveCount(before);
   await expect(page.locator(".yn-me-check")).toContainText("エラーなし");

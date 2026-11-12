@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addRow, deleteRow, insertionIndex, MASTER_FILES, parseMasterDoc, rebaseDraftFile, draftFileOf, restoreRow, serializeMasterDoc, updateRow } from "../../src/core/masterEdit.js";
-import { rebaseRemake, rebaseRemakeFile, type RemakeFile } from "../../src/core/mrRebase.js";
+import { rebaseRemake, rebaseRemakeFile, remakeMergeRequest, type RemakeFile } from "../../src/core/mrRebase.js";
+import type { FetchLike } from "../../src/core/gitlab.js";
 
 const ASSIGN = [
   "member_id,contract_id,start_month,end_month,allocation,updated_by,updated_at",
@@ -61,6 +62,13 @@ describe("追加する行の位置（insertionIndex）", () => {
     doc = deleteRow(doc, "o2");
     doc = restoreRow(doc, "o2");
     expect(doc.rows.map((r) => r.id)).toEqual(["o0", "o1", "n1", "o2", "o3", "o4"]);
+  });
+
+  it("削除を取り消すと、同じキーで後ろに足した行より前に戻る（後の行が有効の順序を変えない）", () => {
+    const rates = "key,hourly_rate,effective_from\n本部長,15000,2026-04\n部長,12000,2026-04\n主任,9000,2026-04\n";
+    let doc = addRow(parseMasterDoc("rates", rates), { key: "部長", hourly_rate: "13000", effective_from: "2026-04" }).doc;
+    doc = restoreRow(deleteRow(doc, "o1"), "o1");
+    expect(lines(serializeMasterDoc(doc).text).slice(1)).toEqual(["本部長,15000,2026-04", "部長,12000,2026-04", "部長,13000,2026-04", "主任,9000,2026-04"]);
   });
 
   it("下書きを当て直しても、足した行は同じ人の行の後ろに入る", () => {
@@ -149,6 +157,14 @@ describe("最新に載せ直す（rebaseRemake）", () => {
     expect(r.files[0]!.changed).toBe(false);
   });
 
+  it("この MR で足した行が本体にも既にあれば足さない（同じ行を二重にしない。変更者・変更日は比べない）", () => {
+    const latest = mr().replace(/M4,C1,2026-10,2027-03,0\.2,suzuki,2026-11-01/, "M4,C1,2026-10,2027-03,0.2,sato,2026-11-02");
+    const r = rebaseRemake({ files: [file(mr(), latest)] });
+    expect(r.empty).toBe(true);
+    const twice = rebaseRemake({ files: [file(mr(), ASSIGN + "M4,C1,2026-10,2027-03,0.2,sato,2026-11-02\n")] });
+    expect(lines(twice.files[0]!.text!).filter((l) => l.startsWith("M4,C1,2026-10"))).toHaveLength(1);
+  });
+
   it("MR で作ったファイル（土台に無い）を、本体にもまだ無いなら作る", () => {
     const after = "member_id,type,start_month,end_month,person_months,note,updated_by,updated_at\nM1,提案,2026-11,2026-12,0.2,,suzuki,2026-11-01\n";
     const r = rebaseRemakeFile({ fileId: "outside", path: "data/outside-plans.csv", before: null, after, latest: null, latestCommitId: null });
@@ -170,5 +186,43 @@ describe("最新に載せ直す（rebaseRemake）", () => {
     const r = rebaseRemake({ files: [file(null as unknown as string, ASSIGN)].map((f) => ({ ...f, after: null })) });
     expect(r.blocked).toBe(true);
     expect(r.files[0]!.error).toBe("deleted");
+  });
+});
+
+describe("remakeMergeRequest（作り直しと取り下げ）", () => {
+  const cfg = { mode: "gitlab", gitlab: { apiBaseUrl: "https://gl.test/api/v4", projectId: "g/p", targetBranch: "main", commitMode: "direct" } } as never;
+  const plan = { files: [{ fileId: "rates" as const, path: "data/masters/rates.csv", before: "key,hourly_rate,effective_from\n", after: "key,hourly_rate,effective_from\n部長,1,2026-04\n", latest: "key,hourly_rate,effective_from\n", latestCommitId: "L" }] };
+  function fake(head: string, state = "opened") {
+    const calls: Array<{ method: string; url: string; body: Record<string, unknown> }> = [];
+    const f: FetchLike = async (url, init) => {
+      const body = init.body ? JSON.parse(init.body) : {};
+      calls.push({ method: init.method, url, body });
+      const reply = (status: number, b: unknown) => ({ ok: status < 300, status, text: async () => JSON.stringify(b) });
+      if (url.endsWith("/user")) return reply(200, { username: "sato" });
+      if (url.endsWith("/merge_requests/8") && init.method === "GET") return reply(200, { iid: 8, state, diff_refs: { head_sha: head } });
+      if (url.endsWith("/repository/commits")) return reply(201, { id: "c" });
+      if (url.endsWith("/merge_requests")) return reply(201, { iid: 9 });
+      if (url.endsWith("/merge_requests/8")) return reply(200, {});
+      return reply(404, {});
+    };
+    return { f, calls };
+  }
+
+  it("設定が直接コミットでも、新しいブランチと MR を作ってから元を取り下げる", async () => {
+    const { f, calls } = fake("h1");
+    const r = await remakeMergeRequest(f, cfg, "t", { iid: 8 }, rebaseRemake(plan), { message: "m", description: "d", headSha: "h1" });
+    expect(r.result.commitMode).toBe("mr");
+    const commit = calls.find((c) => c.url.endsWith("/repository/commits"))!;
+    expect(String(commit.body.branch)).toMatch(/^masters\//);
+    expect(commit.body.start_branch).toBe("main");
+    expect(calls.at(-1)!.body).toEqual({ state_event: "close" });
+  });
+
+  it("読んだあとに元の MR が更新された・閉じられたら、何も作らずに止める", async () => {
+    for (const [head, state] of [["h2", "opened"], ["h1", "closed"]] as const) {
+      const { f, calls } = fake(head, state);
+      await expect(remakeMergeRequest(f, cfg, "t", { iid: 8 }, rebaseRemake(plan), { message: "m", description: "d", headSha: "h1" })).rejects.toMatchObject({ kind: "conflict" });
+      expect(calls.some((c) => c.method === "POST")).toBe(false);
+    }
   });
 });

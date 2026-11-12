@@ -17,6 +17,8 @@ import { MASTER_FILES, parseMasterDoc, serializeMasterDoc, addRow, deleteRow, up
 const GITLAB = "https://gitlab.test/api/v4";
 const PAYLOAD = buildMastersPayload(ROOT_DIR);
 const RATES_TEXT = PAYLOAD.files.rates.text;
+/** 元の単価に部長 14000（2026-11）を足した CSV（足した行は同じ部長の行のすぐ後ろ。§120.1） */
+const RATES_WITH_BUCHO = serializeMasterDoc(addRow(parseMasterDoc("rates", RATES_TEXT), { key: "部長", hourly_rate: "14000", effective_from: "2026-11" }).doc).text;
 const DRAFT_KEY = "yojitsu-navi:masters-draft:v1";
 
 /** masters.json の中身を書き換える（gitlab モード・取り込みモードの再現） */
@@ -169,7 +171,10 @@ test("download: 未来の単価行の追加は確認なしで反映 → 差分 �
   const text = readFileSync((await dl.path())!, "utf-8");
   const expected = serializeMasterDoc(addRow(parseMasterDoc("rates", RATES_TEXT), { key: "部長", hourly_rate: "14000", effective_from: "2026-11" }).doc).text;
   expect(text).toBe(expected);
-  expect(text.startsWith(RATES_TEXT)).toBe(true);
+  // 元の行はそのまま、足した行は部長の行のすぐ後ろ（末尾ではない。§120.1）
+  const lines = text.split("\n");
+  expect(lines.filter((l) => l !== "部長,14000,2026-11").join("\n")).toBe(RATES_TEXT);
+  expect(lines[lines.indexOf("部長,14000,2026-11") - 1]).toMatch(/^部長,/);
   expect(text.charCodeAt(0)).not.toBe(0xfeff);
   expect(text).not.toContain("\r");
   // 変更していないファイルのボタンは出ない
@@ -301,7 +306,7 @@ test("下書き: 再訪で復元を提案し、復元すると編集が戻る。
   // ダウンロードする CSV は最新の元データ ＋ 自分の追加（下書きの古い土台 15500 は出ない）
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
-  expect(text).toBe(RATES_TEXT + "部長,14000,2026-11\n");
+  expect(text).toBe(RATES_WITH_BUCHO);
   expect(text).not.toContain("15500");
   // 破棄
   await page.reload();
@@ -528,7 +533,7 @@ test.describe("gitlab モード", () => {
     expect(commit.commit_message).toBe("2026年11月の部長単価改定");
     expect(commit.actions).toHaveLength(1);
     expect(commit.actions[0]).toMatchObject({ action: "update", file_path: PAYLOAD.files.rates.repoPath });
-    expect(commit.actions[0]!.content).toBe(RATES_TEXT + "部長,14000,2026-11\n");
+    expect(commit.actions[0]!.content).toBe(RATES_WITH_BUCHO);
     if (PAYLOAD.files.rates.lastCommitId) expect(commit.actions[0]!.last_commit_id).toBe(PAYLOAD.files.rates.lastCommitId);
     expect(calls[2]!.body).toMatchObject({ source_branch: commit.branch, target_branch: "main", title: "2026年11月の部長単価改定" });
     // 保存後は下書きを消し、編集をロック
@@ -613,7 +618,7 @@ test.describe("gitlab モード", () => {
     await expect(page.getByRole("heading", { name: "保存（CSV ダウンロード）" })).toBeFocused();
     await expect(page.locator(".yn-me-save")).toContainText("GitLab に接続できなかったため");
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /rates\.csv をダウンロード/ }).click()]);
-    expect(readFileSync((await dl.path())!, "utf-8")).toBe(RATES_TEXT + "部長,14000,2026-11\n");
+    expect(readFileSync((await dl.path())!, "utf-8")).toBe(RATES_WITH_BUCHO);
     // GitLab のファイル画面へのリンク（projectId が group/project 形式）
     await expect(page.getByRole("link", { name: "GitLab でこのファイルを開く" })).toHaveAttribute("href", "https://gitlab.test/grp/yojitsu-navi/-/blob/main/data/masters/rates.csv");
     ignoreGitLabErrors(errors);

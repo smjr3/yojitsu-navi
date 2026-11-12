@@ -462,6 +462,8 @@ export interface MergeRequestSummary {
   sourceBranch: string;
   /** 競合（GitLab が判定済みのとき） */
   hasConflicts: boolean;
+  /** opened / merged / closed（返らなければ空） */
+  state: string;
 }
 
 function userOf(u: unknown): GitLabUser {
@@ -479,6 +481,7 @@ function summaryOf(m: Record<string, unknown>): MergeRequestSummary {
     webUrl: typeof m.web_url === "string" ? m.web_url : null,
     sourceBranch: typeof m.source_branch === "string" ? m.source_branch : "",
     hasConflicts: m.has_conflicts === true,
+    state: typeof m.state === "string" ? m.state : "",
   };
 }
 

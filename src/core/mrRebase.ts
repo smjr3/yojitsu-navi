@@ -9,11 +9,13 @@
  *   const r = rebaseRemake(plan, choices)                          // 衝突と、選んだ結果の中身（純粋）
  *   await remakeMergeRequest(fetch, cfg, token, mr, r, { message, description })
  */
-import { closeMergeRequest, fetchFileForUpdate, mergeRequestFileChanges, saveToGitLab } from "./gitlab.js";
+import { GitLabError, closeMergeRequest, fetchFileForUpdate, getMergeRequest, mergeRequestFileChanges, saveToGitLab } from "./gitlab.js";
+import { T } from "../i18n/index.js";
 import type { FetchLike, MergeRequestDetail, SaveResult } from "./gitlab.js";
 import type { MasterEditConfig } from "./types.js";
 import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, draftFileOf, emptyMasterText, parseMasterDoc, rebaseDraftFile, serializeMasterDoc, withColumn } from "./masterEdit.js";
-import type { ConflictChoice, MasterFileId, RebaseResult } from "./masterEdit.js";
+import { STAMP_COLUMNS } from "./masterEdit.js";
+import type { ConflictChoice, DraftFile, MasterFileId, RebaseResult } from "./masterEdit.js";
 import { docFromCsvText } from "./csvEdit.js";
 
 export interface RemakeFile {
@@ -30,6 +32,8 @@ export interface RemakeFile {
 
 export interface RemakePlan {
   files: RemakeFile[];
+  /** 読んだときの MR の head（載せ直す前に変わっていないか確かめる） */
+  headSha?: string | null;
 }
 
 export interface RemakeFileResult {
@@ -73,7 +77,40 @@ export async function prepareRemake(
       return { fileId, path: c.path, before: c.before, after: c.after, latest: latest?.text ?? null, latestCommitId: latest?.lastCommitId ?? null };
     }),
   );
-  return { files };
+  return { files, headSha: mr.headSha };
+}
+
+/**
+ * MR で足した行のうち、本体でも（別の MR などで）既に足されている行を外す。
+ * 本体で土台より増えた同じ内容の行（変更者・変更日の列は比べない）の数だけ外す（同じ行を 2 本足すと人月が二重になるため）
+ */
+function withoutAlreadyAdded(fileId: MasterFileId, draft: DraftFile, beforeText: string, latestText: string | null): DraftFile {
+  if (latestText === null || draft.added.length === 0) return draft;
+  const latest = parseMasterDoc(fileId, latestText);
+  const header = latest.header;
+  const skip = new Set<string>([STAMP_COLUMNS.by, STAMP_COLUMNS.at]);
+  const sigBy = (hdr: readonly string[]) => (cells: readonly string[]) => header.filter((h) => !skip.has(h)).map((h) => (cells[hdr.indexOf(h)] ?? "").trim()).join("\u0001");
+  const count = new Map<string, number>();
+  const sigLatest = sigBy(header);
+  for (const r of latest.rows) count.set(sigLatest(r.cells), (count.get(sigLatest(r.cells)) ?? 0) + 1);
+  const before = parseMasterDoc(fileId, beforeText);
+  const sigBefore = sigBy(before.header);
+  for (const r of before.rows) count.set(sigBefore(r.cells), (count.get(sigBefore(r.cells)) ?? 0) - 1);
+  const draftHeader = draft.columns?.length ? [...before.header, ...draft.columns.filter((c) => !before.header.includes(c))] : before.header;
+  const sigDraft = sigBy(draftHeader);
+  const added: string[][] = [];
+  const addedAfter: number[] = [];
+  draft.added.forEach((cells, k) => {
+    const s = sigDraft(cells);
+    const n = count.get(s) ?? 0;
+    if (n > 0) {
+      count.set(s, n - 1);
+      return;
+    }
+    added.push(cells);
+    if (draft.addedAfter) addedAfter.push(draft.addedAfter[k] as number);
+  });
+  return { ...draft, added, ...(draft.addedAfter ? { addedAfter } : {}) };
 }
 
 /** 1 ファイルの当て直し（純粋）。choices = 衝突 id → mine（この MR）| theirs（本体の今） */
@@ -87,7 +124,7 @@ export function rebaseRemakeFile(f: RemakeFile, choices: Readonly<Record<string,
   for (const c of afterHeader) if (!source.header.includes(c)) source = withColumn(source, c);
   const imported = docFromCsvText(source, f.after);
   if (!imported.doc) return { ...base, result: null, text: null, changed: false, error: "unreadable" };
-  const draft = draftFileOf(imported.doc, { text: beforeText, lastCommitId: null });
+  const draft = withoutAlreadyAdded(f.fileId, draftFileOf(imported.doc, { text: beforeText, lastCommitId: null }), beforeText, f.latest);
   const result = rebaseDraftFile(f.fileId, draft, f.latest ?? emptyMasterText(f.fileId), choices);
   const changed = diffMasterDoc(result.doc).count > 0 || (f.latest === null && result.doc.rows.length > 0);
   return { ...base, result, text: result.unresolved.length === 0 ? serializeMasterDoc(result.doc).text : null, changed };
@@ -102,19 +139,26 @@ export function rebaseRemake(plan: RemakePlan, choices: Readonly<Partial<Record<
   return { files, unresolved, blocked, empty };
 }
 
-/** 当て直した中身で新しい MR を作り、元の MR を取り下げる。closeError = 新しい MR はできたが取り下げに失敗した */
+/**
+ * 当て直した中身で新しい MR を作り、元の MR を取り下げる。closeError = 新しい MR はできたが取り下げに失敗した。
+ * 読んだあとに元の MR が更新された・閉じられたときは何もせずに止める（GitLabError conflict）。
+ * 設定が直接コミット（commitMode: direct）でも、載せ直しは必ず MR にする（確かめずに本体へ入れない）
+ */
 export async function remakeMergeRequest(
   fetchImpl: FetchLike,
   cfg: MasterEditConfig,
   token: string,
   mr: Pick<MergeRequestDetail, "iid">,
   rebased: RemakeRebase,
-  opts: { message: string; description: string; now?: Date },
+  opts: { message: string; description: string; now?: Date; headSha?: string | null },
 ): Promise<{ result: SaveResult; closeError: unknown }> {
+  const current = await getMergeRequest(fetchImpl, cfg, token, mr.iid);
+  if ((current.state !== "" && current.state !== "opened") || (opts.headSha !== undefined && current.headSha !== opts.headSha)) throw new GitLabError("conflict", T.mr.remakeStale);
   const files = rebased.files
     .filter((f) => f.text !== null && f.changed)
     .map((f) => ({ path: f.path, content: f.text as string, lastCommitId: f.lastCommitId, create: f.create }));
-  const result = await saveToGitLab(fetchImpl, { config: cfg, token, files, message: opts.message, description: opts.description, ...(opts.now ? { now: opts.now } : {}) });
+  const mrConfig: MasterEditConfig = { ...cfg, gitlab: { ...cfg.gitlab, commitMode: "mr" } };
+  const result = await saveToGitLab(fetchImpl, { config: mrConfig, token, files, message: opts.message, description: opts.description, ...(opts.now ? { now: opts.now } : {}) });
   let closeError: unknown = null;
   try {
     await closeMergeRequest(fetchImpl, cfg, token, mr.iid);
