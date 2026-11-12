@@ -59,6 +59,8 @@ export interface MemberRow {
   effective_from: YearMonth;
   /** 在籍状態（空 = 在籍、"退職" = この月から在籍しない。SPEC §35） */
   status: string;
+  /** 在籍・不在が切り替わる日（任意。§119）。effective_from の月の中の日付 */
+  status_date?: string;
   /** GitLab のユーザー名（任意。§113）。デモの利用者（gitlab-mock の DEMO_USER）を 1 人に付ける */
   gitlab_username?: string;
 }
@@ -845,7 +847,7 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   // holidays.csv は Excel で保存した体で BOM 付き
   writeFileSync(join(out, "holidays.csv"), "﻿" + csv(g.holidays, ["date", "name"]));
   writeFileSync(join(out, "masters", "teams.csv"), csv(g.teams, ["team_id", "name", "parent_team_id", "effective_from", "level", "leader_member_id"]));
-  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status", "gitlab_username"]));
+  writeFileSync(join(out, "masters", "members.csv"), csv(g.members, ["member_id", "name", "kind", "title", "division", "department", "section", "team_id", "effective_from", "status", "status_date", "gitlab_username"]));
   writeFileSync(join(out, "masters", "rates.csv"), csv(g.rates, ["key", "hourly_rate", "effective_from"]));
   writeFileSync(join(out, "task-types.csv"), csv(g.taskTypes, ["task", "category", "group", "match", "note"]));
 

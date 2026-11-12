@@ -343,6 +343,11 @@ export interface MemberRecord {
    * 省略・空・「在籍」 = 在籍。CSV にそれ以外の値があれば "left"
    */
   status?: string;
+  /**
+   * 在籍・不在が切り替わる日（任意の列 status_date。SPEC §119）。この行の effective_from の月の中の日付（YYYY-MM-DD）。
+   * 不在の行 = この日から不在（前日まで在籍）、在籍の行（入社・復帰）= この日から在籍。空なら項目を持たない（月の初めから）
+   */
+  statusDate?: string;
   /** GitLab のユーザー名（任意の列 gitlab_username。§113）。ヘッダーの「今月の残り」で閲覧者本人を見つけるのに使う。空なら項目を持たない */
   gitlabUsername?: string;
 }
@@ -869,6 +874,8 @@ export interface MemberTotals {
   kind: MemberKind | null;
   /** 基準月の時点で不在なら不在になった月（§35）、在籍なら null */
   leftFrom: YearMonth | null;
+  /** 不在になった日（§119。leftFrom の月の不在の行の status_date）。無ければ null */
+  leftDate: string | null;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;

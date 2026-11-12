@@ -352,6 +352,8 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     effectiveFrom: r.get("effective_from"),
     // 省略可の列（§35）。空・「在籍」は在籍（項目を持たない）
     ...memberStatus(r.get("status")),
+    // 省略可の列（§119）。空なら項目を持たない（形式・月の検証は validateDataset）
+    ...(r.get("status_date").trim() ? { statusDate: r.get("status_date").trim() } : {}),
     // 省略可の列（§113）。空なら項目を持たない
     ...(r.get("gitlab_username").trim() ? { gitlabUsername: r.get("gitlab_username").trim() } : {}),
   }));

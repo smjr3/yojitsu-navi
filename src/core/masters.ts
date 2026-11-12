@@ -3,7 +3,7 @@
  */
 import type { Assignment, Dataset, MemberRecord, OutsidePlan, Worklog, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
-import { addMonths, isValidISODate, isValidYearMonth, monthOfDate, monthRange } from "./calendar.js";
+import { addMonths, isBusinessDay, isValidISODate, isValidYearMonth, monthOfDate, monthRange, toHolidaySet, type HolidayLookup } from "./calendar.js";
 
 // ---------------------------------------------------------------------------
 // §5 有効レコード（汎用）
@@ -117,7 +117,8 @@ export function isActiveAt(index: MasterIndex, memberId: string, month: YearMont
 
 /**
  * 月 m に稼働しているとみなすか（§35）。在籍していれば稼働。
- * 不在した月（前月は在籍）は、その月に計画か実績があれば（worked）稼働とみなす。翌月からは稼働しない
+ * 不在した月（前月は在籍）は、その月に計画か実績があれば（worked）稼働とみなす。翌月からは稼働しない。
+ * 不在になる日（status_date。§119）を書いた月は、計画・実績に関係なく、その日が月の 2 日以降なら稼働
  */
 export function isWorkingAt(
   at: (memberId: string, month: YearMonth) => MemberRecord | null | undefined,
@@ -130,7 +131,65 @@ export function isWorkingAt(
   if (!isLeftRecord(rec)) return true;
   if (rec.effectiveFrom !== month) return false;
   const prev = at(memberId, addMonths(month, -1));
-  return !!prev && !isLeftRecord(prev) && worked(memberId, month);
+  if (!prev || isLeftRecord(prev)) return false;
+  // 不在になる日を書いた月（§119）: その日より前に在籍していれば稼働。月の初日からなら計画・実績があっても稼働しない
+  const date = statusDateOf(rec);
+  if (date) return date > `${month}-01`;
+  return worked(memberId, month);
+}
+
+/** 行の在籍・不在が切り替わる日（§119。status_date）。適用開始月の中の正しい日付だけ。それ以外（空・形式違い・別の月）は null（月の初めから） */
+export function statusDateOf(rec: Pick<MemberRecord, "statusDate" | "effectiveFrom"> | null | undefined): string | null {
+  const d = rec?.statusDate;
+  return d && isValidISODate(d) && monthOfDate(d) === rec!.effectiveFrom ? d : null;
+}
+
+/** 月の在籍日数（§119）。present = 在籍している営業日、total = 月の営業日（営業日が無い月は暦日で数える） */
+export interface MonthPresence {
+  present: number;
+  total: number;
+}
+
+/**
+ * 月 m に在籍している営業日（§119）。在籍・不在が切り替わる日（status_date）のある月だけ日割りし、それ以外は null（月の全部か 0）。
+ * 切り替わる日より前は前月の状態、その日からはこの行の状態。祝日は HolidaySet（§49 の国民の祝日の補完込み）を渡す
+ */
+export function monthPresenceAt(
+  at: (memberId: string, month: YearMonth) => MemberRecord | null | undefined,
+  memberId: string,
+  month: YearMonth,
+  holidays: HolidayLookup,
+): MonthPresence | null {
+  const rec = at(memberId, month);
+  if (!rec || rec.effectiveFrom !== month) return null;
+  const date = statusDateOf(rec);
+  if (!date) return null;
+  const prev = at(memberId, addMonths(month, -1));
+  const before = !!prev && !isLeftRecord(prev);
+  const after = !isLeftRecord(rec);
+  if (before === after) return null;
+  const set = toHolidaySet(holidays);
+  const last = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const days = Array.from({ length: last }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+  const biz = days.filter((d) => isBusinessDay(d, set));
+  const pool = biz.length > 0 ? biz : days;
+  const present = pool.filter((d) => (d < date ? before : after)).length;
+  return { present, total: pool.length };
+}
+
+/**
+ * 月 m に稼働できる量（人月。§58・§119）。稼働しない月（isWorkingAt）は 0、在籍・不在が切り替わる日のある月は在籍の営業日の割合、それ以外は 1
+ */
+export function workingShareAt(
+  at: (memberId: string, month: YearMonth) => MemberRecord | null | undefined,
+  memberId: string,
+  month: YearMonth,
+  worked: (memberId: string, month: YearMonth) => boolean,
+  holidays: HolidayLookup,
+): number {
+  if (!isWorkingAt(at, memberId, month, worked)) return 0;
+  const p = monthPresenceAt(at, memberId, month, holidays);
+  return p ? p.present / p.total : 1;
 }
 
 /** 「メンバー|月」のキー（§35 の不在した月の稼働判定で使う） */
@@ -168,6 +227,13 @@ export function leftMonthOf(records: readonly Pick<MemberRecord, "status" | "eff
   let from = last.effectiveFrom;
   for (let i = sorted.length - 2; i >= 0 && isLeftRecord(sorted[i]); i--) from = (sorted[i] as MemberRecord).effectiveFrom;
   return from;
+}
+
+/** 不在になった日（§119）。leftMonthOf の月の不在の行に status_date があればその日、無ければ null（月の初めから） */
+export function leftDateOf(records: readonly Pick<MemberRecord, "status" | "effectiveFrom" | "statusDate">[]): string | null {
+  const month = leftMonthOf(records);
+  if (!month) return null;
+  return statusDateOf(records.find((r) => r.effectiveFrom === month && isLeftRecord(r)) ?? null);
 }
 
 /** 月 m に有効なメンバーレコード */

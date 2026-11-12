@@ -135,6 +135,8 @@ export function mergeMembers(existing: readonly MemberCsvRow[], imported: readon
       apply(cur); // 同じ月の行はその場で更新
     } else {
       const next: MemberCsvRow = { ...cur, effective_from: month };
+      // 在籍・不在の開始日（§119）は元の行の月の日なので引き継がない
+      if (next.status_date !== undefined) next.status_date = "";
       apply(next);
       rows.push(next);
       history.push({ row: next, idx: rows.length - 1 });

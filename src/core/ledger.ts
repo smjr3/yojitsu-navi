@@ -106,13 +106,13 @@ export function ledgerGroups(rows: readonly LedgerRowInput[], keyColumn: string,
 /**
  * 列 column の、基準月より後の最初の変更（「7月〜 主任」のような予告）。無ければ null
  */
-export function nextChangeOf(group: LedgerGroup, column: string): { from: string; value: string } | null {
+export function nextChangeOf(group: LedgerGroup, column: string): { from: string; value: string; record: Readonly<Record<string, string>> } | null {
   const shownAt = group.entries.indexOf(group.shown);
   let value = group.shown.record[column] ?? "";
   for (const e of group.entries.slice(shownAt + 1)) {
     if (!e.future) continue;
     const v = e.record[column] ?? "";
-    if (v !== value) return { from: e.from, value: v };
+    if (v !== value) return { from: e.from, value: v, record: e.record };
     value = v;
   }
   return null;

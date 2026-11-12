@@ -82,6 +82,12 @@ export function monthJa(ym) {
   return fmt(T.format.month, { year: ym.slice(0, 4), month: Number(ym.slice(5, 7)) });
 }
 
+/** "2026-10-15" → "2026年10月15日" */
+export function dateJa(d) {
+  if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return EMPTY_VALUE;
+  return fmt(T.format.date, { year: d.slice(0, 4), month: Number(d.slice(5, 7)), day: Number(d.slice(8, 10)) });
+}
+
 /** "2026-10" → "10月"（軸などの短い表示。1月と最初の点には年を付ける） */
 export function monthShort(ym, withYear = false) {
   if (typeof ym !== "string" || !/^\d{4}-\d{2}$/.test(ym)) return "";
