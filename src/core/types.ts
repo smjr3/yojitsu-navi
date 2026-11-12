@@ -443,9 +443,15 @@ export interface Dataset {
 export interface BudgetBreakdown {
   totalAmount: number;
   monthCount: number;
-  /** 均等割りの基本額（切り捨て） */
-  baseMonthly: number;
-  /** 最終月に乗せる端数 */
+  /** この月の営業日数（§118） */
+  businessDays: number;
+  /** 契約期間の営業日数の合計 */
+  totalBusinessDays: number;
+  /** 営業日で按分したか（契約期間の営業日が 0 日なら false = 月数で均等割り） */
+  byBusinessDays: boolean;
+  /** 端数を乗せる前のこの月の額 = floor(契約総額 × 営業日数 ÷ 契約期間の営業日数) */
+  baseAmount: number;
+  /** 最終月に乗せる端数 = 契約総額 − 各月の baseAmount の合計 */
   remainder: number;
   isLastMonth: boolean;
 }

@@ -12,7 +12,7 @@ function months(c: Contract, costByMonth: Record<string, number>, budget = 100_0
     month: m,
     status: "final",
     budget,
-    budgetBreakdown: { totalAmount: 0, monthCount: 0, baseMonthly: budget, remainder: 0, isLastMonth: false },
+    budgetBreakdown: { totalAmount: 0, monthCount: 0, businessDays: 20, totalBusinessDays: 0, byBusinessDays: true, baseAmount: budget, remainder: 0, isLastMonth: false },
     costs: { labor: costByMonth[m] ?? 0 },
     cost: costByMonth[m] ?? 0,
     grossProfit: budget - (costByMonth[m] ?? 0),

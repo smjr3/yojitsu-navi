@@ -7,12 +7,12 @@ import { parseDataset, type DatasetFiles } from "../../src/core/csv.js";
 import { createMasterIndex } from "../../src/core/masters.js";
 import type { PlanInputs } from "../../src/core/planImpact.js";
 import { planTargetAlerts } from "../../src/core/planTargets.js";
-import { baseConfig } from "./fixtures.js";
+import { baseConfig, budgetIn, contract } from "./fixtures.js";
 
 const A_HEADER = "member_id,contract_id,start_month,end_month,allocation\n";
 const T_HEADER = "target_type,target_id,end_month,remaining_rate,start_month,note\n";
 
-/** C1（T1）・C2（T2）は 2026-04〜2027-09（月 100 万円）。M1 = SE 5,000 円、M2 = PM 8,000 円。基準日 2026-10-15、作業実績なし */
+/** C1（T1）・C2（T2）は 2026-04〜2027-09（1,800 万円を営業日で按分 §118）。M1 = SE 5,000 円、M2 = PM 8,000 円。基準日 2026-10-15、作業実績なし */
 function files(assignments: string, targets?: string): DatasetFiles {
   return {
     config: baseConfig,
@@ -38,6 +38,8 @@ const inputs = (assignments: string): PlanInputs => {
 };
 const all = { teamId: null };
 const ids = (list: ReturnType<typeof planTargetAlerts>) => list.map((a) => `${a.kind}:${a.evaluation.target.targetId}:${a.evaluation.target.endMonth}`);
+/** C1 の年度（2026-04〜2027-03）の予算 */
+const FY_BUDGET = budgetIn(contract({ contractId: "C1", startMonth: "2026-04", endMonth: "2027-09", totalAmount: 18_000_000 }), "2026-04", "2027-03");
 const FY_REST = ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03"];
 
 describe("planTargetAlerts", () => {
@@ -45,13 +47,13 @@ describe("planTargetAlerts", () => {
     expect(planTargetAlerts(modelOf(), null, all)).toEqual([]);
   });
 
-  it("計画値の着地で残予算率が目標を下回る目標だけ出す（C1: 年度の予算 1,200 万円・計画 0.5 人月 × 10〜3 月の 1,040h × 5,000 円 = 260 万円 → 約 78%）", () => {
+  it("計画値の着地で残予算率が目標を下回る目標だけ出す（C1: 年度の予算 約 1,200 万円・計画 0.5 人月 × 10〜3 月の 1,040h × 5,000 円 = 260 万円 → 約 78%）", () => {
     const m = modelOf("project,C1,2027-03,90,,\nproject,C1,2027-09,50,2026-04,\n");
     const r = planTargetAlerts(m, null, all);
     expect(ids(r)).toEqual(["project:C1:2027-03"]);
     expect(r[0]!.evaluation.status).toBe("atRisk");
-    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 2_600_000 / 12_000_000, 9);
-    // 月の目安の上限 = 100 万円 × (1 − 90%) = 10 万円 < 計画 40 万円 → 基準月から終了月まで全部
+    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 2_600_000 / FY_BUDGET, 9);
+    // 月の目安の上限 = その月の予算（約 100 万円）× (1 − 90%) ≒ 10 万円 < 計画 40 万円 → 基準月から終了月まで全部
     expect(r[0]!.overMonths).toEqual(FY_REST);
   });
 
@@ -79,7 +81,7 @@ describe("planTargetAlerts", () => {
     // 2.0 人月 × 1,040h × 5,000 円 = 1,040 万円 → 約 13%。まだ達成見込み
     expect(r).toEqual([]);
     const r2 = planTargetAlerts(modelOf("project,C1,2027-03,-10,,\n"), inputs("M1,C1,2026-04,2027-09,3.0\nM2,C2,2026-04,2027-09,0.1\n"), all);
-    // 3.0 人月 × 1,040h × 5,000 円 = 1,560 万円 → -30% < -10%。月の上限は 110 万円
+    // 3.0 人月 × 1,040h × 5,000 円 = 1,560 万円 → -30% < -10%。月の上限は予算の 110%
     expect(ids(r2)).toEqual(["project:C1:2027-03"]);
     expect(r2[0]!.overMonths).toEqual(FY_REST);
   });
@@ -90,7 +92,7 @@ describe("planTargetAlerts", () => {
     expect(planTargetAlerts(m, inputs(BASE), all)).toEqual([]);
     const r = planTargetAlerts(m, inputs("M1,C1,2026-04,2027-09,1.0\nM2,C2,2026-04,2027-09,0.1\n"), all);
     expect(ids(r)).toEqual(["project:C1:2027-03"]);
-    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 5_200_000 / 12_000_000, 9);
+    expect(r[0]!.evaluation.rate).toBeCloseTo(1 - 5_200_000 / FY_BUDGET, 9);
     // 減らせば消える
     expect(planTargetAlerts(modelOf("project,C1,2027-03,90,,\n"), inputs("M1,C1,2026-04,2027-09,0.1\nM2,C2,2026-04,2027-09,0.1\n"), all)).toEqual([]);
   });

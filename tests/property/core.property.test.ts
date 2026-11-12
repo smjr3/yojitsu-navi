@@ -30,15 +30,19 @@ const contractArb: fc.Arbitrary<Contract> = fc
   }));
 
 describe("予算の不変条件 (SPEC §3)", () => {
-  it("全月の合計 == totalAmount、最終月以外は均等", () => {
+  it("全月の合計 == totalAmount、最終月以外は営業日に比例（切り捨て）、端数は月数未満（§118）", () => {
     fc.assert(
-      fc.property(contractArb, (c) => {
-        const s = budgetSchedule(c);
+      fc.property(contractArb, fc.array(fc.integer({ min: 0, max: 23 }), { minLength: 1, maxLength: 12 }), (c, pattern) => {
+        const daysOf = (m: string) => pattern[Number(m.slice(5, 7)) % pattern.length]!;
+        const s = budgetSchedule(c, daysOf);
         expect(s.reduce((a, b) => a + b.budget, 0)).toBe(c.totalAmount);
-        const base = s[0]?.breakdown.baseMonthly ?? 0;
-        expect(s.slice(0, -1).every((b) => b.budget === base)).toBe(true);
         expect(s.every((b) => Number.isInteger(b.budget) && b.budget >= 0)).toBe(true);
+        const total = s.reduce((a, b) => a + b.breakdown.businessDays, 0);
+        for (const b of s.slice(0, -1)) {
+          expect(b.budget).toBe(total > 0 ? Math.floor((c.totalAmount * b.breakdown.businessDays) / total) : Math.floor(c.totalAmount / s.length));
+        }
         expect(s.at(-1)?.breakdown.remainder).toBeLessThan(s.length);
+        expect(s.at(-1)?.breakdown.remainder).toBeGreaterThanOrEqual(0);
       }),
     );
   });

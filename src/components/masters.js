@@ -27,6 +27,7 @@ import {
   diffMasterDoc,
   draftFileCount,
   impactBetween,
+  contractPeriodsOf,
   issueText,
   makeDraft,
   parseDraft,
@@ -381,6 +382,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   // 編集の土台は常にこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。書き換えない
   const bases = Object.freeze(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, Object.freeze({ text: data.files[id].text, lastCommitId: data.files[id].lastCommitId })])));
   let docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
+  // 影響の計算に使う周りのデータ（祝日の変更は案件の期間の月すべての予算を変える。§118）
+  const impactContext = () => ({ contractPeriods: contractPeriodsOf(docs.contracts) });
   /** 古い土台の下書きを当て直して復元したファイル → { applied, resolved }（表の上に注記する） */
   let rebasedInfo = {};
   let active = VIEW_IDS.includes(initialView) ? initialView : VIEW_IDS[0];
@@ -2233,7 +2236,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         msg.textContent = T.plan.noChange;
         return;
       }
-      const impact = impactBetween(docs[fileId], res.doc, range);
+      const impact = impactBetween(docs[fileId], res.doc, range, impactContext());
       if (impact.months.length === 0) {
         returnFocusKey = focus;
         dialog.close();
@@ -2384,7 +2387,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       let impactFile = null;
       let impactAll = null;
       for (const ch of result.changes) {
-        const impact = impactBetween(docs[ch.fileId], ch.doc, range);
+        const impact = impactBetween(docs[ch.fileId], ch.doc, range, impactContext());
         for (const m of impact.months) months.add(m);
         if (impact.months.length && (!impactAll || ch.fileId === "assignments")) {
           impactFile = ch.fileId;
@@ -2874,7 +2877,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         }
         const outFocus = `plan:hist:${memberId}|${targetId({ kind: "outside", type })}`;
         plan.open.add(memberId);
-        const impact = impactBetween(docs.outside, res.doc, range);
+        const impact = impactBetween(docs.outside, res.doc, range, impactContext());
         if (impact.months.length === 0) {
           returnFocusKey = outFocus;
           dialog.close();
@@ -2913,7 +2916,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         for (const extra of pieces.slice(1)) next = addRow(next, extra).doc;
       }
       Object.assign(values, pieces[0]);
-      const impact = impactBetween(before, next, range);
+      const impact = impactBetween(before, next, range, impactContext());
       const changes = mode === "edit" ? columns.filter((c) => (rowRecord(before, row)[c.name] ?? "").trim() !== (values[c.name] ?? "")) : [];
       if (mode === "edit" && changes.length === 0 && pieces.length === 1) {
         dialog.close();
@@ -2967,7 +2970,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const row = before.rows.find((r) => r.id === rowId);
     if (!row) return;
     const next = deleteRow(before, rowId);
-    const impact = impactBetween(before, next, range);
+    const impact = impactBetween(before, next, range, impactContext());
     const rec = rowRecord(before, row);
     const columns = def.columns.filter((c) => before.header.includes(c.name));
     const doDelete = () => {

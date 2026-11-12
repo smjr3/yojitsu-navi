@@ -16,26 +16,42 @@ export function contractMonthCount(contract: Pick<Contract, "startMonth" | "endM
   return monthsBetween(contract.startMonth, contract.endMonth);
 }
 
+/** 月 → 営業日数（土日と祝日を除いた日。§9） */
+export type BusinessDaysOf = (month: YearMonth) => number;
+
 /**
- * 月 m の予算。均等割り（切り捨て）＋端数は最終月に乗せる。
- * 契約期間外の月を渡すと例外（呼び出し側のバグ）。
+ * 契約の全月の予算一覧（SPEC §2・§118）。契約総額を契約期間の営業日数で按分する:
+ * 月の予算 = floor(契約総額 × その月の営業日数 ÷ 契約期間の営業日数)。最終月は 契約総額 − ほかの月の合計（端数を乗せる）。
+ * 契約期間の営業日が 0 日（祝日表の誤りなど）のときは月数で均等に割る。
  */
-export function monthlyBudget(contract: Contract, month: YearMonth): MonthlyBudget {
+export function budgetSchedule(contract: Contract, businessDaysOf: BusinessDaysOf): Array<{ month: YearMonth } & MonthlyBudget> {
   const monthCount = contractMonthCount(contract);
-  if (monthCount === 0 || month < contract.startMonth || month > contract.endMonth) {
-    throw new RangeError(`契約 ${contract.contractId} の期間外の月です: ${month}`);
-  }
+  if (monthCount === 0) throw new RangeError(`契約 ${contract.contractId} の期間が不正です`);
+  const months = monthRange(contract.startMonth, contract.endMonth);
+  const days = months.map((m) => Math.max(0, businessDaysOf(m)));
+  const totalBusinessDays = days.reduce((a, b) => a + b, 0);
   const totalAmount = contract.totalAmount;
-  const baseMonthly = Math.floor(totalAmount / monthCount);
-  const remainder = totalAmount - baseMonthly * monthCount;
-  const isLastMonth = month === contract.endMonth;
-  const budget = isLastMonth ? baseMonthly + remainder : baseMonthly;
-  return { budget, breakdown: { totalAmount, monthCount, baseMonthly, remainder, isLastMonth } };
+  const byDays = totalBusinessDays > 0;
+  const base = months.map((_, i) => (byDays ? Math.floor((totalAmount * days[i]!) / totalBusinessDays) : Math.floor(totalAmount / monthCount)));
+  const remainder = totalAmount - base.reduce((a, b) => a + b, 0);
+  return months.map((month, i) => {
+    const isLastMonth = i === months.length - 1;
+    const baseAmount = base[i]!;
+    return {
+      month,
+      budget: isLastMonth ? baseAmount + remainder : baseAmount,
+      breakdown: { totalAmount, monthCount, businessDays: days[i]!, totalBusinessDays, byBusinessDays: byDays, baseAmount, remainder, isLastMonth },
+    };
+  });
 }
 
-/** 契約の全月の予算一覧 */
-export function budgetSchedule(contract: Contract): Array<{ month: YearMonth } & MonthlyBudget> {
-  return monthRange(contract.startMonth, contract.endMonth).map((month) => ({ month, ...monthlyBudget(contract, month) }));
+/** 月 m の予算（budgetSchedule の 1 か月分）。契約期間外の月を渡すと例外（呼び出し側のバグ） */
+export function monthlyBudget(contract: Contract, month: YearMonth, businessDaysOf: BusinessDaysOf): MonthlyBudget {
+  if (contractMonthCount(contract) === 0 || month < contract.startMonth || month > contract.endMonth) {
+    throw new RangeError(`契約 ${contract.contractId} の期間外の月です: ${month}`);
+  }
+  const hit = budgetSchedule(contract, businessDaysOf).find((x) => x.month === month)!;
+  return { budget: hit.budget, breakdown: hit.breakdown };
 }
 
 /** 契約が計算対象として妥当でない理由（妥当なら null） */

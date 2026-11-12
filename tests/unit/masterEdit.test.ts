@@ -19,6 +19,7 @@ import {
   formatCsvRecord,
   impactBetween,
   impactOfChange,
+  contractPeriodsOf,
   isPristine,
   issueText,
   makeDraft,
@@ -705,6 +706,18 @@ describe("祝日（holidays.csv。§80）", () => {
     expect(impactBetween(before, updateRow(before, "o0", { date: "2025-05-06" }), range).months).toEqual(["2025-05"]);
     expect(impactBetween(before, updateRow(before, "o0", { name: "祝日" }), range).months).toEqual([]);
     expect(impactBetween(before, addRow(before, { date: "2026-01-02", name: "年末年始休暇" }).doc, range).months).toEqual([]);
+  });
+
+  it("案件の期間を渡すと、変えた日を期間に含む案件の期間の月すべてが影響（予算は営業日で按分。§118）", () => {
+    const before = parseMasterDoc("holidays", HOLIDAYS);
+    const contracts = parseMasterDoc("contracts", "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\nC1,A,保守,T1,2025-06,2026-03,100\nC2,B,保守,T1,2025-04,2025-05,100\n");
+    const ctx = { contractPeriods: contractPeriodsOf(contracts) };
+    // 2026-01 の休日を足す → C1（2025-06〜2026-03）の範囲内の月すべて。C2 は期間外なので含めない
+    const future = impactBetween(before, addRow(before, { date: "2026-01-05", name: "休暇" }).doc, range, ctx);
+    expect(future.months).toEqual(["2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"]);
+    // 2025-05 の変更は C2（2025-04〜05）の月すべて
+    expect(impactBetween(before, updateRow(before, "o0", { date: "2025-05-06" }), range, ctx).months).toEqual(["2025-04", "2025-05"]);
+    expect(contractPeriodsOf(null)).toEqual([]);
   });
 
   it("validateEdited は編集中の祝日で検証する（日付の誤りを行に結び付ける）", () => {

@@ -7,7 +7,10 @@ import { assignment, contract, dataset, member, rate, rule, team, worklog } from
 /**
  * 手計算の例（SPEC 全体の通し）
  *
- * 契約 C1: 2026-04〜2027-03（12 か月）、総額 ¥2,400,000 → 月次予算 200,000（端数 0）
+ * 契約 C1: 2026-04〜2027-03（12 か月）、総額 ¥2,400,000 → 月次予算は営業日で按分（§118）
+ *   営業日（祝日なし）22,21,22,23,21,22,22,21,23,21,20,23 = 261 日
+ *   floor(2,400,000 × 日数 / 261): 22 日 → 202,298、21 日 → 193,103、23 日 → 211,494、20 日 → 183,908
+ *   端数は最終月（2027-03 = 211,500）
  * メンバー:
  *   M1 社員 役職 SE、単価 SE = 5,000 円/h
  *   M2 パートナー 個人単価 M2 = 4,000 円/h（役職 PG = 3,000 は使われない）
@@ -26,7 +29,7 @@ import { assignment, contract, dataset, member, rate, rule, team, worklog } from
  *   予算 2,400,000
  *   原価 130,000+230,000+42,000+80,000+61,250+100,000+20,000 = 663,250
  *   粗利 1,736,750、粗利率 1,736,750 / 2,400,000 = 0.72364583…
- *   経過月 04〜10 の 7 か月: 累計予算 1,400,000、累計原価 663,250 → 消化率 0.47375
+ *   経過月 04〜10 の 7 か月: 累計予算 1,406,892、累計原価 663,250 → 消化率 0.471429…
  *   時間 10+20+30+20+10.5+16+12.25+25+4 = 147.75h → 標準人月 147.75/160 = 0.9234375
  *
  * 着地（FY2026）: 実績月 04〜09、actualCost = 643,250、残り月 10〜03 の 6 か月
@@ -93,18 +96,18 @@ describe("buildModel — 手計算の例", () => {
   it("月ごとの予算・原価・粗利・状態", () => {
     const rows = c1.months.map((m) => [m.month, m.budget, m.cost, m.grossProfit, m.status]);
     expect(rows).toEqual([
-      ["2026-04", 200_000, 130_000, 70_000, "final"],
-      ["2026-05", 200_000, 230_000, -30_000, "final"],
-      ["2026-06", 200_000, 42_000, 158_000, "final"],
-      ["2026-07", 200_000, 80_000, 120_000, "final"],
-      ["2026-08", 200_000, 61_250, 138_750, "final"],
-      ["2026-09", 200_000, 100_000, 100_000, "final"],
-      ["2026-10", 200_000, 20_000, 180_000, "preliminary"],
-      ["2026-11", 200_000, 0, 200_000, "future"],
-      ["2026-12", 200_000, 0, 200_000, "future"],
-      ["2027-01", 200_000, 0, 200_000, "future"],
-      ["2027-02", 200_000, 0, 200_000, "future"],
-      ["2027-03", 200_000, 0, 200_000, "future"],
+      ["2026-04", 202_298, 130_000, 72_298, "final"],
+      ["2026-05", 193_103, 230_000, -36_897, "final"],
+      ["2026-06", 202_298, 42_000, 160_298, "final"],
+      ["2026-07", 211_494, 80_000, 131_494, "final"],
+      ["2026-08", 193_103, 61_250, 131_853, "final"],
+      ["2026-09", 202_298, 100_000, 102_298, "final"],
+      ["2026-10", 202_298, 20_000, 182_298, "preliminary"],
+      ["2026-11", 193_103, 0, 193_103, "future"],
+      ["2026-12", 211_494, 0, 211_494, "future"],
+      ["2027-01", 193_103, 0, 193_103, "future"],
+      ["2027-02", 183_908, 0, 183_908, "future"],
+      ["2027-03", 211_500, 0, 211_500, "future"],
     ]);
   });
 
@@ -117,7 +120,7 @@ describe("buildModel — 手計算の例", () => {
     expect(apr?.worklogs.map((w) => [w.memberId, w.hourlyRate, w.amount])).toEqual([["M1", 5000, 50_000], ["M2", 4000, 80_000]]);
     expect(apr?.costs).toEqual({ labor: 130_000 });
     expect(apr?.hours).toBe(30);
-    expect(apr?.budgetBreakdown).toEqual({ totalAmount: 2_400_000, monthCount: 12, baseMonthly: 200_000, remainder: 0, isLastMonth: false });
+    expect(apr?.budgetBreakdown).toEqual({ totalAmount: 2_400_000, monthCount: 12, businessDays: 22, totalBusinessDays: 261, byBusinessDays: true, baseAmount: 202_298, remainder: 6, isLastMonth: false });
     expect(apr?.businessDays).toBe(22); // 2026-04: 30 日、土日 8 日（4,5,11,12,18,19,25,26）
   });
 
@@ -128,8 +131,8 @@ describe("buildModel — 手計算の例", () => {
     expect(t.costs).toEqual({ labor: 663_250 });
     expect(t.grossProfit).toBe(1_736_750);
     expect(t.grossMargin).toBeCloseTo(1_736_750 / 2_400_000, 10);
-    expect(t.burnRateBreakdown).toEqual({ elapsedMonths: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], cumulativeCost: 663_250, cumulativeBudget: 1_400_000 });
-    expect(t.burnRate).toBeCloseTo(0.47375, 10);
+    expect(t.burnRateBreakdown).toEqual({ elapsedMonths: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], cumulativeCost: 663_250, cumulativeBudget: 1_406_892 });
+    expect(t.burnRate).toBeCloseTo(663_250 / 1_406_892, 10);
     expect(t.isOverBudget).toBe(false);
     expect(t.hours).toBe(147.75);
     expect(t.personMonthsStandard).toBeCloseTo(0.9234375, 10);
@@ -169,9 +172,9 @@ describe("buildModel — 手計算の例", () => {
   it("月次推移", () => {
     const series = monthlySeries(model, { period: { from: "2026-09", to: "2026-11" } });
     expect(series).toEqual([
-      { month: "2026-09", status: "final", budget: 200_000, cost: 100_000, costs: { labor: 100_000 }, grossProfit: 100_000, hours: 25 },
-      { month: "2026-10", status: "preliminary", budget: 200_000, cost: 20_000, costs: { labor: 20_000 }, grossProfit: 180_000, hours: 4 },
-      { month: "2026-11", status: "future", budget: 200_000, cost: 0, costs: { labor: 0 }, grossProfit: 200_000, hours: 0 },
+      { month: "2026-09", status: "final", budget: 202_298, cost: 100_000, costs: { labor: 100_000 }, grossProfit: 102_298, hours: 25 },
+      { month: "2026-10", status: "preliminary", budget: 202_298, cost: 20_000, costs: { labor: 20_000 }, grossProfit: 182_298, hours: 4 },
+      { month: "2026-11", status: "future", budget: 193_103, cost: 0, costs: { labor: 0 }, grossProfit: 193_103, hours: 0 },
     ]);
   });
 

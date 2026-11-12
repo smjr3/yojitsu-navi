@@ -4,7 +4,7 @@
  * 純粋関数。同じ Dataset と asOf からは常に同じ Model が得られる
  * （meta.generatedAt のみ options.generatedAt で固定できる）。
  */
-import { partitionContracts, monthlyBudget } from "./budget.js";
+import { budgetSchedule, partitionContracts } from "./budget.js";
 import { addMonths, businessDaysInMonth, isValidISODate, isValidYearMonth, monthOfDate, monthRange, fiscalYearMonths, fiscalYearOf } from "./calendar.js";
 import { HolidaySet } from "./holidays.js";
 import { computeMonthCost, createLaborProvider, indexWorklogs, type CostProvider } from "./cost.js";
@@ -101,8 +101,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   const fyMonthsForForecast = fiscalYearMonths(forecastFiscalYear, config.fiscalYearStartMonth);
 
   const results: ContractResult[] = contracts.map((contract) => {
-    const months: ContractMonth[] = monthRange(contract.startMonth, contract.endMonth).map((month) => {
-      const { budget, breakdown } = monthlyBudget(contract, month);
+    // 予算は契約期間の営業日で按分する（§118）
+    const schedule = budgetSchedule(contract, businessDaysOf);
+    const months: ContractMonth[] = schedule.map(({ month, budget, breakdown }) => {
       const mc = computeMonthCost(providers, costTypeIds, contract.contractId, month);
       return {
         contractId: contract.contractId,

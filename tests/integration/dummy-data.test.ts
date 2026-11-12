@@ -142,23 +142,34 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
   });
 });
 
+/** 素朴な按分（計算コアとは別実装）: floor(総額 × 月の営業日 ÷ 契約期間の営業日)、端数は最終月。営業日は各月の businessDays を使う */
+function naiveBudgets(r: ContractResult): number[] {
+  const days = r.months.map((m) => m.businessDays);
+  const total = days.reduce((a, d) => a + d, 0);
+  const base = days.map((d) => Math.floor((r.contract.totalAmount * d) / total));
+  base[base.length - 1]! += r.contract.totalAmount - base.reduce((a, x) => a + x, 0);
+  return base;
+}
+
 describe("C005: 38,000,000 円 / 12 か月（§3 手計算）", () => {
-  it("基本額 3,166,666、端数 8 を最終月 2027-03 に乗せ、合計は総額に一致", () => {
+  it("営業日で按分し、端数を最終月 2027-03 に乗せ、合計は総額に一致", () => {
     const r = byId("C005");
     expect(r.contract.totalAmount).toBe(38_000_000);
     expect(r.months).toHaveLength(12);
-    const base = Math.floor(38_000_000 / 12); // 3,166,666.66… → 3,166,666
-    expect(base).toBe(3_166_666);
-    const remainder = 38_000_000 - base * 12; // 38,000,000 − 37,999,992 = 8
-    expect(remainder).toBe(8);
+    const expected = naiveBudgets(r);
+    expect(r.months.map((m) => m.budget)).toEqual(expected);
+    const totalDays = r.months.reduce((a, m) => a + m.businessDays, 0);
     for (const m of r.months.slice(0, 11)) {
-      expect(m.budget).toBe(3_166_666);
-      expect(m.budgetBreakdown).toEqual({ totalAmount: 38_000_000, monthCount: 12, baseMonthly: 3_166_666, remainder: 8, isLastMonth: false });
+      expect(m.budgetBreakdown).toMatchObject({ totalAmount: 38_000_000, monthCount: 12, businessDays: m.businessDays, totalBusinessDays: totalDays, byBusinessDays: true, baseAmount: m.budget, isLastMonth: false });
     }
+    // 営業日の多い月ほど予算が大きい
+    const most = r.months.slice(0, 11).reduce((a, m) => (m.businessDays > a.businessDays ? m : a));
+    const least = r.months.slice(0, 11).reduce((a, m) => (m.businessDays < a.businessDays ? m : a));
+    expect(most.budget).toBeGreaterThan(least.budget);
     const last = r.months[11]!;
     expect(last.month).toBe("2027-03");
-    expect(last.budget).toBe(3_166_674);
     expect(last.budgetBreakdown.isLastMonth).toBe(true);
+    expect(last.budget).toBe(last.budgetBreakdown.baseAmount + last.budgetBreakdown.remainder);
     expect(r.months.reduce((a, m) => a + m.budget, 0)).toBe(38_000_000);
     // FY2026 の着地予算も総額と一致（契約期間 = 年度）
     expect(r.forecasts.recent3.targetBudget).toBe(38_000_000);
@@ -197,10 +208,11 @@ describe("C008: こもれび出版（赤字見込み）の手計算", () => {
     expect(f.forecastGrossProfit).toBe(6_000_000 - actual - remaining);
     expect(f.forecastGrossProfit).toBeLessThan(0);
     expect(f.isDeficit).toBe(true);
-    // 消化率も 100% 超（4〜10 月の累計原価 ÷ 累計予算 3,500,000）
+    // 消化率も 100% 超（4〜10 月の累計原価 ÷ 累計予算）
     const t = aggregate(model, { period: { from: "2026-04", to: "2027-03" }, contractIds: ["C008"] });
-    expect(t.burnRateBreakdown.cumulativeBudget).toBe(500_000 * 7);
-    expect(t.burnRate).toBeCloseTo((actual + cost("2026-10")) / 3_500_000, 12);
+    const cumulativeBudget = naiveBudgets(r).slice(0, 7).reduce((a, x) => a + x, 0);
+    expect(t.burnRateBreakdown.cumulativeBudget).toBe(cumulativeBudget);
+    expect(t.burnRate).toBeCloseTo((actual + cost("2026-10")) / cumulativeBudget, 12);
     expect(t.isOverBudget).toBe(true);
   });
 
@@ -351,10 +363,11 @@ describe("月の状態・年度（asOf = 2026-10-27）", () => {
     expect(c007.months.find((m) => m.month === "2026-10")!.status).toBe("preliminary");
     expect(c007.months.find((m) => m.month === "2026-11")!.status).toBe("future");
   });
-  it("C007（24 か月）の FY2026 予算は 4,000,000 × 12、C012（実績ゼロ）は基礎月があるので noActuals ではない", () => {
+  it("C007（24 か月）の FY2026 予算は年度内の月予算の合計、C012（実績ゼロ）は基礎月があるので noActuals ではない", () => {
     const c007 = byId("C007");
-    expect(c007.months.every((m) => m.budget === 4_000_000)).toBe(true);
-    expect(c007.forecasts.recent3.targetBudget).toBe(48_000_000);
+    expect(c007.months.map((m) => m.budget)).toEqual(naiveBudgets(c007));
+    const fy = c007.months.filter((m) => m.month >= "2026-04" && m.month <= "2027-03").reduce((a, m) => a + m.budget, 0);
+    expect(c007.forecasts.recent3.targetBudget).toBe(fy);
     expect(c007.forecasts.recent3.breakdown.averageBasisMonths).toEqual(["2026-07", "2026-08", "2026-09"]);
     const c012 = byId("C012");
     // SPEC §10: noActuals は「基礎月が 0 か月」。C012 は 2026-07〜09 が基礎月（原価 0）なので false、平均 0
