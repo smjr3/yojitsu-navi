@@ -18,7 +18,7 @@ import {
   validateDataset,
 } from "../../src/core/index.js";
 import type { TaskTypeRule } from "../../src/core/types.js";
-import { baseConfig, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
+import { baseConfig, contract, dataset, member, rate, rule, team, weekdayHours, worklog } from "./fixtures.js";
 
 const BASE = "2031-04";
 const m = (n: number) => addMonths(BASE, n);
@@ -154,44 +154,49 @@ describe("メンバー別の契約外（§50.3・§50.4）", () => {
   const model = buildModel(ds(), { asOf: day(2, 20), generatedAt: "x" });
   const mm = (id: string, n: number) => model.memberMonths.find((x) => x.memberId === id && x.month === m(n));
 
-  it("種別ごとの行: 計画 = 人月 × 基準時間 × 単価、実績 = 時間 × 単価（月の合計には入れない）", () => {
+  // m(0)・m(1) は営業日 22 日（祝日なし）= 176h（§114）
+  it("種別ごとの行: 計画 = 人月 × 月の稼働時間 × 単価、実績 = 時間 × 単価（月の合計には入れない）", () => {
+    expect([weekdayHours(m(0)), weekdayHours(m(1))]).toEqual([176, 176]);
     const a = mm("M1", 0)!;
-    expect(a.plannedHours).toBe(80);
+    expect(a.plannedHours).toBe(88);
     expect(a.actualHours).toBe(10);
     const out = a.byContract.filter(isOutsideRow);
     expect(out.map((r) => [r.contractId, r.outsideType, r.plannedHours, r.plannedCost, r.actualHours, r.actualCost])).toEqual([
-      [outsideRowId("会社業務"), "会社業務", 16, 80_000, 2, 10_000],
-      [outsideRowId("提案"), "提案", 32, 160_000, 5.5, 27_500],
+      [outsideRowId("会社業務"), "会社業務", 0.1 * 176, 88_000, 2, 10_000],
+      [outsideRowId("提案"), "提案", 0.2 * 176, 176_000, 5.5, 27_500],
     ]);
     // 契約の行が先、契約外の行は末尾
     expect(isOutsideRow(a.byContract[0]!)).toBe(false);
     // 計画だけの月
-    expect(mm("M1", 1)!.byContract.filter(isOutsideRow).map((r) => [r.outsideType, r.plannedHours, r.actualHours])).toEqual([["提案", 32, 0]]);
+    expect(mm("M1", 1)!.byContract.filter(isOutsideRow).map((r) => [r.outsideType, r.plannedHours, r.actualHours])).toEqual([["提案", 0.2 * 176, 0]]);
   });
 
   it("既定は契約外を数えない（従来どおり）。includeOutside で計画・実績の両方に足す", () => {
     const period = { from: m(0), to: m(1) };
     const off = aggregateMembers(model, { period });
     expect(off.members.map((x) => x.memberId)).toEqual(["M1"]);
-    expect(off.total).toMatchObject({ plannedHours: 160, actualHours: 10, plannedCost: 800_000, actualCost: 50_000 });
+    expect(off.total).toMatchObject({ plannedHours: 176, actualHours: 10, plannedCost: 880_000, actualCost: 50_000 });
     const on = aggregateMembers(model, { period, includeOutside: true });
     // 契約外予定だけの人も出る
     expect(on.members.map((x) => x.memberId)).toEqual(["M1", "M2"]);
     const m1 = on.members[0]!;
-    expect(m1).toMatchObject({ plannedHours: 160 + 16 + 64, actualHours: 10 + 2 + 5.5, plannedCost: 800_000 + 80_000 + 320_000, actualCost: 50_000 + 10_000 + 27_500 });
+    expect(m1.plannedHours).toBeCloseTo(176 + 17.6 + 70.4, 9);
+    expect(m1).toMatchObject({ actualHours: 10 + 2 + 5.5, plannedCost: 880_000 + 88_000 + 352_000, actualCost: 50_000 + 10_000 + 27_500 });
     expect(m1.byContract.map((c) => c.outsideType ?? c.contractId)).toEqual(["C1", "会社業務", "提案"]);
-    expect(on.members[1]!.byContract).toMatchObject([{ outsideType: "設計", plannedHours: 80, actualHours: 0, assignedMonths: 1 }]);
+    expect(on.members[1]!.byContract).toMatchObject([{ outsideType: "設計", plannedHours: 88, actualHours: 0, assignedMonths: 1 }]);
     expect(on.total.plannedCost).toBe(m1.plannedCost + on.members[1]!.plannedCost);
     // 契約で絞っても契約外は含めない（includeOutside なし）
-    expect(aggregateMembers(model, { period, contractIds: ["C1"] }).total.plannedHours).toBe(160);
+    expect(aggregateMembers(model, { period, contractIds: ["C1"] }).total.plannedHours).toBe(176);
   });
 
   it("月次推移も同じ切替", () => {
     const period = { from: m(0), to: m(1) };
     const off = memberMonthlySeries(model, "M1", period);
     const on = memberMonthlySeries(model, "M1", period, undefined, { includeOutside: true });
-    expect(off.map((p) => p.plannedHours)).toEqual([80, 80]);
-    expect(on.map((p) => p.plannedHours)).toEqual([80 + 16 + 32, 80 + 32]);
+    expect(off.map((p) => p.plannedHours)).toEqual([88, 88]);
+    const onHours = on.map((p) => p.plannedHours);
+    expect(onHours[0]).toBeCloseTo(88 + 17.6 + 35.2, 9);
+    expect(onHours[1]).toBeCloseTo(88 + 35.2, 9);
     expect(on[0]!.actualCost).toBe(50_000 + 10_000 + 27_500);
   });
 
@@ -259,10 +264,10 @@ describe("Codex 指摘（#33）: 種別の表記ゆれ・契約の外の月", ()
     const row = model.memberMonths.find((x) => x.memberId === "M1" && x.month === m(0))!;
     const out = row.byContract.filter(isOutsideRow);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ plannedHours: 32, actualHours: 8 });
+    expect(out[0]).toMatchObject({ plannedHours: 0.2 * 176, actualHours: 8 });
     expect(out[0]!.contractId).toBe(outsideRowId("presales"));
     const on = aggregateMembers(model, { period: { from: m(0), to: m(0) }, includeOutside: true });
-    expect(on.members[0]!.byContract.filter(isOutsideRow)).toMatchObject([{ plannedHours: 32, actualHours: 8, unplannedHours: 0 }]);
+    expect(on.members[0]!.byContract.filter(isOutsideRow)).toMatchObject([{ plannedHours: 0.2 * 176, actualHours: 8, unplannedHours: 0 }]);
   });
 
   it("運用保守以外の予定が契約の期間の外にあっても、選べる期間（minMonth〜maxMonth）に入る", () => {

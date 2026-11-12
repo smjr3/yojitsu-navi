@@ -28,9 +28,9 @@ export interface CostTypeDef {
 export interface Config {
   /** 年度開始月（1〜12）。4 = 4月始まり */
   fiscalYearStartMonth: number;
-  /** 1.0人月の標準時間 */
+  /** 1.0人月の標準時間（実績の人月（標準）に使う。リソース計画は営業日数 × hoursPerBusinessDay。§114） */
   standardHoursPerMonth: number;
-  /** 営業日1日あたりの時間（カレンダー基準の人月換算に使う） */
+  /** 営業日1日あたりの時間（カレンダー基準の人月換算と、リソース計画の 1 人月の時間 = 営業日数 × この値。§114） */
   hoursPerBusinessDay: number;
   /** 消化率がこの値を超えたら「赤」。1.0 = 100% */
   burnRateDangerThreshold: number;
@@ -295,7 +295,7 @@ export interface Assignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 配分人月（0 以上。1.0 = 基準時間。1.0 超も可） */
+  /** 配分人月（0 以上。1.0 = その月の営業日ぶんの時間。§114。1.0 超も可） */
   allocation: number;
 }
 
@@ -791,7 +791,7 @@ export interface MemberContractMonth {
   allocation: number;
   /** 掛かったアサイン（契約外は契約外予定）の件数。0 = 計画なし（この行の実績は unplanned に入る） */
   assignmentCount: number;
-  /** allocation × standardHoursPerMonth */
+  /** allocation × 月の稼働時間（営業日数 × 1 日の時間。§114） */
   plannedHours: number;
   /** round(plannedHours × hourlyRate)。行（x, c, m）ごとに丸める */
   plannedCost: number;
@@ -801,7 +801,7 @@ export interface MemberContractMonth {
   actualCost: number;
 }
 
-/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 基準時間 × 単価、実績 = 工数原価） */
+/** メンバー x・月 m の計画と実績（計画 = 配分人月 × 1人月の時間 × 単価、実績 = 工数原価） */
 export interface MemberMonth {
   memberId: string;
   month: YearMonth;
@@ -817,8 +817,8 @@ export interface MemberMonth {
   hourlyRate: number;
   rateSource: { key: string; effectiveFrom: YearMonth } | null;
   rateMissing: boolean;
-  /** 計算に使った基準時間（config.standardHoursPerMonth） */
-  standardHoursPerMonth: number;
+  /** 計算に使った月の稼働時間（1.0 人月の時間 = 営業日数 × 1 日の時間。§114） */
+  monthHours: number;
   plannedHours: number;
   /** Σ_c plannedCost(x, c, m)（行ごとに丸めた額の合計） */
   plannedCost: number;

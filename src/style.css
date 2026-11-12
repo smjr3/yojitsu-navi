@@ -1594,12 +1594,13 @@ h3 {
     min-width: min(16em, 30vw);
   }
   .yn-table .yn-primary-cell:has(.yn-cell-2line) {
-    min-width: min(16vw, 300px);
+    min-width: min(14.5vw, 300px);
     max-width: min(28vw, 400px);
   }
-  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする */
+  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする。
+   * 1024px で列の多い表（メンバー一覧: 計画時間は月の営業日で端数が出る。§114）が収まる幅にする */
   .yn-table .yn-primary-cell .yn-cell-2line {
-    max-width: 17vw;
+    max-width: 15vw;
     display: flex;
   }
   .yn-table .yn-primary-cell .yn-cell-main {

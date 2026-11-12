@@ -3,12 +3,13 @@
  */
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
 import { getModel } from "./helpers/core.js";
-import { addMonths, loadLevelOf, orgChartAt, personMonths } from "../../src/core/index.js";
+import { addMonths, createMonthHours, loadLevelOf, orgChartAt, personMonths } from "../../src/core/index.js";
 
 const model = getModel();
 const asOf = model.meta.asOfMonth;
 const chart = orgChartAt(model, asOf);
-const std = model.config.standardHoursPerMonth;
+// 1 人月の時間 = その月の営業日数 × 1 日の時間（§114）
+const std = createMonthHours(model.holidays, model.config.hoursPerBusinessDay)(asOf);
 const chip = (page: import("@playwright/test").Page, teamId: string, memberId: string) => page.locator(`.yn-org-node[data-team="${teamId}"] > .yn-org-people > [data-member="${memberId}"][data-origin="own"]`);
 
 test("表 ⇄ 体制図の切り替え。URL に残り、表示だけ（入力欄・保存は無い） @smoke", async ({ page }) => {

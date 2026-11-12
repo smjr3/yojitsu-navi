@@ -125,7 +125,7 @@ describe("リソース計画 planView（§23.1）", () => {
 });
 
 describe("人月と時間（§23.2: 入力だけ時間可、保存・表示は人月）", () => {
-  it("時間は基準時間で人月に直し、小数 4 桁", () => {
+  it("時間は1人月の時間で人月に直し、小数 4 桁", () => {
     expect(allocationFromInput("16", "hours", 160)).toBe("0.1");
     expect(allocationFromInput("10", "hours", 160)).toBe("0.0625");
     expect(allocationFromInput("1", "hours", 160)).toBe("0.0063");

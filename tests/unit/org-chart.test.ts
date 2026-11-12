@@ -53,7 +53,7 @@ describe("orgChartAt (SPEC §76 体制図)", () => {
 
   it("own の負荷は全案件の計画・実績（時間）。応援先の案件は support", () => {
     const m1 = orgChartAt(model, "2026-05").nodes.T1!.members[0]!;
-    expect(m1.plannedHours).toBeCloseTo((0.8 + 0.5) * 160);
+    expect(m1.plannedHours).toBeCloseTo((0.8 + 0.5) * 168); // 2026-05 は営業日 21 日 = 168h（§114）;
     expect(m1.actualHours).toBe(140);
     expect(m1.lines.find((l) => l.contractId === "B")).toMatchObject({ support: true, contractTeamId: "T2" });
     expect(m1.lines.find((l) => l.contractId === "A")).toMatchObject({ support: false });
@@ -63,7 +63,7 @@ describe("orgChartAt (SPEC §76 体制図)", () => {
     const c = orgChartAt(model, "2026-05");
     const t2 = c.nodes.T2!.guests;
     expect(t2.map((g) => [g.memberId, g.origin])).toEqual([["M1", "support"], ["X9", "help"]]);
-    expect(t2[0]!.plannedHours).toBeCloseTo(0.5 * 160);
+    expect(t2[0]!.plannedHours).toBeCloseTo(0.5 * 168);
     expect(t2[0]!.actualHours).toBe(40);
     expect(t2[1]!.memberUnknown).toBe(true);
     const t1 = c.nodes.T1!.guests;
@@ -97,7 +97,7 @@ describe("orgChartAt (SPEC §76 体制図)", () => {
 
   it("未来の月は計画だけ（実績 0）", () => {
     const m2 = orgChartAt(model, "2027-02").nodes.T1!.members.find((p) => p.memberId === "M2")!;
-    expect(m2.plannedHours).toBe(160);
+    expect(m2.plannedHours).toBe(160); // 2027-02 は営業日 20 日 = 160h
     expect(m2.actualHours).toBe(0);
   });
 });

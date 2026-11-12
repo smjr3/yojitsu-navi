@@ -14,7 +14,10 @@ import { addRow, parseMasterDoc, serializeMasterDoc } from "../../src/core/maste
 const HOLIDAYS_TEXT = buildMastersPayload(ROOT_DIR).files.holidays.text;
 
 test.beforeEach(async ({ page }) => {
+  // 最初の読み込みでだけ下書きを消す（同じタブで画面を移っても下書きが続くことを確かめるテストがある）
   await page.addInitScript(() => {
+    if (sessionStorage.getItem("e2e-draft-cleared")) return;
+    sessionStorage.setItem("e2e-draft-cleared", "1");
     localStorage.removeItem("yojitsu-navi:masters-draft:v1");
     sessionStorage.removeItem("yojitsu-navi:masters-draft-session");
   });
@@ -80,4 +83,30 @@ test("390px・ダーク: 祝日タブで画面が横にはみ出さない", asyn
   await gotoPage(page, "/masters?view=holidays");
   await expect(page.locator("table.yn-me-table tbody tr.yn-me-group").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+});
+
+test("祝日を足すと、リソース計画の 1 人月の時間・変更の影響がその祝日で変わる（§114）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=holidays");
+  await page.getByRole("button", { name: "＋ 新しい祝日" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  // 2026-11-30（月）。ダミーの祝日表で 11 月は 19 日 = 152h → 18 日 = 144h
+  await d.locator("#yn-me-f-date").fill("2026-11-30");
+  await d.locator("#yn-me-f-name").fill("会社の休日");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  // 同じタブでリソース計画へ（下書きは続き）
+  await gotoPage(page, "/plan?team=T111");
+  const cellEl = page.locator('[data-fk="plan:cell:M010:all:2026-11"]');
+  await cellEl.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await cellEl.hover();
+  // 吹き出しの時間は編集中の祝日で数える（人月 × 144h）
+  const tip = page.locator("#yn-plan-tip");
+  await expect(tip).toContainText("2026年11月 合計");
+  const m = /合計 ([\d.]+) 人月（([\d.,]+) 時間）/.exec((await tip.textContent()) ?? "");
+  expect(m).not.toBeNull();
+  expect(Number(m![1])).toBeGreaterThan(0);
+  expect(Number(m![2]!.replace(/,/g, ""))).toBeCloseTo(Number(m![1]) * 144, 0);
+  // 祝日だけの編集でも変更の影響を出す（計画値の着地が減る）
+  const section = page.locator(".yn-me-impact");
+  await expect(section.locator('[data-role="impact-rows"] tbody tr').first()).toBeVisible();
 });

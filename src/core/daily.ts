@@ -208,7 +208,7 @@ export interface DailyMemberRow {
   /** hours[日 - 1] = その日の時間（経過前は null） */
   hours: Array<number | null>;
   total: number;
-  /** 今月のリソース計画の時間（配分 × 基準時間。対象の案件の合計） */
+  /** 今月のリソース計画の時間（配分 × 1人月の時間。§114。対象の案件の合計） */
   plan: number;
   /** 計画までの残り時間（負 = 超過） */
   remaining: number;
