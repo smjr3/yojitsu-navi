@@ -93,6 +93,9 @@ test("祝日を足すと、リソース計画の 1 人月の時間・変更の�
   await d.locator("#yn-me-f-date").fill("2026-11-30");
   await d.locator("#yn-me-f-name").fill("会社の休日");
   await d.locator('[data-role="submit"]').click();
+  // 予算は契約期間の営業日で按分するので、11 月を含む案件の過去の月の予算も変わる（§118）
+  await expect(d.locator(".yn-me-impact")).toContainText("予算");
+  await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   // 同じタブでリソース計画へ（下書きは続き）
   await gotoPage(page, "/plan?team=T111");

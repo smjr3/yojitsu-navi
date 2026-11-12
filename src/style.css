@@ -1594,13 +1594,12 @@ h3 {
     min-width: min(16em, 30vw);
   }
   .yn-table .yn-primary-cell:has(.yn-cell-2line) {
-    min-width: min(14.5vw, 300px);
+    min-width: min(16vw, 300px);
     max-width: min(28vw, 400px);
   }
-  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする。
-   * 1024px で列の多い表（メンバー一覧: 計画時間は月の営業日で端数が出る。§114）が収まる幅にする */
+  /* 表のセルの max-width は中身の最小幅に負けるので、中身の側で幅を決めて 2 行目（所属など）を「…」にする */
   .yn-table .yn-primary-cell .yn-cell-2line {
-    max-width: 15vw;
+    max-width: 17vw;
     display: flex;
   }
   .yn-table .yn-primary-cell .yn-cell-main {
@@ -1610,7 +1609,15 @@ h3 {
     white-space: normal;
   }
 }
-/* 1024px 前後は列が多い表（メンバー一覧など）が収まる幅を優先し、それより広い画面で名前の列を広げる */
+/* 1024px 前後は列が多い表（メンバー一覧など。計画時間は月の営業日で端数が出る §114）が収まる幅を優先し、それより広い画面で名前の列を広げる */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .yn-table .yn-primary-cell:has(.yn-cell-2line) {
+    min-width: 14.5vw;
+  }
+  .yn-table .yn-primary-cell .yn-cell-2line {
+    max-width: 15vw;
+  }
+}
 @media (min-width: 1200px) {
   .yn-table .yn-primary-cell .yn-cell-2line {
     max-width: min(26vw, 370px);

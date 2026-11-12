@@ -6,11 +6,11 @@ import { buildModel } from "../../src/core/model.js";
 import { parseDataset, parsePercentCell, type DatasetFiles } from "../../src/core/csv.js";
 import { evaluateTarget, headlineTarget, isUsableTarget, targetContractIds, targetStartMonth, targetsOf } from "../../src/core/targets.js";
 import type { Target } from "../../src/core/types.js";
-import { baseConfig } from "./fixtures.js";
+import { baseConfig, budgetIn, contract } from "./fixtures.js";
 
 const HEADER = "target_type,target_id,end_month,remaining_rate,start_month,note\n";
 
-/** 月 100 万円の予算（12 か月）、2026-04〜2026-09 に毎月 100 時間 × 5,000 円 = 50 万円の実績。基準日 2026-10-15 */
+/** 年 1,200 万円の予算（12 か月、営業日で按分 §118）、2026-04〜2026-09 に毎月 100 時間 × 5,000 円 = 50 万円の実績。基準日 2026-10-15 */
 function files(targets?: string): DatasetFiles {
   const worklogs = ["04", "05", "06", "07", "08", "09"].map((m) => `date,member_id,member_name,customer_name,project_name,task,hours\n2026-${m}-10,M1,山田,A社,保守,定例,100\n`);
   return {
@@ -106,11 +106,13 @@ describe("目標の評価", () => {
   });
 
   it("終了月が過ぎた目標は実績で確定（ちょうど目標なら達成）", () => {
-    // 2026-04〜09: 予算 600 万、実績 300 万 → 残予算率 50%
-    const ok = evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: 0.5 }), "recent3");
-    expect(ok).toMatchObject({ period: { from: "2026-04", to: "2026-09" }, contractIds: ["C1"], budget: 6_000_000, actualCost: 3_000_000, forecastCost: 3_000_000, settled: true, status: "achieved" });
-    expect(ok.rate).toBeCloseTo(0.5);
-    expect(evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: 0.6 }), "recent3").status).toBe("missed");
+    // 2026-04〜09: 予算（約 600 万）、実績 300 万 → 残予算率 約 50%
+    const budget = budgetIn(contract({ contractId: "C1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 12_000_000 }), "2026-04", "2026-09");
+    const rate = 1 - 3_000_000 / budget;
+    const ok = evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: rate }), "recent3");
+    expect(ok).toMatchObject({ period: { from: "2026-04", to: "2026-09" }, contractIds: ["C1"], budget, actualCost: 3_000_000, forecastCost: 3_000_000, settled: true, status: "achieved" });
+    expect(ok.rate).toBeCloseTo(rate);
+    expect(evaluateTarget(model, target({ endMonth: "2026-09", remainingRate: rate + 0.01 }), "recent3").status).toBe("missed");
   });
 
   it("終了月が先の目標は着地見込みで判定（方式で変わる）", () => {

@@ -452,16 +452,17 @@ test.describe("案件詳細", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(t.cost, "yen"));
   });
 
-  test("百万円の丸めで 0 になる小さい金額は「0.0百万円」で、「-0.0」にならない（C003 2026-06 の残予算 -7,375 / C013 の月）", async ({ page }) => {
+  test("百万円の丸めで 0 になる小さい金額は「0.0百万円」で、「-0.0」にならない（C006 2026-09 の残予算 -1,250 / C013 の月）", async ({ page }) => {
     const small = [
-      { id: "C003", month: "2026-06", key: "grossProfit" as const },
+      // 予算は営業日で按分（§118）。C006 2026-09 は実績が予算をわずかに上回る
+      { id: "C006", month: "2026-09", key: "grossProfit" as const },
       { id: "C013", month: "2026-04", key: "budget" as const },
       { id: "C013", month: "2026-04", key: "cost" as const },
       { id: "C013", month: "2026-04", key: "grossProfit" as const },
     ];
     const label = { budget: "予算", cost: "実績", grossProfit: "残予算" } as const;
     let negative = 0;
-    for (const id of ["C003", "C013"]) {
+    for (const id of ["C006", "C013"]) {
       await gotoPage(page, `/contract?id=${id}&unit=m`);
       const table = tableByCaption(page, "月ごとの予実");
       const h = await headerIndex(table);
@@ -476,6 +477,6 @@ test.describe("案件詳細", () => {
         expect(text, "マイナスゼロを出さない").not.toMatch(/[-−]\s*0\.0/);
       }
     }
-    expect(negative, "負の小さい値（-7,375）を 1 件は含む").toBeGreaterThan(0);
+    expect(negative, "負の小さい値（-1,250）を 1 件は含む").toBeGreaterThan(0);
   });
 });

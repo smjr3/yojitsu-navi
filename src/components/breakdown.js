@@ -212,11 +212,13 @@ export function budgetMonthSpec({ contract, cm, unit }) {
   const b = cm.budgetBreakdown;
   return {
     title: fmt(T.breakdown.budgetTitle, { customer: contract.customerName, project: contract.projectName, month: monthJa(cm.month) }),
-    formula: [T.breakdown.budgetFormulaBase, T.breakdown.budgetFormulaRemainder, T.breakdown.budgetFormulaMonth],
+    formula: b.byBusinessDays ? [T.breakdown.budgetFormulaBase, T.breakdown.budgetFormulaRemainder, T.breakdown.budgetFormulaMonth] : [T.breakdown.budgetFormulaEqual, T.breakdown.budgetFormulaMonth],
     rows: [
       { label: T.breakdown.totalAmount, value: money(b.totalAmount, unit) },
       { label: T.breakdown.monthCount, value: fmt(T.breakdown.months, { n: b.monthCount }), note: `${contract.startMonth}〜${contract.endMonth}` },
-      { label: T.breakdown.baseMonthly, value: money(b.baseMonthly, unit) },
+      { label: T.breakdown.contractBusinessDays, value: fmt(T.breakdown.daysValue, { n: integer(b.totalBusinessDays) }) },
+      { label: T.breakdown.monthBusinessDays, value: fmt(T.breakdown.daysValue, { n: integer(b.businessDays) }) },
+      { label: T.breakdown.baseMonthly, value: money(b.baseAmount, unit) },
       { label: T.breakdown.remainder, value: money(b.remainder, unit) },
       { label: T.breakdown.isLastMonth, value: b.isLastMonth ? T.breakdown.yes : T.breakdown.no },
       { label: fmt(T.breakdown.monthBudget, { month: monthJa(cm.month) }), value: money(cm.budget, unit), emphasis: true },
@@ -241,7 +243,7 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
       `${r.contract.startMonth}〜${r.contract.endMonth}`,
       money(r.contract.totalAmount, unit),
       `${b.monthCount}`,
-      money(b.baseMonthly, unit),
+      fmt(T.breakdown.daysValue, { n: integer(b.totalBusinessDays) }),
       `${months.length}`,
       money(sum, unit),
     ]);
@@ -262,7 +264,6 @@ export function budgetAggregateSpec({ model, contractIds, period, unit, label = 
         },
       },
     ],
-    note: T.breakdown.budgetAggNote,
   };
 }
 

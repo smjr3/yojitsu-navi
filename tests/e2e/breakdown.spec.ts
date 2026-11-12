@@ -99,36 +99,38 @@ test("月の実績の内訳から作業ログを遅延読み込みする（C008 
   expect(worklogUrls.length, "取得は 1 回").toBe(1);
 });
 
-test("予算の月割り: 総額 ÷ 月数 = 基本額、端数は最終月に加算（C005: 38,000,000 → 3,166,666 / 3,166,674）", async ({ page }) => {
+test("予算の月割り: 契約総額を営業日で按分、端数は最終月に加算（C005: 38,000,000、§118）", async ({ page }) => {
   await gotoPage(page, "/contract?id=C005");
   const r = contractResult("C005", model);
+  const totalDays = r.months.reduce((s, m) => s + m.businessDays, 0);
   const table = tableByCaption(page, "月ごとの予実");
   const h = await headerIndex(table);
-  const check = async (month: string, expectedBudgetYen: string, expectedBudgetShown: string, last: boolean) => {
+  const check = async (month: string, last: boolean) => {
+    const cm = r.months.find((m) => m.month === month)!;
+    const base = Math.floor((38_000_000 * cm.businessDays) / totalDays);
     const row = table.locator(`tbody tr[data-key="${month}"]`);
     // 表のセルは画面の既定単位、内訳（dialog）は常に円
-    await expect(cell(row, col(h, "予算"))).toHaveText(expectedBudgetShown);
+    await expect(cell(row, col(h, "予算"))).toHaveText(yen(cm.budget, DEFAULT_UNIT));
     await cell(row, col(h, "予算")).locator("button").click();
     const d = dialog(page);
     await expect(d).toBeVisible();
     await expect(d.locator("#yn-dialog-title")).toContainText("予算の計算根拠");
-    await expect(d.locator(".yn-bd-formula")).toContainText("floor(契約総額 ÷ 契約月数)");
+    await expect(d.locator(".yn-bd-formula")).toContainText("floor(契約総額 × この月の営業日 ÷ 契約期間の営業日)");
     expect(await dialogRow(page, "契約総額")).toBe("38,000,000円");
     expect(await dialogRow(page, "契約月数")).toBe("12か月");
-    expect(await dialogRow(page, "基本額")).toBe("3,166,666円");
-    expect(await dialogRow(page, "端数（最終月に加算）")).toBe("8円");
+    expect(await dialogRow(page, "契約期間の営業日")).toBe(`${totalDays}日`);
+    expect(await dialogRow(page, "この月の営業日")).toBe(`${cm.businessDays}日`);
+    expect(await dialogRow(page, "按分額")).toBe(yen(base, "yen"));
     expect(await dialogRow(page, "この月は最終月か")).toBe(last ? "はい" : "いいえ");
-    const cm = r.months.find((m) => m.month === month)!;
-    expect(cm.budgetBreakdown).toMatchObject({ totalAmount: 38_000_000, monthCount: 12, baseMonthly: 3_166_666, remainder: 8, isLastMonth: last });
+    expect(cm.budgetBreakdown).toMatchObject({ totalAmount: 38_000_000, monthCount: 12, businessDays: cm.businessDays, totalBusinessDays: totalDays, baseAmount: base, isLastMonth: last });
     const label = `${Number(month.slice(0, 4))}年${Number(month.slice(5, 7))}月 の予算`;
-    expect(await dialogRow(page, label)).toBe(expectedBudgetYen);
-    expect(yen(cm.budget, "yen")).toBe(expectedBudgetYen);
-    expect(yen(cm.budget, DEFAULT_UNIT)).toBe(expectedBudgetShown);
+    expect(await dialogRow(page, label)).toBe(yen(cm.budget, "yen"));
+    expect(cm.budget).toBe(last ? base + cm.budgetBreakdown.remainder : base);
     await page.keyboard.press("Escape");
     await expect(d).toHaveCount(0);
   };
-  await check("2026-04", "3,166,666円", yen(3_166_666, DEFAULT_UNIT), false);
-  await check("2027-03", "3,166,674円", yen(3_166_674, DEFAULT_UNIT), true);
+  await check("2026-04", false);
+  await check("2027-03", true);
   // 12 か月の合計 = 契約総額
   expect(r.months.reduce((s, m) => s + m.budget, 0)).toBe(38_000_000);
 });

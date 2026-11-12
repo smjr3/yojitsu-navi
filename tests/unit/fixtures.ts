@@ -1,3 +1,4 @@
+import { budgetSchedule } from "../../src/core/budget.js";
 import { businessDaysInMonth } from "../../src/core/calendar.js";
 /**
  * テスト用のデータ組み立てヘルパー
@@ -107,4 +108,14 @@ export function dataset(overrides: Partial<Dataset> = {}): Dataset {
  */
 export function weekdayHours(ym: string, hoursPerDay = 8): number {
   return businessDaysInMonth(ym, []) * hoursPerDay;
+}
+
+/**
+ * 祝日なしのときの、契約 c の from〜to の予算の合計（SPEC §118: 契約総額を契約期間の平日の数で按分。最終月に端数）。
+ * 集計のテストで期待値を書くために使う（按分そのものは budget.test.ts で確かめる）
+ */
+export function budgetIn(c: Contract, from: string, to = from): number {
+  return budgetSchedule(c, (m) => businessDaysInMonth(m, []))
+    .filter((b) => from <= b.month && b.month <= to)
+    .reduce((a, b) => a + b.budget, 0);
 }

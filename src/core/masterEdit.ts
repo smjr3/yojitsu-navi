@@ -9,6 +9,7 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
+import { HolidaySet } from "./holidays.js";
 import { customerTeamIndex, memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
 import { normalizeName } from "./normalize.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
@@ -679,15 +680,68 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
   return hits.sort().join("\u0002");
 }
 
-/** 祝日（§80）の変更で営業日が変わる月: 休みの日の集合が変わった日の月（名前だけの変更は数えない） */
-function holidayImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
+/** 影響を求めるときの周りのデータ。祝日の変更は、案件の期間の月すべての予算を変える（§118） */
+export interface ImpactContext {
+  /** 案件の期間（編集中の案件があればその値） */
+  contractPeriods?: ReadonlyArray<{ startMonth: YearMonth; endMonth: YearMonth }>;
+}
+
+/**
+ * 祝日（§80）の変更で値が変わる月: 休みの日の集合（行の無い年を国民の祝日で補う分を含む。§49）が変わった日の月と、
+ * その月を期間に含む案件の期間の月すべて（予算は契約期間の営業日で按分するため。§118）。名前だけの変更は数えない。
+ * 年の最初の行を足す・最後の行を消すと、その年の国民の祝日の補完が切り替わるので、行の日付だけでなく実際の休みの日で比べる
+ */
+function holidayImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange, context: ImpactContext): Impact {
   const di = header.indexOf("date");
-  const dates = (rows: readonly CellRow[]) => new Set(rows.map((r) => (r[di] ?? "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)));
+  const dates = (rows: readonly CellRow[]) => [...new Set(rows.map((r) => (r[di] ?? "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))];
   const b = dates(before);
   const a = dates(after);
-  const changed = [...new Set([...[...b].filter((d) => !a.has(d)), ...[...a].filter((d) => !b.has(d))])].sort();
-  const months = [...new Set(changed.map((d) => d.slice(0, 7)))].filter((m) => m >= range.fromMonth && m <= range.toMonth).sort();
-  return months.length ? { months, keys: changed, columns: ["date"] } : { months: [], keys: [], columns: [] };
+  const bs = new Set(b);
+  const as = new Set(a);
+  const edited = [...new Set([...b.filter((d) => !as.has(d)), ...a.filter((d) => !bs.has(d))])].sort();
+  if (edited.length === 0 && b.length === a.length) return { months: [], keys: [], columns: [] };
+  const hb = new HolidaySet(b.map((date) => ({ date, name: "" })));
+  const ha = new HolidaySet(a.map((date) => ({ date, name: "" })));
+  const periods = (context.contractPeriods ?? []).filter((p) => isValidYearMonth(p.startMonth) && isValidYearMonth(p.endMonth) && p.startMonth <= p.endMonth);
+  // 調べる年: 計算の範囲・案件の期間・編集した日の年
+  const years = new Set<number>();
+  const addYears = (from: YearMonth, to: YearMonth) => {
+    for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) years.add(y);
+  };
+  addYears(range.fromMonth, range.toMonth);
+  for (const p of periods) addYears(p.startMonth, p.endMonth);
+  for (const d of edited) years.add(Number(d.slice(0, 4)));
+  const changedMonths = new Set<YearMonth>();
+  for (const y of years) {
+    for (let m = 1; m <= 12; m++) {
+      const ym = `${y}-${String(m).padStart(2, "0")}`;
+      const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      for (let d = 1; d <= days; d++) {
+        const date = `${ym}-${String(d).padStart(2, "0")}`;
+        if (hb.has(date) !== ha.has(date)) {
+          changedMonths.add(ym);
+          break;
+        }
+      }
+    }
+  }
+  if (changedMonths.size === 0) return { months: [], keys: [], columns: [] };
+  const months = new Set(changedMonths);
+  for (const p of periods) {
+    if (![...changedMonths].some((m) => p.startMonth <= m && m <= p.endMonth)) continue;
+    for (let m = p.startMonth; m <= p.endMonth; m = addMonths(m, 1)) months.add(m);
+  }
+  const inRange = [...months].filter((m) => m >= range.fromMonth && m <= range.toMonth).sort();
+  return inRange.length ? { months: inRange, keys: edited, columns: ["date"] } : { months: [], keys: [], columns: [] };
+}
+
+/** 案件の文書から期間を取り出す（影響の計算用） */
+export function contractPeriodsOf(doc: MasterDoc | null | undefined): Array<{ startMonth: YearMonth; endMonth: YearMonth }> {
+  if (!doc) return [];
+  const si = doc.header.indexOf("start_month");
+  const ei = doc.header.indexOf("end_month");
+  if (si < 0 || ei < 0) return [];
+  return doc.rows.map((r) => ({ startMonth: (r.cells[si] ?? "").trim(), endMonth: (r.cells[ei] ?? "").trim() }));
 }
 
 /** 案件（§80）の月 m の中身: その月に期間が掛かる行の「予算の月割り・担当チーム・顧客・案件名」 */
@@ -702,7 +756,7 @@ function contractMonthSignature(header: readonly string[], rows: readonly CellRo
 }
 
 /**
- * 案件の変更で値が変わる月（予算は期間の均等割りなので、金額・期間を変えると期間の月すべての予算が変わる）。
+ * 案件の変更で値が変わる月（予算は契約期間の営業日で按分するので、金額・期間を変えると期間の月すべての予算が変わる）。
  * 変わった列は、その月に掛かる行どうしで比べる（片方にしか無ければ contract_id）
  */
 function contractImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
@@ -734,13 +788,13 @@ function contractImpact(header: readonly string[], before: readonly CellRow[], a
  * 履歴マスタはキーごとに「月 m の有効レコード」、アサインは「月 m に掛かる行の集合」を比べる。
  * 変わったキー（行の追加・変更・削除で触れたキー）だけを調べる。
  */
-export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange): Impact {
+export function impactOfChange(fileId: MasterFileId, header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange, context: ImpactContext = {}): Impact {
   const def = MASTER_FILES[fileId];
   // 目標（§63）は計算の値を変えない
   if (def.history === "list" && fileId !== "contracts" && fileId !== "holidays") return { months: [], keys: [], columns: [] };
   if (!isValidYearMonth(range.fromMonth) || !isValidYearMonth(range.toMonth) || range.fromMonth > range.toMonth) return { months: [], keys: [], columns: [] };
   if (fileId === "contracts") return contractImpact(header, before, after, range);
-  if (fileId === "holidays") return holidayImpact(header, before, after, range);
+  if (fileId === "holidays") return holidayImpact(header, before, after, range, context);
   // 触れたキー: 片方にしか無い行（値まで含めて比べる）のキー
   const count = (rows: readonly CellRow[]) => {
     const m = new Map<string, number>();
@@ -812,13 +866,14 @@ export function impactOfChange(fileId: MasterFileId, header: readonly string[], 
 }
 
 /** 文書 2 つ（編集前・編集後）の影響 */
-export function impactBetween(before: MasterDoc, after: MasterDoc, range: ImpactRange): Impact {
+export function impactBetween(before: MasterDoc, after: MasterDoc, range: ImpactRange, context: ImpactContext = {}): Impact {
   return impactOfChange(
     after.fileId,
     after.header,
     before.rows.map((r) => r.cells),
     after.rows.map((r) => r.cells),
     range,
+    context,
   );
 }
 

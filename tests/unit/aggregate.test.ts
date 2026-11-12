@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { UNASSIGNED_TEAM_ID, aggregate, contractsForTeam, forecastTotals, monthlySeries, teamTreeForMonth } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
-import { contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
+import { budgetIn, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
 
+const A = contract({ contractId: "A", customerName: "A社", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 1_200_000 });
+const B = contract({ contractId: "B", customerName: "B社", teamId: "T2", startMonth: "2026-07", endMonth: "2026-09", totalAmount: 300_000 });
+const Z = contract({ contractId: "Z", customerName: "Z社", teamId: null, startMonth: "2027-04", endMonth: "2028-03", totalAmount: 120 });
+// 予算は契約期間の営業日（祝日なし = 平日）で按分する（§118）。期待値は budgetIn で出す
 const ds = dataset({
   contracts: [
-    contract({ contractId: "A", customerName: "A社", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 1_200_000 }),
-    contract({ contractId: "B", customerName: "B社", teamId: "T2", startMonth: "2026-07", endMonth: "2026-09", totalAmount: 300_000 }),
-    contract({ contractId: "Z", customerName: "Z社", teamId: null, startMonth: "2027-04", endMonth: "2028-03", totalAmount: 120 }),
+    A,
+    B,
+    Z,
     contract({ contractId: "U", customerName: "U社", teamId: "GONE", startMonth: "2026-04", endMonth: "2026-04", totalAmount: 0 }),
   ],
   mappings: [rule("A社", "", "A"), rule("B社", "", "B")],
@@ -25,13 +29,14 @@ const model = buildModel(ds, { asOf: "2026-10-27" });
 
 describe("aggregate (SPEC §11)", () => {
   it("期間・全契約", () => {
-    // A: 100,000 × 12、B: 100,000 × 3（07,08,09）、U: 0
+    // A の 07〜09 ＋ B の全額（07,08,09）、U: 0
     const t = aggregate(model, { period: { from: "2026-07", to: "2026-09" } });
-    expect(t.budget).toBe(600_000);
+    const budget = budgetIn(A, "2026-07", "2026-09") + 300_000;
+    expect(t.budget).toBe(budget);
     expect(t.cost).toBe(170_000);
-    expect(t.grossProfit).toBe(430_000);
-    expect(t.grossMargin).toBeCloseTo(430_000 / 600_000);
-    expect(t.burnRate).toBeCloseTo(170_000 / 600_000);
+    expect(t.grossProfit).toBe(budget - 170_000);
+    expect(t.grossMargin).toBeCloseTo((budget - 170_000) / budget);
+    expect(t.burnRate).toBeCloseTo(170_000 / budget);
     expect(t.burnRateBreakdown.elapsedMonths).toEqual(["2026-07", "2026-08", "2026-09"]);
     expect(t.hours).toBe(170);
     expect(t.contractCount).toBe(2);
@@ -48,16 +53,16 @@ describe("aggregate (SPEC §11)", () => {
   it("消化率は経過月（asOf 月まで）のみで計算。未来月は分母に入れない", () => {
     const t = aggregate(model, { period: { from: "2026-04", to: "2027-03" }, contractIds: ["A"] });
     expect(t.budget).toBe(1_200_000);
-    expect(t.burnRateBreakdown).toEqual({ elapsedMonths: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], cumulativeCost: 61_000, cumulativeBudget: 700_000 });
-    expect(t.burnRate).toBeCloseTo(61_000 / 700_000);
+    expect(t.burnRateBreakdown).toEqual({ elapsedMonths: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], cumulativeCost: 61_000, cumulativeBudget: budgetIn(A, "2026-04", "2026-10") });
+    expect(t.burnRate).toBeCloseTo(61_000 / budgetIn(A, "2026-04", "2026-10"));
     expect(t.includesPreliminary).toBe(true);
   });
 
   it("消化率 > 閾値 で isOverBudget", () => {
     const t = aggregate(model, { period: { from: "2026-08", to: "2026-08" }, contractIds: ["B"] });
-    expect(t.burnRate).toBeCloseTo(1.2);
+    expect(t.burnRate).toBeCloseTo(120_000 / budgetIn(B, "2026-08"));
     expect(t.isOverBudget).toBe(true);
-    const exact = buildModel(dataset({ contracts: [contract({ contractId: "E", totalAmount: 1200 })], mappings: [rule("ABC株式会社", "", "E")], members: [member({ memberId: "M1" })], rates: [rate("SE", 100)], worklogs: [worklog({ date: "2026-05-01", memberId: "M1", hours: 1 })] }), { asOf: "2026-10-27" });
+    const exact = buildModel(dataset({ contracts: [contract({ contractId: "E", startMonth: "2026-05", endMonth: "2026-05", totalAmount: 100 })], mappings: [rule("ABC株式会社", "", "E")], members: [member({ memberId: "M1" })], rates: [rate("SE", 100)], worklogs: [worklog({ date: "2026-05-01", memberId: "M1", hours: 1 })] }), { asOf: "2026-10-27" });
     const te = aggregate(exact, { period: { from: "2026-05", to: "2026-05" } });
     expect(te.burnRate).toBe(1);
     expect(te.isOverBudget).toBe(false); // ちょうど閾値は赤にしない
@@ -68,7 +73,7 @@ describe("aggregate (SPEC §11)", () => {
     expect(t.burnRate).toBeNull();
     expect(t.burnRateBreakdown).toEqual({ elapsedMonths: [], cumulativeCost: 0, cumulativeBudget: 0 });
     expect(t.isOverBudget).toBe(false);
-    expect(t.budget).toBe(500_000);
+    expect(t.budget).toBe(budgetIn(A, "2026-11", "2027-03"));
   });
 
   it("予算 0 → grossMargin null、burnRate null", () => {
@@ -105,16 +110,16 @@ describe("monthlySeries", () => {
   it("期間の全月を返し、契約の無い月は 0・状態は asOf 基準", () => {
     const s = monthlySeries(model, { period: { from: "2027-02", to: "2027-05" } });
     expect(s.map((p) => [p.month, p.status, p.budget])).toEqual([
-      ["2027-02", "future", 100_000],
-      ["2027-03", "future", 100_000],
-      ["2027-04", "future", 10],
-      ["2027-05", "future", 10],
+      ["2027-02", "future", budgetIn(A, "2027-02")],
+      ["2027-03", "future", budgetIn(A, "2027-03")],
+      ["2027-04", "future", budgetIn(Z, "2027-04")],
+      ["2027-05", "future", budgetIn(Z, "2027-05")],
     ]);
     const past = monthlySeries(model, { period: { from: "2026-02", to: "2026-04" } });
     expect(past.map((p) => [p.month, p.status, p.budget, p.cost])).toEqual([
       ["2026-02", "final", 0, 0],
       ["2026-03", "final", 0, 0],
-      ["2026-04", "final", 100_000, 0],
+      ["2026-04", "final", budgetIn(A, "2026-04"), 0],
     ]);
   });
 
@@ -125,7 +130,8 @@ describe("monthlySeries", () => {
     expect(s.reduce((a, p) => a + p.budget, 0)).toBe(t.budget);
     expect(s.reduce((a, p) => a + p.cost, 0)).toBe(t.cost);
     expect(s.reduce((a, p) => a + p.hours, 0)).toBe(t.hours);
-    expect(s.find((p) => p.month === "2026-08")).toEqual({ month: "2026-08", status: "final", budget: 200_000, cost: 170_000, costs: { labor: 170_000 }, grossProfit: 30_000, hours: 170 });
+    const aug = budgetIn(A, "2026-08") + budgetIn(B, "2026-08");
+    expect(s.find((p) => p.month === "2026-08")).toEqual({ month: "2026-08", status: "final", budget: aug, cost: 170_000, costs: { labor: 170_000 }, grossProfit: aug - 170_000, hours: 170 });
   });
 
   it("from > to は空", () => {
