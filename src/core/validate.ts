@@ -333,7 +333,10 @@ function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
     const rec = memberAt(masters, w.memberId, monthOfDate(w.date));
     if (!isLeftRecord(rec)) continue;
     // 不在になる日（§119）を書いた月は、その日からの実績
-    const leftDate = rec!.effectiveFrom === monthOfDate(w.date) ? statusDateOf(rec) : null;
+    // 前月も不在なら（在籍・不在が変わらない行）日付は使わない
+    const month = monthOfDate(w.date);
+    const prev = rec!.effectiveFrom === month ? at(w.memberId, addMonths(month, -1)) : null;
+    const leftDate = prev && !isLeftRecord(prev) ? statusDateOf(rec) : null;
     if (leftDate ? w.date < leftDate : isWorkingAt(at, w.memberId, monthOfDate(w.date), () => true)) continue;
     const acc = hit.get(w.memberId);
     if (acc) {

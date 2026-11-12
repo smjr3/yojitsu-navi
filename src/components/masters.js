@@ -2021,14 +2021,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const total = aRows.reduce((s, x) => s + (Number.isFinite(x.value) ? x.value : 0), 0) + out;
       const i = months.indexOf(m);
       const presence = i >= 0 ? r.presence?.[i] : null;
-      const free = (i >= 0 && r.activeMonths ? limitAt(r, i) : 1) - total;
+      const cap = i >= 0 && r.activeMonths ? limitAt(r, i) : 1;
+      const free = cap - total;
       return html`<div class="yn-plan-tip-inner">
         <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, hoursOfMonth(m)) })}</p>
         ${aRows.length || out > 0
           ? html`<ul class="yn-plan-tip-list">${aRows.map((x) => html`<li><span>${contractText(x.contractId)}</span><span class="num">${Number.isFinite(x.value) ? pm(x.value) : "?"}</span></li>`)}${outs.map((o) => html`<li class="is-outside"><span>${o.type ? fmt(T.planEdit.outsideTypeTip, { type: o.type }) : T.masterFiles.outside}</span><span class="num">${pm(o.v)}</span></li>`)}</ul>`
           : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
         ${presence ? html`<p class="yn-plan-tip-foot">${fmt(T.plan.tipPresence, { present: integer(presence.present), total: integer(presence.total), pm: pm(presence.present / presence.total) })}</p>` : null}
-        <p class="yn-plan-tip-foot">${free < -1e-9 ? html`<strong>${fmt(T.plan.tipOver, { pm: pm(-free) })}</strong>` : fmt(T.plan.tipFree, { pm: pm(free) })}${editable ? html` ・ ${T.plan.tipAction}` : null}</p>
+        <p class="yn-plan-tip-foot">${free < -1e-9 ? html`<strong>${fmt(T.plan.tipOver, { cap: cap === 1 ? "1.0" : pm(cap), pm: pm(-free) })}</strong>` : fmt(T.plan.tipFree, { pm: pm(free) })}${editable ? html` ・ ${T.plan.tipAction}` : null}</p>
       </div>`;
     }
 

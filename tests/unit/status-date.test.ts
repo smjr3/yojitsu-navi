@@ -171,6 +171,19 @@ describe("作業実績の警告と取り込み", () => {
     expect(w.message).toContain("2026-07-16〜2026-08-03");
   });
 
+  it("前月から不在の行の日付は使わない（月の初めからの実績も警告）", () => {
+    const issues = validateDataset(
+      dataset({
+        contracts: [contract({ contractId: "C1", customerName: "顧客", projectName: "保守", startMonth: "2026-01", endMonth: "2026-12", totalAmount: 1_200_000 })],
+        mappings: [rule("顧客", "保守", "C1")],
+        members: [member({ memberId: "M1", title: "一般", effectiveFrom: "2025-04" }), member({ memberId: "M1", title: "一般", effectiveFrom: "2026-04", status: "left" }), member({ memberId: "M1", title: "主任", effectiveFrom: "2026-07", status: "left", statusDate: LEAVE })],
+        rates: [rate("一般", 5000, "2025-04"), rate("主任", 6000, "2025-04")],
+        worklogs: [worklog({ date: "2026-07-03", memberId: "M1", hours: 2, customerName: "顧客", projectName: "保守" })],
+      }),
+    );
+    expect(issues.find((i) => i.code === "WORKLOG_AFTER_LEFT")).toMatchObject({ ref: { memberId: "M1", hours: 2 } });
+  });
+
   it("人事データの取り込みで足す行に日付を引き継がない", () => {
     const cols = { member_id: "M1", name: "A", kind: "employee", title: "一般", department: "", section: "", team_id: "T1", effective_from: "2026-07", status: "", status_date: LEAVE };
     const r = mergeMembers([cols], [{ memberId: "M1", name: "A", kind: "employee", title: "主任" }], "2026-10");

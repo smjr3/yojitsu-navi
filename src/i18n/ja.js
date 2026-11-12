@@ -1952,7 +1952,7 @@ export default {
     tipTotal: "{month} 合計 {pm} 人月（{hours} 時間）",
     tipFree: "空き {pm} 人月",
     tipPresence: "在籍 {present} / {total} 営業日（{pm} 人月まで）",
-    tipOver: "1.0 人月を {pm} 超えています",
+    tipOver: "{cap} 人月を {pm} 超えています",
     tipNone: "計画はありません",
     tipAction: "クリックで修正",
     cellAria: "{name} {month} {pm} 人月",
