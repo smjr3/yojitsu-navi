@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("一覧と追加: 曜日つきで出し、追加した日はダウンロードした CSV の末尾に入る", { tag: "@smoke" }, async ({ page }) => {
+test("一覧と追加: 曜日つきで出し、追加した日はダウンロードした CSV の同じ日の行の後ろに入る", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/masters?view=holidays");
   await expect(page.getByRole("tab", { name: /祝日/ })).toHaveAttribute("aria-selected", "true");
   const doc = parseMasterDoc("holidays", HOLIDAYS_TEXT);
@@ -40,8 +40,10 @@ test("一覧と追加: 曜日つきで出し、追加した日はダウンロー
   // 未来の日なので確認なしで反映
   await expect(d).toHaveCount(0);
   await expect(rows).toHaveCount(doc.rows.length + 1);
-  await expect(rows.last()).toContainText("2027-08-13");
-  await expect(rows.last()).toContainText("（金）");
+  const added = rows.filter({ hasText: "追加" });
+  await expect(added).toHaveCount(1);
+  await expect(added).toContainText("2027-08-13");
+  await expect(added).toContainText("（金）");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /holidays\.csv をダウンロード/ }).click()]);
   const text = readFileSync((await dl.path())!, "utf-8");
   expect(text).toBe(serializeMasterDoc(addRow(doc, { date: "2027-08-13", name: "夏季休暇" }).doc).text);

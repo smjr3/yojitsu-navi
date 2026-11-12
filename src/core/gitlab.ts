@@ -462,6 +462,8 @@ export interface MergeRequestSummary {
   sourceBranch: string;
   /** 競合（GitLab が判定済みのとき） */
   hasConflicts: boolean;
+  /** opened / merged / closed（返らなければ空） */
+  state: string;
 }
 
 function userOf(u: unknown): GitLabUser {
@@ -479,6 +481,7 @@ function summaryOf(m: Record<string, unknown>): MergeRequestSummary {
     webUrl: typeof m.web_url === "string" ? m.web_url : null,
     sourceBranch: typeof m.source_branch === "string" ? m.source_branch : "",
     hasConflicts: m.has_conflicts === true,
+    state: typeof m.state === "string" ? m.state : "",
   };
 }
 
@@ -533,6 +536,31 @@ export async function fetchFileRaw(fetchImpl: FetchLike, cfg: MasterEditConfig, 
   try {
     const res = await requestText(fetchImpl, "file", `${projectPath(cfg)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`, token0(token), "GET");
     return res.text;
+  } catch (e) {
+    if (e instanceof GitLabError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** base64 → UTF-8 の文字列（先頭の BOM は外す。raw の取得と同じ） */
+function decodeBase64Utf8(b64: string): string {
+  const bin = atob(b64.replace(/\s+/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * ファイルの中身と最終コミット ID（ref 時点。GET /repository/files/:path?ref=）。無ければ null。
+ * 「最新に載せ直す」（§120）で、本体の今の中身に当て直して last_commit_id を付けて保存するために使う
+ */
+export async function fetchFileForUpdate(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string): Promise<{ text: string; lastCommitId: string | null } | null> {
+  ensureConfigured(cfg);
+  try {
+    const f = await request<{ content?: unknown; encoding?: unknown; last_commit_id?: unknown }>(fetchImpl, "file", `${projectPath(cfg)}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)}`, token0(token), "GET");
+    const content = typeof f.content === "string" ? f.content : "";
+    const text = f.encoding === "base64" ? decodeBase64Utf8(content) : content;
+    return { text, lastCommitId: typeof f.last_commit_id === "string" ? f.last_commit_id : null };
   } catch (e) {
     if (e instanceof GitLabError && e.status === 404) return null;
     throw e;

@@ -186,7 +186,8 @@ Playwright のスモークテスト（全ページのコンソールエラー 0�
 
 | ファイル | 役割 |
 |---|---|
-| `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
+| `src/core/masterEdit.ts` | 純粋ロジック: 行テキストを保った CSV 読み込み（`splitCsvRecords`）、行の追加（同じキーの行のすぐ後ろ。`insertionIndex`。§120.1）・修正・削除・元に戻す、書き出し（`serializeMasterDoc`）、差分（`diffMasterDoc`）、過去月への影響（`impactOfChange` / `impactBetween`）、編集後の `parseDataset`+`validateDataset`（`validateEdited`）、下書き（`makeDraft` / `parseDraft` / `draftFileOf` / `docFromDraft` / `staleDraftFiles`）、下書きの当て直し（`rebaseDraftFile`）、影響ダイアログの文（`describeImpactEffects`） |
+| `src/core/mrRebase.ts` | 「競合あり」の MR を最新に載せ直す（§120.2）: MR の土台・中身と本体の今の中身を読み（`prepareRemake`）、MR の変更を行の差分にして `rebaseDraftFile` で当て直し（`rebaseRemake`。純粋）、新しい MR を作って元を取り下げる（`remakeMergeRequest`）。画面は `src/components/mr-list.js` |
 | `src/core/gitlab.ts` | GitLab API（fetch を注入）: `saveToGitLab`、`buildCommitPayload`、`masterBranchName`、`classifyHttpError` / `networkError`（conflict / permission / network / other）、`resolveMasterEdit` / `effectiveSaveMode` / `webFileUrl` |
 | `src/core/ledger.ts` | 台帳のまとめ（`ledgerGroups`・`nextChangeOf`）、期間の行の履歴（`periodHistory`）・期間の置き換え（`replaceRange`）・月の値（`valueAt`） |
 | `src/data/masters.json.ts`（`_masters.ts`） | 8 ファイル（案件 contracts.csv・祝日 holidays.csv を含む。任意の outside-plans.csv・targets.csv は無ければ見出しだけ）の生テキスト・最終コミット ID・リポジトリ内パス・文字コード／改行、検証用の contracts / mapping / holidays、`masterEdit` 設定、`memberSourceAdapter`・`memberImportedColumns` |
@@ -214,7 +215,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §19.2 保存後 | 続けて編集 | 保存成功で下書きを消し、編集をロック。「新しく編集を始める（元のデータから）」で元に戻す（同じ変更を 2 度送らない） |
 | §19.2 最終コミット ID | 浅いクローン | 浅いクローンでは誤った ID を返しうるので null（競合検出なし。画面に注記）。CI の build ジョブは `GIT_DEPTH: "0"` |
 | §19.2 下書き | 形式 | `version: 2` = 土台（生テキスト・最終コミット ID）＋差分（`changed: [{baseIndex, cells}]`・`removed: [baseIndex]`・`added: [cells]`）。キーは `yojitsu-navi:masters-draft:v1` のまま。以前の `version: 1`（編集後の全行）は読み込み時に差分へ直す。復元か破棄を選ぶまで自動保存しない |
-| §19.2 下書き | 土台が変わったとき | 復元時に `rebaseDraftFile` で最新の土台（このビルドの元データ）へ当て直す。行の対応は「最新のヘッダの列名で並べ trim した内容」の LCS（前後の共通部分を除いた残りが 4,000,000 セルを超えるときは順序を保つ貪欲法）、対応しなかった行は前後の対応行に挟まれた区間で同じキー（適用開始月／開始月も同じものを優先）の行と対にする。衝突（both-changed / changed-vs-deleted / deleted-vs-changed）は行ごとにラジオで「自分の下書き／最新のデータ」を選ばせ、全部選ぶまで復元しない（押すと案内して最初の未選択へフォーカス）。「自分」を選んだ最新側で削除済みの行は、追加行の手前（末尾）に戻す。画面の `bases` は凍結し、古い土台で保存・ダウンロードする経路を無くした |
+| §19.2 下書き | 土台が変わったとき | 復元時に `rebaseDraftFile` で最新の土台（このビルドの元データ）へ当て直す。行の対応は「最新のヘッダの列名で並べ trim した内容」の LCS（前後の共通部分を除いた残りが 4,000,000 セルを超えるときは順序を保つ貪欲法）、対応しなかった行は前後の対応行に挟まれた区間で同じキー（適用開始月／開始月も同じものを優先）の行と対にする。衝突（both-changed / changed-vs-deleted / deleted-vs-changed）は行ごとにラジオで「自分の下書き／最新のデータ」を選ばせ、全部選ぶまで復元しない（押すと案内して最初の未選択へフォーカス）。「自分」を選んだ最新側で削除済みの行と追加行は、同じキーの行のすぐ後ろに入れる（§120.1）。画面の `bases` は凍結し、古い土台で保存・ダウンロードする経路を無くした |
 | §19.2 download | 他人の更新の上書き | ダウンロードボタンの横に元データのコミット（先頭 8 桁）を出し、手順に「GitLab 上のファイルの最新コミットと違えばアップロードせず、ビルド後に再読み込み」を加えた（ブラウザからは GitLab の最新を確かめられないため、案内で止める） |
 | §19.1 影響の文 | 何が変わるか | `impactOfChange` が「変わる月に値が変わる列」（`Impact.columns`）も返し、`describeImpactEffects` で列ごとの文に直す（役職・単価 → 単価と実績・残予算・消化率・着地見込み、所属チーム → 組織別の集計、部署・課・氏名・区分 → 表示、チームの親 → 組織の木と上位の合計、アサイン → 着地見込みと計画）。メンバーで実績が変わらないときは「実績・残予算・消化率・着地見込みは変わりません」と明記。`effective_from` だけが違い値が同じ月は変わる月に数えない |
 | §20.2・§81 | 取り込み列 | members の member_id / name は保存済みの行で常に読み取り専用（§81。CSV で編集も無し）。`memberSourceAdapter != "none"` のときは `memberImportedColumns`（config の columns に書いた列）も読み取り専用。既存行は削除不可（取り込みで管理する行のため）。追加は社員番号を選ぶと取り込み列を最新行から写す |
@@ -233,7 +234,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 ### テスト
 
-単体 `tests/unit/masterEdit.test.ts`・`tests/unit/gitlab.test.ts`（モック fetch で全分岐）、プロパティ `tests/property/masterEdit.property.test.ts`（書き出し→再読み込みで同値、未変更行のバイト保持、任意の編集列で差分が正しい）・`tests/property/masterRebase.property.test.ts`（任意の土台の変更と下書きの差分で、衝突しない行は保たれ、衝突は両方が同じ行を違う結果にした行ちょうど。当て直しは決定的・冪等）、結合 `tests/integration/masters.test.ts`（ダミーデータの 4 ファイルで 編集→書き戻し→loadDataset / validate-data / buildModel）、E2E `tests/e2e/masters.spec.ts`（masters.json を `page.route` で書き換えて gitlab モード・取り込みモードを再現し、GitLab API を `page.route` でモック）、モンキー（`/masters` を対象に追加）。
+単体 `tests/unit/masterEdit.test.ts`・`tests/unit/gitlab.test.ts`（モック fetch で全分岐）・`tests/unit/mrRebase.test.ts`（足す行の位置、別々の人を直した 2 本が `git merge-file` で衝突しないこと、載せ直し）、プロパティ `tests/property/masterEdit.property.test.ts`（書き出し→再読み込みで同値、未変更行のバイト保持、任意の編集列で差分が正しい）・`tests/property/masterRebase.property.test.ts`（任意の土台の変更と下書きの差分で、衝突しない行は保たれ、衝突は両方が同じ行を違う結果にした行ちょうど。当て直しは決定的・冪等）、結合 `tests/integration/masters.test.ts`（ダミーデータの 4 ファイルで 編集→書き戻し→loadDataset / validate-data / buildModel）、E2E `tests/e2e/masters.spec.ts`（masters.json を `page.route` で書き換えて gitlab モード・取り込みモードを再現し、GitLab API を `page.route` でモック）、モンキー（`/masters` を対象に追加）。
 
 ## 台帳とリソース計画（SPEC §36）— 決定事項
 
