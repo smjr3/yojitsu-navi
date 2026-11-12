@@ -64,7 +64,7 @@ describe("ledgerGroups", () => {
 
   it("nextChangeOf: 列ごとの次の変更（予定）", () => {
     const [g] = ledgerGroups(rows, "member_id", "2026-10");
-    expect(nextChangeOf(g!, "team_id")).toEqual({ from: "2026-11", value: "T2" });
+    expect(nextChangeOf(g!, "team_id")).toMatchObject({ from: "2026-11", value: "T2", record: { team_id: "T2" } });
     expect(nextChangeOf(g!, "title")).toBeNull();
     const [past] = ledgerGroups(rows, "member_id", "2027-01");
     expect(nextChangeOf(past!, "team_id")).toBeNull();

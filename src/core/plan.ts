@@ -7,7 +7,8 @@
  */
 import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
-import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, teamTreeAt, workedMonthKeys } from "./masters.js";
+import type { HolidayLookup } from "./calendar.js";
+import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, monthPresenceAt, statusDateOf, teamTreeAt, workedMonthKeys, type MonthPresence } from "./masters.js";
 import type { MemberRecord, OutsidePlan, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
 /** 画面で編集中のアサイン 1 行（rowId はマスタ編集の行 id） */
@@ -31,6 +32,8 @@ export interface PlanSources {
   outsidePlans?: readonly Pick<OutsidePlan, "memberId" | "startMonth" | "endMonth" | "personMonths">[];
   /** 作業実績のある「メンバー|月」（memberMonthKey。§35。不在した月の稼働判定に使う。編集中に不在の月を変えても判定できるよう全部） */
   worklogMonths?: readonly string[];
+  /** 祝日（§119 の在籍・不在が切り替わる月の営業日を数える。HolidaySet なら国民の祝日の補完込み）。省略時は土日だけ除く */
+  holidays?: HolidayLookup;
 }
 
 export interface PlanMemberRow {
@@ -43,16 +46,25 @@ export interface PlanMemberRow {
   support: boolean;
   /** months と同じ順の配分合計（人月） */
   monthly: number[];
-  /** 合計が 1.0 を超える月 */
+  /** 合計が稼働できる量（capacity。稼働しない月は 1.0）を超える月 */
   overMonths: YearMonth[];
   /** 期間に掛かるアサイン行（契約ID・開始月の順） */
   assignments: PlanAssignment[];
   /** 不在した月（§35。期間の最終月までに不在（退職・休職など）になっていれば その月、在籍中なら null） */
   leftFrom: YearMonth | null;
+  /** 不在になった日（§119。leftFrom の月の不在の行の status_date）。無ければ null（月の初めから） */
+  leftDate: string | null;
   /** 不在した月より後に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
   /** months と同じ順の稼働（その月の台帳の行があり、不在していない。不在した月も計画か実績があれば稼働。復職後は在籍に戻る。§58 の人数 × 1.0） */
   activeMonths: boolean[];
+  /**
+   * months と同じ順の稼働できる量（人月。§119）。稼働する月は 1、在籍・不在が切り替わる日のある月は在籍の営業日の割合、稼働しない月は 0。
+   * グラフの「人数 × 1.0」はこの合計、セルの 1.0 超はこの値（稼働しない月は 1.0）を超えたもの
+   */
+  capacity: number[];
+  /** months と同じ順の在籍の営業日（切り替わる日のある月だけ。他は null） */
+  presence: (MonthPresence | null)[];
   /** months と同じ順の「計画が入っているべき月」（§116。在籍（不在の行でない）で、その月に選んだ組織か配下に所属。応援の人・所属組織の無い人・入社前・不在は false） */
   planNeededMonths: boolean[];
 }
@@ -82,6 +94,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   const to = ms[ms.length - 1] as YearMonth;
   const memberIdx = createEffectiveIndex(src.members, (m) => m.memberId, (m) => m.effectiveFrom);
   const at = (id: string, m: YearMonth) => memberIdx.at(id, m);
+  const holidays: HolidayLookup = src.holidays ?? [];
   // 不在した月は計画（アサイン・運用保守以外）か実績があれば稼働とみなす（§35）
   const workedKeys = workedMonthKeys({ assignments: src.assignments, outsidePlans: src.outsidePlans ?? [] });
   for (const k of src.worklogMonths ?? []) workedKeys.add(k);
@@ -139,28 +152,42 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     monthly.forEach((v, i) => (totals[i] = (totals[i] as number) + v));
     let last: MemberRecord | null = null;
     let leftFrom: YearMonth | null = null;
+    let leftDate: string | null = null;
     for (const m of ms) {
       const rec = memberIdx.at(memberId, m);
       if (rec && !isLeftRecord(rec)) last = rec;
-      if (isLeftRecord(rec)) leftFrom ??= rec!.effectiveFrom;
-      else if (rec) leftFrom = null; // 復職
+      if (isLeftRecord(rec)) {
+        if (leftFrom === null) {
+          leftFrom = rec!.effectiveFrom;
+          leftDate = statusDateOf(rec);
+        }
+      } else if (rec) leftFrom = leftDate = null; // 復職
     }
     if (!last) last = memberIdx.at(memberId, to) ?? null;
+    const activeMonths = ms.map((m) => working(memberId, m));
+    const presence = ms.map((m, i) => (activeMonths[i] ? monthPresenceAt(at, memberId, m, holidays) : null));
+    const capacity = ms.map((_, i) => (activeMonths[i] ? (presence[i] ? presence[i]!.present / presence[i]!.total : 1) : 0));
+    const limit = (i: number) => (activeMonths[i] ? (capacity[i] as number) : 1);
     return {
       memberId,
       name: last?.name ?? memberIdx.at(memberId, "9999-12")?.name ?? "",
       teamId: last?.teamId ?? null,
       support: support.has(memberId),
       monthly,
-      overMonths: ms.filter((_, i) => (monthly[i] as number) > 1 + EPS),
+      overMonths: ms.filter((_, i) => (monthly[i] as number) > limit(i) + EPS),
       assignments: list,
       leftFrom,
+      leftDate,
       afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m)) && !working(memberId, m)),
-      activeMonths: ms.map((m) => working(memberId, m)),
-      planNeededMonths: ms.map((m) => {
+      activeMonths,
+      capacity,
+      presence,
+      planNeededMonths: ms.map((m, i) => {
         const rec = memberIdx.at(memberId, m);
+        // 不在になる日を書いた月（§119）は、その日より前に在籍していれば対象
+        const present = !!rec && (!isLeftRecord(rec) || (rec.effectiveFrom === m && !!statusDateOf(rec) && (capacity[i] as number) > EPS));
         // 所属組織の無い人（他部署のヘルプなど。§71）は計画を入れる対象でない。部長など上位の組織の直属は対象（依頼者 11/11）
-        return !!rec && !isLeftRecord(rec) && !!rec.teamId && inScope(rec.teamId, m);
+        return present && !!rec!.teamId && inScope(rec!.teamId, m);
       }),
     };
   });

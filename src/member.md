@@ -13,7 +13,7 @@ title: メンバー詳細
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { myHoursCard } from "./components/my-hours.js";
-import { aggregateMembers, myHoursRows, isLeftRecord, leftMonthOf, memberMonthlySeries, memberRecordsOf, memberBaseMonth } from "./core/index.js";
+import { aggregateMembers, myHoursRows, isLeftRecord, leftDateOf, leftMonthOf, memberMonthlySeries, statusDateOf, memberRecordsOf, memberBaseMonth } from "./core/index.js";
 import { createStore } from "./components/state.js";
 import { teamName, treeAt } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, loadJson, note, withToday } from "./components/layout.js";
@@ -29,7 +29,7 @@ import { chartFigure } from "./components/chart-zoom.js";
 import { memberHoursChart, memberHoursLegend } from "./components/charts.js";
 import { dataTable, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, monthJa, periodJa, periodCompact, STATUS_LABELS } from "./components/format.js";
+import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, dateJa, monthJa, periodJa, periodCompact, STATUS_LABELS } from "./components/format.js";
 ```
 
 ```js
@@ -122,8 +122,10 @@ if (vm) {
     }),
   );
   const teamText = (id) => (id ? teamName(model, id, vm.tree) : T.members.noTeam);
+  // 不在になった日（§119）があれば日付まで
+  const leftWhen = leftDateOf(records) ? dateJa(leftDateOf(records)) : monthJa(leftMonthOf(records));
   display(html`<dl class="yn-facts" aria-label=${T.member.factsLabel}>
-    <div><dt>${T.members.colKind}</dt><dd>${unknown ? statusChip("neutral", T.members.chipUnknown, T.member.unknownTitle) : rec?.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee}${leftMonthOf(records) ? html` ${statusChip("neutral", `${T.members.chipLeft} ${monthJa(leftMonthOf(records))}`, fmt(T.members.chipLeftTitle, { month: monthJa(leftMonthOf(records)) }))}` : null}</dd></div>
+    <div><dt>${T.members.colKind}</dt><dd>${unknown ? statusChip("neutral", T.members.chipUnknown, T.member.unknownTitle) : rec?.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee}${leftMonthOf(records) ? html` ${statusChip("neutral", `${T.members.chipLeft} ${leftWhen}`, fmt(T.members.chipLeftTitle, { month: leftWhen }))}` : null}</dd></div>
     <div><dt>${fmt(T.member.teamAt, { team: model.config.labels?.team ?? T.columns.team, month: monthJa(vm.baseMonth) })}</dt><dd>${isLeftRecord(rec) ? fmt(T.members.leftLastTeam, { team: teamText(rec.teamId) }) : rec?.teamId ? html`<a href=${store.href("./members", { team: rec.teamId })}>${teamText(rec.teamId)}</a>` : T.members.noTeam}</dd></div>
     <div><dt>${T.members.colTitle}</dt><dd>${rec?.title || EMPTY_VALUE}</dd></div>
     ${rec?.division || rec?.department || rec?.section ? html`<div><dt>${T.member.department}</dt><dd>${[rec.division, rec.department, rec.section].filter(Boolean).join(" ")}</dd></div>` : null}
@@ -137,7 +139,7 @@ if (vm) {
           { key: "team", label: T.members.colTeam, type: "text", get: (r) => teamText(r.teamId) },
           { key: "title", label: T.members.colTitle, type: "text" },
           { key: "kind", label: T.members.colKind, type: "text", get: (r) => (r.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) },
-          { key: "status", label: T.masterFiles.colStatus, type: "text", get: (r) => (isLeftRecord(r) ? T.members.chipLeft : T.masters.statusActive) },
+          { key: "status", label: T.masterFiles.colStatus, type: "text", get: (r) => `${isLeftRecord(r) ? T.members.chipLeft : T.masters.statusActive}${statusDateOf(r) ? fmt(T.member.statusFrom, { date: dateJa(statusDateOf(r)) }) : ""}` },
         ],
         rows: records.map((r, i) => ({ ...r, key: `${r.effectiveFrom}-${i}` })),
         caption: T.member.historyCaption,
