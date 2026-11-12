@@ -720,6 +720,15 @@ describe("祝日（holidays.csv。§80）", () => {
     expect(contractPeriodsOf(null)).toEqual([]);
   });
 
+  it("年の最初の行を足すとその年の国民の祝日の補完が止まるので、編集した月を含まない案件も影響を数える（§49・§118）", () => {
+    // 2025 年の行だけ → 2026 年は国民の祝日で補う。2026-12-29 を足すと 2026 年の補完が止まり、1〜5 月の祝日も変わる
+    const before = parseMasterDoc("holidays", "date,name\n2025-05-05,こどもの日\n");
+    const contracts = parseMasterDoc("contracts", "contract_id,customer_name,project_name,team_id,start_month,end_month,total_amount\nC1,A,保守,T1,2026-01,2026-03,100\n");
+    const r = impactBetween(before, addRow(before, { date: "2026-12-29", name: "年末休暇" }).doc, { fromMonth: "2026-01", toMonth: "2026-06" }, { contractPeriods: contractPeriodsOf(contracts) });
+    expect(r.months).toEqual(["2026-01", "2026-02", "2026-03", "2026-04", "2026-05"]);
+    expect(r.keys).toEqual(["2026-12-29"]);
+  });
+
   it("validateEdited は編集中の祝日で検証する（日付の誤りを行に結び付ける）", () => {
     const docs = {
       members: parseMasterDoc("members", "member_id,name,kind,title,department,section,team_id,effective_from\n"),

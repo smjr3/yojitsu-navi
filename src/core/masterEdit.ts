@@ -9,6 +9,7 @@
  * DOM にも fetch にも依存しない（GitLab API は gitlab.ts）。
  */
 import { addMonths, isValidYearMonth } from "./calendar.js";
+import { HolidaySet } from "./holidays.js";
 import { customerTeamIndex, memberStatus, parseCsvTable, parseDataset, parseNumberCell, type DatasetFiles } from "./csv.js";
 import { normalizeName } from "./normalize.js";
 import type { PlanAssignment, PlanSources } from "./plan.js";
@@ -686,24 +687,52 @@ export interface ImpactContext {
 }
 
 /**
- * 祝日（§80）の変更で値が変わる月: 休みの日の集合が変わった日の月（名前だけの変更は数えない）と、
- * その月を期間に含む案件の期間の月すべて（予算は契約期間の営業日で按分するため。§118）
+ * 祝日（§80）の変更で値が変わる月: 休みの日の集合（行の無い年を国民の祝日で補う分を含む。§49）が変わった日の月と、
+ * その月を期間に含む案件の期間の月すべて（予算は契約期間の営業日で按分するため。§118）。名前だけの変更は数えない。
+ * 年の最初の行を足す・最後の行を消すと、その年の国民の祝日の補完が切り替わるので、行の日付だけでなく実際の休みの日で比べる
  */
 function holidayImpact(header: readonly string[], before: readonly CellRow[], after: readonly CellRow[], range: ImpactRange, context: ImpactContext): Impact {
   const di = header.indexOf("date");
-  const dates = (rows: readonly CellRow[]) => new Set(rows.map((r) => (r[di] ?? "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)));
+  const dates = (rows: readonly CellRow[]) => [...new Set(rows.map((r) => (r[di] ?? "").trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))];
   const b = dates(before);
   const a = dates(after);
-  const changed = [...new Set([...[...b].filter((d) => !a.has(d)), ...[...a].filter((d) => !b.has(d))])].sort();
-  const changedMonths = [...new Set(changed.map((d) => d.slice(0, 7)))];
+  const bs = new Set(b);
+  const as = new Set(a);
+  const edited = [...new Set([...b.filter((d) => !as.has(d)), ...a.filter((d) => !bs.has(d))])].sort();
+  if (edited.length === 0 && b.length === a.length) return { months: [], keys: [], columns: [] };
+  const hb = new HolidaySet(b.map((date) => ({ date, name: "" })));
+  const ha = new HolidaySet(a.map((date) => ({ date, name: "" })));
+  const periods = (context.contractPeriods ?? []).filter((p) => isValidYearMonth(p.startMonth) && isValidYearMonth(p.endMonth) && p.startMonth <= p.endMonth);
+  // 調べる年: 計算の範囲・案件の期間・編集した日の年
+  const years = new Set<number>();
+  const addYears = (from: YearMonth, to: YearMonth) => {
+    for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) years.add(y);
+  };
+  addYears(range.fromMonth, range.toMonth);
+  for (const p of periods) addYears(p.startMonth, p.endMonth);
+  for (const d of edited) years.add(Number(d.slice(0, 4)));
+  const changedMonths = new Set<YearMonth>();
+  for (const y of years) {
+    for (let m = 1; m <= 12; m++) {
+      const ym = `${y}-${String(m).padStart(2, "0")}`;
+      const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      for (let d = 1; d <= days; d++) {
+        const date = `${ym}-${String(d).padStart(2, "0")}`;
+        if (hb.has(date) !== ha.has(date)) {
+          changedMonths.add(ym);
+          break;
+        }
+      }
+    }
+  }
+  if (changedMonths.size === 0) return { months: [], keys: [], columns: [] };
   const months = new Set(changedMonths);
-  for (const p of context.contractPeriods ?? []) {
-    if (!isValidYearMonth(p.startMonth) || !isValidYearMonth(p.endMonth) || p.startMonth > p.endMonth) continue;
-    if (!changedMonths.some((m) => p.startMonth <= m && m <= p.endMonth)) continue;
+  for (const p of periods) {
+    if (![...changedMonths].some((m) => p.startMonth <= m && m <= p.endMonth)) continue;
     for (let m = p.startMonth; m <= p.endMonth; m = addMonths(m, 1)) months.add(m);
   }
   const inRange = [...months].filter((m) => m >= range.fromMonth && m <= range.toMonth).sort();
-  return inRange.length ? { months: inRange, keys: changed, columns: ["date"] } : { months: [], keys: [], columns: [] };
+  return inRange.length ? { months: inRange, keys: edited, columns: ["date"] } : { months: [], keys: [], columns: [] };
 }
 
 /** 案件の文書から期間を取り出す（影響の計算用） */
