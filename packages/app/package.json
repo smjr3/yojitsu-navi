@@ -1,6 +1,6 @@
 {
   "name": "yojitsu-navi",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "予実ナビ（保守案件の予算と実績のダッシュボード）一式を作るコマンドと、計算コア（予算・実績・残予算・着地見込みの計算と型）",
   "license": "MIT",
   "keywords": [
