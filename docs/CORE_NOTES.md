@@ -130,3 +130,7 @@
 ## 今月の残り時間（SPEC §113）— `src/core/myHours.ts`
 
 `myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。
+
+## 月の稼働時間（SPEC §114）— `src/core/monthHours.ts`
+
+`createMonthHours(holidays, hoursPerBusinessDay)` は「月 → 営業日数 × 1 日の時間」の関数を返す（月ごとにキャッシュ）。`holidays` は csv の行（`Holiday[]`）か作成済みの `HolidaySet`（行の無い年を国民の祝日で補う数え方を Model と揃える）。Model は `ForecastContext.monthHours` と `buildMemberMonths(…, monthHours)` に同じ関数を渡す。画面（変更の影響・目標の警告）は `PlanInputs.holidays`（編集中の祝日）があればそれで作り直す（`monthHoursOfInputs`）。リソース計画画面は編集中の `holidays` 文書から作り、文書が変わったときだけ作り直す。

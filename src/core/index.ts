@@ -27,6 +27,7 @@ export {
   type HolidayLookup,
 } from "./calendar.js";
 export { HolidaySet, nationalHolidays } from "./holidays.js";
+export { createMonthHours, type MonthHours } from "./monthHours.js";
 export {
   createEffectiveIndex,
   createMasterIndex,

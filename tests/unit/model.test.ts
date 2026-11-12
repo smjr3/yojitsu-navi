@@ -154,13 +154,16 @@ describe("buildModel — 手計算の例", () => {
     expect(all.forecastGrossProfit).toBe(1_113_500);
 
     expect(asg.breakdown.assignmentLines).toHaveLength(9); // M1 × 6 か月 + M2 × 3 か月
-    expect(asg.breakdown.remainingCost).toBe(2_880_000);
-    expect(asg.forecastCost).toBe(3_523_250);
-    expect(asg.forecastGrossProfit).toBe(-1_123_250);
+    // 配分 × 月の稼働時間（営業日 × 8h。§114）× 単価。10〜3 月 = 176・168・184・168・160・184h
+    // M1: 0.5 × 1,040h × 5,000 = 2,600,000、M2: 0.25 × (176 + 168 + 184)h × 4,000 = 528,000
+    expect(asg.breakdown.assignmentLines.map((l) => l.hours)).toEqual([88, 44, 84, 42, 92, 46, 84, 80, 92]);
+    expect(asg.breakdown.remainingCost).toBe(3_128_000);
+    expect(asg.forecastCost).toBe(3_771_250);
+    expect(asg.forecastGrossProfit).toBe(-1_371_250);
     expect(asg.isDeficit).toBe(true);
 
     const totals = forecastTotals(model, undefined, "assignment");
-    expect(totals).toEqual({ method: "assignment", fiscalYear: 2026, period: null, targetBudget: 2_400_000, forecastCost: 3_523_250, forecastGrossProfit: -1_123_250, deficitContractIds: ["C1"], contractCount: 1 });
+    expect(totals).toEqual({ method: "assignment", fiscalYear: 2026, period: null, targetBudget: 2_400_000, forecastCost: 3_771_250, forecastGrossProfit: -1_371_250, deficitContractIds: ["C1"], contractCount: 1 });
   });
 
   it("月次推移", () => {

@@ -6,7 +6,7 @@ import { aggregate } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
 import { aggregateMembers, memberBaseMonth, memberMonthlySeries, memberRateHistory, memberRecordsOf } from "../../src/core/members.js";
 import type { Dataset, MemberMonth, Model } from "../../src/core/types.js";
-import { assignment, contract, dataset, member, rate, rule, team, worklog } from "./fixtures.js";
+import { assignment, contract, dataset, member, rate, rule, team, weekdayHours, worklog } from "./fixtures.js";
 
 const AS_OF = "2026-10-27";
 
@@ -35,20 +35,22 @@ function basic(overrides: Partial<Dataset> = {}): Dataset {
 }
 
 describe("buildMemberMonths（§18.1）", () => {
-  it("計画 = 配分 × 基準時間 × 単価、実績 = CostLine、差額 = 計画 − 実績", () => {
+  it("計画 = 配分 × 月の稼働時間（営業日 × 8h。§114）× 単価、実績 = CostLine、差額 = 計画 − 実績", () => {
     const model = build(basic());
     const may = mmOf(model, "M1", "2026-05");
-    expect(may.plannedHours).toBe(80);
-    expect(may.plannedCost).toBe(400_000);
+    // 2026-05 は営業日 21 日（祝日なし）= 168h → 0.5 人月 = 84h
+    expect(may.plannedHours).toBe(84);
+    expect(may.plannedCost).toBe(420_000);
     expect(may.actualHours).toBe(70);
     expect(may.actualCost).toBe(350_000);
-    expect(may.variance).toBe(50_000);
+    expect(may.variance).toBe(70_000);
     expect(may.unplannedHours).toBe(0);
-    expect(may).toMatchObject({ memberName: "佐藤", teamId: "T1", title: "SE", kind: "employee", hourlyRate: 5000, rateSource: { key: "SE", effectiveFrom: "2000-01" }, rateMissing: false, memberUnknown: false, standardHoursPerMonth: 160 });
-    expect(may.byContract).toEqual([{ contractId: "C1", allocation: 0.5, assignmentCount: 1, plannedHours: 80, plannedCost: 400_000, actualHours: 70, actualCost: 350_000 }]);
+    expect(may).toMatchObject({ memberName: "佐藤", teamId: "T1", title: "SE", kind: "employee", hourlyRate: 5000, rateSource: { key: "SE", effectiveFrom: "2000-01" }, rateMissing: false, memberUnknown: false, monthHours: 168 });
+    expect(may.byContract).toEqual([{ contractId: "C1", allocation: 0.5, assignmentCount: 1, plannedHours: 84, plannedCost: 420_000, actualHours: 70, actualCost: 350_000 }]);
     // 実績の無い計画だけの月も行になる
     const jun = mmOf(model, "M1", "2026-06");
-    expect(jun).toMatchObject({ plannedHours: 80, plannedCost: 400_000, actualHours: 0, actualCost: 0, variance: 400_000 });
+    // 2026-06 は 22 日 = 176h（月ごとに営業日で変わる）
+    expect(jun).toMatchObject({ monthHours: 176, plannedHours: 88, plannedCost: 440_000, actualHours: 0, actualCost: 0, variance: 440_000 });
     // アサインも実績も無い月は作らない
     expect(model.memberMonths.map((m) => m.month)).toEqual(["2026-05", "2026-06"]);
     // 実績は契約の CostLine と同じ
@@ -65,7 +67,7 @@ describe("buildMemberMonths（§18.1）", () => {
       }),
     );
     expect(model.memberMonths.map((m) => m.month)).toEqual(["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]);
-    expect(model.memberMonths.every((m) => m.plannedHours === 80)).toBe(true);
+    expect(model.memberMonths.map((m) => m.plannedHours)).toEqual(["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map((m) => 0.5 * weekdayHours(m)));
   });
 
   it("CONTRACT_INVALID・重複で除外した契約、存在しない契約、allocation が数値でないアサインは数えない", () => {
@@ -98,19 +100,19 @@ describe("buildMemberMonths（§18.1）", () => {
         ],
         rates: [rate("SE", 1234)],
         assignments: [
-          assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-05", endMonth: "2026-05", allocation: 0.111 }),
-          assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-05", endMonth: "2026-05", allocation: 0.222 }),
-          assignment({ memberId: "M1", contractId: "C2", startMonth: "2026-05", endMonth: "2026-05", allocation: 0.111 }),
+          assignment({ memberId: "M1", contractId: "C1", startMonth: "2027-02", endMonth: "2027-02", allocation: 0.111 }),
+          assignment({ memberId: "M1", contractId: "C1", startMonth: "2027-02", endMonth: "2027-02", allocation: 0.222 }),
+          assignment({ memberId: "M1", contractId: "C2", startMonth: "2027-02", endMonth: "2027-02", allocation: 0.111 }),
         ],
         worklogs: [],
       }),
     );
-    const mm = mmOf(model, "M1", "2026-05");
+    const mm = mmOf(model, "M1", "2027-02");
     const c1 = mm.byContract.find((r) => r.contractId === "C1")!;
     const c2 = mm.byContract.find((r) => r.contractId === "C2")!;
     expect(c1.allocation).toBeCloseTo(0.333, 10);
     expect(c1.assignmentCount).toBe(2);
-    expect(c1.plannedCost).toBe(Math.round(c1.allocation * 160 * 1234)); // 0.333 × 160 × 1,234 = 65,747.52 → 65,748（配分を合計してから 1 回だけ丸める）
+    expect(c1.plannedCost).toBe(Math.round(c1.allocation * 160 * 1234)); // 2027-02 は営業日 20 日 = 160h。0.333 × 160 × 1,234 = 65,747.52 → 65,748（配分を合計してから 1 回だけ丸める）
     expect(c2.plannedCost).toBe(Math.round(0.111 * 160 * 1234)); // 21,915.84 → 21,916
     expect(mm.plannedCost).toBe(c1.plannedCost + c2.plannedCost); // 87,664（全体で丸めると 87,663）
     expect(mm.plannedCost).not.toBe(Math.round(mm.plannedHours * 1234));
@@ -125,7 +127,7 @@ describe("buildMemberMonths（§18.1）", () => {
         ],
       }),
     );
-    expect(mmOf(model, "M1", "2026-05").plannedHours).toBeCloseTo(240, 10);
+    expect(mmOf(model, "M1", "2026-05").plannedHours).toBeCloseTo(1.5 * 168, 10);
   });
 
   it("単価改定月: 改定前の月は旧単価、改定月から新単価（計画・実績とも §6 の単価）", () => {
@@ -138,13 +140,13 @@ describe("buildMemberMonths（§18.1）", () => {
     );
     const may = mmOf(model, "M1", "2026-05");
     const jun = mmOf(model, "M1", "2026-06");
-    expect(may).toMatchObject({ hourlyRate: 5000, rateSource: { key: "SE", effectiveFrom: "2025-04" }, plannedCost: 400_000, actualCost: 50_000 });
-    expect(jun).toMatchObject({ hourlyRate: 5500, rateSource: { key: "SE", effectiveFrom: "2026-06" }, plannedCost: 440_000, actualCost: 55_000 });
+    expect(may).toMatchObject({ hourlyRate: 5000, rateSource: { key: "SE", effectiveFrom: "2025-04" }, plannedCost: 420_000, actualCost: 50_000 });
+    expect(jun).toMatchObject({ hourlyRate: 5500, rateSource: { key: "SE", effectiveFrom: "2026-06" }, plannedCost: 484_000, actualCost: 55_000 });
   });
 
   it("個人単価は役職単価より優先（パートナー）", () => {
     const model = build(basic({ members: [member({ memberId: "M1", kind: "partner", title: "SE" })], rates: [rate("SE", 5000), rate("M1", 7000)] }));
-    expect(mmOf(model, "M1", "2026-05")).toMatchObject({ kind: "partner", hourlyRate: 7000, rateSource: { key: "M1" }, plannedCost: 560_000, actualCost: 490_000 });
+    expect(mmOf(model, "M1", "2026-05")).toMatchObject({ kind: "partner", hourlyRate: 7000, rateSource: { key: "M1" }, plannedCost: 588_000, actualCost: 490_000 });
   });
 
   it("未登録メンバー: 工数があれば行を作り、名前は作業ログの名前。個人単価が無ければ 0・rateMissing", () => {
@@ -189,7 +191,7 @@ describe("buildMemberMonths（§18.1）", () => {
       }),
     );
     expect(mmOf(model, "M1", "2026-05")).toMatchObject({ teamId: "T1", title: "SE", hourlyRate: 5000 });
-    expect(mmOf(model, "M1", "2026-06")).toMatchObject({ teamId: "T2", title: "PL", hourlyRate: 8000, plannedCost: 640_000 });
+    expect(mmOf(model, "M1", "2026-06")).toMatchObject({ teamId: "T2", title: "PL", hourlyRate: 8000, plannedCost: 704_000 });
   });
 
   it("並びは memberId → month、byContract は contractId 昇順（入力順に依らない）", () => {
@@ -237,11 +239,12 @@ describe("aggregateMembers（期間・チームで合算）", () => {
     const agg = aggregateMembers(model, { period: { from: "2026-04", to: "2026-06" } });
     expect(agg.members.map((m) => m.memberId)).toEqual(["M1", "M2"]);
     const m1 = agg.members[0]!;
-    expect(m1).toMatchObject({ plannedHours: 240, plannedCost: 1_200_000, actualHours: 80, actualCost: 400_000, variance: 800_000, unplannedHours: 10, unplannedCost: 50_000, months: ["2026-04", "2026-05", "2026-06"] });
-    expect(m1.utilization).toBeCloseTo(80 / 240, 12);
-    expect(m1.byContract.map((c) => [c.contractId, c.assignedMonths, c.plannedHours, c.actualHours])).toEqual([["C1", 3, 240, 70], ["C2", 0, 0, 10]]);
+    // 0.5 人月 × (176 + 168 + 176)h = 260h
+    expect(m1).toMatchObject({ plannedHours: 260, plannedCost: 1_300_000, actualHours: 80, actualCost: 400_000, variance: 900_000, unplannedHours: 10, unplannedCost: 50_000, months: ["2026-04", "2026-05", "2026-06"] });
+    expect(m1.utilization).toBeCloseTo(80 / 260, 12);
+    expect(m1.byContract.map((c) => [c.contractId, c.assignedMonths, c.plannedHours, c.actualHours])).toEqual([["C1", 3, 260, 70], ["C2", 0, 0, 10]]);
     expect(m1.byContract[1]!.utilization).toBeNull();
-    expect(agg.total).toMatchObject({ memberCount: 2, plannedHours: 240 + 120, actualHours: 80, actualCost: 400_000, plannedCost: 1_200_000 + 600_000 });
+    expect(agg.total).toMatchObject({ memberCount: 2, plannedHours: 260 + 130, actualHours: 80, actualCost: 400_000, plannedCost: 1_300_000 + 650_000 });
     expect(agg.total.variance).toBe(agg.total.plannedCost - agg.total.actualCost);
   });
 
@@ -273,7 +276,7 @@ describe("aggregateMembers（期間・チームで合算）", () => {
     const model = build(ds());
     const period = { from: "2026-04", to: "2026-12" };
     const onlyC2 = aggregateMembers(model, { period, contractIds: ["C2"] });
-    expect(onlyC2.members.map((m) => [m.memberId, m.actualHours, m.plannedHours])).toEqual([["M1", 10, 0], ["M2", 8, 6 * 40]]);
+    expect(onlyC2.members.map((m) => [m.memberId, m.actualHours, m.plannedHours])).toEqual([["M1", 10, 0], ["M2", 8, 0.25 * (176 + 168 + 176 + 184 + 168 + 176)]]);
     expect(aggregateMembers(model, { period, memberIds: ["M2"] }).members.map((m) => m.memberId)).toEqual(["M2"]);
   });
 
@@ -312,11 +315,11 @@ describe("memberMonthlySeries", () => {
     const s = memberMonthlySeries(model, "M1", { from: "2026-04", to: "2026-07" });
     expect(s.map((p) => [p.month, p.plannedHours, p.actualHours, p.status])).toEqual([
       ["2026-04", 0, 0, "final"],
-      ["2026-05", 80, 70, "final"],
-      ["2026-06", 80, 0, "final"],
+      ["2026-05", 84, 70, "final"],
+      ["2026-06", 88, 0, "final"],
       ["2026-07", 0, 0, "final"],
     ]);
-    expect(s[1]!.utilization).toBeCloseTo(70 / 80, 12);
+    expect(s[1]!.utilization).toBeCloseTo(70 / 84, 12);
     expect(s[0]!.utilization).toBeNull();
     const sum = s.reduce((a, p) => a + p.plannedCost - p.actualCost, 0);
     expect(sum).toBe(aggregateMembers(model, { period: { from: "2026-04", to: "2026-07" } }).members[0]!.variance);

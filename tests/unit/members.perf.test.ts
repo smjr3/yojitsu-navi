@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { buildModel } from "../../src/core/model.js";
 import { createMasterIndex } from "../../src/core/masters.js";
 import { aggregateMembers, buildMemberMonths, memberMonthlySeries } from "../../src/core/members.js";
+import { createMonthHours } from "../../src/core/monthHours.js";
 import type { Assignment, Contract, MappingRule, MemberRecord, Worklog } from "../../src/core/types.js";
 import { dataset, rate, team } from "./fixtures.js";
 import { measure } from "../test-env.js";
@@ -62,7 +63,7 @@ describe("性能（メンバー別）", () => {
     expect(model.memberMonths.length).toBeGreaterThan(4000);
 
     const masters = createMasterIndex(ds);
-    const again = measure("メンバー月の構築", 300, () => buildMemberMonths(model.contracts, ds.assignments, masters, ds.config.standardHoursPerMonth));
+    const again = measure("メンバー月の構築", 300, () => buildMemberMonths(model.contracts, ds.assignments, masters, createMonthHours(ds.holidays, ds.config.hoursPerBusinessDay)));
     expect(again).toEqual(model.memberMonths);
   });
 

@@ -8,6 +8,7 @@ import { aggregate, contractsForTeam, teamTreeForMonth } from "../../src/core/ag
 import { monthRange } from "../../src/core/calendar.js";
 import { aggregateMembers, memberMonthlySeries, memberRateHistory } from "../../src/core/members.js";
 import { buildModel } from "../../src/core/model.js";
+import { HolidaySet } from "../../src/core/holidays.js";
 import type { Dataset, MemberMonth, Model, YearMonth } from "../../src/core/types.js";
 import { loadDataset } from "../../scripts/lib/load.js";
 
@@ -50,15 +51,26 @@ describe("メンバー別: ダミーデータ全体", () => {
     }
   });
 
-  it("計画は素朴な再計算（アサイン × 160h × 当月単価、契約期間内）と一致", () => {
+  it("計画は素朴な再計算（アサイン × 月の稼働時間 × 当月単価、契約期間内）と一致", () => {
     const contracts = new Map(ds.contracts.map((c) => [c.contractId, c]));
+    // 月の稼働時間 = 土日と祝日を除いた日数 × 8h（§114。日付を 1 日ずつ数える素朴な実装）
+    const holidays = new HolidaySet(ds.holidays);
+    const naiveHours = (m: YearMonth) => {
+      const [y, mo] = m.split("-").map(Number) as [number, number];
+      let n = 0;
+      for (let d = new Date(Date.UTC(y, mo - 1, 1)); d.getUTCMonth() === mo - 1; d = new Date(d.getTime() + 86_400_000)) {
+        const dow = d.getUTCDay();
+        if (dow !== 0 && dow !== 6 && !holidays.has(d.toISOString().slice(0, 10))) n++;
+      }
+      return n * 8;
+    };
     const expected = new Map<string, number>();
     for (const a of ds.assignments) {
       const c = contracts.get(a.contractId)!;
       for (const m of monthRange(a.startMonth, a.endMonth)) {
         if (m < c.startMonth || m > c.endMonth) continue;
         const key = `${a.memberId}|${m}`;
-        expected.set(key, (expected.get(key) ?? 0) + Math.round(a.allocation * 160 * naiveRate(a.memberId, m)));
+        expected.set(key, (expected.get(key) ?? 0) + Math.round(a.allocation * naiveHours(m) * naiveRate(a.memberId, m)));
       }
     }
     let checked = 0;
@@ -122,9 +134,9 @@ describe("メンバー別: ダミーデータ全体", () => {
     expect(aggregateMembers(model, { period: FY2026, memberIds: ["M025"] }).members[0]?.rateMissing).toBe(true);
   });
 
-  it("C012（実績ゼロ）の M024 0.1 = 16h/月、C010（将来開始）の M013 は 2027-01〜03 の計画だけ", () => {
+  it("C012（実績ゼロ）の M024 0.1 = 17.6h（2026-07 は営業日 22 日 = 176h）、C010（将来開始）の M013 は 2027-01〜03 の計画だけ", () => {
     const row = mm("M024", "2026-07")?.byContract.find((r) => r.contractId === "C012");
-    expect(row).toMatchObject({ allocation: 0.1, plannedHours: 16, plannedCost: Math.round(16 * 6000), actualHours: 0 });
+    expect(row).toMatchObject({ allocation: 0.1, plannedHours: 0.1 * 176, plannedCost: Math.round(0.1 * 176 * 6000), actualHours: 0 });
     const s = memberMonthlySeries(model, "M013", FY2026, ["C010"]);
     expect(s.filter((p) => p.plannedHours > 0).map((p) => p.month)).toEqual(["2027-01", "2027-02", "2027-03"]);
     expect(s.every((p) => p.actualHours === 0)).toBe(true);

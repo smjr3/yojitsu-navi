@@ -16,6 +16,7 @@ import { projectMatcherFor } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
+import { createMonthHours } from "./monthHours.js";
 import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { Contract, ContractMonth, ContractResult, Dataset, ISODate, Model, UnknownMemberWork, Warning, YearMonth } from "./types.js";
@@ -92,7 +93,9 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     return d;
   };
 
-  const forecastCtx: ForecastContext = { asOfMonth, config, masters, assignments: dataset.assignments };
+  // 月の稼働時間（1.0 人月の時間 = 営業日数 × 1 日の時間。§114）。リソース計画の時間・計画額・計画方式の着地に使う
+  const monthHours = createMonthHours(holidays, config.hoursPerBusinessDay);
+  const forecastCtx: ForecastContext = { asOfMonth, config, masters, assignments: dataset.assignments, monthHours };
   const forecastFiscalYear = fiscalYearOf(asOfMonth, config.fiscalYearStartMonth);
   const forecastBasis = { asOfMonth, fiscalYear: forecastFiscalYear, forecastRecentMonths: config.forecastRecentMonths };
   const fyMonthsForForecast = fiscalYearMonths(forecastFiscalYear, config.fiscalYearStartMonth);
@@ -183,7 +186,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     unknownMembers: unknownMemberWork(mapping.mappings, outsideMapping, masters, contracts),
     excludedHours: mapping.excludedHours,
     // メンバー別の計画と実績（§18.1）
-    memberMonths: buildMemberMonths(results, dataset.assignments, masters, config.standardHoursPerMonth, {
+    memberMonths: buildMemberMonths(results, dataset.assignments, masters, monthHours, {
       plans: dataset.outsidePlans ?? [],
       actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classifyWorklog(o.worklog).group, hours: o.worklog.hours })),
     }),

@@ -9,6 +9,7 @@ import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
 import {
   aggregate,
+  createMonthHours,
   formatHours,
   formatPercent,
   formatPersonMonths,
@@ -80,7 +81,8 @@ function nodeMoney(model, chart, month, method, restorePeriod) {
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "±0");
 
 export function orgChartView({ model, store, state, month, color, onChange, restorePeriod }) {
-  const std = model.config.standardHoursPerMonth;
+  // 1人月の時間 = その月の営業日 × 1 日の時間（§114）
+  const std = createMonthHours(model.holidays, model.config.hoursPerBusinessDay)(month);
   const unit = state.unit;
   const months = orgChartMonths(model);
   const chart = orgChartAt(model, month);

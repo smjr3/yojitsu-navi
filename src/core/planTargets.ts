@@ -10,6 +10,7 @@
  * 方式は計画値に固定（他の方式は計画を使わないので、計画を変えても判定が動かない）。DOM にも fetch にも依存しない。
  */
 import { assignmentPlanOf } from "./forecast.js";
+import { monthHoursOfInputs } from "./planImpact.js";
 import { monthRange } from "./calendar.js";
 import type { PlanInputs } from "./planImpact.js";
 import { evaluateTarget, isUsableTarget, targetContractIds, targetStartMonth, type TargetEvaluation } from "./targets.js";
@@ -66,7 +67,8 @@ export function planTargetAlerts(model: Model, after: PlanInputs | null, scope: 
       if (arr) arr.push(a);
       else byContract.set(a.contractId, [a]);
     }
-    const ctx = (list: Assignment[]) => ({ asOfMonth: asOf, config: model.config, masters: after.masters, assignments: list });
+    const monthHours = monthHoursOfInputs(model, after);
+    const ctx = (list: Assignment[]) => ({ asOfMonth: asOf, config: model.config, masters: after.masters, assignments: list, monthHours });
     m = {
       ...model,
       contracts: model.contracts.map((r): ContractResult =>

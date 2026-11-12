@@ -1,3 +1,4 @@
+import { businessDaysInMonth } from "../../src/core/calendar.js";
 /**
  * テスト用のデータ組み立てヘルパー
  */
@@ -98,4 +99,12 @@ export function dataset(overrides: Partial<Dataset> = {}): Dataset {
     worklogs: [],
     ...overrides,
   };
+}
+
+/**
+ * 祝日なし（holidays: []）のときの月の稼働時間 = 平日の数 × 8h（§114）。
+ * 例: 2026-05 = 21 日 → 168h、2026-06 = 22 日 → 176h、2027-02 = 20 日 → 160h
+ */
+export function weekdayHours(ym: string, hoursPerDay = 8): number {
+  return businessDaysInMonth(ym, []) * hoursPerDay;
 }

@@ -7,13 +7,16 @@
 import { assignmentPlanOf, forecastForMonths, type ForecastBasis } from "./forecast.js";
 import { monthRange } from "./calendar.js";
 import type { MasterIndex } from "./masters.js";
+import { createMonthHours, type MonthHours } from "./monthHours.js";
 import { evaluateTarget, isUsableTarget, targetContractIds, type TargetEvaluation } from "./targets.js";
-import type { Assignment, AssignmentPlan, ContractResult, Forecast, Model, TargetKind, YearMonth } from "./types.js";
+import type { Assignment, AssignmentPlan, ContractResult, Forecast, Holiday, Model, TargetKind, YearMonth } from "./types.js";
 
 /** 計画の明細を作る材料（マスタの索引とアサイン） */
 export interface PlanInputs {
   masters: MasterIndex;
   assignments: readonly Assignment[];
+  /** 祝日（編集中の祝日。省略 = model の祝日）。月の稼働時間（§114）に使う */
+  holidays?: readonly Holiday[];
 }
 
 export interface PlanImpactRow {
@@ -45,12 +48,19 @@ export interface PlanImpact {
 
 const EPS = 1e-9;
 
+/** 計画の入力の月の稼働時間（§114）。祝日を持たなければ model の祝日 */
+export function monthHoursOfInputs(model: Model, inputs: PlanInputs | null): MonthHours {
+  return createMonthHours(inputs?.holidays ?? model.holidays, model.config.hoursPerBusinessDay);
+}
+
 /**
  * 変更の影響を計算する。targetMonths は画面の期間（§54）。
  * model の数値はそのまま使い、変わった案件だけ前後の計画で置き換えて比べる（前の値は画面の値と同じ）
  */
 export function planImpact(model: Model, before: PlanInputs, after: PlanInputs, targetMonths: readonly YearMonth[]): PlanImpact {
-  const ctx = (inputs: PlanInputs, assignments: readonly Assignment[]) => ({ asOfMonth: model.meta.asOfMonth, config: model.config, masters: inputs.masters, assignments });
+  const hoursBefore = monthHoursOfInputs(model, before);
+  const hoursAfter = monthHoursOfInputs(model, after);
+  const ctx = (inputs: PlanInputs, assignments: readonly Assignment[]) => ({ asOfMonth: model.meta.asOfMonth, config: model.config, masters: inputs.masters, assignments, monthHours: inputs === before ? hoursBefore : hoursAfter });
   const byContract = (list: readonly Assignment[]) => {
     const m = new Map<string, Assignment[]>();
     for (const a of list) {

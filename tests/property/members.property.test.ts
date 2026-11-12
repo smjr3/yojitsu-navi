@@ -1,14 +1,15 @@
 /**
  * メンバー別（SPEC §18.1）の不変条件
  *   - Σ メンバー実績原価 = Σ 契約原価（同じ期間・同じ契約集合）。時間も同じ
- *   - plannedCost は行（x, c, m）ごとに round(配分 × 基準時間 × 単価)、メンバー月はその合計
+ *   - plannedCost は行（x, c, m）ごとに round(配分 × 1人月の時間 × 単価)、メンバー月はその合計
  *   - 計画は契約期間内・アサイン期間内の月だけ
  *   - 決定性（同じ入力 → 同じ出力、JSON 往復でも集計が同じ）
  */
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { aggregate } from "../../src/core/aggregate.js";
-import { addMonths, formatYearMonth } from "../../src/core/calendar.js";
+import { addMonths, businessDaysInMonth, formatYearMonth } from "../../src/core/calendar.js";
+import { HolidaySet } from "../../src/core/holidays.js";
 import { createMasterIndex, rateFor } from "../../src/core/masters.js";
 import { aggregateMembers, memberMonthlySeries } from "../../src/core/members.js";
 import { buildModel } from "../../src/core/model.js";
@@ -120,7 +121,7 @@ describe("メンバー別の不変条件 (SPEC §18.1)", () => {
     );
   });
 
-  it("plannedCost は行ごとに round(配分 × 基準時間 × §6 の単価)。計画は契約期間内かつアサイン期間内の月だけ", () => {
+  it("plannedCost は行ごとに round(配分 × 月の稼働時間 × §6 の単価)。計画は契約期間内かつアサイン期間内の月だけ", () => {
     fc.assert(
       fc.property(datasetArb, (ds) => {
         const model = buildModel(ds, { asOf: "2026-10-27", generatedAt: "x" });
@@ -141,7 +142,9 @@ describe("メンバー別の不変条件 (SPEC §18.1)", () => {
             expect(row.assignmentCount).toBe(inContract ? hits.length : 0);
             const alloc = hits.reduce((s, a) => s + a.allocation, 0);
             expect(row.allocation).toBeCloseTo(inContract ? alloc : 0, 12);
-            expect(row.plannedHours).toBe(row.allocation * ds.config.standardHoursPerMonth);
+            // 月の稼働時間 = その月の営業日（土日・祝日を除く）× 1 日の時間（§114）
+            expect(mm.monthHours).toBe(businessDaysInMonth(mm.month, new HolidaySet(ds.holidays)) * ds.config.hoursPerBusinessDay);
+            expect(row.plannedHours).toBe(row.allocation * mm.monthHours);
             expect(row.plannedCost).toBe(Math.round(row.plannedHours * mm.hourlyRate));
             expect(Number.isInteger(row.plannedCost)).toBe(true);
             planned += row.plannedCost;

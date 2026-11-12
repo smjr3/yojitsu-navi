@@ -193,20 +193,20 @@ export function formatAllocation(value: number): string {
  * 入力値（人月 or 時間）を CSV に書く人月の文字列にする。
  * 人月で入れた値はそのまま（入力どおり）。時間は人月に直して小数 4 桁。数値でなければ元の文字列のまま（検証でエラーにする）
  */
-export function allocationFromInput(text: string, unit: "personMonth" | "hours", standardHoursPerMonth: number): string {
+export function allocationFromInput(text: string, unit: "personMonth" | "hours", hoursPerMonth: number): string {
   const t = text.normalize("NFKC").trim();
   if (t === "") return "";
   // CSV の読み込み（parseNumberCell）と同じ規則で数値にする。0x10・1e-5 などを画面だけ数値扱いしない
   const n = parseNumberCell(t);
   if (!Number.isFinite(n)) return t;
   if (unit === "personMonth") return t;
-  if (!(standardHoursPerMonth > 0)) return t;
-  return formatAllocation(n / standardHoursPerMonth);
+  if (!(hoursPerMonth > 0)) return t;
+  return formatAllocation(n / hoursPerMonth);
 }
 
 /** 人月 → 時間（入力欄の換算表示用。小数 1 桁） */
-export function hoursFromAllocation(allocation: number, standardHoursPerMonth: number): number {
-  return Math.round(allocation * standardHoursPerMonth * 10) / 10;
+export function hoursFromAllocation(allocation: number, hoursPerMonth: number): number {
+  return Math.round(allocation * hoursPerMonth * 10) / 10;
 }
 
 // ---------------------------------------------------------------------------

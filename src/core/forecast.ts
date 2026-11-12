@@ -7,14 +7,17 @@
 import { fiscalYearMonths, fiscalYearOf, monthRange } from "./calendar.js";
 import { roundYen } from "./cost.js";
 import { rateFor, type MasterIndex } from "./masters.js";
+import type { MonthHours } from "./monthHours.js";
 import type { Assignment, AssignmentForecastLine, AssignmentPlan, Config, Contract, ContractMonth, Forecast, ForecastBreakdown, ForecastMethod, YearMonth } from "./types.js";
 
 export const FORECAST_METHODS: readonly ForecastMethod[] = ["assignment", "recent3", "all"];
 
 export interface ForecastContext {
   asOfMonth: YearMonth;
-  config: Pick<Config, "fiscalYearStartMonth" | "standardHoursPerMonth" | "forecastRecentMonths">;
+  config: Pick<Config, "fiscalYearStartMonth" | "forecastRecentMonths">;
   masters: MasterIndex;
+  /** 月の稼働時間（1.0 人月の時間 = 営業日数 × 1 日の時間。§114） */
+  monthHours: MonthHours;
   /** 全契約のアサイン（契約IDで絞って使う） */
   assignments: readonly Assignment[];
 }
@@ -28,7 +31,7 @@ export interface ForecastBasis {
 
 /**
  * リソース計画（assignment 方式）の明細を、asOf 月から契約の終了月まで前もって作る。
- * 月ごとに、該当アサインの allocation × standardHoursPerMonth × 当月単価（円に丸める）。
+ * 月ごとに、該当アサインの allocation × 月の稼働時間（営業日数 × 1 日の時間。§114）× 当月単価（円に丸める）。
  */
 export function assignmentPlanOf(ctx: ForecastContext, contract: Contract): AssignmentPlan {
   const assignments = ctx.assignments.filter((a) => a.contractId === contract.contractId);
@@ -40,7 +43,7 @@ export function assignmentPlanOf(ctx: ForecastContext, contract: Contract): Assi
         if (!(a.startMonth <= month && month <= a.endMonth)) continue;
         if (!Number.isFinite(a.allocation)) continue;
         const rate = rateFor(ctx.masters, a.memberId, month);
-        const hours = a.allocation * ctx.config.standardHoursPerMonth;
+        const hours = a.allocation * ctx.monthHours(month);
         lines.push({ month, memberId: a.memberId, allocation: a.allocation, hours, hourlyRate: rate.hourlyRate, amount: roundYen(hours * rate.hourlyRate) });
       }
     }
