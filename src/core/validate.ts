@@ -11,7 +11,7 @@ import { mapWorklogs } from "./mapping.js";
 import { createTaskNameExtractor } from "./taskFromName.js";
 import { projectMatcherFor, validateProjectAliases } from "./projectFromTask.js";
 import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
-import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
+import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, statusDateOf, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
 import { createTaskClassifier, isOutsideWorklog, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import { normalizeName } from "./normalize.js";
@@ -288,6 +288,8 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
       push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: m.memberId, teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
     }
     if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
+    // 在籍・不在の開始日（§119）は適用開始月の中の日付
+    else if (m.statusDate !== undefined && statusDateOf(m) === null) push({ severity: "error", code: "MEMBER_STATUS_DATE_INVALID", message: fmt(T.checks.memberStatusDateInvalid, { file, row, memberId: m.memberId, value: m.statusDate, month: m.effectiveFrom }), file, row, ref: { memberId: m.memberId } });
   });
   // 同じ GitLab のユーザー名が複数の人に付いている（§113）。ヘッダーの「今月の残り」でどの人か決められないので出さない
   for (const d of duplicateGitlabUsernames(dataset.members)) {
@@ -325,18 +327,21 @@ function validateWorkAfterLeft(dataset: Dataset, push: IssueSink): void {
   const file = "worklogs";
   const masters = createMasterIndex(dataset);
   const at = (id: string, m: YearMonth) => memberAt(masters, id, m);
-  const hit = new Map<string, { memberId: string; memberName: string; leftFrom: YearMonth; hours: number; first: string; last: string; count: number }>();
+  const hit = new Map<string, { memberId: string; memberName: string; leftFrom: string; hours: number; first: string; last: string; count: number }>();
   for (const w of dataset.worklogs) {
     if (!isValidISODate(w.date) || !Number.isFinite(w.hours) || w.hours <= 0) continue;
     const rec = memberAt(masters, w.memberId, monthOfDate(w.date));
-    if (!isLeftRecord(rec) || isWorkingAt(at, w.memberId, monthOfDate(w.date), () => true)) continue;
+    if (!isLeftRecord(rec)) continue;
+    // 不在になる日（§119）を書いた月は、その日からの実績
+    const leftDate = rec!.effectiveFrom === monthOfDate(w.date) ? statusDateOf(rec) : null;
+    if (leftDate ? w.date < leftDate : isWorkingAt(at, w.memberId, monthOfDate(w.date), () => true)) continue;
     const acc = hit.get(w.memberId);
     if (acc) {
       acc.hours += w.hours;
       acc.count++;
       if (w.date < acc.first) acc.first = w.date;
       if (w.date > acc.last) acc.last = w.date;
-    } else hit.set(w.memberId, { memberId: w.memberId, memberName: rec?.name || w.memberName, leftFrom: rec!.effectiveFrom, hours: w.hours, first: w.date, last: w.date, count: 1 });
+    } else hit.set(w.memberId, { memberId: w.memberId, memberName: rec?.name || w.memberName, leftFrom: leftDate ?? rec!.effectiveFrom, hours: w.hours, first: w.date, last: w.date, count: 1 });
   }
   for (const h of [...hit.values()].sort((a, b) => (a.memberId < b.memberId ? -1 : 1))) {
     const hours = Math.round(h.hours * 100) / 100;

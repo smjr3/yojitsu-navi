@@ -570,7 +570,15 @@ export function generateScale(input: ScaleInput): ScaleOutput {
     const leftAt = lastRow(midMonthLeaver).effective_from;
     const team = midMonthLeaver.rows[0]!.team_id;
     const d = drafts.find((x) => x.team_id === team && x.start_month <= leftAt && leftAt <= x.end_month);
-    if (d) for (const date of input.days.filter((x) => ymOf(x) === leftAt).slice(0, 5)) pushLog(midMonthLeaver, date, d, "引き継ぎ", 7, { customer: d.account.customerVariants[0]!, project: d.account.projectVariants[0]! });
+    const days = input.days.filter((x) => ymOf(x) === leftAt).slice(0, 5);
+    if (d) for (const date of days) pushLog(midMonthLeaver, date, d, "引き継ぎ", 7, { customer: d.account.customerVariants[0]!, project: d.account.projectVariants[0]! });
+    // 不在になる日（§119）: 最後の工数の翌日から。その月の稼働できる量は在籍の営業日の割合になる
+    const lastDay = days[days.length - 1];
+    if (lastDay) {
+      const next = new Date(`${lastDay}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      lastRow(midMonthLeaver).status_date = next.toISOString().slice(0, 10);
+    }
   }
 
   // 作業コードの点検の例（§92。乱数を使わない。ほかのデータを変えないため）: 今月、超大型の案件に

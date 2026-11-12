@@ -163,7 +163,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
       const k = planGapKindOf(p.plannedHours, p.actualHours);
       return k === "over" || k === "unplanned" ? "is-over" : k === "under" || k === "noActual" ? "is-under" : "is-full";
     }
-    return `is-${loadLevelOf(personMonths(p.plannedHours, std))}`;
+    return `is-${loadLevelOf(personMonths(p.plannedHours, std), p.capacity ?? 1)}`;
   };
   const chipValue = (p) => {
     if (p.change === "left") return "";

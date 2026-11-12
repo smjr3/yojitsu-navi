@@ -94,6 +94,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "effective_from", label: T.masterFiles.colEffectiveFrom, input: "month", required: true },
       // 在籍状態（§35）。省略可。何か書いてある行（退職・休職など）の effective_from から不在
       { name: "status", label: T.masterFiles.colStatus, input: "status", required: false },
+      // 在籍・不在が切り替わる日（§119）。省略可。適用開始月の中の日付。列が無いファイルは、入力した行を保存するときに見出しの末尾に足す
+      { name: "status_date", label: T.masterFiles.colStatusDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
       // GitLab のユーザー名（§113）。省略可。列が無いファイルは、入力した行を保存するときに見出しの末尾に足す。台帳の一覧には出さない（修正のダイアログで入れる）
       { name: "gitlab_username", label: T.masterFiles.colGitlabUsername, input: "text", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
     ],
@@ -1471,6 +1473,7 @@ export function planSourcesFromDocs(
       teamId: (v.team_id ?? "").trim() || null,
       effectiveFrom: (v.effective_from ?? "").trim(),
       ...memberStatus(v.status ?? ""),
+      ...((v.status_date ?? "").trim() ? { statusDate: (v.status_date ?? "").trim() } : {}),
     };
   });
   const assignments: PlanAssignment[] = docs.assignments.rows.map((r) => {

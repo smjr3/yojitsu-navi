@@ -8,7 +8,8 @@
  *   所属チームが無い人・マスタに無い人はヘルプ。主担当チームのノードに載せる
  */
 import { addMonths } from "./calendar.js";
-import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, teamTreeAt } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, monthPresenceAt, teamTreeAt } from "./masters.js";
+import { HolidaySet } from "./holidays.js";
 import { ownTeamScope, workOriginOf, type WorkOrigin } from "./team-detail.js";
 import type { MemberMonth, MemberRecord, Model, TeamNode, YearMonth } from "./types.js";
 
@@ -41,6 +42,8 @@ export interface OrgPerson {
   otherTeamId: string | null;
   /** 不在の行だが不在した月に計画・実績があるので稼働扱い（§35） */
   leaving: boolean;
+  /** その月に稼働できる量（人月。§119）。在籍・不在が切り替わる日のある月は在籍の営業日の割合、他は 1 */
+  capacity: number;
   memberUnknown: boolean;
   /** その月の計画・実績の時間（own は全案件＋運用保守以外、support/help はこのノードの案件だけ） */
   plannedHours: number;
@@ -80,7 +83,7 @@ export interface OrgChart {
   unplaced: OrgPerson[];
 }
 
-type OrgSource = Pick<Model, "teams" | "members" | "memberMonths" | "contracts" | "worklogMonths">;
+type OrgSource = Pick<Model, "teams" | "members" | "memberMonths" | "contracts" | "worklogMonths"> & Partial<Pick<Model, "holidays">>;
 
 const EPS = 1e-9;
 const byId = (a: { memberId: string }, b: { memberId: string }) => (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0);
@@ -143,6 +146,11 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
     plannedHours: lines.reduce((s, l) => s + l.plannedHours, 0),
     actualHours: lines.reduce((s, l) => s + l.actualHours, 0),
   });
+  const holidaySet = new HolidaySet(model.holidays ?? []);
+  const presenceShare = (memberId: string): number => {
+    const p = monthPresenceAt(at, memberId, month, holidaySet);
+    return p ? p.present / p.total : 1;
+  };
   const person = (memberId: string, teamId: string | null, origin: WorkOrigin, change: OrgChange, otherTeamId: string | null, lines: OrgLoadLine[]): OrgPerson => {
     const rec = at(memberId, month) ?? at(memberId, prevMonth);
     const mm = mmAt.get(memberId);
@@ -155,6 +163,7 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
       change,
       otherTeamId,
       leaving: change !== "left" && isLeftRecord(at(memberId, month)),
+      capacity: presenceShare(memberId),
       memberUnknown: !idx.has(memberId),
       ...sum(lines),
       lines,
@@ -219,11 +228,11 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
   return { month, prevMonth, rootTeamIds, nodes, unplaced };
 }
 
-/** 計画の負荷の色分け（§41・§58 と同じ）: 1.0 超 = over、1.0 未満 = under、ちょうど = full、計画なし = none */
+/** 計画の負荷の色分け（§41・§58 と同じ）: 稼働できる量（通常 1.0。§119）超 = over、未満 = under、ちょうど = full、計画なし = none */
 export type OrgLoadLevel = "over" | "full" | "under" | "none";
-export function loadLevelOf(plannedPersonMonths: number): OrgLoadLevel {
+export function loadLevelOf(plannedPersonMonths: number, capacity = 1): OrgLoadLevel {
   if (plannedPersonMonths <= EPS) return "none";
-  if (plannedPersonMonths > 1 + EPS) return "over";
-  if (plannedPersonMonths < 1 - EPS) return "under";
+  if (plannedPersonMonths > capacity + EPS) return "over";
+  if (plannedPersonMonths < capacity - EPS) return "under";
   return "full";
 }

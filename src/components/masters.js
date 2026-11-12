@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, createMonthHours, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -69,7 +69,7 @@ import {
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { dateJa, dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
 import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
@@ -388,16 +388,22 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   let rebasedInfo = {};
   let active = VIEW_IDS.includes(initialView) ? initialView : VIEW_IDS[0];
   // 月の稼働時間（1.0 人月の時間 = 営業日 × 1 日の時間。§114）。祝日タブを編集中なら編集中の祝日で数える
-  let monthHoursCache = { doc: null, fn: null };
-  function hoursOfMonth(m) {
+  let monthHoursCache = { doc: null, fn: null, set: null };
+  function holidayCache() {
     if (monthHoursCache.doc !== docs.holidays) {
       const rows = parseCsvTable(serializeMasterDoc(docs.holidays).text)
         .rows.map((r) => ({ date: r.get("date"), name: r.get("name") }))
         .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date));
-      monthHoursCache = { doc: docs.holidays, fn: createMonthHours(rows, config.hoursPerBusinessDay) };
+      const set = new HolidaySet(rows);
+      monthHoursCache = { doc: docs.holidays, fn: createMonthHours(set, config.hoursPerBusinessDay), set };
     }
-    return monthHoursCache.fn(m);
+    return monthHoursCache;
   }
+  function hoursOfMonth(m) {
+    return holidayCache().fn(m);
+  }
+  /** リソース計画の材料（編集中のデータ）。在籍・不在が切り替わる月の営業日（§119）は編集中の祝日で数える */
+  const planSources = () => ({ ...planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []), holidays: holidayCache().set });
   /** 時間で入れた計画を人月に直す基準の月 = フォームの開始月（無ければ表示中の最初の月）（§114） */
   function hoursBaseMonth(root) {
     const f = root?.closest?.("form");
@@ -650,6 +656,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
   /** 表示用の補足（時間換算・区分名・契約の期間・個人単価） */
   function cellHint(fileId, column, value, record = null) {
+    // 在籍・不在の開始日（§119）は在籍の列に添える
+    if (fileId === "members" && column === "status") {
+      const d = String(record?.status_date ?? "").trim();
+      // 月は「変更の履歴」の列に出ているので日だけ
+      return /^\d{4}-\d{2}-\d{2}$/.test(d) ? fmt(T.masters.statusDayHint, { day: Number(d.slice(8, 10)) }) : null;
+    }
     if (value === "") return null;
     // 祝日（§80）は曜日を添える（土日を入れても営業日は変わらない）
     if (fileId === "holidays" && column === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -1224,7 +1236,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       };
       const nextEl = (column) => {
         const next = nextChangeOf(g, column);
-        return next ? html`<span class="yn-me-next" title=${T.ledger.nextTitle}>${fmt(T.ledger.nextChange, { month: monthJa(next.from), value: displayValue(fileId, column, next.value) || T.masters.emptyValue })}</span>` : null;
+        if (!next) return null;
+        // 在籍・不在の開始日（§119）があれば日付から
+        const day = fileId === "members" && column === "status" ? String(next.record.status_date ?? "").trim() : "";
+        const when = /^\d{4}-\d{2}-\d{2}$/.test(day) && day.startsWith(next.from) ? dateJa(day) : monthJa(next.from);
+        return html`<span class="yn-me-next" title=${T.ledger.nextTitle}>${fmt(T.ledger.nextChange, { month: when, value: displayValue(fileId, column, next.value) || T.masters.emptyValue })}</span>`;
       };
       const rawKey = g.shown.record[keyColumn] ?? "";
       const keyHint = cellHint(fileId, keyColumn, rawKey);
@@ -1300,7 +1316,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const nameChanged = nameColumn && ((idx > 0 && e.changes.includes(nameColumn)) || edited(nameColumn));
         const tds = [
           html`<th scope="row"><span class="yn-me-hist-from"><span class="yn-me-hist-arrow" aria-hidden="true">↳</span> ${e.from ? fmt(T.ledger.fromMonth, { month: e.from }) : T.masters.emptyValue}</span><span class="yn-me-hint">${label}${e.current ? html` ・ <strong>${T.ledger.current}</strong>` : e.future ? ` ・ ${T.ledger.future}` : ""}</span>${nameChanged ? html`<span class="yn-me-hist-name">${def.columns.find((c) => c.name === nameColumn).label}: ${valueOrDiff(nameColumn)}</span>` : null}</th>`,
-          ...columns.map((c) => html`<td class=${`${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}</td>`),
+          ...columns.map((c) => {
+            // 在籍・不在の開始日（§119）は在籍の列に添える
+            const dayHint = fileId === "members" && c.name === "status" ? cellHint(fileId, c.name, e.record[c.name] ?? "", e.record) : null;
+            return html`<td class=${`${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}${dayHint ? html`<span class="yn-me-hint">${dayHint}</span>` : null}</td>`;
+          }),
         ];
         const tr = html`<tr data-key=${r.id} class=${`yn-me-row yn-me-hist is-${st}${invalid ? " is-invalid" : ""}`} aria-describedby=${list.length ? issueId : null}>
           ${tds}
@@ -1571,7 +1591,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       renderPlanCsv();
       return;
     }
-    const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
+    const src = planSources();
     const months = plan.months;
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
@@ -1693,7 +1713,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const overCounts = months.map(() => 0);
 
     /** 人の行の月合計の色: 1.0 超は黄、0 より多く 1.0 未満は青系（§41）。0（計画なし）は色を付けない */
-    const allocLevel = (v) => (v > 1 + 1e-9 ? "over" : v > 1e-9 && v < 1 - 1e-9 ? "under" : null);
+    const allocLevel = (v, cap = 1) => (v > cap + 1e-9 ? "over" : v > 1e-9 && v < cap - 1e-9 ? "under" : null);
+    /** 人の月の上限（§119）: 在籍・不在が切り替わる日のある月は在籍の営業日の割合。稼働しない月は 1.0（不在中の計画は別の警告） */
+    const limitAt = (r, i) => (r.activeMonths[i] ? r.capacity[i] : 1);
     /**
      * 計画が何も入っていない人（§116）: 表示中の今月以降で、在籍して組織に所属している月が 1 つ以上あり、そのどの月も案件・運用保守以外とも 0。
      * その月の番号を返す（該当しなければ空）。月ごとの空きで判定すると、年度の切り替わりで次の年度の計画がまだ無い全員が出てしまうので人ごと
@@ -1885,10 +1907,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       monthly.forEach((v, i) => (totals[i] += v));
       outsideMonthly.forEach((v, i) => (outsideTotals[i] += v));
       months.forEach((m, i) => {
-        if (r.activeMonths[i]) capacity[i] += 1;
-        if (monthly[i] > 1 + 1e-9) overCounts[i] += 1;
+        capacity[i] += r.capacity[i];
+        if (monthly[i] > limitAt(r, i) + 1e-9) overCounts[i] += 1;
       });
-      const overMonths = months.filter((_, i) => monthly[i] > 1 + 1e-9);
+      const overMonths = months.filter((_, i) => monthly[i] > limitAt(r, i) + 1e-9);
       // 案件ごと（表示中の期間に掛かる計画のある案件。月の不正な行も見せる）
       const byProject = new Map();
       for (const x of aRows) {
@@ -1907,9 +1929,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: monthJa(r.leftFrom) })}>${T.members.chipLeft} ${monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
         </div></th>
-        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i])))}
+        ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:add:${r.memberId}`} disabled=${!editable} aria-label=${fmt(T.plan.addForAria, { name })} onclick=${() => addFor(r.memberId, `plan:add:${r.memberId}`)}>${T.planEdit.addWork}</button>
@@ -1997,12 +2019,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         .filter((o) => o.v > 0);
       const out = outs.reduce((s, o) => s + o.v, 0);
       const total = aRows.reduce((s, x) => s + (Number.isFinite(x.value) ? x.value : 0), 0) + out;
-      const free = 1 - total;
+      const i = months.indexOf(m);
+      const presence = i >= 0 ? r.presence?.[i] : null;
+      const free = (i >= 0 && r.activeMonths ? limitAt(r, i) : 1) - total;
       return html`<div class="yn-plan-tip-inner">
         <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, hoursOfMonth(m)) })}</p>
         ${aRows.length || out > 0
           ? html`<ul class="yn-plan-tip-list">${aRows.map((x) => html`<li><span>${contractText(x.contractId)}</span><span class="num">${Number.isFinite(x.value) ? pm(x.value) : "?"}</span></li>`)}${outs.map((o) => html`<li class="is-outside"><span>${o.type ? fmt(T.planEdit.outsideTypeTip, { type: o.type }) : T.masterFiles.outside}</span><span class="num">${pm(o.v)}</span></li>`)}</ul>`
           : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
+        ${presence ? html`<p class="yn-plan-tip-foot">${fmt(T.plan.tipPresence, { present: integer(presence.present), total: integer(presence.total), pm: pm(presence.present / presence.total) })}</p>` : null}
         <p class="yn-plan-tip-foot">${free < -1e-9 ? html`<strong>${fmt(T.plan.tipOver, { pm: pm(-free) })}</strong>` : fmt(T.plan.tipFree, { pm: pm(free) })}${editable ? html` ・ ${T.plan.tipAction}` : null}</p>
       </div>`;
     }
@@ -2697,6 +2722,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
     status: T.masters.statusHint,
+    status_date: T.masters.statusDateHint,
     target_id: T.masters.hintTarget,
     remaining_rate: T.masters.hintRemainingRate,
   };
@@ -2747,6 +2773,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (def.history === "effective") initial = { ...initial, effective_from: /^\d{4}-\d{2}$/.test(tFrom) && tFrom >= next ? addMonths(tFrom, 1) : next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
+      // 在籍・不在の開始日（§119）は写した行の月の日なので引き継がない
+      if (template && fileId === "members" && "status_date" in initial) initial = { ...initial, status_date: "" };
       // 新しい案件（§103）の案件ID は、今の ID の続き番号を入れておく
       if (!template && fileId === "contracts") initial = { ...initial, contract_id: nextContractId(cIndex().list.map((c) => c.id)) };
       if (preset) initial = { ...initial, ...preset };
@@ -3131,7 +3159,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       plan.cols = {};
       plan.emptyOnly = false;
       savePlanList();
-      const src = planSourcesFromDocs(docs, contractsText(), model?.worklogMonths ?? []);
+      const src = planSources();
       const shown = () => planView(src, plan.teamId, plan.months).rows.some((r) => r.memberId === memberId);
       if (memberId && !shown()) {
         const at = plan.months.includes(asOfMonth) ? asOfMonth : plan.months[0];
