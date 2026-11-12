@@ -134,5 +134,7 @@ test("在籍の列は理由（退職・休職など）を出さず一律「不�
   const idx = await handle(page, "status").evaluate((h) => (h.closest("th") as HTMLTableCellElement).cellIndex);
   const texts = await panel(page).locator("tbody tr.yn-me-group").evaluateAll((trs, i) => trs.map((tr) => (tr as HTMLTableRowElement).cells[i]!.innerText.trim()), idx);
   expect(texts).toContain("不在");
-  for (const t of texts) expect(["不在", "在籍", "—", ""]).toContain(t);
+  // 在籍・不在の開始日（§119）は「D日から」を添える
+  for (const t of texts) expect(["不在", "在籍", "—", ""]).toContain(t.replace(/\s*\d+日から$/, ""));
+  expect(texts).toContain("不在\n6日から");
 });
