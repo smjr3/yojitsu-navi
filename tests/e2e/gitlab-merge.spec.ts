@@ -3,6 +3,7 @@
  * - デモ（masterEdit.mode = "demo"。masters.json を page.route で書き換え）で、CSV 編集 → 保存（MR）→ マージ待ち一覧・ヘッダーの件数 → 内容 → マージ／取り下げ
  * - リーダーでない人にはマージボタンを出さない
  * - 本物の API 形式（page.route のモック）で、can_merge の出し分け・マージの要求・失敗の案内
+ * - 「競合あり」の MR を最新に載せ直す（§120）: 本体の今の内容に当て直して作り直し、元の MR を取り下げる
  * - 設定画面: トークンの登録・記憶・接続の確認・テーマ。ヘッダーのアイコンボタン
  * - 390px・ダークではみ出さない
  */
@@ -276,6 +277,117 @@ test.describe("本物の GitLab API の形（モック）", () => {
     errors.failedRequests.splice(0, errors.failedRequests.length, ...errors.failedRequests.filter((s) => !s.includes("gitlab.test")));
     errors.console.splice(0, errors.console.length, ...errors.console.filter((s) => !s.includes("gitlab.test") && !s.includes("405")));
   });
+});
+
+test.describe("競合ありの MR を最新に載せ直す（§120）", () => {
+  const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "content-type": "application/json" };
+  const cfg = { mode: "gitlab", gitlab: { apiBaseUrl: GITLAB, projectId: "grp/yn", targetBranch: "main", commitMode: "mr" } };
+  const BASE = PAYLOAD.files.rates.text;
+  const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
+
+  /** MR 8（自分の MR・競合あり）: head = base の「部長,12000」を 12500 に＋課長の行を足す。main = latest */
+  async function mock(page: Page, latest: string) {
+    const calls: Array<{ method: string; url: string; body: unknown }> = [];
+    let remade = false;
+    await page.route(`${GITLAB}/**`, async (route: Route) => {
+      const req = route.request();
+      if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      const url = req.url();
+      const body = req.postData() ? JSON.parse(req.postData()!) : undefined;
+      calls.push({ method: req.method(), url, body });
+      const json = (status: number, b: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(b) });
+      const mr = { iid: 8, title: "マスタ更新: data/masters/rates.csv", description: "単価の見直し", source_branch: "masters/20261110-1-sato", target_branch: "main", state: "opened", author: { username: "sato", name: "佐藤" }, created_at: "2026-11-10T01:00:00Z" };
+      if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/merge_requests?")) return json(200, remade ? [] : [mr]);
+      if (url.endsWith("/merge_requests/8") && req.method() === "GET") return json(200, { ...mr, user: { can_merge: false }, diff_refs: { base_sha: "b0", head_sha: "h1" }, has_conflicts: true, detailed_merge_status: "conflict" });
+      if (url.endsWith("/merge_requests/8") && req.method() === "PUT") {
+        remade = true;
+        return json(200, { ...mr, state: "closed" });
+      }
+      if (url.endsWith("/repository/commits")) return json(201, { id: "c2" });
+      if (url.endsWith("/merge_requests") && req.method() === "POST") return json(201, { iid: 9, web_url: "https://gitlab.test/grp/yn/-/merge_requests/9" });
+      if (url.includes("/raw?ref=")) {
+        const ref = new URL(url).searchParams.get("ref");
+        const text = url.includes("rates.csv") ? (ref === "h1" ? BASE.replace("部長,12000,2025-04", "部長,12500,2025-04") + "課長,11000,2026-11\n" : BASE) : "same\n";
+        return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "text/plain" }, body: text });
+      }
+      if (/\/repository\/files\/[^/]+\?ref=main$/.test(url)) {
+        if (url.includes("rates.csv")) return json(200, { encoding: "base64", content: b64(latest), last_commit_id: "L9" });
+        return json(200, { encoding: "base64", content: b64("same\n"), last_commit_id: "L0" });
+      }
+      return json(404, { message: "404" });
+    });
+    return calls;
+  }
+
+  async function open(page: Page, latest: string) {
+    await patchMasters(page, cfg);
+    const calls = await mock(page, latest);
+    await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
+    await gotoPage(page, "/masters");
+    const item = page.locator(".yn-mr-item");
+    await expect(item).toContainText("競合あり");
+    // マージできない人でも、自分の MR なら載せ直せる
+    await expect(item).toContainText("マージはリーダーが行います");
+    await item.getByRole("button", { name: "マスタ更新: 単価（番号 8）を最新に載せ直す" }).click();
+    return calls;
+  }
+
+  test("別の行の変更だけなら、そのまま当て直して新しい MR を作り、元の MR を取り下げる", { tag: "@smoke" }, async ({ page }) => {
+    const latest = BASE + "主任,9500,2026-11\n";
+    const calls = await open(page, latest);
+    const dialog = page.locator("dialog[open]");
+    await expect(dialog).toContainText("本体の今の内容に当て直せます（2 件）");
+    await expect(dialog.getByRole("button", { name: "載せ直す" })).toBeFocused();
+    await dialog.getByRole("button", { name: "載せ直す" }).click();
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("最新に載せ直しました");
+    const commit = calls.find((c) => c.url.endsWith("/repository/commits"))!.body as { start_branch: string; actions: Array<{ content: string; last_commit_id: string; file_path: string }> };
+    expect(commit.start_branch).toBe("main");
+    expect(commit.actions).toHaveLength(1);
+    expect(commit.actions[0]!.file_path).toBe("data/masters/rates.csv");
+    expect(commit.actions[0]!.last_commit_id).toBe("L9");
+    const content = commit.actions[0]!.content;
+    expect(content).toContain("部長,12500,2025-04");
+    expect(content).toContain("主任,9500,2026-11");
+    expect(content).toContain("課長,11000,2026-11");
+    const created = calls.find((c) => c.url.endsWith("/merge_requests") && c.method === "POST")!.body as { title: string; description: string };
+    expect(created.title).toBe("マスタ更新: data/masters/rates.csv");
+    expect(created.description).toContain("番号 8 の変更を最新に載せ直したもの");
+    expect(calls.some((c) => c.method === "PUT" && c.url.endsWith("/merge_requests/8") && (c.body as { state_event: string }).state_event === "close")).toBe(true);
+  });
+
+  test("同じ行を本体でも変えていたら、どちらを残すか選ぶまで載せ直さない", async ({ page }) => {
+    const latest = BASE.replace("部長,12000,2025-04", "部長,13000,2025-04");
+    const calls = await open(page, latest);
+    const dialog = page.locator("dialog[open]");
+    await expect(dialog).toContainText("どちらを残すか選んでください（1 件）");
+    await expect(dialog.locator(".yn-me-conflict")).toContainText("12500");
+    await expect(dialog.locator(".yn-me-conflict")).toContainText("13000");
+    await dialog.getByRole("button", { name: "載せ直す" }).click();
+    await expect(dialog).toContainText("まだ選んでいない行が 1 件");
+    expect(calls.some((c) => c.url.endsWith("/repository/commits"))).toBe(false);
+    await dialog.getByRole("radio", { name: /本体の今の内容を残す/ }).check();
+    await dialog.getByRole("button", { name: "載せ直す" }).click();
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("最新に載せ直しました");
+    const content = (calls.find((c) => c.url.endsWith("/repository/commits"))!.body as { actions: Array<{ content: string }> }).actions[0]!.content;
+    expect(content).toContain("部長,13000,2025-04");
+    expect(content).not.toContain("部長,12500,2025-04");
+    expect(content).toContain("課長,11000,2026-11");
+  });
+
+  for (const [w, dark] of [[390, true], [1280, false]] as const) {
+    test(`${w}px${dark ? " ダーク" : ""}: 載せ直しのダイアログがはみ出さない`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: 800 });
+      if (dark) await useDarkTheme(page);
+      await open(page, BASE.replace("部長,12000,2025-04", "部長,13000,2025-04"));
+      const dialog = page.locator("dialog[open]");
+      await expect(dialog.locator(".yn-me-conflict")).toBeVisible();
+      const box = await dialog.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(w);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
 });
 
 test.describe("設定画面とヘッダー", () => {

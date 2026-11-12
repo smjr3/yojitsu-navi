@@ -425,7 +425,7 @@ describe("下書きの形式（土台 ＋ 差分）", () => {
     doc = deleteRow(doc, "o2");
     doc = addRow(doc, { key: "課長", hourly_rate: "11000", effective_from: "2026-11" }).doc;
     const f = draftFileOf(doc, { text: RATES, lastCommitId: "b" });
-    expect(f).toEqual({ baseText: RATES, baseCommitId: "b", changed: [{ baseIndex: 1, cells: ["部長", "12500", "2025-04"] }], removed: [2], added: [["課長", "11000", "2026-11"]] });
+    expect(f).toEqual({ baseText: RATES, baseCommitId: "b", changed: [{ baseIndex: 1, cells: ["部長", "12500", "2025-04"] }], removed: [2], added: [["課長", "11000", "2026-11"]], addedAfter: [3] });
     expect(draftFileCount(f)).toBe(3);
   });
 
@@ -435,7 +435,7 @@ describe("下書きの形式（土台 ＋ 差分）", () => {
     const v1 = { version: 1, savedAt: "t", files: { rates: { baseText: RATES, baseCommitId: null, rows: doc.rows, nextId: 1 } } };
     const d = parseDraft(JSON.stringify(v1))!;
     expect(d.version).toBe(2);
-    expect(d.files.rates).toEqual({ baseText: RATES, baseCommitId: null, changed: [{ baseIndex: 0, cells: ["本部長", "1", "2025-04"] }], removed: [3], added: [] });
+    expect(d.files.rates).toEqual({ baseText: RATES, baseCommitId: null, changed: [{ baseIndex: 0, cells: ["本部長", "1", "2025-04"] }], removed: [3], added: [], addedAfter: [] });
     expect(serializeMasterDoc(docFromDraft("rates", d.files.rates!)).text).toBe(serializeMasterDoc(doc).text);
   });
 
@@ -474,7 +474,8 @@ describe("rebaseDraftFile（古い下書きを最新の土台に当て直す）"
     expect(r.stale).toBe(true);
     expect(r.conflicts).toEqual([]);
     expect(r.applied).toBe(3);
-    expect(keys(r.doc)).toEqual(["一般,6000,2025-04", "本部長,15500,2025-04", "部長,12500,2025-04", "部長,13000,2026-04", "P009,9000,2026-01", "課長,11000,2026-11"]);
+    // 足した行は、下書きでその前にあった行（部長 2026-04）のすぐ後ろ（§120.1）
+    expect(keys(r.doc)).toEqual(["一般,6000,2025-04", "本部長,15500,2025-04", "部長,12500,2025-04", "部長,13000,2026-04", "課長,11000,2026-11", "P009,9000,2026-01"]);
     // 文書は最新の土台に対する編集（差分は自分の 3 件だけ）
     const d = diffMasterDoc(r.doc);
     expect([d.added.length, d.changed.length, d.removed.length]).toEqual([1, 1, 1]);

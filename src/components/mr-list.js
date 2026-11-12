@@ -11,6 +11,7 @@ import { T, fmt } from "../i18n/index.js";
 import { closeMergeRequest, fetchCurrentUser, getMergeRequest, gitlabConfigured, listMasterMergeRequests, mergeMergeRequest, mergeRequestFileChanges } from "../core/gitlab.js";
 import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, parseMasterDoc, timeColumnOf } from "../core/masterEdit.js";
 import { docFromCsvText } from "../core/csvEdit.js";
+import { prepareRemake, rebaseRemake, remakeMergeRequest } from "../core/mrRebase.js";
 import { getToken, publishMrCount } from "./gitlab-client.js";
 import { dateTimeJst, integer } from "./format.js";
 import { infoTip } from "./layout.js";
@@ -101,12 +102,18 @@ export function mrTitleText(title) {
   return t;
 }
 
-export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null }) {
+/** 「最新に載せ直す」を出す MR か（GitLab が競合と判定したもの。§120） */
+export function needsRemake(d) {
+  return d.hasConflicts === true || d.mergeStatus === "conflict" || d.mergeStatus === "need_rebase";
+}
+
+export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {} }) {
   const el = html`<div class="yn-mr-slot"></div>`;
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-mr-dialog-title"></dialog>`;
   dialog.addEventListener("click", (ev) => ev.target === dialog && dialog.close());
   let returnFocus = null;
   dialog.addEventListener("close", () => {
+    remake = null;
     dialog.replaceChildren();
     returnFocus?.focus?.();
   });
@@ -118,6 +125,8 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
   let meToken = null;
 
   const enabled = () => gitlabConfigured(cfg);
+  /** リポジトリ内のパス（導入先でデータを下のフォルダに置いているときは masters.js から渡す） */
+  const pathOf = (id) => paths[id] ?? MASTER_FILES[id].path;
   const fk = (key) => el.querySelector(`[data-fk="${CSS.escape(key)}"]`);
 
   async function refresh({ notice = null } = {}) {
@@ -153,12 +162,11 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     item.changes = { status: "loading" };
     render();
     try {
-      const paths = MASTER_FILE_IDS.map((id) => MASTER_FILES[id].path);
-      const changes = await mergeRequestFileChanges(fetchImpl, cfg, getToken(), item.detail, paths);
+      const changes = await mergeRequestFileChanges(fetchImpl, cfg, getToken(), item.detail, MASTER_FILE_IDS.map(pathOf));
       item.changes = {
         status: "ok",
         files: changes.map((c) => {
-          const id = MASTER_FILE_IDS.find((x) => MASTER_FILES[x].path === c.path);
+          const id = MASTER_FILE_IDS.find((x) => pathOf(x) === c.path);
           return { path: c.path, id, diff: id ? fileDiff(id, c.before, c.after) : null };
         }),
       };
@@ -199,6 +207,120 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     </div>`);
     if (!dialog.open) dialog.showModal();
     dialog.querySelector('[data-role="mr-confirm"]').focus();
+  }
+
+  // ---- 最新に載せ直す（§120） ----
+  /** {item, status: "loading"|"ready"|"error", plan, choices, message, msg} */
+  let remake = null;
+
+  async function openRemake(item, opener) {
+    returnFocus = opener;
+    remake = { item, status: "loading", plan: null, choices: {}, message: "", msg: "" };
+    renderRemake();
+    if (!dialog.open) dialog.showModal();
+    try {
+      const plan = await prepareRemake(fetchImpl, cfg, getToken(), item.detail, paths);
+      if (remake?.item !== item) return;
+      remake = { ...remake, status: "ready", plan };
+    } catch (e) {
+      if (remake?.item !== item) return;
+      remake = { ...remake, status: "error", message: e?.message ?? String(e) };
+    }
+    renderRemake();
+    (dialog.querySelector(".yn-me-conflict input") ?? dialog.querySelector('[data-role="mr-remake-confirm"]') ?? dialog.querySelector('[data-role="mr-remake-cancel"]'))?.focus();
+  }
+
+  function remakeConflict(fileId, c, namer) {
+    const def = MASTER_FILES[fileId];
+    const cols = def.columns.filter((col) => col.name in c.base || (c.mine && col.name in c.mine) || (c.theirs && col.name in c.theirs));
+    const shown = shownColumns(def, c.columns).filter((col) => cols.some((x) => x.name === col));
+    const values = (rec, deletedText) =>
+      rec === null
+        ? html`<span class="yn-me-conflict-del">${deletedText}</span>`
+        : html`<span class="yn-me-conflict-vals">${(shown.length ? shown : cols.map((x) => x.name)).map((name, i) => html`${i > 0 ? " / " : ""}${def.columns.find((x) => x.name === name)?.label ?? name}: <strong>${namer.value(fileId, name, cell(rec, name)) || T.masters.emptyValue}</strong>`)}</span>`;
+    const chosen = remake.choices[fileId]?.[c.id] ?? null;
+    const option = (value, label, rec, deletedText) => {
+      const input = html`<input type="radio" name=${`yn-mr-conflict-${fileId}-${c.id}`} value=${value} checked=${chosen === value}>`;
+      input.addEventListener("change", () => {
+        remake = { ...remake, msg: "", choices: { ...remake.choices, [fileId]: { ...(remake.choices[fileId] ?? {}), [c.id]: value } } };
+        renderRemake();
+        dialog.querySelector(`input[name="${CSS.escape(`yn-mr-conflict-${fileId}-${c.id}`)}"][value="${value}"]`)?.focus();
+      });
+      return html`<label class="yn-me-conflict-opt">${input}<span><span class="yn-me-conflict-label">${label}:</span> ${values(rec, deletedText)}</span></label>`;
+    };
+    return html`<fieldset class=${`yn-me-conflict${chosen ? "" : " is-unresolved"}`}>
+      <legend><span class="yn-chip yn-chip-neutral">${def.label}</span> ${namer.lead(fileId, def, c.base)}</legend>
+      ${option("mine", T.mr.keepThisMr, c.mine, T.masters.deleteThisRow)}
+      ${option("theirs", T.mr.keepLatest, c.theirs, T.masters.keepDeleted)}
+    </fieldset>`;
+  }
+
+  function renderRemake() {
+    if (!remake) return;
+    const { item } = remake;
+    const d = item.detail;
+    let body;
+    let action = null;
+    if (remake.status === "loading") body = html`<p class="yn-me-small" role="status">${T.mr.remakeLoading}</p>`;
+    else if (remake.status === "error") body = html`<p class="yn-note yn-note-warn" role="alert">${T.mr.remakeLoadFailed} ${remake.message}</p>`;
+    else {
+      const r = rebaseRemake(remake.plan, remake.choices);
+      const conflicts = r.files.flatMap((f) => (f.result?.conflicts ?? []).map((c) => ({ fileId: f.fileId, c })));
+      const applied = r.files.reduce((n, f) => n + (f.result?.applied ?? 0), 0);
+      const namer = namerFor(describe, []);
+      if (r.blocked) body = html`<p class="yn-note yn-note-warn">${T.mr.remakeBlocked}</p>`;
+      else if (r.empty) body = html`<p>${T.mr.remakeEmpty}</p>`;
+      else {
+        body = html`<p>${fmt(T.mr.remakeReady, { n: integer(applied) })}</p>
+          ${conflicts.length
+            ? html`<div class="yn-me-conflicts"><h3 class="yn-me-subtitle">${fmt(T.mr.remakeChoose, { n: integer(conflicts.length) })}</h3>${conflicts.map(({ fileId, c }) => remakeConflict(fileId, c, namer))}</div>`
+            : null}
+          ${remake.msg ? html`<p class="yn-me-form-msg" role="alert">${remake.msg}</p>` : null}`;
+        action = html`<button type="button" class="yn-btn yn-btn-primary" data-role="mr-remake-confirm" onclick=${() => {
+          if (r.unresolved > 0) {
+            remake = { ...remake, msg: fmt(T.mr.remakeUnresolved, { n: integer(r.unresolved) }) };
+            renderRemake();
+            dialog.querySelector(".yn-me-conflict.is-unresolved input")?.focus();
+            return;
+          }
+          returnFocus = null;
+          const rebased = r;
+          remake = null;
+          dialog.close();
+          runRemake(item, rebased);
+        }}>${T.mr.remakeConfirm}</button>`;
+      }
+    }
+    dialog.replaceChildren(html`<div class="yn-dialog-inner">
+      <header class="yn-dialog-head">
+        <h2 id="yn-mr-dialog-title" class="yn-dialog-title">${T.mr.remakeTitle}</h2>
+        <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
+      </header>
+      <div class="yn-dialog-body">
+        <p class="yn-me-small">${mrTitleText(d.title)}</p>
+        ${body}
+        <div class="yn-me-form-foot">
+          <button type="button" class="yn-btn" data-role="mr-remake-cancel" onclick=${() => dialog.close()}>${T.mr.cancel}</button>
+          ${action}
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function runRemake(item, rebased) {
+    const d = item.detail;
+    state = { ...state, busy: { kind: "remake", iid: d.iid }, notice: null };
+    render();
+    try {
+      const description = [d.description, fmt(T.mr.remakeDescription, { iid: d.iid })].filter((x) => x && x.trim() !== "").join("\n\n");
+      const { closeError } = await remakeMergeRequest(fetchImpl, cfg, getToken(), d, rebased, { message: d.title, description, now: now() });
+      const text = fmt(closeError ? T.mr.remadeCloseFailed : T.mr.remade, { iid: d.iid, title: mrTitleText(d.title) });
+      await refresh({ notice: { kind: closeError ? "error" : "ok", text } });
+    } catch (e) {
+      state = { ...state, busy: null, notice: { kind: "error", text: e?.message ?? String(e), detail: e?.detail ?? "" } };
+      render();
+    }
+    fk("mr:notice")?.focus();
   }
 
   async function run(kind, item) {
@@ -269,6 +391,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
         ${d.canMerge
           ? html`<button type="button" class="yn-btn yn-btn-sm yn-btn-primary" data-fk=${`mr:merge:${d.iid}`} aria-label=${fmt(T.mr.mergeAria, { iid: d.iid, title: mrTitleText(d.title) })} disabled=${!!state.busy} onclick=${(e) => confirm("merge", item, e.currentTarget)}>${busy === "merge" ? T.mr.merging : T.mr.merge}</button>`
           : html`<span class="yn-me-small yn-mr-nomerge">${T.mr.cannotMerge}</span>`}
+        ${needsRemake(d) && (d.canMerge || mine) ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`mr:remake:${d.iid}`} aria-label=${fmt(T.mr.remakeAria, { iid: d.iid, title: mrTitleText(d.title) })} disabled=${!!state.busy} onclick=${(e) => openRemake(item, e.currentTarget)}>${busy === "remake" ? T.mr.remaking : T.mr.remake}</button>` : null}
         ${d.canMerge || mine ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`mr:close:${d.iid}`} aria-label=${fmt(T.mr.closeAria, { iid: d.iid, title: mrTitleText(d.title) })} disabled=${!!state.busy} onclick=${(e) => confirm("close", item, e.currentTarget)}>${busy === "close" ? T.mr.closing : T.mr.close}</button>` : null}
       </div>
       ${item.open ? html`<div class="yn-mr-changes">${renderChanges(item)}</div>` : null}

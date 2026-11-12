@@ -130,7 +130,15 @@ describe("rebaseDraftFile（下書きの当て直し）", () => {
           if (t === null) appended.push(out); // 最新で削除・自分の変更を残した
           else expected.push(out);
         }
-        expect(rowsOf(r.doc)).toEqual([...expected, ...appended, ...addedRows]);
+        // 足した行・最新で消えたが自分を選んだ行は、位置を §120.1 の規則で決める（下書きでの前の行の後ろ／同じキーの後ろ）。
+        // それ以外の行は最新の並びのまま。足した行どうしの順序は保つ
+        const got = rowsOf(r.doc);
+        const isMoved = (row: string[]) => addedRows.some((a) => same(a, row)) || appended.some((a) => same(a, row));
+        expect(got.filter((row) => !isMoved(row))).toEqual(expected.filter((row) => !isMoved(row)));
+        const mineOrder = rowsOf(doc).filter((row) => addedRows.some((a) => same(a, row)));
+        expect(got.filter((row) => addedRows.some((a) => same(a, row)))).toEqual(mineOrder);
+        const sortRows = (rows: string[][]) => rows.map((x) => JSON.stringify(x)).sort();
+        expect(sortRows(got)).toEqual(sortRows([...expected, ...appended, ...addedRows]));
       }),
       { numRuns: 400 },
     );

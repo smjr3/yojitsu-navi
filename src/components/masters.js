@@ -306,7 +306,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
   // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）

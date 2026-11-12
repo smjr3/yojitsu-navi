@@ -2,7 +2,7 @@
  * 試用のデモ（SPEC §29）: GitLab REST API の代わりにブラウザ内で動く模擬。
  *
  * gitlab.ts が使う範囲（/user、/personal_access_tokens/self、/projects/:id、保護ブランチ、commits、merge_requests の作成・一覧・詳細・マージ・取り下げ、
- * repository/files/:path/raw）だけを、localStorage 相当の保存先に持つ。fetch と同じ形（FetchLike）なので
+ * repository/files/:path(/raw)）だけを、localStorage 相当の保存先に持つ。fetch と同じ形（FetchLike）なので
  * 画面・テストからは本物の GitLab と同じ呼び方で使える。
  *
  * - 本体（targetBranch）の中身は画面のビルド時のファイル（baseFiles）。マージしても本体は変えない
@@ -164,6 +164,17 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
         save(s);
         return reply(200, mrJson(s, m));
       }
+    }
+
+    // 本体の中身と最終コミット ID（JSON・base64。§120 の載せ直し）
+    const metaMatch = /^\/repository\/files\/(.+)$/.exec(rest);
+    if (method === "GET" && metaMatch && !metaMatch[1]!.endsWith("/raw")) {
+      const b = base[metaMatch[1] as string];
+      if (!b) return reply(404, { message: "404 File Not Found" });
+      const bytes = new TextEncoder().encode(b.text);
+      let bin = "";
+      for (const x of bytes) bin += String.fromCharCode(x);
+      return reply(200, { file_path: metaMatch[1], encoding: "base64", content: btoa(bin), last_commit_id: b.lastCommitId });
     }
 
     const fileMatch = /^\/repository\/files\/(.+)\/raw$/.exec(rest);

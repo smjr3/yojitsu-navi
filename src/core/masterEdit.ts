@@ -71,6 +71,11 @@ export interface MasterFileDef {
    * 案件（§103）: 未登録の案件の確認から登録する。取り込み済みの行の顧客名・案件名は変えない
    */
   addable?: boolean;
+  /**
+   * 新しい行を入れる位置の手がかり（キー列で同じ行が無いときに使う列。§120）。
+   * この列の値が同じ最後の行のすぐ後ろに入れる（別の人の MR と同じ所＝ファイル末尾を書き換えないため）
+   */
+  placeAfter?: readonly string[];
 }
 
 export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
@@ -81,6 +86,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     label: T.masterFiles.members,
     history: "effective",
     keyColumns: ["member_id"],
+    placeAfter: ["team_id"],
     columns: [
       { name: "member_id", label: T.masterFiles.colMemberId, input: "memberKey", required: true },
       { name: "name", label: T.masterFiles.colName, input: "text", required: true },
@@ -120,6 +126,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     label: T.masterFiles.teams,
     history: "effective",
     keyColumns: ["team_id"],
+    placeAfter: ["parent_team_id"],
     columns: [
       { name: "team_id", label: T.masterFiles.colTeamIdKey, input: "text", required: true },
       { name: "name", label: T.masterFiles.colTeamName, input: "text", required: true },
@@ -137,6 +144,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     label: T.masterFiles.contracts,
     history: "list",
     keyColumns: ["contract_id"],
+    placeAfter: ["customer_name"],
     editableColumns: ["start_month", "end_month", "total_amount", "team_id"],
     addable: true,
     columns: [
@@ -518,11 +526,38 @@ function cellsFromRecord(doc: MasterDoc, values: Record<string, string>, base?: 
   return cells;
 }
 
-/** 行を末尾に追加する（履歴は「同じキー・同じ適用開始月なら後の行」が有効なので末尾に足すのが安全） */
+/**
+ * 新しい行を入れる位置（rows の添字。§120）: キー列が同じ最後の行のすぐ後ろ。
+ * 無ければキー列の先頭から順に短くした組（アサインなら同じ人）、次に placeAfter の列が同じ最後の行の後ろ。どれも無ければ末尾。
+ * 同じキーの行より後ろに入るので「同じキー・同じ適用開始月なら後の行」（§5）の意味は末尾に足したときと変わらない。
+ * 別々の人を直した MR どうしがファイル末尾で衝突しないようにする
+ */
+export function insertionIndex(def: MasterFileDef, header: readonly string[], rows: readonly { cells: readonly string[] }[], cells: readonly string[]): number {
+  const val = (c: readonly string[], col: string): string => {
+    const i = header.indexOf(col);
+    return i < 0 ? "" : (c[i] ?? "").trim();
+  };
+  const groups: string[][] = [];
+  for (let n = def.keyColumns.length; n >= 1; n--) groups.push(def.keyColumns.slice(0, n));
+  for (const col of def.placeAfter ?? []) groups.push([col]);
+  for (const cols of groups) {
+    const want = cols.map((c) => val(cells, c));
+    if (want.every((v) => v === "")) continue;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i]!.cells;
+      if (!isBlankRow(r as string[]) && cols.every((c, k) => val(r, c) === want[k])) return i + 1;
+    }
+  }
+  return rows.length;
+}
+
+/** 行を追加する（同じキーの行のすぐ後ろ。insertionIndex） */
 export function addRow(doc: MasterDoc, values: Record<string, string>): { doc: MasterDoc; rowId: string } {
   const rowId = `n${doc.nextId}`;
   const row: MasterRow = { id: rowId, cells: cellsFromRecord(doc, values) };
-  return { doc: { ...doc, rows: [...doc.rows, row], nextId: doc.nextId + 1 }, rowId };
+  const rows = doc.rows.slice();
+  rows.splice(insertionIndex(MASTER_FILES[doc.fileId], doc.header, rows, row.cells), 0, row);
+  return { doc: { ...doc, rows, nextId: doc.nextId + 1 }, rowId };
 }
 
 /** 行の値を変える（values に無い列はそのまま） */
@@ -547,10 +582,10 @@ export function restoreRow(doc: MasterDoc, rowId: string): MasterDoc {
   const o = doc.originals[rowId];
   if (!o || doc.rows.some((r) => r.id === rowId)) return doc;
   const rows = doc.rows.slice();
-  // 元の通し番号より後ろにある最初の元行の手前に入れる（追加行は末尾にあるので、その手前）
+  // 元の通し番号より後ろにある最初の元行の手前に入れる（追加行は飛ばす）
   let at = rows.findIndex((r) => {
     const ro = doc.originals[r.id];
-    return !ro || ro.index > o.index;
+    return !!ro && ro.index > o.index;
   });
   if (at < 0) at = rows.length;
   rows.splice(at, 0, { id: rowId, cells: o.cells.slice() });
@@ -1076,6 +1111,11 @@ export interface DraftFile {
   removed: number[];
   /** 追加した行のセル（追加した順） */
   added: string[][];
+  /**
+   * 追加した各行の位置: 文書でその行より前にある最後の土台の行の通し番号（-1 = 先頭。§120.1）。
+   * 当て直しではその行（最新で消えていればその前の残っている行）のすぐ後ろに戻す（git が行を足した位置を保つのと同じ）。無ければ（古い下書き）同じキーの行の後ろ
+   */
+  addedAfter?: number[];
   /** 編集で見出しの末尾に足した列（§103.5 の provisional）。セルはこの列を足した見出しの順 */
   columns?: string[];
 }
@@ -1092,12 +1132,18 @@ type Bases = Record<MasterFileId, { text: string; lastCommitId: string | null }>
 export function draftFileOf(doc: MasterDoc, base: { text: string; lastCommitId: string | null }): DraftFile {
   const changed: DraftFile["changed"] = [];
   const added: string[][] = [];
+  const addedAfter: number[] = [];
   const present = new Set<string>();
+  let lastBase = -1;
   for (const row of doc.rows) {
     present.add(row.id);
     const o = doc.originals[row.id];
+    if (o) lastBase = o.index;
     if (!o) {
-      if (!isBlankRow(row.cells)) added.push(row.cells.slice());
+      if (!isBlankRow(row.cells)) {
+        added.push(row.cells.slice());
+        addedAfter.push(lastBase);
+      }
     } else if (!sameCells(o.cells, row.cells)) {
       changed.push({ baseIndex: o.index, cells: row.cells.slice() });
     }
@@ -1112,7 +1158,7 @@ export function draftFileOf(doc: MasterDoc, base: { text: string; lastCommitId: 
     const baseHeader = parseMasterDoc(doc.fileId, base.text).header;
     return doc.header.filter((h) => !baseHeader.includes(h));
   })() : [];
-  return { baseText: base.text, baseCommitId: base.lastCommitId, changed, removed, added, ...(columns.length > 0 ? { columns } : {}) };
+  return { baseText: base.text, baseCommitId: base.lastCommitId, changed, removed, added, addedAfter, ...(columns.length > 0 ? { columns } : {}) };
 }
 
 /** 下書きのファイルの変更件数（追加 + 変更 + 削除） */
@@ -1172,6 +1218,7 @@ export function parseDraft(json: string | null): MasterDraft | null {
         changed: (changed as DraftFile["changed"]).map((c) => ({ baseIndex: c.baseIndex, cells: c.cells.slice() })),
         removed: (removed as number[]).slice(),
         added: (added as string[][]).map((c) => c.slice()),
+        ...(Array.isArray(f.addedAfter) && f.addedAfter.length === (added as unknown[]).length && f.addedAfter.every((x: unknown) => Number.isInteger(x) && (x as number) >= -1) ? { addedAfter: (f.addedAfter as number[]).slice() } : {}),
         ...(isCells(f.columns) && f.columns.length > 0 ? { columns: (f.columns as string[]).slice() } : {}),
       };
     }
@@ -1310,7 +1357,9 @@ export function alignRows(a: readonly string[], b: readonly string[]): number[] 
  *    対が無ければ最新側で削除された行
  * 3. 下書きの変更・削除は、最新側で変わっていない行にはそのまま当てる。最新側でも変更・削除されていれば衝突
  *    （両方が同じ値に変えた・両方が削除したなら衝突にしない）
- * 4. 下書きで追加した行は末尾に足す（衝突で「自分の下書き」を選んだ、最新側で削除済みの行もその手前に足す）
+ * 4. 下書きで追加した行は、下書きでその行の前にあった土台の行（最新で消えていればその前の残っている行）のすぐ後ろに戻す（addedAfter。§120.1）。
+ *    分からなければ（古い下書き）同じキーの行の後ろ（insertionIndex）。
+ *    衝突で「自分の下書き」を選んだ、最新側で削除済みの行も同じキーの行の後ろ
  *
  * 当て直した結果を draftFileOf で下書きにし、同じ latestText にもう一度当て直しても結果は変わらない（冪等）
  */
@@ -1421,9 +1470,45 @@ export function rebaseDraftFile(fileId: MasterFileId, f: DraftFile, latestText: 
       applied++; // 両方が削除
     }
   }
+  // 追加した行: 下書きで前にあった土台の行（addedAfter。最新で消えていればその前の残っている行）のすぐ後ろに戻す。
+  // 位置が分からない（古い下書き）ときと、最新で消えた行を「自分」で残したときは、同じキーの行の後ろ（insertionIndex）
   let nextId = 1;
-  const rows = rowsOut.filter((r): r is MasterRow => r !== null);
-  for (const cells of [...appended, ...f.added.map((c) => remap(c))]) rows.push({ id: `n${nextId++}`, cells: padCells(cells, width) });
+  const slots = new Map<number, MasterRow[]>();
+  const floating: MasterRow[] = [];
+  /** 土台の行 a（とその前の行）のうち、最新に残っている最後の行の位置（-1 = 先頭） */
+  const latestAt = (a: number): number => {
+    for (let b = Math.min(a, old.rows.length - 1); b >= 0; b--) {
+      const j = (map[b] as number) >= 0 ? (map[b] as number) : (pair[b] as number);
+      if (j >= 0) return j;
+    }
+    return -1;
+  };
+  f.added.forEach((c, k) => {
+    const row = { id: "", cells: padCells(remap(c), width) };
+    const a = f.addedAfter?.[k];
+    if (a === undefined) floating.push(row);
+    else {
+      const at = latestAt(a);
+      slots.set(at, [...(slots.get(at) ?? []), row]);
+    }
+  });
+  const rows: MasterRow[] = [];
+  const take = (list: MasterRow[] | undefined) => {
+    for (const r of list ?? []) rows.push({ id: `n${nextId++}`, cells: r.cells });
+  };
+  take(slots.get(-1));
+  rowsOut.forEach((r, j) => {
+    if (r) rows.push(r);
+    take(slots.get(j));
+  });
+  for (const cells of appended) {
+    const row = { id: `n${nextId++}`, cells: padCells(cells, width) };
+    rows.splice(insertionIndex(def, header, rows, row.cells), 0, row);
+  }
+  for (const r of floating) {
+    const row = { id: `n${nextId++}`, cells: r.cells };
+    rows.splice(insertionIndex(def, header, rows, row.cells), 0, row);
+  }
   applied += f.added.length;
   return {
     doc: { ...latest, rows, nextId },
