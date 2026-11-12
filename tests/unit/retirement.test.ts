@@ -226,6 +226,30 @@ M6,産休,employee,一般,,,T1,2026-08,育休`) }, CONTRACTS), "T1", FY).rows.fi
     expect(FY.filter((_, i) => !rejoin.activeMonths[i])).toEqual(["2026-07", "2026-08", "2026-09"]);
   });
 
+  it("計画が入っているべき月 planNeededMonths（§116）: 在籍で組織に所属している月だけ。不在・入社前・応援・他組織へ移った月は対象外", () => {
+    const TEAMS2 = "team_id,name,parent_team_id,effective_from\nT1,保守,,2026-04\nT2,別,,2026-04\nT3,下の組織,T2,2027-01\n";
+    const MEMBERS2 = `${MEMBERS}
+M7,10月入社,employee,一般,,,T1,2026-10,
+M8,9月に異動,employee,一般,,,T1,2026-04,
+M8,9月に異動,employee,一般,,,T2,2026-09,
+M9,応援,employee,一般,,,T2,2026-04,`;
+    const ASSIGN2 = `${ASSIGN}\nM9,C1,2026-05,2026-05,0.3`;
+    const v = planView(planSourcesFromDocs({ teams: parseMasterDoc("teams", TEAMS2), members: parseMasterDoc("members", MEMBERS2), assignments: parseMasterDoc("assignments", ASSIGN2) }, CONTRACTS), "T1", FY);
+    const needed = (id: string) => FY.filter((_, i) => v.rows.find((r) => r.memberId === id)!.planNeededMonths[i]);
+    expect(needed("M1")).toEqual(FY);
+    // 不在になった月から（その月に計画があっても入れる必要はない）
+    expect(needed("M2")).toEqual(["2026-04", "2026-05", "2026-06"]);
+    expect(needed("M4")).toEqual(FY.slice(0, 6));
+    expect(needed("M7")).toEqual(FY.slice(6));
+    expect(needed("M8")).toEqual(FY.slice(0, 5));
+    expect(v.rows.find((r) => r.memberId === "M9")!.support).toBe(true);
+    expect(needed("M9")).toEqual([]);
+    // すべての組織: 所属があれば対象
+    const all = planView(planSourcesFromDocs({ teams: parseMasterDoc("teams", TEAMS2), members: parseMasterDoc("members", MEMBERS2), assignments: parseMasterDoc("assignments", ASSIGN2) }, CONTRACTS), null, FY);
+    // 配下の組織を持つ組織の直属（部長など）も対象: T2 は 2027-01 から T3 を持つ
+    expect(FY.filter((_, i) => all.rows.find((r) => r.memberId === "M9")!.planNeededMonths[i])).toEqual(FY);
+  });
+
   it("退職後の月だけを見ると、配分の残っている人だけが出る", () => {
     const v = view(["2026-11", "2026-12"]);
     expect(v.rows.map((r) => r.memberId)).toEqual(["M1", "M4"]);

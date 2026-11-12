@@ -78,6 +78,8 @@
   --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 12%, var(--yn-card));
   --yn-under-text: #075e80; /* リソース計画の 1.0 未満（6.4:1） */
   --yn-under-bg: #e2f4fb;
+  --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標・紫＝運用保守以外のグラフと分ける赤紫） */
+  --yn-empty-bg: #fbe6f2;
 }
 
 :root[data-theme="dark"] {
@@ -120,6 +122,8 @@
   --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 22%, var(--yn-card));
   --yn-under-text: #6fc6ea; /* 7.4:1 */
   --yn-under-bg: #0c2e3b;
+  --yn-empty-text: #f291cf;
+  --yn-empty-bg: #3d1731;
 }
 
 /* テーマカラー（GitLab のテーマの色合い）。文字に使うのでカード・ページの面に対して 6:1 以上（tests/unit/appearance.test.ts） */
@@ -3002,6 +3006,28 @@ html:has(dialog.yn-dialog[open]) {
 .yn-me-plan-cell.is-under {
   background: var(--yn-under-bg);
   color: var(--yn-under-text);
+}
+/* 計画が入っていない月（§116）。黄（1.0 超）・青（1.0 未満）・赤（目標）と分けて赤紫（運用保守以外のグラフの紫とも分ける）。色だけに頼らず「なし」と書き、点線で囲む */
+.yn-me-plan-cell.is-empty {
+  background: var(--yn-empty-bg);
+  color: var(--yn-empty-text);
+  font-weight: 600;
+}
+.yn-me-plan-cell.is-empty .yn-plan-cell-btn:not(:focus-visible) {
+  outline: 1px dashed color-mix(in srgb, var(--yn-empty-text) 55%, transparent);
+  outline-offset: -3px;
+}
+.yn-chip-empty {
+  background: var(--yn-empty-bg);
+  color: var(--yn-empty-text);
+}
+.yn-me-plan-empty-toggle {
+  color: var(--yn-empty-text);
+  border-color: color-mix(in srgb, var(--yn-empty-text) 45%, transparent);
+}
+.yn-me-plan-empty-toggle.is-on {
+  background: var(--yn-empty-bg);
+  box-shadow: inset 0 0 0 1px var(--yn-empty-text);
 }
 /* 不在した月以降（§35。不在した月に計画・実績があればその月は除く）。配分が残っていれば is-over / is-under の色の上に斜線で示す */
 .yn-me-plan-cell.is-left {
