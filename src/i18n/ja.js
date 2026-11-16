@@ -2168,7 +2168,7 @@ export default {
     closeAria: "{title}（番号 {iid}）を取り下げ",
     cannotMerge: "承認はリーダーが行います",
     confirmMergeTitle: "この変更を承認しますか？",
-    confirmMergeText: "「{title}」を反映します。CI が画面を作り直したあと（数分）、すべての画面の数値に反映されます。",
+    confirmMergeText: "「{title}」を承認します。CI が画面を作り直したあと（数分）、すべての画面の数値に反映されます。",
     confirmMergeCheck: "内容を確認しないままのときは、先に「内容を見る」で確かめてください。",
     confirmMerge: "承認する",
     confirmCloseTitle: "この変更を取り下げますか？",
@@ -2204,7 +2204,7 @@ export default {
     remakeStale: "この変更は読み込んだあとに更新されたか、閉じられています。「更新」で一覧を読み直してから、もう一度お試しください。",
     remakeDescription: "番号 {iid} の変更を最新に載せ直したものです。",
     // 競合ありの MR の「マージ」= 載せ直してからマージ（§126.2）
-    confirmMergeRemakeText: "「{title}」は他の変更と重なっているため、本体の今の内容に載せ直してから反映します。CI が画面を作り直したあと（数分）、すべての画面の数値に反映されます。",
+    confirmMergeRemakeText: "「{title}」は他の変更と重なっているため、本体の今の内容に載せ直してから承認します。CI が画面を作り直したあと（数分）、すべての画面の数値に反映されます。",
     remakeMergeTitle: "載せ直して承認",
     remakeMergeConfirm: "載せ直して承認する",
     remadeMerged: "「{title}」を最新に載せ直して承認しました。CI が画面を作り直したあと（数分）にこのページを再読み込みすると、数値に反映されています。",
