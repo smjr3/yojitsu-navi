@@ -95,7 +95,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
 
   // 月の稼働時間（1.0 人月の時間 = 営業日数 × 1 日の時間。§114）。リソース計画の時間・計画額・計画方式の着地に使う
   const monthHours = createMonthHours(holidays, config.hoursPerBusinessDay);
-  const forecastCtx: ForecastContext = { asOfMonth, config, masters, assignments: dataset.assignments, monthHours };
+  const forecastCtx: ForecastContext = { asOfMonth, config, masters, assignments: dataset.assignments, monthHours, holidays };
   const forecastFiscalYear = fiscalYearOf(asOfMonth, config.fiscalYearStartMonth);
   const forecastBasis = { asOfMonth, fiscalYear: forecastFiscalYear, forecastRecentMonths: config.forecastRecentMonths };
   const fyMonthsForForecast = fiscalYearMonths(forecastFiscalYear, config.fiscalYearStartMonth);
@@ -190,7 +190,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
     memberMonths: buildMemberMonths(results, dataset.assignments, masters, monthHours, {
       plans: dataset.outsidePlans ?? [],
       actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classifyWorklog(o.worklog).group, hours: o.worklog.hours })),
-    }),
+    }, holidays),
     // 工数の明細（§30.2）
     workRows: buildWorkRows(results, outsideIn, classifier, masters),
     outsideTypes: planOutsideTypes(dataset.taskTypes, classifier.enabled),

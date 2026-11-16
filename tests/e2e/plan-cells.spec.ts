@@ -187,8 +187,8 @@ test("アサインの追加: 案件を選び、期間が契約の切り替わり
   await pickCombo(d.locator("#yn-me-f-member_id"), "インフラ 小林");
   await expect(d.locator("#yn-me-f-member_id")).toHaveValue("小林 玲奈");
   await pickCombo(d.locator("#yn-me-f-contract_id"), "青葉");
-  await d.locator("#yn-me-f-start_month").fill("2026-01");
-  await d.locator("#yn-me-f-end_month").fill("2026-06");
+  await d.locator("#yn-me-f-start_month").fill("2026-01-01");
+  await d.locator("#yn-me-f-end_month").fill("2026-06-30");
   await d.locator("#yn-me-f-allocation").fill("0.05");
   await d.locator('[data-role="submit"]').click();
   await expect(d.locator(".yn-me-split")).toContainText("2 行に分けて保存します: 2026-01〜2026-03、2026-04〜2026-06");
@@ -477,13 +477,13 @@ test("案件の候補（計画を追加）: 開始月〜終了月に契約が無
   const input = d.locator("#yn-me-f-contract_id");
   const list = page.locator(`#${await input.getAttribute("aria-controls")}`);
   const opt = (name: string) => list.locator('[role="option"]', { hasText: name });
-  await d.locator("#yn-me-f-start_month").fill("2026-11");
-  await d.locator("#yn-me-f-end_month").fill("2026-12");
+  await d.locator("#yn-me-f-start_month").fill("2026-11-01");
+  await d.locator("#yn-me-f-end_month").fill("2026-12-31");
   await input.fill("保守");
   await expect(opt("受発注システム保守")).toContainText("契約期間外");
   await expect(opt("倉庫管理システム保守")).not.toContainText("契約期間外");
   await input.press("Escape");
-  await d.locator("#yn-me-f-start_month").fill("2026-08");
+  await d.locator("#yn-me-f-start_month").fill("2026-08-01");
   await input.fill("受発注");
   await expect(opt("受発注システム保守")).not.toContainText("契約期間外");
 });

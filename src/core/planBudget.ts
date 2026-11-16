@@ -12,7 +12,7 @@
  */
 import { assignmentPlanOf } from "./forecast.js";
 import { customerKey } from "./customers.js";
-import { monthHoursOfInputs, type PlanInputs } from "./planImpact.js";
+import { holidaysOfInputs, monthHoursOfInputs, type PlanInputs } from "./planImpact.js";
 import { targetForMonth } from "./targets.js";
 import type { Assignment, ContractResult, Model, Target, TargetKind, TeamNode, YearMonth } from "./types.js";
 
@@ -66,13 +66,15 @@ export function contractPlanAmounts(model: Model, inputs: PlanInputs, contractId
     else byContract.set(a.contractId, [a]);
   }
   const monthHours = monthHoursOfInputs(model, inputs);
+  // 月の途中から・途中までのアサインは端の月を営業日で日割り（§123）
+  const holidays = holidaysOfInputs(model, inputs);
   // 基準月より前の月も計画で数える（表示する月の最初から）
   const from = months.reduce((a, b) => (a < b ? a : b));
   for (const r of model.contracts) {
     const id = r.contract.contractId;
     const list = byContract.get(id);
     if (!list) continue;
-    const plan = assignmentPlanOf({ asOfMonth: from, config: model.config, masters: inputs.masters, assignments: list, monthHours }, r.contract);
+    const plan = assignmentPlanOf({ asOfMonth: from, config: model.config, masters: inputs.masters, assignments: list, monthHours, holidays }, r.contract);
     const x = new Map<YearMonth, number>();
     for (const l of plan.lines) if (want.has(l.month)) x.set(l.month, (x.get(l.month) ?? 0) + l.amount);
     out.set(id, x);

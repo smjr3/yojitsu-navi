@@ -175,7 +175,7 @@ test("リソース計画: 過去の月を含む運用保守以外の追加は、
   await pickCombo(dialog.locator("#yn-me-f-contract_id"), "その他");
   const prev = model.meta.fiscalYearMonths.filter((m) => m < ASOF).pop();
   test.skip(!prev, "年度の最初の月が基準月");
-  await dialog.locator("#yn-me-f-start_month").fill(prev!);
+  await dialog.locator("#yn-me-f-start_month").fill(`${prev!}-01`);
   await dialog.locator("#yn-me-f-allocation").fill("0.1");
   await dialog.locator('[data-role="submit"]').click();
   await expect(dialog.locator(".yn-me-confirm")).toBeVisible();

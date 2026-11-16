@@ -8,6 +8,7 @@
 import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
 import type { HolidayLookup } from "./calendar.js";
+import { periodShareAt } from "./periodDates.js";
 import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, monthPresenceAt, statusDateOf, teamTreeAt, workedMonthKeys, type MonthPresence } from "./masters.js";
 import type { MemberRecord, OutsidePlan, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
@@ -18,6 +19,9 @@ export interface PlanAssignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
+  /** 開始日・終了日（§123。端の月は営業日で日割り） */
+  startDate?: string;
+  endDate?: string;
   /** 数値でなければ NaN（合計には 0 として数える） */
   allocation: number;
 }
@@ -148,7 +152,8 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   const totals = ms.map(() => 0);
   const rows: PlanMemberRow[] = ids.map((memberId) => {
     const list = (byMember.get(memberId) ?? []).slice().sort((x, y) => (x.contractId < y.contractId ? -1 : x.contractId > y.contractId ? 1 : x.startMonth < y.startMonth ? -1 : x.startMonth > y.startMonth ? 1 : 0));
-    const monthly = ms.map((m) => list.reduce((s, a) => (a.startMonth <= m && m <= a.endMonth && Number.isFinite(a.allocation) ? s + a.allocation : s), 0));
+    // 開始日・終了日のある端の月は営業日で日割り（§123）
+    const monthly = ms.map((m) => list.reduce((s, a) => (a.startMonth <= m && m <= a.endMonth && Number.isFinite(a.allocation) ? s + a.allocation * periodShareAt(a, m, holidays) : s), 0));
     monthly.forEach((v, i) => (totals[i] = (totals[i] as number) + v));
     let last: MemberRecord | null = null;
     let leftFrom: YearMonth | null = null;
@@ -305,6 +310,9 @@ export function contractsCover(contracts: readonly ContractPeriod[], from: YearM
 export interface AllocationPiece {
   startMonth: YearMonth;
   endMonth: YearMonth;
+  /** 開始日・終了日（§123。CSV の値。空・省略 = 月の初めから・終わりまで） */
+  startDate?: string;
+  endDate?: string;
   /** CSV に書く人月の文字列 */
   allocation: string;
 }
@@ -329,7 +337,15 @@ export function editMonthAllocation(row: AllocationPiece, month: YearMonth, valu
   const until = scope === "month" ? month : row.endMonth;
   pieces.push({ startMonth: month, endMonth: until, allocation: value.trim() });
   if (until < row.endMonth) pieces.push({ startMonth: addMonths(until, 1), endMonth: row.endMonth, allocation: row.allocation });
-  return pieces.filter((p) => !isZeroAllocation(p.allocation));
+  // 開始日・終了日（§123）は、元の行の端の月を引き継いだ部分に残す
+  return pieces.filter((p) => !isZeroAllocation(p.allocation)).map((p) => withEdgeDates(p, row));
+}
+
+/** 元の行 row の開始日・終了日を、同じ端の月を持つ部分 p に付ける（§123。月が変わった端の日付は消す） */
+function withEdgeDates(p: AllocationPiece, row: AllocationPiece): AllocationPiece {
+  const sd = p.startMonth === row.startMonth ? (row.startDate ?? "").trim() : "";
+  const ed = p.endMonth === row.endMonth ? (row.endDate ?? "").trim() : "";
+  return { startMonth: p.startMonth, endMonth: p.endMonth, allocation: p.allocation, ...(sd ? { startDate: sd } : {}), ...(ed ? { endDate: ed } : {}) };
 }
 
 /** 配分の文字列が同じ値か（"0.5" と "0.50" は同じ） */
@@ -344,21 +360,26 @@ function sameAllocation(a: string, b: string): boolean {
  * rows は同じメンバー・契約の行。返り値は keep（残す行 id → 新しい終了月）と drop（消す行 id）。
  * 残すのは各まとまりの最初の行（期間順）。preferIds にある行（元からある行）があればそちらを残す
  */
-export function mergeAdjacent<T extends AllocationPiece & { id: string }>(rows: readonly T[], preferIds: ReadonlySet<string> = new Set()): { keep: Map<string, { startMonth: YearMonth; endMonth: YearMonth }>; drop: string[] } {
+export function mergeAdjacent<T extends AllocationPiece & { id: string }>(rows: readonly T[], preferIds: ReadonlySet<string> = new Set()): { keep: Map<string, { startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string }>; drop: string[] } {
   const sorted = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth).slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : 0));
   const groups: T[][] = [];
   for (const r of sorted) {
     const g = groups[groups.length - 1];
     const prev = g?.[g.length - 1];
-    if (g && prev && addMonths(prev.endMonth, 1) === r.startMonth && sameAllocation(prev.allocation, r.allocation)) g.push(r);
+    // 月の途中で終わる・始まる行（§123）とはまとめない（まとめると日割りの月が丸 1 か月になる）
+    if (g && prev && addMonths(prev.endMonth, 1) === r.startMonth && sameAllocation(prev.allocation, r.allocation) && !(prev.endDate ?? "").trim() && !(r.startDate ?? "").trim()) g.push(r);
     else groups.push([r]);
   }
-  const keep = new Map<string, { startMonth: YearMonth; endMonth: YearMonth }>();
+  const keep = new Map<string, { startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string }>();
   const drop: string[] = [];
   for (const g of groups) {
     if (g.length < 2) continue;
     const keeper = g.find((r) => preferIds.has(r.id)) ?? (g[0] as T);
-    keep.set(keeper.id, { startMonth: (g[0] as T).startMonth, endMonth: (g[g.length - 1] as T).endMonth });
+    const first = g[0] as T;
+    const lastRow = g[g.length - 1] as T;
+    const sd = (first.startDate ?? "").trim();
+    const ed = (lastRow.endDate ?? "").trim();
+    keep.set(keeper.id, { startMonth: first.startMonth, endMonth: lastRow.endMonth, ...(sd ? { startDate: sd } : {}), ...(ed ? { endDate: ed } : {}) });
     for (const r of g) if (r !== keeper) drop.push(r.id);
   }
   return { keep, drop };

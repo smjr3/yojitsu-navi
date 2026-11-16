@@ -453,12 +453,12 @@ test("影響ダイアログ: 所属チームだけ変える行の追加は「組
   const first = page.locator("table.yn-me-table tbody tr.yn-me-group").first();
   await first.getByRole("button", { name: /の変更を追加/ }).click();
   // 変える月は既定で翌月（過去を変えない）
-  await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11");
+  await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11-01");
   const team = d.locator("#yn-me-f-team_id");
   const current = await team.inputValue();
   const other = await team.locator("option").evaluateAll((opts, cur) => opts.map((o) => (o as HTMLOptionElement).value).find((v) => v !== "" && v !== cur)!, current);
   await team.selectOption(other);
-  await d.locator("#yn-me-f-effective_from").fill("2026-04");
+  await d.locator("#yn-me-f-effective_from").fill("2026-04-01");
   await d.locator('[data-role="submit"]').click();
   const impact = d.locator(".yn-me-impact");
   await expect(impact).toContainText("過去の計算結果が変わります（影響: 7 か月）");

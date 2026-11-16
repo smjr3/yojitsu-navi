@@ -139,6 +139,10 @@
 
 `myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。
 
+## 開始日・終了日（SPEC §123）— `src/core/periodDates.ts`
+
+アサイン・運用保守以外の予定は月の列のまま、任意の `startDate` / `endDate` を持つ（`startDateOf` / `endDateOf` は月の中の日付で、月の初日・末日でないものだけ返す）。端の月の割合は `periodShareAt(p, month, holidays)`（期間外 0、日付のある端の月は営業日の割合、ほかは 1）。祝日の集合ごとに月の営業日をキャッシュするので、`holidays` は同じ `HolidaySet` を渡し回す（Model は `ForecastContext.holidays` と `buildMemberMonths` の最後の引数、画面の変更の影響・目標の警告は `holidaysOfInputs`、リソース計画画面は `holidayCache().set`）。`valueAt(rows, m, holidays)` は holidays を渡したときだけ日割り（「＋ 変更」の「今の値」は入れた値のまま）。編集系（`editMonthAllocation`・`replaceRange`・`mergeAdjacent`）は端の日付を元の行の端の月を持つ部分に残し、日付のある所ではまとめない。画面の日付 1 欄との変換は `splitPeriodDate`（月の初日・末日なら日付の列は空）。
+
 ## 月の稼働時間（SPEC §114）— `src/core/monthHours.ts`
 
 `createMonthHours(holidays, hoursPerBusinessDay)` は「月 → 営業日数 × 1 日の時間」の関数を返す（月ごとにキャッシュ）。`holidays` は csv の行（`Holiday[]`）か作成済みの `HolidaySet`（行の無い年を国民の祝日で補う数え方を Model と揃える）。Model は `ForecastContext.monthHours` と `buildMemberMonths(…, monthHours)` に同じ関数を渡す。画面（変更の影響・目標の警告）は `PlanInputs.holidays`（編集中の祝日）があればそれで作り直す（`monthHoursOfInputs`）。リソース計画画面は編集中の `holidays` 文書から作り、文書が変わったときだけ作り直す。

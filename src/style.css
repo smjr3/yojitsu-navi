@@ -3037,6 +3037,15 @@ html:has(dialog.yn-dialog[open]) {
   outline: 1px dashed color-mix(in srgb, var(--yn-empty-text) 55%, transparent);
   outline-offset: -3px;
 }
+/* 月の途中から・途中までの月（開始日・終了日。§123）。日割りした人月を出し、左上の角に印。日付は吹き出し */
+.yn-me-plan-cell.is-partial {
+  background-image: linear-gradient(135deg, var(--yn-text-muted) 0 5px, transparent 5px);
+}
+.yn-plan-tip-days {
+  color: var(--yn-text-muted);
+  font-size: calc(12px * var(--yn-fs));
+  white-space: nowrap;
+}
 .yn-chip-empty {
   background: var(--yn-empty-bg);
   color: var(--yn-empty-text);
