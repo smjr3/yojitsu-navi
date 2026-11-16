@@ -153,7 +153,7 @@ if (vm) {
   display(chartFigure({
     title: T.charts.monthlyTitle,
     subtitle: periodJa(vm.scope.period),
-    legend: monthlyLegend(dark),
+    legend: monthlyLegend(dark, vm.series),
     draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
     after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
   }));
