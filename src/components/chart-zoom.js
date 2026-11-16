@@ -111,12 +111,13 @@ export function chartZoomButton({ title, subtitle = null, legend = null, draw, r
 /**
  * グラフの枠。凡例の右に拡大ボタンを置き、本体は幅に合わせて描き直す。
  * after には枠内でグラフの下に置くもの（表の折りたたみなど）を渡す。
+ * controls は凡例の前に置く切り替えなど（拡大表示には出さない）。
  */
-export function chartFigure({ title, subtitle = null, legend = null, draw, after = null, className = "", rotateHint = true }) {
+export function chartFigure({ title, subtitle = null, legend = null, controls = null, draw, after = null, className = "", rotateHint = true }) {
   const plot = html`<div class="yn-chart-plot"></div>`;
   const fig = html`<figure class=${`yn-card yn-chart-card ${className}`.trim()}>
     <div class="yn-chart-head">
-      <div class="yn-chart-head-legend">${legend}</div>
+      <div class="yn-chart-head-legend">${controls}${legend}</div>
       ${chartZoomButton({ title, subtitle, legend, draw, rotateHint })}
     </div>
     ${plot}

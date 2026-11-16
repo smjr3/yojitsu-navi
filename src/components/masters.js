@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planBudgetChart, planImpact, planRoomAt, planTargetAlerts, rateFor } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -80,7 +80,7 @@ import { combobox } from "./combobox.js";
 import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
 import { chartFigure } from "./chart-zoom.js";
-import { planLoadChart, planLoadLegend } from "./work.js";
+import { planAmountChart, planAmountLegend, planLoadChart, planLoadLegend } from "./work.js";
 import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt } from "../core/ledger.js";
 
 /** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
@@ -237,6 +237,8 @@ function safeStorage(kind) {
 
 // リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
 const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+/** リソース計画のグラフの単位（§122）: 人月（既定。保存しない）／金額 */
+const PLAN_CHART_KEY = "yojitsu-navi:plan-chart";
 /** リソース計画の列ごとの絞り込み・並べ替え（§99。タブ単位） */
 const PLAN_LIST_KEY = "yojitsu-navi:plan-list";
 // リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
@@ -427,6 +429,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertsAll: false,
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
+    /** グラフの単位（§122）。このブラウザに覚える */
+    chartMode: local.get(PLAN_CHART_KEY) === "amount" ? "amount" : "pm",
     /** 列ごとの絞り込み（列 key → 絞り込み。月の列は "m:YYYY-MM"）と並べ替え（§99）。タブ単位で覚える */
     ...loadPlanList(),
   };
@@ -1872,15 +1876,46 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
     const planChart = () => {
       const isDark = () => document.documentElement.dataset.theme === "dark";
-      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       planChartBuild = planChart;
+      const subtitle = `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`;
+      const controls = planChartModeSwitch();
+      // 金額（§122）: 組織の担当案件の計画の額を顧客ごとに積み上げ、予算と目標の上限を重ねる。絞り込み・検索には連動しない
+      if (plan.chartMode === "amount") {
+        const data = planAmountFor(plan.teamId, tree, treeMonth, months);
+        return chartFigure({
+          title: T.plan.chartAmountTitle,
+          subtitle,
+          controls,
+          legend: planAmountLegend(data, isDark()),
+          draw: (width, height) => planAmountChart({ data, dark: isDark(), width, height, unit: savedState(model).unit }),
+          className: "yn-me-plan-chart is-amount",
+        });
+      }
+      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       return chartFigure({
         title: T.plan.chartTitle,
-        subtitle: `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`,
+        subtitle,
+        controls,
         legend: planLoadLegend(isDark()),
         draw: (width, height) => planLoadChart({ data, dark: isDark(), width, height }),
         className: "yn-me-plan-chart",
       });
+    };
+    /** グラフの単位の切り替え（人月／金額。§122） */
+    const planChartModeSwitch = () => {
+      const btn = (mode, label) => {
+        const b = h("button", { type: "button", class: "yn-seg-btn", "aria-pressed": String(plan.chartMode === mode), "data-fk": `plan:chart:${mode}` }, label);
+        b.addEventListener("click", () => {
+          if (plan.chartMode === mode) return;
+          plan.chartMode = mode;
+          if (mode === "pm") local.remove(PLAN_CHART_KEY);
+          else local.set(PLAN_CHART_KEY, mode);
+          root.querySelector(".yn-me-plan-chart")?.replaceWith(planChart());
+          focusKey(`plan:chart:${mode}`);
+        });
+        return b;
+      };
+      return h("div", { class: "yn-seg yn-me-plan-chart-mode", role: "group", "aria-label": T.plan.chartModeLabel }, btn("pm", T.plan.chartModePm), btn("amount", T.plan.chartModeAmount));
     };
 
     /** 計画が入っていない人だけに絞る（§116）。いなければ出さない */
@@ -2045,7 +2080,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}</h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span><span class="yn-me-help">${rich(T.plan.amountHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -2402,6 +2437,60 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       afterNote.hidden = scope !== "after";
       cellEditor.refresh();
     };
+    // 目標の上限までの余力（§122）: 案件の上限 − 今の計画の額（入力中の値との差を、この人の 1 人月の額で人月に直す）。目標の無い案件は出さない
+    const roomOf = (contractId) => (model ? planRoomAt(model, planInputsNow(), contractId, month) : null);
+    const perPm = (() => {
+      const rate = rateFor(planInputsNow().masters, r.memberId, month).hourlyRate;
+      return Number.isFinite(rate) ? rate * hoursOfMonth(month) : 0;
+    })();
+    const roomEls = new Map();
+    const rooms = new Map();
+    for (const { a } of inputs) {
+      if (rooms.has(a.contractId)) continue;
+      const room = roomOf(a.contractId);
+      if (room?.room == null || perPm <= 0) continue;
+      rooms.set(a.contractId, room);
+      roomEls.set(a.contractId, h("p", { class: "yn-plan-pop-room", "data-contract": a.contractId, "aria-live": "polite" }));
+    }
+    const newRoomEl = h("p", { class: "yn-plan-pop-room is-new", "aria-live": "polite", hidden: true });
+    const pmOf = (text) => {
+      const v = parseNumberCell(allocationFromInput(text, "personMonth", 0));
+      return Number.isFinite(v) ? v : 0;
+    };
+    /** 選んだ作業（案件）のこの月の契約 */
+    const pickedContract = () => {
+      const picked = proj.getValue();
+      if (!picked || picked.startsWith(OUTSIDE_OPTION)) return null;
+      const p = cIndex().projects.get(picked);
+      return p ? (contractSegments(p.contracts, month, month)[0]?.contractId ?? null) : null;
+    };
+    const showRoom = (el, yen) => {
+      const over = yen < -0.5;
+      const text = fmt(over ? T.plan.roomOver : T.plan.roomLeft, { pm: pm(Math.abs(yen) / perPm) });
+      el.classList.toggle("is-over", over);
+      el.textContent = text;
+      el.title = fmt(T.plan.roomTitle, { cap: money(rooms.get(el.dataset.contract)?.cap ?? 0, "yen") });
+    };
+    const updateRooms = () => {
+      // 入力中の値の差（同じ案件の欄は合わせる）
+      const delta = new Map();
+      for (const { a, input, before } of inputs) delta.set(a.contractId, (delta.get(a.contractId) ?? 0) + pmOf(input.value) - pmOf(before));
+      const nc = pickedContract();
+      if (nc) delta.set(nc, (delta.get(nc) ?? 0) + pmOf(newNum.value));
+      for (const [id, el] of roomEls) showRoom(el, rooms.get(id).room - (delta.get(id) ?? 0) * perPm);
+      newRoomEl.hidden = true;
+      if (nc && !roomEls.has(nc) && perPm > 0) {
+        if (!rooms.has(nc)) {
+          const room = roomOf(nc);
+          if (room?.room != null) rooms.set(nc, room);
+        }
+        if (rooms.has(nc)) {
+          newRoomEl.dataset.contract = nc;
+          showRoom(newRoomEl, rooms.get(nc).room - (delta.get(nc) ?? 0) * perPm);
+          newRoomEl.hidden = false;
+        }
+      }
+    };
     const form = html`<form class="yn-plan-pop-form" novalidate>
       <header class="yn-plan-pop-head">
         <div class="yn-title-with-tip"><h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>${infoTip(T.plan.editLead, { label: T.masters.dialogTipLabel })}</div>
@@ -2410,13 +2499,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${inputs.length
         ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
             const c = cIndex().byId.get(a.contractId);
-            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`;
+            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span>${roomEls.get(a.contractId) ?? null}</li>`;
           })}</ul>`
         : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
       <ul class="yn-plan-pop-rows yn-plan-pop-outside">${outs.map((o) => html`<li><label for=${o.input.id}><span class="yn-plan-pop-project">${o.label}</span><span class="yn-me-hint">${o.before === null ? T.planEdit.outsideOverlapHint : o.type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub}</span></label><span class="yn-plan-pop-val">${o.input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`)}</ul>
       <div class="yn-plan-pop-new">
         <label for="yn-plan-pop-project">${T.plan.editNewRow}</label>
         <div class="yn-plan-pop-new-row">${proj}<span class="yn-plan-pop-val">${newNum}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></div>
+        ${newRoomEl}
       </div>
       <fieldset class="yn-plan-pop-scope"><legend>${T.plan.scopeLabel}</legend><div class="yn-radio-group">${scopeRadios}</div>${afterNote}</fieldset>
       ${msg}${note}
@@ -2430,7 +2520,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </div>
     </form>`;
     afterNote.hidden = scope !== "after";
+    updateRooms();
+    // 作業の選択は hidden の欄なので input が来ないことがある。change でも数え直す
+    form.addEventListener("change", updateRooms);
     form.addEventListener("input", () => {
+      updateRooms();
       msg.textContent = "";
       if (confirmed) reset();
     });
@@ -3316,6 +3410,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertMemo = { key, edited, value };
     return value;
   }
+  // ---- 金額と目標の上限（§122） ----------------------------------------------
+  /** 今の計画（編集中は編集後）の材料。編集の内容が同じなら作り直さない */
+  let planInputsMemo = null;
+  function planInputsNow() {
+    if (!planInputsMemo || planInputsMemo.validation !== validation) planInputsMemo = { validation, value: planInputsOf(validation.dataset) };
+    return planInputsMemo.value;
+  }
+  let amountMemo = null;
+  /** グラフ「金額」のデータ（組織・組織の月・表示する月・編集の内容が同じなら前の結果） */
+  function planAmountFor(teamId, tree, treeMonth, months) {
+    const key = `${teamId ?? ""}|${treeMonth}|${months.join(",")}`;
+    if (amountMemo && amountMemo.key === key && amountMemo.validation === validation) return amountMemo.value;
+    const value = model ? planBudgetChart(model, planInputsNow(), { teamId, tree }, months) : { customers: [], months: [] };
+    amountMemo = { key, validation, value };
+    return value;
+  }
+
   /** 目標の名前（種類・名前・終了月） */
   function alertTargetName(a) {
     const t = a.evaluation.target;

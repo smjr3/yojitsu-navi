@@ -1883,6 +1883,7 @@ export default {
     unknownMember: "（存在しないメンバー）",
     unitNote: "・ リーダー: {leader}",
     unitHelp: "組織を選ぶと、配下の組織とメンバーを含めて表示します（他の組織から、この組織の案件に入る人は「応援」）。",
+    amountHelp: "<strong>金額:</strong> グラフを「金額」にすると、組織の担当案件の計画の額を顧客ごとに積み上げ、予算と目標の上限（予算 ×（1 − 目標の残予算率））を重ねます。セルを直すときは、目標のある案件に上限までの残り（人月）が出ます。目標は案件・顧客・チームの順にいちばん細かいものを使います。",
     targetAlertHelp: "<strong>目標:</strong> 今の計画（編集中は編集後）の着地見込み（計画値）で、目標（マスタ編集の「目標」）の残予算率を下回る見込みのものを表の上に出します。組織を選ぶと、配下の組織と担当案件の目標が対象です。月の見出しの「目標」は、その月の計画が予算 ×（1 − 目標の残予算率）を超える月です。保存は止めません。",
     // 目標の警告（§110）
     targetAlert: {
@@ -1926,6 +1927,22 @@ export default {
     chartOverShort: "{n}人",
     chartOverTip: "1.0 超",
     chartAria: "月別の合計。運用保守と運用保守以外の人月の積み上げ棒と、人数 × 1.0 人月の破線。1.0 人月を超える人がいる月はその人数。値は下の表の合計行で確認できます。",
+    // グラフの単位の切り替えと金額のグラフ（§122）
+    chartModeLabel: "グラフの単位",
+    chartModePm: "人月",
+    chartModeAmount: "金額",
+    chartAmountTitle: "月別の計画の額",
+    chartAmountAria: "月別の計画の額。担当案件の計画の額を顧客ごとに積み上げた棒と、予算の線、目標の上限の赤い破線。上限を超える月は「上限超」。",
+    chartAmountPlan: "計画の額",
+    chartAmountRoom: "上限まで",
+    chartAmountOver: "上限超",
+    chartAmountOverShort: "超",
+    chartAmountOthers: "その他",
+    chartAmountNoCustomer: "顧客名なし",
+    // セルの編集欄の目標の上限までの余力（§122）
+    roomLeft: "上限まで あと {pm}人月",
+    roomOver: "目標の上限を {pm}人月 超え",
+    roomTitle: "この月の目標の上限 {cap}",
     cellTitle: "{month}: {pm} 人月",
     allocPerMonth: "{pm} 人月/月",
     allocNotNumber: "（配分が数値ではありません）",
