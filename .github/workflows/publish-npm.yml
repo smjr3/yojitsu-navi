@@ -1,36 +1,53 @@
-# npmjs.com への公開（SPEC §83、手順は docs/RELEASE.md）
+# npmjs.com への公開とリリース（SPEC §83・§84・§121、手順は docs/RELEASE.md）
 #
-# タグ v<版>（例 v0.1.0）の push で yojitsu-navi を公開する（パッケージは 1 つ。SPEC §84）。
-# 版とタグの一致 → 型チェック・テスト → ビルド → npm publish（scripts/ci/publish-npm.mjs）。
-# 認証は Settings > Secrets and variables > Actions の NPM_TOKEN。
-# provenance（--provenance）は付けない（npm のページにリポジトリのアカウント名が出るため）。
+# main の packages/app/package.json が変わったとき（版を上げる PR のマージ）に動く。
+# その版がまだなら、型チェック・テスト・ビルド → npm publish → タグ v<版> と GitHub のリリース（説明は CHANGELOG.md のその版）。
+# 公開済みなら最初の確認だけで終わる（依存のインストールもしない）。途中で失敗したら Actions の Run workflow で残りだけやり直せる。
+# 認証: npm の trusted publishing（このファイル名で設定したとき。OIDC）、無ければ Secrets の NPM_TOKEN。
+# provenance は付けない（NPM_CONFIG_PROVENANCE=false。SPEC §83）。
 
 name: Publish npm
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["packages/app/package.json"]
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # タグとリリースを作る
+  id-token: write # npm の trusted publishing（OIDC）
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24 # trusted publishing は npm 11.5.1 以上・Node 22.14 以上
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      - name: 公開が要るか
+        id: check
+        run: node scripts/ci/publish-npm.mjs --check
+
       - name: 依存インストール
+        if: steps.check.outputs.needed == 'true'
         run: npm ci --no-audit --no-fund
 
-      - name: 公開
+      - name: 公開とリリース
+        if: steps.check.outputs.needed == 'true'
         run: node scripts/ci/publish-npm.mjs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "false"

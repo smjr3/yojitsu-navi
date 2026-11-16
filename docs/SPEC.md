@@ -1219,7 +1219,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ## 83. npmjs.com に公開する（2026-11-02 依頼者）
 §82 の質問に「npmjs.com にも公開」、ライセンスは「MIT」と回答。社内 GitLab の Package Registry への公開（§43）も残す。
 - ライセンスは MIT（ルートの `LICENSE`。著作権者は「yojitsu-navi contributors」と書き、個人名・年を書かない）。`core:build`・`app:build` がパッケージにも写す。画面フォントは SIL OFL 1.1 のまま（§46）。
-- 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
+- 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ（→ §121 で版上げのマージから自動で公開・タグ・リリース）。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
 - `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
 - `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。
 
@@ -1949,3 +1949,11 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - すべて本体に入っていれば「取り下げてください」と出す。MR でファイルを消した・読めないファイルがあれば載せ直せない（GitLab で直す）。
 - デモ（§29）では本体が変わらないので競合は起きず、ボタンは出ない。
 
+
+## 121. リリースを自動で終わらせる（2026-11-16 依頼者）
+「リリースとかも勝手に終わらせてほしい」への対応。§83 のタグの手作り（GitHub の Releases でタグ `v<版>` を作る）をやめる。
+- `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）は、`main` の `packages/app/package.json` が変わったとき（版を上げる PR のマージ）と手動（Run workflow）で動く。タグの push では動かない。
+- 最初に、その版が npmjs.com にあるか（認証なしで読む）と GitHub のリリースがあるかだけを調べ、両方あれば依存も入れずに終わる（Actions の時間を使わない）。無ければ型チェック・テスト・ビルド → `npm publish` → タグ `v<版>` とリリース（`gh release create`、説明は CHANGELOG.md のその版。`scripts/lib/release.mjs` の `releaseNotes()`）。済んだ分は飛ばすので、失敗しても Run workflow で残りだけやり直せる。
+- 版上げは `npm run version:bump -- patch|minor|major|<x.y.z>`（`scripts/bump-version.mjs`）。ルートと `packages/app` の `package.json`・`package-lock.json` の版をそろえ、CHANGELOG.md の「## 次の版」を「## <版>」にする（無ければ止まる）。開発元だけで使う（利用環境に配らない）。
+- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）か Secrets の `NPM_TOKEN`。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。trusted publishing は `repository.url` が要るので、切り替えるまで `repository` は入れない（§82・§83 のまま）。
+- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）。
