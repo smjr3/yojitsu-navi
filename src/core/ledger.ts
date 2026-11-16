@@ -168,7 +168,9 @@ function sameNumber(a: number, b: number): boolean {
 export function periodHistory(rows: readonly PeriodRowInput[]): PeriodEntry[] {
   const valid = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth);
   const invalid = rows.filter((r) => !valid.includes(r));
-  const sorted = valid.slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : a.endMonth < b.endMonth ? -1 : a.endMonth > b.endMonth ? 1 : a.contractId < b.contractId ? -1 : a.contractId > b.contractId ? 1 : 0));
+  // 実際の開始日・終了日の順（同じ月に始まる行も CSV の順に依らない。§121）
+  const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  const sorted = valid.slice().sort((a, b) => cmp(periodBounds(a).from, periodBounds(b).from) || cmp(periodBounds(a).to, periodBounds(b).to) || cmp(a.contractId, b.contractId));
   const out: PeriodEntry[] = [];
   let maxEnd: string | null = null;
   let prev: PeriodRowInput | null = null;
@@ -263,7 +265,12 @@ export function replaceRange(
   const valid = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth);
   const inRange = valid.filter((r) => r.startMonth <= to && r.endMonth >= from);
   // 期間の中の重なり（同じ月に 2 行）は、どれを置き換えるか決められない
-  const sorted = inRange.slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : 0));
+  // 実際の開始日の順（同じ月に始まる行も CSV の順に依らない。§121）
+  const sorted = inRange.slice().sort((a, b) => {
+    const x = periodBounds(a).from;
+    const y = periodBounds(b).from;
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
   for (let i = 1; i < sorted.length; i++) {
     const a = sorted[i - 1] as RangeRow;
     const b = sorted[i] as RangeRow;
@@ -307,8 +314,10 @@ export function replaceRange(
   if (!isZeroText(value)) {
     for (const sg of segments(from, to)) {
       // 期間の端が元の行の端と同じ月なら、その開始日・終了日を引き継ぐ（§121。月の値だけ変えたとき日付が消えないように）
-      const startDate = inRange.find((r) => r.contractId === sg.contractId && r.startMonth === sg.startMonth && sd(r) !== "");
-      const endDate = inRange.find((r) => r.contractId === sg.contractId && r.endMonth === sg.endMonth && ed(r) !== "");
+      // ほかの行がその月のもっと前（後）を受け持っていれば引き継がない（別々の期間の内側の端どうしを 1 行にまとめない）
+      const sameMonthRows = (m: YearMonth) => inRange.filter((r) => r.contractId === sg.contractId && r.startMonth <= m && m <= r.endMonth);
+      const startDate = inRange.find((r) => r.contractId === sg.contractId && r.startMonth === sg.startMonth && sd(r) !== "" && !sameMonthRows(sg.startMonth).some((o) => o !== r && periodBounds(o).from < sd(r)));
+      const endDate = inRange.find((r) => r.contractId === sg.contractId && r.endMonth === sg.endMonth && ed(r) !== "" && !sameMonthRows(sg.endMonth).some((o) => o !== r && periodBounds(o).to > ed(r)));
       // 開始日・終了日を指定したとき（§121）は、期間の最初・最後の月にそれを付ける
       const givenStart = dates && sg.startMonth === from ? (dates.startDate ?? "").trim() : null;
       const givenEnd = dates && sg.endMonth === to ? (dates.endDate ?? "").trim() : null;

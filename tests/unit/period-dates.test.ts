@@ -196,4 +196,19 @@ describe("同じ月の中で終わって・始まる行", () => {
     const r = replaceRange(rows.map((x) => ({ ...x, id: x.rowId, value: String(x.value) })), "2027-01", "2027-03", "0.3", seg);
     expect(r.ok).toBe(true);
   });
+
+  it("CSV の順が逆（20 日からの行が先）でも重なりにしない。11 月だけの置き換えで内側の端の日付を 1 行にまとめない", () => {
+    const rows = [
+      { rowId: "b", contractId: "C1", startMonth: M, endMonth: "2027-03", startDate: "2026-11-20", value: 0.5 },
+      { rowId: "a", contractId: "C1", startMonth: "2026-04", endMonth: M, endDate: "2026-11-13", value: 1 },
+    ];
+    expect(periodHistory(rows).map((e) => [e.rowId, e.kind])).toEqual([["a", "start"], ["b", "restart"]]);
+    const seg = (from: string, to: string) => [{ contractId: "C1", startMonth: from, endMonth: to }];
+    const r = replaceRange(rows.map((x) => ({ ...x, id: x.rowId, value: String(x.value) })), M, M, "0.8", seg);
+    expect(r.ok).toBe(true);
+    const all = r.ok ? [...r.edit.updates.values(), ...r.edit.adds] : [];
+    const nov = all.find((x) => x.startMonth === M && x.endMonth === M)!;
+    expect(nov).toMatchObject({ startDate: "", endDate: "", value: "0.8" });
+    for (const x of all) expect(periodDateErrors(x)).toEqual([]);
+  });
 });
