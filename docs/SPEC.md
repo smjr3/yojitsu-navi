@@ -1967,5 +1967,5 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - ID を名前で出す（§115 の横展開）:
   - 正式な案件IDの無い案件の「候補の正式な案件」は「顧客 / 案件名（正式な案件ID）」（一覧に無い ID はそのまま）。
   - マスタに無い正式な案件は顧客名・案件名を先頭にし、正式な案件ID は「列」で選べる列（Excel には常に出す。§106.1）。
-  - データ検証（§14）のメッセージの社員番号・案件ID に名前を添える（「メンバー M001（山田 太郎）」「案件 C001（顧客 / 案件名）」。マスタに無い ID・名前が ID と同じときはそのまま）。社員番号の並び（役職の単価が無い人・GitLab ユーザー名の重複）は「: M001（…）、M002（…）」、作業の対応表の期間の重なりは「別の案件 C001（…） と C002（…）」。未紐付けの理由は英語のコードでなく §103 の名前（「紐付けルールなし」など）。
-- 実装: `src/components/fold-section.js`、`src/components/table.js`（`previewRows`）、`src/data-check.md`、`src/core/validate.ts`（`createNames`）、`src/core/taskCodes.ts`（`validateMappingPeriods` の `label`）。
+  - データ検証（§14）のメッセージの社員番号・案件ID に名前を添える（「メンバー M001（山田 太郎）」「案件 C001（顧客 / 案件名）」。マスタに無い ID・名前が ID と同じときはそのまま）。社員番号の並び（役職の単価が無い人・GitLab ユーザー名の重複）は「: M001（…）、M002（…）」、作業の対応表の期間の重なりは「別の案件 C001（…） と C002（…）」。未紐付けの理由は英語のコードでなく §103 の名前（「紐付けルールなし」など）。マスタ編集・リソース計画の検証の一覧（§115）は今までどおり ID を名前に置き換えて出す（添えた名前は外してから置き換える）。
+- 実装: `src/components/fold-section.js`、`src/components/table.js`（`previewRows`）、`src/data-check.md`、`src/core/validate.ts`（`createNames`）、`src/core/taskCodes.ts`（`validateMappingPeriods` の `label`）、`src/components/masters.js`（`issueMessage`）。
