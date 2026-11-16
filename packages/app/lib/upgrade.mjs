@@ -2,31 +2,15 @@
 // update → 設定の互換確認（SPEC §96）→ 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト → ビルド。
 // 依存とテストは要るときだけ動かす（SPEC §104）。失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CliError, VENDOR_CACHE, check, configCompat, missingConfigReport, update } from "./project.mjs";
+import { fileHash, installKey, installUpToDate, manifestHash, writeInstallStamp } from "./install-stamp.mjs";
+import { CliError, check, configCompat, missingConfigReport, update } from "./project.mjs";
 
 /** 依存を入れたときの印（node_modules の中。lock ファイル・Node の版・OS が同じなら入れ直さない。SPEC §104） */
-export const INSTALL_STAMP = "node_modules/.yojitsu-navi-install.json";
-
-/** 依存の中身を決めるもの（package-lock.json・依存込みのキャッシュの有無・Node の主な版・OS） */
-export function installKey(dir, nodeVersion = process.version, platform = `${process.platform}-${process.arch}`) {
-  const lock = join(dir, "package-lock.json");
-  const h = createHash("sha256").update(existsSync(lock) ? readFileSync(lock) : Buffer.alloc(0)).digest("hex");
-  return { lock: h, vendor: existsSync(join(dir, VENDOR_CACHE)), node: nodeVersion.split(".")[0], platform };
-}
-
-/** 前に入れた依存がそのまま使えるか（node_modules があり、印が今の lock ファイルなどと同じ） */
-export function installUpToDate(dir, key = installKey(dir)) {
-  try {
-    const s = JSON.parse(readFileSync(join(dir, INSTALL_STAMP), "utf-8"));
-    return s.lock === key.lock && s.vendor === key.vendor && s.node === key.node && s.platform === key.platform;
-  } catch {
-    return false;
-  }
-}
+// 依存を入れ直さなくてよいかの印は CI（scripts/ci/install.mjs）と同じもの（scripts/lib/install-stamp.mjs を npm run app:build が写す）
+export { INSTALL_STAMP, installKey, installUpToDate } from "./install-stamp.mjs";
 
 /** 社内で手を加えたコード（テストを動かす理由）。社内の版のまま残したパッケージのファイルと、社内で足した画面・スクリプト・テスト・設定のファイル */
 export function localCodeChanges(kept, extras) {
@@ -106,7 +90,9 @@ function preview(o, testChoice) {
   }
   const unresolved = r.conflicts.filter((c) => !r.kept.includes(c.path) && !r.keptRemoved.includes(c.path) && !r.overwritten.includes(c.path));
   const lockNext = join(o.pkgDir, "template", "package-lock.json");
-  const nextKey = { ...installKey(dir), lock: existsSync(lockNext) ? createHash("sha256").update(readFileSync(lockNext)).digest("hex") : installKey(dir).lock };
+  const pkgNext = join(o.pkgDir, "template", "package.json");
+  const now = installKey(dir);
+  const nextKey = { ...now, lock: existsSync(lockNext) ? fileHash(lockNext) : now.lock, manifest: existsSync(pkgNext) ? manifestHash(pkgNext) : now.manifest };
   const code = localCodeChanges([...r.kept, ...r.keptRemoved], r.extras);
   const tests = testChoice === true ? "動かす（指定あり）" : testChoice === false ? "動かさない（指定あり）" : code.length ? `動かす（社内で手を加えたコード ${code.length} ファイル）` : "動かさない（社内で手を加えたコードが無い）";
   const m = missingConfigReport(o.pkgDir, dir);
@@ -197,8 +183,9 @@ export async function upgrade(o) {
         // CI と同じ入れ方（依存込みのプロジェクトは vendor/npm-cache から。社内ミラーは NPM_CONFIG_REGISTRY・.npmrc）
         const script = join(dir, "scripts", "ci", "install.mjs");
         const [cmd, args, shell] = existsSync(script) ? [process.execPath, [script], false] : npm(["ci", "--no-audit", "--no-fund"]);
-        const r = await run(cmd, args, { cwd: dir, env, shell, out });
-        if (r.ok && existsSync(join(dir, "node_modules"))) writeFileSync(join(dir, INSTALL_STAMP), `${JSON.stringify(key)}\n`);
+        // --install（または印が合わない）ときは install.mjs にも入れ直させる（印が残っていても飛ばさない。SPEC §128）
+        const r = await run(cmd, args, { cwd: dir, env: { ...env, YOJITSU_FRESH_INSTALL: "1" }, shell, out });
+        if (r.ok) writeInstallStamp(dir, key);
         return r;
       },
     },
