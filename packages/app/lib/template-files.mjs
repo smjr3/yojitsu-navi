@@ -31,10 +31,13 @@ const DEV_FILES = new Set([
   "CLAUDE.md",
   "CONTRIBUTING.md",
   "scripts/build-app.mjs",
+  "scripts/bump-version.mjs",
   "scripts/check-publish.mjs",
   "scripts/lib/image-detect.mjs",
   "scripts/lib/package-guard.mjs",
   "scripts/lib/package-guard.d.mts",
+  "scripts/lib/release.mjs",
+  "scripts/lib/release.d.mts",
   "scripts/ci/publish-npm.mjs",
   "scripts/make-favicons.mjs",
 ]);
@@ -42,7 +45,7 @@ const DEV_FILES = new Set([
 const DEV_DIRS = [".github/", "packages/"];
 
 /** 開発元だけで使う package.json の scripts（利用環境の package.json から外す。中のファイルを配らないので） */
-export const DEV_SCRIPTS = ["app:build", "app:pack", "test:e2e", "test:e2e:smoke"];
+export const DEV_SCRIPTS = ["app:build", "app:pack", "version:bump", "test:e2e", "test:e2e:smoke"];
 
 /** サンプルではなく、利用環境でもそのまま使えるデータ（祝日・作業種類の既定） */
 export const STARTER_DATA_KEEP = new Set(["data/holidays.csv", "data/task-types.csv"]);

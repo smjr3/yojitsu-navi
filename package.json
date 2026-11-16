@@ -26,7 +26,8 @@
     "ci:check": "node scripts/ci/check.mjs",
     "verify:dist": "tsx scripts/verify-dist.ts",
     "app:build": "node scripts/build-app.mjs",
-    "app:pack": "node scripts/build-app.mjs --pack"
+    "app:pack": "node scripts/build-app.mjs --pack",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "dependencies": {
     "@observablehq/framework": "^1.13.4",
