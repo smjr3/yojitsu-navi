@@ -100,10 +100,10 @@ describe("マージ・取り下げ", () => {
     expect(calls[0]!.body).toEqual({ should_remove_source_branch: true, sha: "abc" });
   });
   it.each([
-    [401, "permission", "マージする権限"],
-    [403, "permission", "マージする権限"],
-    [405, "conflict", "今はマージできません"],
-    [406, "conflict", "今はマージできません"],
+    [401, "permission", "承認する権限"],
+    [403, "permission", "承認する権限"],
+    [405, "conflict", "今は承認できません"],
+    [406, "conflict", "今は承認できません"],
     [409, "conflict", "新しい変更"],
   ])("マージの失敗 HTTP %i → %s", async (status, kind, text) => {
     const { fetch } = route({ "PUT /merge_requests/7/merge": { status, body: { message: "x" } } });

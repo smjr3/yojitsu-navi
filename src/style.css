@@ -778,6 +778,13 @@ h3 {
 .yn-chip-icon {
   font-size: calc(10px * var(--yn-fs));
 }
+/* マージ待ちの変更がある対象の印（§126.3）。本体にはまだ入っていないので点線の枠 */
+.yn-chip-pending {
+  background: transparent;
+  color: var(--yn-link);
+  border: 1px dashed currentColor;
+  cursor: help;
+}
 /* ヘルプ（他部署の人。§71）: 応援（塗り）と見分けられるよう枠線だけ */
 .yn-chip-help {
   background: transparent;
@@ -3706,6 +3713,27 @@ html:has(dialog.yn-dialog[open]) {
 .yn-mr-bar .yn-section-title {
   margin: 0;
 }
+/* 件数の内訳（対応が必要・自分の分）。見出しのすぐ右、操作ボタンは右端（§126） */
+.yn-mr-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0 auto 0 0;
+  max-width: none;
+  font-size: calc(12px * var(--yn-fs));
+}
+.yn-mr-tally:empty {
+  display: none;
+}
+.yn-mr-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 畳んでいるときは枠を詰める（見出しの 1 段だけ） */
+.yn-mr.is-folded {
+  padding-block: 8px;
+}
 .yn-mr-count {
   display: inline-block;
   margin-left: 4px;
@@ -3757,6 +3785,22 @@ html:has(dialog.yn-dialog[open]) {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
+}
+/* 広い画面では見出しとボタンを 1 段に並べ、1 件の高さを抑える（§126） */
+@media (min-width: 768px) {
+  .yn-mr-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    align-items: center;
+  }
+  .yn-mr-item .yn-mr-actions {
+    margin-top: 0;
+    justify-content: flex-end;
+  }
+  .yn-mr-item .yn-mr-changes {
+    grid-column: 1 / -1;
+  }
 }
 .yn-mr-changes {
   margin-top: 8px;

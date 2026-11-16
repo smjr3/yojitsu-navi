@@ -76,6 +76,7 @@ import { numberButton } from "./breakdown.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
+import { pendingFor } from "../core/mrPending.js";
 import { combobox } from "./combobox.js";
 import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
@@ -307,8 +308,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
+  /** マージ待ちの変更がある対象（§126.3） */
+  let pendingMrs = {};
+  let pendingSig = "";
   // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) }, onPending: (p) => {
+    // マージ待ちの変更がある対象に印（§126.3）。変わったときだけ描き直す
+    const sig = JSON.stringify(Object.entries(p).map(([id, m]) => [id, [...m].map(([k, list]) => [k, list.map((x) => x.iid)])]));
+    if (sig === pendingSig) return;
+    pendingSig = sig;
+    pendingMrs = p;
+    // 操作と関係なく描き直すので、表の中のフォーカス（data-fk）と入力中の欄を保つ
+    const panelSlot = parts.panel;
+    const focused = panelSlot.contains(document.activeElement) ? document.activeElement : null;
+    if (focused && focused.matches("input, textarea, select")) return; // 入力中は描き直さない（次の描き直しで印が出る）
+    const key = focused?.closest?.("[data-fk]")?.dataset.fk;
+    renderPanel();
+    if (key && !panelSlot.contains(document.activeElement)) focusKey(key);
+  } });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
@@ -924,6 +941,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
   }
 
+  /** マージ待ちの変更がある対象の印（§126.3）。title に誰の何の変更か */
+  function pendingChip(fileIds, key) {
+    const list = pendingFor(pendingMrs, fileIds, key);
+    if (list.length === 0) return null;
+    return html`<span class="yn-chip yn-chip-pending" title=${list.map((m) => fmt(T.masters.pendingTitle, { name: m.author, title: m.title })).join("\n")}>${T.masters.pendingChip}${list.length > 1 ? ` ${integer(list.length)}` : ""}</span>`;
+  }
+
   /** 変更・エラーの数（台帳の対象・リソース計画の行のチップ） */
   function stateChips(changed, added, errors) {
     if (!changed && !added && !errors) return null;
@@ -1296,7 +1320,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           ${g.upcoming.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.upcoming, { n: integer(g.upcoming.length) })}</span>` : null}
           ${!g.shown.current && g.entries.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.notYet, { month: monthJa(g.shown.from) })}</span>` : null}
         </td>
-        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}</td>
+        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}${pendingChip([fileId], fileId === "targets" ? `${g.shown.record.target_type ?? ""}\u0001${g.shown.record.target_id ?? ""}` : rawKey)}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`next:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.addChangeAria, { key: keyText })} onclick=${() => openRowDialog({ fileId, mode: "add", template: latestRowOf(g, rowById), focus: `next:${g.shown.rowId}` })}>${T.ledger.addChange}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.editCurrentAria, { key: keyText, month: g.shown.from })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: g.shown.rowId, focus: `edit:${g.shown.rowId}` })}>${T.masters.edit}</button>
@@ -1967,7 +1991,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>

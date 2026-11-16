@@ -56,6 +56,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・稼働実績の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
+| `mr-pending.spec.ts` | マージ待ちの一覧の開閉・対応が必要なものを先に・競合ありのマージで載せ直してマージ・幅ごとのはみ出し（§126） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
 | `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の ▸・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
 | `plan-empty.spec.ts` | リソース計画で計画が何も入っていない人の印・「なし」のセル・「計画なし n人」の絞り込み、計画を入れると外れる、対象外（不在・所属なし）、390px・ダーク（SPEC §116） |
