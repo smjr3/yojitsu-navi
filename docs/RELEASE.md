@@ -23,7 +23,13 @@ npm パッケージ `yojitsu-navi` を npmjs.com に公開する手順です。�
 
 ### トークンを使わない公開（trusted publishing）
 
-npm は 2 段階認証を飛ばすトークンでの CI からの公開を段階的にやめる予定です。`publish-npm` は npm の trusted publishing（OIDC）にも対応しています（`id-token: write`、Node 24）。切り替えるときは、`packages/app/package.json` の `repository.url` をこのリポジトリの URL にし（npm の必須条件。npm のページにリポジトリが出る）、npmjs.com の **yojitsu-navi > Settings > Trusted publishing > GitHub Actions** に、リポジトリの持ち主・リポジトリ名・ワークフローのファイル名 `publish-npm.yml` を入れ、「Allowed actions」で `npm publish` も許可して保存する。設定後 2 日以内に 1 回公開しないと設定が無効になる。動いたら Secrets の `NPM_TOKEN` は消してよい。
+npm は 2 段階認証を飛ばすトークンでの CI からの公開を 2027 年 1 月ごろにやめる予定なので、`publish-npm` は npm の trusted publishing（OIDC）で公開します（`id-token: write`、Node 24。`packages/app/package.json` の `repository.url` はそのための必須条件）。npm 側の設定は 1 回だけ:
+
+1. npmjs.com で **yojitsu-navi > Settings > Trusted publishing** の **GitHub Actions** を選ぶ。
+2. Organization or user・Repository にこのリポジトリの持ち主と名前、Workflow filename に `publish-npm.yml` を入れる（大文字・小文字も同じに）。Environment name は空のまま。
+3. **Allowed actions** で `npm publish` も許可して保存する（許可しないと仮公開だけになり、毎回 npm での承認が要る）。
+
+設定から 2 日以内に 1 回公開しないと設定が無効になるので、版上げ PR をマージする直前に行う（無効になったら消して作り直す）。trusted publishing で公開できたら、Secrets の `NPM_TOKEN` を消し、パッケージの Settings > Publishing access を「Require two-factor authentication and disallow tokens」にしてよい（trusted publishing はそのまま使える）。
 
 ## 変更履歴の書き方
 

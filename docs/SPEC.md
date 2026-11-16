@@ -1220,7 +1220,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 §82 の質問に「npmjs.com にも公開」、ライセンスは「MIT」と回答。社内 GitLab の Package Registry への公開（§43）も残す。
 - ライセンスは MIT（ルートの `LICENSE`。著作権者は「yojitsu-navi contributors」と書き、個人名・年を書かない）。`core:build`・`app:build` がパッケージにも写す。画面フォントは SIL OFL 1.1 のまま（§46）。
 - 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ（→ §121 で版上げのマージから自動で公開・タグ・リリース）。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
-- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
+- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44。→ §121 で `repository` だけ入れる）。npm のユーザー名も個人名・会社名にしない。
 - `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。
 
 ## 84. パッケージを 1 つにする（2026-11-02 依頼者）
@@ -1955,8 +1955,10 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）は、`main` の `packages/app/package.json` が変わったとき（版を上げる PR のマージ）と手動（Run workflow）で動く。タグの push では動かない。
 - 最初に、その版が npmjs.com にあるか（認証なしで読む）と GitHub のリリースがあるかだけを調べ、両方あれば依存も入れずに終わる（Actions の時間を使わない）。無ければ型チェック・テスト・ビルド → `npm publish` → タグ `v<版>` とリリース（`gh release create`、説明は CHANGELOG.md のその版。`scripts/lib/release.mjs` の `releaseNotes()`）。済んだ分は飛ばすので、失敗しても Run workflow で残りだけやり直せる。
 - 版上げは `npm run version:bump -- patch|minor|major|<x.y.z>`（`scripts/bump-version.mjs`）。ルートと `packages/app` の `package.json`・`package-lock.json` の版をそろえ、CHANGELOG.md の「## 次の版」を「## <版>」にする（無ければ止まる）。開発元だけで使う（利用環境に配らない）。
-- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）か Secrets の `NPM_TOKEN`。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。trusted publishing は `repository.url` が要るので、切り替えるまで `repository` は入れない（§82・§83 のまま）。
-- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）。
+- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）。npm 側の設定が済むまでは Secrets の `NPM_TOKEN`（2 段階認証を飛ばすトークンは CI からの公開が 2027 年 1 月ごろに終わる予定）。trusted publishing の設定で「Allowed actions」に `npm publish` を許可し、承認なしで公開する（依頼者 2026-11-16、npm での毎回の承認より手を介さないほうを選んだ）。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。
+- `packages/app/package.json` の `repository.url` はこのリポジトリ（trusted publishing の必須条件で、npm のページにリポジトリが出る。依頼者 2026-11-16 了承。アカウント名を書かない決まりの唯一の例外）。`author`・`homepage`・`bugs` は今までどおり入れない。template（利用環境）には入らない。
+- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）、`tests/integration/app-package.test.ts`（`repository` はこのリポジトリの URL だけ）。
+
 
 ## 124. メンバーごとの今月の時間の表を他の表にそろえる（2026-11-16 依頼者）
 「メンバーごとの今月の時間の表も、他の表みたいに役職を出したり、絞り込み・並べ替えがほしい」への対応。専用に組んでいた表（§61）を一覧表の共通部品 `dataTable` に載せ替えた。
@@ -1966,3 +1968,12 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - 横展開: チーム詳細・顧客詳細・案件詳細の「メンバー別の実績」にも同じ役職・区分・事業本部・部・課・在籍を選べる列（既定では出さない）と Excel の社員番号を足した（`memberInfoColumns`。メンバー一覧と同じ列名）。チーム詳細・顧客詳細の行もメンバー詳細へのリンクにした（案件詳細と同じ）。
 - `dataTable` の列に `cellClass(row)`（セルの class）・`headClass`（見出しと合計行のセルの class）・`headTitle`（見出しの title）・`menu: false` を、表に `className` を足した。
 - 再発防止: `tests/e2e/daily.spec.ts`（役職の列・並べ替え・日の列に漏斗が無い・「列」に事業本部があり日の列が無い・Excel・合計行・名前の列の固定・各画面幅とダーク）、`tests/unit/members.test.ts`（`memberRecordAt`）。
+
+## 125. 月次推移に今月の実績を速報で出す（2026-11-16 依頼者）
+「月次推移のグラフ、今月の棒グラフ、速報値でもいいので実績が登録されているやつは可視化したい」への対応。これまで今月（asOf の月）は見込みの破線枠だけで、入っている実績はマウスの表示と「表で見る」の「（速報）」にしか出ていなかった。
+- 月次推移（全体・チーム・顧客・案件の詳細、`monthlyChart`）: 基準月以降で状態が速報、実績が 0 より大きい月（＝今月）に、実績の棒を **見込みの破線枠の中に斜線** で重ねる。枠＝月末までの見込み、斜線＝今日までに入っている分なので、月の途中の少ない棒を満額の予算と比べて誤解しない（日々のペースは今月の進捗 §61 で見る）。確定・速報済みの前の月（実線の塗り）とは塗り方で見分ける（色だけに頼らない）。残予算の折れ線・着地見込みの計算は変えない（§54）。
+- メンバー詳細の「計画と実績の時間」（`memberHoursChart`）: 今月の実績時間の棒を同じ斜線にする（これまでも棒は出ていたが確定月と同じ見た目だった）。
+- 凡例は今月の実績があるときだけ「実績（速報・斜線）」「実績時間（速報・斜線）」を足す。マウスの表示は従来どおり「速報実績」、表は「（速報）」。説明は見出しの「?」だけ。
+- 斜線は SVG の `pattern`（色で決まる id。描き直しても同じ）を `fill: url(#…)` で使う。凡例は CSS の `repeating-linear-gradient`。
+- リソース計画のグラフ（§58・§110）は計画だけなので対象外。
+- 再発防止: `tests/e2e/monthly-prelim.spec.ts`（全体・チーム・メンバー詳細で斜線の棒と pattern の参照・凡例、ダーク、今月を含まない期間では出ない）。
