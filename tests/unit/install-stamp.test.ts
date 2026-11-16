@@ -40,6 +40,17 @@ describe("依存の印（SPEC §126）", () => {
     expect(installUpToDate(dir)).toBe(false);
   });
 
+  it("package.json の依存の項目が変われば入れ直す（lock と食い違えば npm ci が止める）。版の番号などほかの項目だけなら入れ直さない", () => {
+    const dir = project();
+    mkdirSync(join(dir, "node_modules"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", version: "1.0.0", dependencies: { a: "1.0.0" } }));
+    writeInstallStamp(dir);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", version: "1.0.1", dependencies: { a: "1.0.0" } }));
+    expect(installUpToDate(dir)).toBe(true);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", version: "1.0.1", dependencies: { a: "1.0.0", b: "2.0.0" } }));
+    expect(installUpToDate(dir)).toBe(false);
+  });
+
   it("入れ始めに印を消すので、途中で止まった node_modules は使わない。node_modules が無ければ印を書かない", () => {
     const dir = project();
     writeInstallStamp(dir);

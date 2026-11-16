@@ -14,7 +14,7 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 ### テスト・CI の前提
 
 - 既定ブランチのパイプラインは `pages` 1 つになる（ビルドと公開を同じジョブで行う）。MR・既定ブランチ以外のブランチはこれまでどおり `build`（SPEC §126）
-- Runner が作業フォルダを使い回すとき（shell executor など）、`node_modules/` を消さずに残し、`package-lock.json`・Node の版・OS が前に入れたときと同じなら `npm ci` を飛ばす（`GIT_CLEAN_FLAGS`）。必ず入れ直すなら CI/CD 変数か Run pipeline で `YOJITSU_FRESH_INSTALL` = `1`
+- Runner が作業フォルダを使い回すとき（shell executor など）、`node_modules/` を消さずに残し、`package-lock.json`・`package.json` の依存・Node の版・OS が前に入れたときと同じなら `npm ci` を飛ばす（`GIT_CLEAN_FLAGS`）。必ず入れ直すなら CI/CD 変数か Run pipeline で `YOJITSU_FRESH_INSTALL` = `1`
 
 ### 変更
 

@@ -2,11 +2,10 @@
 // update → 設定の互換確認（SPEC §96）→ 依存を入れる（npm ci）→ CI のファイルの確認 → データ検証 → テスト → ビルド。
 // 依存とテストは要るときだけ動かす（SPEC §104）。失敗したところで止まり、最後に結果の要約を出す。全部の出力はログのファイル（UTF-8）に残す
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { installKey, installUpToDate, writeInstallStamp } from "./install-stamp.mjs";
+import { fileHash, installKey, installUpToDate, manifestHash, writeInstallStamp } from "./install-stamp.mjs";
 import { CliError, check, configCompat, missingConfigReport, update } from "./project.mjs";
 
 /** 依存を入れたときの印（node_modules の中。lock ファイル・Node の版・OS が同じなら入れ直さない。SPEC §104） */
@@ -91,7 +90,9 @@ function preview(o, testChoice) {
   }
   const unresolved = r.conflicts.filter((c) => !r.kept.includes(c.path) && !r.keptRemoved.includes(c.path) && !r.overwritten.includes(c.path));
   const lockNext = join(o.pkgDir, "template", "package-lock.json");
-  const nextKey = { ...installKey(dir), lock: existsSync(lockNext) ? createHash("sha256").update(readFileSync(lockNext)).digest("hex") : installKey(dir).lock };
+  const pkgNext = join(o.pkgDir, "template", "package.json");
+  const now = installKey(dir);
+  const nextKey = { ...now, lock: existsSync(lockNext) ? fileHash(lockNext) : now.lock, manifest: existsSync(pkgNext) ? manifestHash(pkgNext) : now.manifest };
   const code = localCodeChanges([...r.kept, ...r.keptRemoved], r.extras);
   const tests = testChoice === true ? "動かす（指定あり）" : testChoice === false ? "動かさない（指定あり）" : code.length ? `動かす（社内で手を加えたコード ${code.length} ファイル）` : "動かさない（社内で手を加えたコードが無い）";
   const m = missingConfigReport(o.pkgDir, dir);
@@ -182,7 +183,8 @@ export async function upgrade(o) {
         // CI と同じ入れ方（依存込みのプロジェクトは vendor/npm-cache から。社内ミラーは NPM_CONFIG_REGISTRY・.npmrc）
         const script = join(dir, "scripts", "ci", "install.mjs");
         const [cmd, args, shell] = existsSync(script) ? [process.execPath, [script], false] : npm(["ci", "--no-audit", "--no-fund"]);
-        const r = await run(cmd, args, { cwd: dir, env, shell, out });
+        // --install（または印が合わない）ときは install.mjs にも入れ直させる（印が残っていても飛ばさない。SPEC §126）
+        const r = await run(cmd, args, { cwd: dir, env: { ...env, YOJITSU_FRESH_INSTALL: "1" }, shell, out });
         if (r.ok) writeInstallStamp(dir, key);
         return r;
       },
