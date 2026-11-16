@@ -9,7 +9,7 @@
  *   const r = rebaseRemake(plan, choices)                          // 衝突と、選んだ結果の中身（純粋）
  *   await remakeMergeRequest(fetch, cfg, token, mr, r, { message, description })
  */
-import { GitLabError, closeMergeRequest, fetchFileForUpdate, getMergeRequest, mergeRequestFileChanges, saveToGitLab } from "./gitlab.js";
+import { GitLabError, closeMergeRequest, fetchFileForUpdate, getMergeRequest, mergeMergeRequest, mergeRequestFileChanges, saveToGitLab } from "./gitlab.js";
 import { T } from "../i18n/index.js";
 import type { FetchLike, MergeRequestDetail, SaveResult } from "./gitlab.js";
 import type { MasterEditConfig } from "./types.js";
@@ -166,4 +166,49 @@ export async function remakeMergeRequest(
     closeError = e;
   }
   return { result, closeError };
+}
+
+/** GitLab がまだマージできるか判定している途中の状態（detailed_merge_status / merge_status） */
+const CHECKING = new Set(["unchecked", "checking", "preparing", "cannot_be_merged_recheck", "approvals_syncing"]);
+/** 検証（パイプライン）待ちでマージできない状態 */
+const WAIT_PIPELINE = new Set(["ci_must_pass", "ci_still_running"]);
+const PIPELINE_RUNNING = new Set(["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"]);
+
+/**
+ * 載せ直して作った新しい MR をそのままマージする（SPEC §126.2）。
+ * GitLab の判定が終わるまで少し待ち、すぐマージできればマージ（merged）、検証の途中なら検証が通ったら自動でマージする予約（scheduled）。
+ * 待っても判定が終わらない・競合などでマージできないときは何もしない（pending。人が一覧からマージする）
+ */
+export async function mergeRemade(
+  fetchImpl: FetchLike,
+  cfg: MasterEditConfig,
+  token: string,
+  iid: number,
+  opts: { tries?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<"merged" | "scheduled" | "pending"> {
+  const tries = opts.tries ?? 12;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let i = 0; i < tries; i++) {
+    if (i > 0) await sleep(opts.intervalMs ?? 1500);
+    const d = await getMergeRequest(fetchImpl, cfg, token, iid);
+    if (d.state !== "" && d.state !== "opened") return "pending";
+    if (d.hasConflicts) return "pending";
+    const status = d.mergeStatus ?? "";
+    if (CHECKING.has(status)) continue;
+    // 検証に失敗した・取り消された変更は、GitLab がマージできると言っても入れない（検証を必須にしていない GitLab もあるため）
+    if (d.pipelineStatus === "failed" || d.pipelineStatus === "canceled") return "pending";
+    const pipelineRunning = d.pipelineStatus !== null && PIPELINE_RUNNING.has(d.pipelineStatus);
+    if (status === "mergeable" || status === "can_be_merged") {
+      await mergeMergeRequest(fetchImpl, cfg, token, iid, d.headSha, pipelineRunning ? { whenPipelineSucceeds: true } : {});
+      return pipelineRunning ? "scheduled" : "merged";
+    }
+    if (WAIT_PIPELINE.has(status) || pipelineRunning) {
+      // パイプラインがまだ作られていなければ待つ（無いと自動マージを予約できない）
+      if (d.pipelineStatus === null) continue;
+      await mergeMergeRequest(fetchImpl, cfg, token, iid, d.headSha, { whenPipelineSucceeds: true });
+      return "scheduled";
+    }
+    return "pending";
+  }
+  return "pending";
 }
