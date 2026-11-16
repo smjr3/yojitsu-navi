@@ -37,6 +37,44 @@ export function withTargets(series, targetOf) {
 
 const hasTarget = (series) => series.some((d) => d.targetCap != null);
 
+/** 今月（月の途中）の速報の実績（§125）。基準月以降で実績が入っている月だけ */
+const isPrelimNow = (d) => !d.isActual && d.status === "preliminary" && d.cost > 0;
+const hasPrelimNow = (series) => series.some(isPrelimNow);
+
+let hatchSeq = 0;
+/**
+ * 斜線の塗り（今月の速報の実績）。Plot の fill に url(#id) を渡し、描いた svg に pattern を足す。
+ * 色だけに頼らず、確定・速報済みの月の実線の棒と見分けられるようにする
+ */
+function hatchFill(color) {
+  const id = `yn-hatch-${++hatchSeq}`;
+  const attach = (plot) => {
+    const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
+    if (!svg) return;
+    const ns = "http://www.w3.org/2000/svg";
+    const defs = document.createElementNS(ns, "defs");
+    const pat = document.createElementNS(ns, "pattern");
+    pat.setAttribute("id", id);
+    pat.setAttribute("width", "6");
+    pat.setAttribute("height", "6");
+    pat.setAttribute("patternUnits", "userSpaceOnUse");
+    pat.setAttribute("patternTransform", "rotate(45)");
+    const bg = document.createElementNS(ns, "rect");
+    bg.setAttribute("width", "6");
+    bg.setAttribute("height", "6");
+    bg.setAttribute("fill", color);
+    bg.setAttribute("fill-opacity", "0.45");
+    const line = document.createElementNS(ns, "rect");
+    line.setAttribute("width", "3");
+    line.setAttribute("height", "6");
+    line.setAttribute("fill", color);
+    pat.append(bg, line);
+    defs.append(pat);
+    svg.prepend(defs);
+  };
+  return { fill: `url(#${id})`, attach };
+}
+
 /**
  * 月次推移: 予算と原価の棒 ＋ 粗利の折れ線。
  * series は analysis.seriesWithForecast() の出力（isActual, forecastCost, forecastGrossProfit を持つ。withTargets を通すと targetCap も）
@@ -72,6 +110,9 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
   const gap = 0.03;
   const yMax = (d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0);
+  // 今月の速報の実績（§125）: 見込みの破線枠の中に、入っている分を斜線で描く
+  const prelim = data.filter(isPrelimNow);
+  const hatch = prelim.length ? hatchFill(c.cost) : null;
 
   const plot = Plot.plot({
     width,
@@ -97,6 +138,8 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       Plot.rectY(actual, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "cost", fill: c.cost, ry2: 4 }),
       // 原価（見込み）: 薄い塗り ＋ 破線の枠
       Plot.rectY(remaining, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "forecastCost", fill: c.cost, fillOpacity: 0.35, stroke: c.cost, strokeWidth: 1, strokeDasharray: "3 2", ry2: 4 }),
+      // 原価（今月の速報）: 斜線
+      hatch ? Plot.rectY(prelim, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "cost", fill: hatch.fill, stroke: c.cost, strokeWidth: 1, ry2: 4 }) : null,
       // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ赤の破線。実績の棒が線を超えたら目標を外れている
       targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - gap - bw - 0.06, x2: (d) => d.i + gap + bw + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
@@ -133,6 +176,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   });
   plot.setAttribute("role", "img");
   plot.setAttribute("aria-label", fmt(T.charts.monthlyAria, { title }));
+  hatch?.attach(plot);
   return plot;
 }
 
@@ -142,6 +186,7 @@ export function monthlyLegend(dark, series = null) {
     { label: T.columns.budget, color: c.budget },
     { label: T.charts.costActual, color: c.cost },
     { label: T.charts.legendCostForecast, color: c.cost, shape: "rect-dashed" },
+    ...(series && hasPrelimNow(series) ? [{ label: T.charts.legendCostPrelim, color: c.cost, shape: "rect-hatched" }] : []),
     { label: T.charts.gpActual, color: c.gp, shape: "line" },
     { label: T.charts.legendGpForecast, color: c.gp, shape: "line-dashed" },
     ...(series && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
@@ -192,6 +237,9 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   const barW = Math.max(6, Math.min(22, ((width - 80) / n) * 0.4));
   const bw = barW / ((width - 80) / n);
   const gap = 0.03;
+  // 今月（月の途中）の実績時間は速報なので斜線（§125）
+  const isNow = (d) => d.month === asOfMonth && d.actualHours > 0;
+  const hatch = data.some(isNow) ? hatchFill(c.cost) : null;
   const plot = Plot.plot({
     width,
     height,
@@ -208,7 +256,8 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
       Plot.ruleY([0], { stroke: c.axis }),
       firstFuture ? Plot.rectX([{ x1: firstFuture.i - 0.5, x2: n - 0.5 }], { x1: "x1", x2: "x2", fill: c.muted, fillOpacity: 0.06 }) : null,
       Plot.rectY(data, { x1: (d) => d.i - gap - bw, x2: (d) => d.i - gap, y: "plannedHours", fill: c.budget, ry2: 3 }),
-      Plot.rectY(data, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "actualHours", fill: c.cost, ry2: 3 }),
+      Plot.rectY(data.filter((d) => !isNow(d)), { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "actualHours", fill: c.cost, ry2: 3 }),
+      hatch ? Plot.rectY(data.filter(isNow), { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "actualHours", fill: hatch.fill, stroke: c.cost, strokeWidth: 1, ry2: 3 }) : null,
       Plot.ruleX(data, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
         data,
@@ -233,14 +282,16 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   });
   plot.setAttribute("role", "img");
   plot.setAttribute("aria-label", fmt(T.charts.memberHoursAria, { title }));
+  hatch?.attach(plot);
   return plot;
 }
 
-export function memberHoursLegend(dark) {
+export function memberHoursLegend(dark, series = null, asOfMonth = null) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.charts.legendPlanned, color: c.budget },
     { label: T.charts.legendActual, color: c.cost },
+    ...(series && series.some((d) => d.month === asOfMonth && d.actualHours > 0) ? [{ label: T.charts.legendActualPrelim, color: c.cost, shape: "rect-hatched" }] : []),
   ]);
 }
 
