@@ -503,6 +503,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
   /** 月別の合計グラフ（§58）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
   let planChartBuild = null;
+  /** 表示中のリソース計画の組織の木（グラフと編集欄の余力で同じ木の目標を使う。§122） */
+  let planTree = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
     tabs: html`<div class="yn-me-tabs-slot"></div>`,
@@ -1600,6 +1602,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
     const tree = teamTreeAt({ teams: src.teams }, treeMonth).tree;
+    planTree = tree;
     const flat = flattenTeamTree(tree);
     const view = planView(src, plan.teamId, months);
     const names = memberNames();
@@ -2438,7 +2441,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       cellEditor.refresh();
     };
     // 目標の上限までの余力（§122）: 案件の上限 − 今の計画の額（入力中の値との差を、この人の 1 人月の額で人月に直す）。目標の無い案件は出さない
-    const roomOf = (contractId) => (model ? planRoomAt(model, planInputsNow(), contractId, month) : null);
+    const roomOf = (contractId) => (model ? planRoomAt(model, planInputsNow(), contractId, month, planTree ?? undefined) : null);
     const perPm = (() => {
       const rate = rateFor(planInputsNow().masters, r.memberId, month).hourlyRate;
       return Number.isFinite(rate) ? rate * hoursOfMonth(month) : 0;
