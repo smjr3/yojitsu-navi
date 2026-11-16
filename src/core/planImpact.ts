@@ -8,6 +8,7 @@ import { assignmentPlanOf, forecastForMonths, type ForecastBasis } from "./forec
 import { monthRange } from "./calendar.js";
 import type { MasterIndex } from "./masters.js";
 import { createMonthHours, type MonthHours } from "./monthHours.js";
+import { HolidaySet } from "./holidays.js";
 import { evaluateTarget, isUsableTarget, targetContractIds, type TargetEvaluation } from "./targets.js";
 import type { Assignment, AssignmentPlan, ContractResult, Forecast, Holiday, Model, TargetKind, YearMonth } from "./types.js";
 
@@ -53,6 +54,15 @@ export function monthHoursOfInputs(model: Model, inputs: PlanInputs | null): Mon
   return createMonthHours(inputs?.holidays ?? model.holidays, model.config.hoursPerBusinessDay);
 }
 
+const holidaySets = new WeakMap<readonly Holiday[], HolidaySet>();
+/** 計画の入力の祝日（行の無い年は国民の祝日で補う。§49。開始日・終了日の日割り §121 に使う）。祝日を持たなければ model の祝日 */
+export function holidaysOfInputs(model: Model, inputs: PlanInputs | null): HolidaySet {
+  const list = inputs?.holidays ?? model.holidays;
+  let set = holidaySets.get(list);
+  if (!set) holidaySets.set(list, (set = new HolidaySet(list)));
+  return set;
+}
+
 /**
  * 変更の影響を計算する。targetMonths は画面の期間（§54）。
  * model の数値はそのまま使い、変わった案件だけ前後の計画で置き換えて比べる（前の値は画面の値と同じ）
@@ -60,7 +70,7 @@ export function monthHoursOfInputs(model: Model, inputs: PlanInputs | null): Mon
 export function planImpact(model: Model, before: PlanInputs, after: PlanInputs, targetMonths: readonly YearMonth[]): PlanImpact {
   const hoursBefore = monthHoursOfInputs(model, before);
   const hoursAfter = monthHoursOfInputs(model, after);
-  const ctx = (inputs: PlanInputs, assignments: readonly Assignment[]) => ({ asOfMonth: model.meta.asOfMonth, config: model.config, masters: inputs.masters, assignments, monthHours: inputs === before ? hoursBefore : hoursAfter });
+  const ctx = (inputs: PlanInputs, assignments: readonly Assignment[]) => ({ asOfMonth: model.meta.asOfMonth, config: model.config, masters: inputs.masters, assignments, monthHours: inputs === before ? hoursBefore : hoursAfter, holidays: holidaysOfInputs(model, inputs) });
   const byContract = (list: readonly Assignment[]) => {
     const m = new Map<string, Assignment[]>();
     for (const a of list) {

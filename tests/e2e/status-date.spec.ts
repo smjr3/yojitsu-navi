@@ -2,7 +2,7 @@
  * 退職・休みなどを日付で指定する（SPEC §119。members.csv の任意列 status_date）
  * - リソース計画: 不在のチップに日付、その月の吹き出しに在籍の営業日と稼働できる量
  * - メンバー詳細: 不在のチップに日付、所属の変遷の在籍の列に「（日付から）」
- * - マスタ編集: 行の編集に「在籍・不在の開始日」、台帳の在籍の列に添える。「＋ 変更」では写さない
+ * - マスタ編集: 行の編集の「適用開始日」（日付 1 欄。§121）、台帳の在籍の列に添える。「＋ 変更」では写さない
  * - 390px・ダークで横スクロール無し
  */
 import type { Page } from "@playwright/test";
@@ -49,25 +49,25 @@ test("メンバー詳細: 不在のチップと所属の変遷に日付", async 
   await expect(page.locator(".yn-member-history")).toContainText("不在（2026年6月6日から）");
 });
 
-test("マスタ編集: 在籍・不在の開始日を入れられ、台帳の在籍の列に添える。「＋ 変更」では写さない", async ({ page }) => {
+test("マスタ編集: 適用開始日の 1 欄で日付まで入れ、台帳の在籍の列に添える。「＋ 変更」では写さない（§121）", async ({ page }) => {
   await gotoPage(page, "/masters");
   await expect(group(page, LEAVER)).toContainText("6日から");
   const d = page.locator("dialog.yn-me-dialog[open]");
-  // 今の行の修正には日付が入っている
+  // 今の行の修正: 適用開始日に月と日がまとめて入る（日付の欄は別に無い）
   await group(page, LEAVER).locator("button", { hasText: /^修正$/ }).click();
-  await expect(d.locator('[name="status_date"]')).toHaveValue("2026-06-06");
-  await expect(d.locator('label[for="yn-me-f-status_date"]')).toContainText("在籍・不在の開始日");
+  await expect(d.locator('[name="effective_from"]')).toHaveValue("2026-06-06");
+  await expect(d.locator('label[for="yn-me-f-effective_from"]')).toContainText("適用開始日");
+  await expect(d.locator('[name="status_date"]')).toHaveCount(0);
   await page.keyboard.press("Escape");
-  // 「＋ 変更」は写さない
+  // 「＋ 変更」は日を写さない（翌月の 1 日）
   await group(page, LEAVER).getByRole("button", { name: /の変更を追加/ }).click();
-  await expect(d.locator('[name="status_date"]')).toHaveValue("");
+  await expect(d.locator('[name="effective_from"]')).toHaveValue(/-01$/);
   await page.keyboard.press("Escape");
 
   // 在籍の人を月の途中から不在にする
   await group(page, "M010").getByRole("button", { name: /の変更を追加/ }).click();
   await d.locator('[name="status"]').selectOption({ label: "不在" });
-  await d.locator('[name="effective_from"]').fill("2026-11");
-  await d.locator('[name="status_date"]').fill("2026-11-16");
+  await d.locator('[name="effective_from"]').fill("2026-11-16");
   await d.locator('[data-role="submit"]').click();
   if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);

@@ -278,6 +278,13 @@ export function applyCustomerTeams(contracts: Contract[], rows: readonly Custome
   }
 }
 
+/** 期間の開始日・終了日（任意の列 start_date / end_date。§121）。空なら付けない */
+function periodDateCells(r: { get(name: string): string }): { startDate?: string; endDate?: string } {
+  const s = r.get("start_date").trim();
+  const e = r.get("end_date").trim();
+  return { ...(s !== "" ? { startDate: s } : {}), ...(e !== "" ? { endDate: e } : {}) };
+}
+
 /** 各 CSV テキストから Dataset を組み立てる。検証結果（§14）も issues に含める */
 export function parseDataset(files: DatasetFiles): ParsedDataset {
   const issues: ValidationIssue[] = [];
@@ -325,6 +332,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
     contractId: r.get("contract_id"),
     startMonth: r.get("start_month"),
     endMonth: r.get("end_month"),
+    ...periodDateCells(r),
     allocation: parseNumberCell(r.get("allocation")),
   }));
 
@@ -417,6 +425,7 @@ export function parseDataset(files: DatasetFiles): ParsedDataset {
           type: r.get("type"),
           startMonth: r.get("start_month"),
           endMonth: r.get("end_month"),
+          ...periodDateCells(r),
           personMonths: parseNumberCell(r.get("person_months")),
           note: r.get("note"),
         }));

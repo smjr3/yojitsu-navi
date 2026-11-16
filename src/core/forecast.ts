@@ -4,7 +4,8 @@
  * 対象の月（target）は既定で asOf の年度。画面では選択中の期間（§54）、案件詳細では契約の全期間（案件終了時点の着地）。
  * 見積りの材料（平均の基礎・リソース計画の明細）は対象の月に依らないので、Model に持たせて画面で対象を変えて計算し直す。
  */
-import { fiscalYearMonths, fiscalYearOf, monthRange } from "./calendar.js";
+import { fiscalYearMonths, fiscalYearOf, monthRange, type HolidayLookup } from "./calendar.js";
+import { periodShareAt } from "./periodDates.js";
 import { roundYen } from "./cost.js";
 import { rateFor, type MasterIndex } from "./masters.js";
 import type { MonthHours } from "./monthHours.js";
@@ -20,6 +21,8 @@ export interface ForecastContext {
   monthHours: MonthHours;
   /** 全契約のアサイン（契約IDで絞って使う） */
   assignments: readonly Assignment[];
+  /** 祝日（開始日・終了日のある端の月の日割り。§121）。省略時は土日だけ除く */
+  holidays?: HolidayLookup;
 }
 
 /** 対象の月を変えて計算し直すのに要る設定（Model の meta・config から取れる） */
@@ -43,8 +46,10 @@ export function assignmentPlanOf(ctx: ForecastContext, contract: Contract): Assi
         if (!(a.startMonth <= month && month <= a.endMonth)) continue;
         if (!Number.isFinite(a.allocation)) continue;
         const rate = rateFor(ctx.masters, a.memberId, month);
-        const hours = a.allocation * ctx.monthHours(month);
-        lines.push({ month, memberId: a.memberId, allocation: a.allocation, hours, hourlyRate: rate.hourlyRate, amount: roundYen(hours * rate.hourlyRate) });
+        // 開始日・終了日のある端の月は営業日で日割り（§121）
+        const allocation = a.allocation * periodShareAt(a, month, ctx.holidays ?? []);
+        const hours = allocation * ctx.monthHours(month);
+        lines.push({ month, memberId: a.memberId, allocation, hours, hourlyRate: rate.hourlyRate, amount: roundYen(hours * rate.hourlyRate) });
       }
     }
   }
