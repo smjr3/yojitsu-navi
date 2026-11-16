@@ -1,4 +1,4 @@
-// 依存（node_modules）を入れ直さなくてよいかの印（SPEC §104・§126）。Node の標準モジュールだけを使う
+// 依存（node_modules）を入れ直さなくてよいかの印（SPEC §104・§128）。Node の標準モジュールだけを使う
 //   - CI の before_script（scripts/ci/install.mjs）と yojitsu-navi upgrade が同じ印を使う
 //   - 印は node_modules/ の中に置く（npm ci が node_modules を消すと印も消える）
 // プロジェクトにも入る。yojitsu-navi コマンドには npm run app:build が packages/app/lib に写す

@@ -5,7 +5,7 @@
 #              データ（data/・config.json）だけが変わった              → validate（データ検証だけ。ビルドしない）
 #              それ以外（文書・CI の設定など）だけ                     → ci-check（CI の設定の点検だけ。依存も取らない）
 #   既定ブランチへの push（MR のマージ・自動取り込みのマージ）:
-#              プログラム・データ・CI の設定のどれかが変わった         → pages（ビルドと公開を 1 つのジョブで。SPEC §126）
+#              プログラム・データ・CI の設定のどれかが変わった         → pages（ビルドと公開を 1 つのジョブで。SPEC §128）
 #              文書だけ                                                → 何も動かない（公開中のサイトはそのまま）
 #   Run pipeline（手動）・API: 既定ブランチなら pages、ほかのブランチなら build。test は既定で動かさない
 #   - validate : データ検証（scripts/validate-data.ts。error があれば止める）。MR のパイプラインだけ
@@ -19,9 +19,9 @@
 #                ビルドは増分（SPEC §102）: ローダのキャッシュを cache: でパイプラインをまたいで使い回し、データだけが変わったときは
 #                変わった出力だけを作り直す。プログラムが変わったときと、CI/CD 変数 YOJITSU_FULL_BUILD=1 のときはフルビルド
 #   - pages    : 既定ブランチのみ。build と同じ検証・ビルドをして、dist/ を public/ として GitLab Pages に公開。
-#                ジョブを分けないので、ジョブの待ち・取り直しと dist/ の受け渡し（成果物の上げ下ろし）が無い（SPEC §126）
+#                ジョブを分けないので、ジョブの待ち・取り直しと dist/ の受け渡し（成果物の上げ下ろし）が無い（SPEC §128）
 #   依存（node_modules）は、Runner が作業フォルダを使い回すときは消さずに残し、package-lock.json・Node の版・OS が同じなら
-#   npm ci を飛ばす（GIT_CLEAN_FLAGS と scripts/ci/install.mjs。SPEC §126）。CI/CD 変数 YOJITSU_FRESH_INSTALL=1 で必ず入れ直す
+#   npm ci を飛ばす（GIT_CLEAN_FLAGS と scripts/ci/install.mjs。SPEC §128）。CI/CD 変数 YOJITSU_FRESH_INSTALL=1 で必ず入れ直す
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
 #                      MR では validate だけが動き、マージで既定ブランチの pages（ビルドと公開）まで流れる）
@@ -96,7 +96,7 @@ variables:
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
   GIT_DEPTH: "20"
   # 作業フォルダを使い回す Runner（shell executor など）で node_modules/ を消さずに残す（既定は -ffdx で全部消す）。
-  # 残った node_modules は scripts/ci/install.mjs が package-lock.json などの印で確かめ、同じなら npm ci を飛ばす（SPEC §126）
+  # 残った node_modules は scripts/ci/install.mjs が package-lock.json などの印で確かめ、同じなら npm ci を飛ばす（SPEC §128）
   GIT_CLEAN_FLAGS: "-ffdx -e node_modules/"
 
 # npm のダウンロードキャッシュを lock ファイル単位で共有する。
@@ -207,7 +207,7 @@ test:
 
 # --------------------------------------------------------------------------
 # build: データの整合性チェック（案件ID重複・期間逆転・未知のチーム等で止める）→ 静的サイトを dist/ に生成
-#   MR と既定ブランチ以外で動く。既定ブランチでは pages が同じことをして公開まで行う（SPEC §126）
+#   MR と既定ブランチ以外で動く。既定ブランチでは pages が同じことをして公開まで行う（SPEC §128）
 # --------------------------------------------------------------------------
 build:
   stage: build
@@ -262,7 +262,7 @@ build:
     expire_in: 1 week
 
 # --------------------------------------------------------------------------
-# pages: 既定ブランチで、build と同じ検証・ビルドをして dist/ を public/ として公開する（SPEC §126）
+# pages: 既定ブランチで、build と同じ検証・ビルドをして dist/ を public/ として公開する（SPEC §128）
 #   ビルドと公開を 1 つのジョブにして、ジョブの待ち・リポジトリの取り直し・dist/ の成果物の上げ下ろしを省く
 #   （.gitlab-ci.local.yml で build: にタグなどを足しているときは、同じものを pages: にも足す）
 # --------------------------------------------------------------------------

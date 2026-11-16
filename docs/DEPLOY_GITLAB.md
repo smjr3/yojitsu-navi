@@ -148,7 +148,7 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 
 **パイプラインの流れ**: 変わったファイルを見て、要るジョブだけが動きます（SPEC §102.3）。
 - MR: プログラム（パッケージの更新）なら `build`、データ（`data/`・`config.json`。画面の保存・定期取り込みの MR）だけなら `validate`、それ以外（文書・CI の設定）だけなら `ci-check`。どの MR にもジョブが 1 つあるので、「Pipelines must succeed」のままマージできます。
-- `main` へのマージ: プログラム・データ・CI の設定のどれかが変わっていれば `pages`（検証・ビルド・公開を 1 つのジョブで。SPEC §126）。文書だけなら何も動きません。
+- `main` へのマージ: プログラム・データ・CI の設定のどれかが変わっていれば `pages`（検証・ビルド・公開を 1 つのジョブで。SPEC §128）。文書だけなら何も動きません。
 - 依存（`node_modules/`）は、Runner が作業フォルダを使い回すときは残し、`package-lock.json`・Node の版・OS が同じなら `npm ci` を飛ばします。必ず入れ直すときは CI/CD 変数か Run pipeline で `YOJITSU_FRESH_INSTALL=1`。
 - `build`・`pages` は増分ビルドです。ローダのキャッシュを `cache:` で使い回し、データだけが変わったときは変わった出力だけを作り直します（SPEC §102）。
 - データだけの MR でもビルドまで確かめたいときは CI/CD 変数 `YOJITSU_MR_BUILD=1`、キャッシュを使わずに作り直したいときは Run pipeline で `YOJITSU_FULL_BUILD=1`。

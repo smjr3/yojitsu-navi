@@ -183,7 +183,7 @@ export async function upgrade(o) {
         // CI と同じ入れ方（依存込みのプロジェクトは vendor/npm-cache から。社内ミラーは NPM_CONFIG_REGISTRY・.npmrc）
         const script = join(dir, "scripts", "ci", "install.mjs");
         const [cmd, args, shell] = existsSync(script) ? [process.execPath, [script], false] : npm(["ci", "--no-audit", "--no-fund"]);
-        // --install（または印が合わない）ときは install.mjs にも入れ直させる（印が残っていても飛ばさない。SPEC §126）
+        // --install（または印が合わない）ときは install.mjs にも入れ直させる（印が残っていても飛ばさない。SPEC §128）
         const r = await run(cmd, args, { cwd: dir, env: { ...env, YOJITSU_FRESH_INSTALL: "1" }, shell, out });
         if (r.ok) writeInstallStamp(dir, key);
         return r;

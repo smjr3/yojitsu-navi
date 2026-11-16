@@ -1,5 +1,5 @@
 /**
- * 依存を入れ直さなくてよいかの印（scripts/lib/install-stamp.mjs。CI の scripts/ci/install.mjs と yojitsu-navi upgrade が使う。SPEC §126）
+ * 依存を入れ直さなくてよいかの印（scripts/lib/install-stamp.mjs。CI の scripts/ci/install.mjs と yojitsu-navi upgrade が使う。SPEC §128）
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +18,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-describe("依存の印（SPEC §126）", () => {
+describe("依存の印（SPEC §128）", () => {
   it("入れ終わって印を書けば、同じ lock・Node・OS のあいだは入れ直さない", () => {
     const dir = project();
     expect(installUpToDate(dir)).toBe(false);

@@ -2,7 +2,7 @@
  * 利用環境の .gitlab-ci.yml が、変わったファイルに応じて要るジョブだけを選ぶこと（SPEC §102.3）。
  * GitLab の rules:（if・changes・when）の評価をここで真似て、パイプラインの種類と変わったファイルごとに、動くジョブを確かめる。
  *   - MR: プログラムが変わった → build、データだけ → validate、それ以外 → ci-check（どれか 1 つだけ）
- *   - 既定ブランチへの push: プログラム・データ・CI の設定が変わった → pages（ビルドと公開を 1 つのジョブで。SPEC §126）、文書だけ → 何も動かない
+ *   - 既定ブランチへの push: プログラム・データ・CI の設定が変わった → pages（ビルドと公開を 1 つのジョブで。SPEC §128）、文書だけ → 何も動かない
  *   - 依存を取る（npm ci する）ジョブはパイプライン 1 回につき 1 つまで（test を有効にしたときを除く。SPEC §79.3）
  */
 import { readFileSync } from "node:fs";
@@ -173,7 +173,7 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
     expect(cache[0]!.key).toEqual((CI.cache as Obj).key);
   });
 
-  it("pages は build と同じ検証・ビルドをしてから公開する（ジョブを分けず、dist/ の受け渡しが無い。SPEC §126）", () => {
+  it("pages は build と同じ検証・ビルドをしてから公開する（ジョブを分けず、dist/ の受け渡しが無い。SPEC §128）", () => {
     const build = CI.build as Obj;
     const pages = CI.pages as Obj;
     expect(pages.needs).toBeUndefined();
@@ -184,7 +184,7 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
     expect((pages.artifacts as Obj).paths).toEqual(["public/"]);
   });
 
-  it("作業フォルダを使い回す Runner では node_modules/ を消さずに残す（npm ci を飛ばせるように。SPEC §126）", () => {
+  it("作業フォルダを使い回す Runner では node_modules/ を消さずに残す（npm ci を飛ばせるように。SPEC §128）", () => {
     expect((CI.variables as Obj).GIT_CLEAN_FLAGS).toBe("-ffdx -e node_modules/");
   });
 

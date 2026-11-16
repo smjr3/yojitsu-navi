@@ -42,7 +42,7 @@ describe("Windows・Linux の両方で動く", () => {
     expect(job).not.toContain("<<: *normal-rules");
   });
 
-  it("待ち時間を短くする: 検証は build の中、依存を取るのは build・pages と（MR でデータだけのとき）validate だけ、node_modules はキャッシュしない（SPEC §79.3・§102.3・§126）", () => {
+  it("待ち時間を短くする: 検証は build の中、依存を取るのは build・pages と（MR でデータだけのとき）validate だけ、node_modules はキャッシュしない（SPEC §79.3・§102.3・§128）", () => {
     const ci = readFileSync(join(ROOT, ".gitlab-ci.yml"), "utf-8");
     const blocks = ci.split(/\n(?=\S)/);
     const jobs = new Map(blocks.filter((b) => /^[\w-]+:/.test(b) && /\n {2}(stage|script):/.test(b)).map((b) => [b.slice(0, b.indexOf(":")), b]));
@@ -53,7 +53,7 @@ describe("Windows・Linux の両方で動く", () => {
     expect(cmds.indexOf("- npm run validate")).toBeGreaterThanOrEqual(0);
     expect(cmds.indexOf("- npm run validate")).toBeLessThan(cmds.indexOf("- npm run build"));
     // スケジュール実行の取り込み（fetch-*）と既定で動かない test を除くと、依存を取る（before_script: [] でない）のは build・pages・validate だけ
-    // （pages は既定ブランチだけ・build はそれ以外なので、1 つのパイプラインで依存を取るのは 1 回。tests/unit/ci-rules.test.ts、SPEC §126）
+    // （pages は既定ブランチだけ・build はそれ以外なので、1 つのパイプラインで依存を取るのは 1 回。tests/unit/ci-rules.test.ts、SPEC §128）
     const installs = [...jobs].filter(([name, b]) => !name.startsWith("fetch-") && name !== "test" && !/before_script: \[\]/.test(b)).map(([name]) => name);
     expect(installs.sort()).toEqual(["build", "pages", "validate"]);
     const cache = blocks.find((b) => b.startsWith("cache:"))!;

@@ -1,6 +1,6 @@
 /**
  * CI の依存の取得（.gitlab-ci.yml の before_script）。Windows・Linux のどちらの Runner でも動く
- * - 前のジョブで入れた node_modules が残っていて、package-lock.json・Node の主な版・OS が同じなら入れ直さない（SPEC §126）。
+ * - 前のジョブで入れた node_modules が残っていて、package-lock.json・Node の主な版・OS が同じなら入れ直さない（SPEC §128）。
  *   .gitlab-ci.yml の GIT_CLEAN_FLAGS で node_modules/ を消さずに残す（Runner が作業フォルダを使い回すとき。使い回さなければ毎回入れる）。
  *   CI/CD 変数 YOJITSU_FRESH_INSTALL=1 で必ず入れ直す
  * - 依存込みのパッケージで作ったプロジェクト（vendor/npm-cache がある）は、同梱のキャッシュだけで入れる
