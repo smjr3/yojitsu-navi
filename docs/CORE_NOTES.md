@@ -127,6 +127,10 @@
 
 `planTargetAlerts(model, after, { teamId, tree })` は、組織に関わる目標（終了月が基準月以降）を先に絞り、`after`（編集後のマスタとアサイン）があればその目標に入る案件だけ `assignmentPlanOf` で計画を作り直してから `evaluateTarget(…, "assignment")` を呼ぶ（判定は §63 と共有、重複実装なし）。未達見込みだけ返す。超える月は計画の明細（`assignmentPlan.lines`）の月ごとの額と、`ContractMonth.budget` ×（1 − 目標）を比べる。`after = null` なら Model の計画のまま（編集が無いときは作り直さない）。
 
+## 金額と目標の上限（SPEC §122）— `src/core/planBudget.ts`
+
+`contractCapAt(model, row, month, tree)` は案件の月の目標を `targetForMonth`（§61 と共有）で案件 → 顧客 → 担当チームから上位の順に探し、上限 = 予算 ×（1 − 残予算率）。`contractPlanAmounts(model, inputs, ids, months)` は対象の案件だけ `assignmentPlanOf` で計画の明細を作り直す（基準月を表示する月の最初にして、過去の月も計画で数える）。`planBudgetChart` は組織の担当案件を顧客（`customerKey`）ごとに合計し、組織の上限は案件の上限の合計（目標の無い案件は予算）。`planRoomAt` はセルの編集欄の余力（上限 − 今の計画の額）。入力中の値の差は画面側でその人の 1 人月の額（`rateFor` × 月の稼働時間）を掛けて引く。
+
 ## 計画なしの人（SPEC §116）— `src/core/plan.ts`
 - `planView` の行に `planNeededMonths`（月ごとに「計画が入っているべきか」）。在籍（不在の行でない）で、所属組織があり、その月に選んだ組織か配下に所属している月だけ true。応援の人（他組織から）・所属組織の無い人（他部署のヘルプ）・入社前（部長など上位の組織の直属は対象）・不在の月は false。
 - 「今月以降」と「月の合計が 0」は画面側（運用保守以外の予定は編集中の値で足すため）。人ごとに、対象の月がすべて 0 のときだけ印を付ける（月ごとの空きで出すと、年度の切り替わりで次の年度の計画がまだ無い全員に付く）。
@@ -134,6 +138,10 @@
 ## 今月の残り時間（SPEC §113）— `src/core/myHours.ts`
 
 `myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。
+
+## 開始日・終了日（SPEC §123）— `src/core/periodDates.ts`
+
+アサイン・運用保守以外の予定は月の列のまま、任意の `startDate` / `endDate` を持つ（`startDateOf` / `endDateOf` は月の中の日付で、月の初日・末日でないものだけ返す）。端の月の割合は `periodShareAt(p, month, holidays)`（期間外 0、日付のある端の月は営業日の割合、ほかは 1）。祝日の集合ごとに月の営業日をキャッシュするので、`holidays` は同じ `HolidaySet` を渡し回す（Model は `ForecastContext.holidays` と `buildMemberMonths` の最後の引数、画面の変更の影響・目標の警告は `holidaysOfInputs`、リソース計画画面は `holidayCache().set`）。`valueAt(rows, m, holidays)` は holidays を渡したときだけ日割り（「＋ 変更」の「今の値」は入れた値のまま）。編集系（`editMonthAllocation`・`replaceRange`・`mergeAdjacent`）は端の日付を元の行の端の月を持つ部分に残し、日付のある所ではまとめない。画面の日付 1 欄との変換は `splitPeriodDate`（月の初日・末日なら日付の列は空）。
 
 ## 月の稼働時間（SPEC §114）— `src/core/monthHours.ts`
 

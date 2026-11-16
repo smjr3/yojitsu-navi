@@ -65,6 +65,8 @@ test.describe("リソース計画: 名前列の幅", () => {
     const before = await width(page);
     const handle = page.locator(".yn-col-resizer");
     await expect(handle).toHaveAttribute("role", "separator");
+    // グラフ（§58・§122 の単位の切り替え）の下にあり、720px の高さでは画面の外になるので見える位置まで送る
+    await handle.scrollIntoViewIfNeeded();
     const box = (await handle.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

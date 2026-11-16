@@ -11,7 +11,7 @@ import { html } from "htl";
 import { scaledPx } from "./appearance.js";
 import { T, fmt } from "../i18n/index.js";
 import { personMonths, workByTask } from "../core/index.js";
-import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, money, monthJa, monthShort } from "./format.js";
+import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, maxFractionFormat, money, moneySigned, monthJa, monthShort } from "./format.js";
 import { chartColors, chartLegend } from "./charts.js";
 import { dataTable, PREVIEW_ROWS } from "./table.js";
 import { sectionTitle, note } from "./layout.js";
@@ -336,5 +336,103 @@ export function planLoadLegend(dark) {
     { label: T.work.contract, color: c.contract },
     { label: T.work.outside, color: c.outside },
     { label: T.plan.chartCapacity, color: c.muted, shape: "line-dashed" },
+  ]);
+}
+
+/** 顧客の色（dataviz の分類色 1〜7 を固定の順で。8 色目の赤は目標の上限の線と紛れるので使わない）。8 社目以降は「その他」にまとめて灰色 */
+const CUSTOMER_COLORS = {
+  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
+  dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9"],
+};
+const MAX_CUSTOMER_SERIES = CUSTOMER_COLORS.light.length;
+
+/**
+ * 金額のグラフの系列（§122）: 計画の額の多い順に 7 社まで、残りは「その他」。data は core の planBudgetChart()
+ */
+function amountSeries(data, dark) {
+  const colors = dark ? CUSTOMER_COLORS.dark : CUSTOMER_COLORS.light;
+  const head = data.customers.slice(0, MAX_CUSTOMER_SERIES).map((cu, k) => ({ name: cu.name || T.plan.chartAmountNoCustomer, color: colors[k], value: (m) => m.byCustomer[k] ?? 0 }));
+  if (data.customers.length > MAX_CUSTOMER_SERIES) {
+    const c = chartColors(dark);
+    head.push({ name: T.plan.chartAmountOthers, color: c.muted, value: (m) => m.byCustomer.slice(MAX_CUSTOMER_SERIES).reduce((a, b) => a + b, 0) });
+  }
+  return head;
+}
+
+/**
+ * リソース計画の月別の計画の額（§122）: 顧客ごとの積み上げ棒、予算の線（実線）、目標の上限（赤の破線）。
+ * 上限を超える月は棒の上に「上限超」（狭い画面は「超」）
+ */
+export function planAmountChart({ data, dark = false, width = 640, height = 200, unit = "m" }) {
+  const c = chartColors(dark);
+  const n = data.months.length;
+  if (n === 0) return html`<div class="yn-chart-empty">${T.charts.noMonths}</div>`;
+  const series = amountSeries(data, dark);
+  const rows = data.months.flatMap((m, i) => series.map((s, k) => ({ i, k, v: s.value(m) })).filter((r) => r.v > 0));
+  const pts = data.months.map((m, i) => ({ ...m, i, over: m.cap !== null && m.plan > m.cap + 0.5 }));
+  const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 76) / 44))));
+  const ticks = pts.map((d) => d.i).filter((i) => i % every === 0);
+  const peak = Math.max(0, ...pts.map((d) => Math.max(d.plan, d.budget, d.cap ?? 0)));
+  const axisUnit = peak >= 5e10 ? { label: T.charts.axisHundredMillionYen, div: 1e8 } : peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
+  const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
+  const marginLeft = scaledPx(Math.max(44, 12 + 7.5 * axisFormat(peak).length));
+  const half = Math.min(0.35, Math.max(0.12, 12 / Math.max(1, (width - 80) / n)));
+  const slot = (width - 60) / n;
+  const caps = pts.filter((d) => d.cap !== null);
+  const budgets = pts.filter((d) => d.budget > 0);
+  const tipRows = Object.fromEntries(series.map((s) => [s.name, (d) => (s.value(d) > 0 ? money(s.value(d), unit) : null)]));
+  const plot = Plot.plot({
+    width,
+    height,
+    marginLeft,
+    marginRight: scaledPx(12),
+    marginTop: scaledPx(26),
+    marginBottom: scaledPx(28),
+    style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (pts[i] ? monthShort(pts[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
+    y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, domain: [0, Math.max(axisUnit.div, peak * 1.12)], nice: true, tickSize: 0, line: false },
+    marks: [
+      Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
+      Plot.ruleY([0], { stroke: c.axis }),
+      Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "v", z: "k", fill: (d) => series[d.k].color, order: (d) => d.k, stroke: c.surface, strokeWidth: 1 })),
+      // 予算（月ごとの段）と目標の上限（予算 ×（1 − 目標の残予算率）の合計。§63.3 と同じ赤の破線）
+      Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.text, strokeOpacity: 0.7, strokeWidth: 1.5 }),
+      Plot.link(caps, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "cap", y2: "cap", stroke: c.danger, strokeWidth: 2, strokeDasharray: "5 3" }),
+      Plot.text(pts.filter((d) => d.over), { x: "i", y: (d) => Math.max(d.plan, d.budget, d.cap ?? 0), dy: scaledPx(-9), text: () => (slot < 72 ? T.plan.chartAmountOverShort : T.plan.chartAmountOver), fill: c.danger, fontWeight: 700, fontSize: scaledPx(11) }),
+      Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
+      Plot.tip(
+        pts,
+        Plot.pointerX({
+          x: "i",
+          y: (d) => Math.max(d.plan, d.budget, d.cap ?? 0),
+          preferredAnchor: "bottom",
+          dy: scaledPx(-6),
+          fill: c.surface,
+          stroke: c.axis,
+          fontSize: scaledPx(12),
+          channels: {
+            [T.charts.tipMonth]: (d) => monthJa(d.month),
+            ...tipRows,
+            [T.plan.chartAmountPlan]: (d) => money(d.plan, unit),
+            [T.charts.tipBudget]: (d) => money(d.budget, unit),
+            [T.charts.tipTarget]: (d) => (d.cap === null ? null : money(d.cap, unit)),
+            [T.plan.chartAmountRoom]: (d) => (d.cap === null ? null : moneySigned(d.cap - d.plan, unit)),
+          },
+          format: { x: false, y: false },
+        }),
+      ),
+    ],
+  });
+  plot.setAttribute("role", "img");
+  plot.setAttribute("aria-label", T.plan.chartAmountAria);
+  return plot;
+}
+
+export function planAmountLegend(data, dark) {
+  const c = chartColors(dark);
+  return chartLegend([
+    ...amountSeries(data, dark).map((s) => ({ label: s.name, color: s.color })),
+    { label: T.charts.tipBudget, color: c.text, shape: "line" },
+    ...(data.months.some((m) => m.cap !== null) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
   ]);
 }

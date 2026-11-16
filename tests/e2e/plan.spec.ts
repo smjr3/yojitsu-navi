@@ -70,19 +70,19 @@ test("リソース計画: 時間で入力すると人月に直して保存し、
   await expect(d.locator('input[name="member_id"]')).toHaveValue("M011");
   // 案件で選ぶ（期間 2026-11〜2027-03 は更新後の案件 C002 に割り当てられる。§31.3）
   await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
-  await d.locator("#yn-me-f-start_month").fill("2026-11");
-  await d.locator("#yn-me-f-end_month").fill("2027-03");
-  // 終了月の説明は計画用（目標の「累計で判定」は出さない）
-  await expect(d.locator("#yn-me-f-end_month-hint")).toHaveText("YYYY-MM（この月を含む）");
+  await d.locator("#yn-me-f-start_month").fill("2026-11-01");
+  await d.locator("#yn-me-f-end_month").fill("2027-03-31");
+  // 終了日の説明は計画用（目標の「累計で判定」は出さない。§123）
+  await expect(d.locator("#yn-me-f-end_month-hint")).toHaveText("この日まで（月の途中は営業日で日割り）");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   // 1 人月の時間は開始月の営業日数 × 8h（§114。ダミーの祝日表で 2026-11 は 19 日 = 152h）
   await d.locator("#yn-me-f-allocation").fill("15.2");
   await expect(d.locator(".yn-me-conv")).toContainText("15.2 時間 = 0.1 人月");
   await expect(d.locator(".yn-me-conv")).toContainText("152 時間 = 1 人月");
   // 開始月を変えると換算し直す（2026-10 は 21 日 = 168h）
-  await d.locator("#yn-me-f-start_month").fill("2026-10");
+  await d.locator("#yn-me-f-start_month").fill("2026-10-01");
   await expect(d.locator(".yn-me-conv")).toContainText("168 時間 = 1 人月");
-  await d.locator("#yn-me-f-start_month").fill("2026-11");
+  await d.locator("#yn-me-f-start_month").fill("2026-11-01");
   await expect(d.locator(".yn-me-conv")).toContainText("152 時間 = 1 人月");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
@@ -111,7 +111,7 @@ test("リソース計画: 単位を切り替えると入っている値を換算
   await d.locator("#yn-me-f-allocation").fill("0.5");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   // 開始月（既定 2026-11 = 152h。§114）の時間で換算
-  await expect(d.locator("#yn-me-f-start_month")).toHaveValue("2026-11");
+  await expect(d.locator("#yn-me-f-start_month")).toHaveValue("2026-11-01");
   await expect(d.locator("#yn-me-f-allocation")).toHaveValue("76");
   await d.locator("#yn-me-f-allocation-unit").selectOption("personMonth");
   await expect(d.locator("#yn-me-f-allocation")).toHaveValue("0.5");
@@ -132,8 +132,8 @@ for (const dark of [false, true]) {
     await row.getByRole("button", { name: /計画を追加/ }).click();
     const d = page.locator("dialog.yn-me-dialog[open]");
     await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
-    await d.locator("#yn-me-f-start_month").fill("2026-11");
-    await d.locator("#yn-me-f-end_month").fill("2026-11");
+    await d.locator("#yn-me-f-start_month").fill("2026-11-01");
+    await d.locator("#yn-me-f-end_month").fill("2026-11-30");
     await d.locator("#yn-me-f-allocation").fill("0.5");
     await d.locator('[data-role="submit"]').click();
     await expect(d).toHaveCount(0);

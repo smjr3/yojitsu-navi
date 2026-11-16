@@ -10,7 +10,8 @@
  *
  * DOM にも fetch にも依存しない。
  */
-import { addMonths, isValidYearMonth } from "./calendar.js";
+import { addMonths, isValidYearMonth, type HolidayLookup } from "./calendar.js";
+import { periodBounds, periodShareAt } from "./periodDates.js";
 import { parseNumberCell } from "./csv.js";
 import type { YearMonth } from "./types.js";
 
@@ -128,6 +129,9 @@ export interface PeriodRowInput {
   contractId: string;
   startMonth: string;
   endMonth: string;
+  /** 開始日・終了日（§123。CSV の値） */
+  startDate?: string;
+  endDate?: string;
   /** 数値でなければ NaN */
   value: number;
 }
@@ -164,22 +168,26 @@ function sameNumber(a: number, b: number): boolean {
 export function periodHistory(rows: readonly PeriodRowInput[]): PeriodEntry[] {
   const valid = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth);
   const invalid = rows.filter((r) => !valid.includes(r));
-  const sorted = valid.slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : a.endMonth < b.endMonth ? -1 : a.endMonth > b.endMonth ? 1 : a.contractId < b.contractId ? -1 : a.contractId > b.contractId ? 1 : 0));
+  // 実際の開始日・終了日の順（同じ月に始まる行も CSV の順に依らない。§123）
+  const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  const sorted = valid.slice().sort((a, b) => cmp(periodBounds(a).from, periodBounds(b).from) || cmp(periodBounds(a).to, periodBounds(b).to) || cmp(a.contractId, b.contractId));
   const out: PeriodEntry[] = [];
   let maxEnd: string | null = null;
   let prev: PeriodRowInput | null = null;
   for (const r of sorted) {
     let kind: PeriodEntryKind;
     let previousValue: number | null = null;
-    if (maxEnd !== null && r.startMonth <= maxEnd) kind = "overlap";
+    // 重なりは日付で比べる（同じ月でも、前の行の終了日より後の開始日なら重ならない。§123）
+    if (maxEnd !== null && periodBounds(r).from <= maxEnd) kind = "overlap";
     else if (prev === null) kind = "start";
-    else if (addMonths(prev.endMonth, 1) !== r.startMonth) kind = "restart";
+    else if (addMonths(prev.endMonth, 1) !== r.startMonth || (prev.endDate ?? "").trim() !== "" || (r.startDate ?? "").trim() !== "") kind = "restart";
     else {
       previousValue = prev.value;
       kind = !sameNumber(prev.value, r.value) ? "change" : prev.contractId !== r.contractId ? "contract" : "same";
     }
     out.push({ ...r, kind, previousValue, endsBefore: null });
-    if (maxEnd === null || r.endMonth > maxEnd) maxEnd = r.endMonth;
+    const to = periodBounds(r).to;
+    if (maxEnd === null || to > maxEnd) maxEnd = to;
     prev = r;
   }
   // 翌月にどの期間も掛からない（次の期間まで空く・最後の期間）なら「〜で終了」を付ける
@@ -199,6 +207,9 @@ export interface RangeRow {
   contractId: string;
   startMonth: string;
   endMonth: string;
+  /** 開始日・終了日（§123。CSV の値。空・省略 = 月の初めから・終わりまで） */
+  startDate?: string;
+  endDate?: string;
   /** CSV に書く文字列 */
   value: string;
 }
@@ -211,11 +222,11 @@ export interface RangeSegment {
 
 export interface RangeEdit {
   /** 書き換える行（id → 新しい期間・値・契約） */
-  updates: Map<string, { contractId: string; startMonth: YearMonth; endMonth: YearMonth; value: string }>;
+  updates: Map<string, { contractId: string; startMonth: YearMonth; endMonth: YearMonth; startDate: string; endDate: string; value: string }>;
   /** 消す行 */
   deletes: string[];
   /** 足す行 */
-  adds: Array<{ contractId: string; startMonth: YearMonth; endMonth: YearMonth; value: string }>;
+  adds: Array<{ contractId: string; startMonth: YearMonth; endMonth: YearMonth; startDate: string; endDate: string; value: string }>;
 }
 
 export type RangeEditResult = { ok: true; edit: RangeEdit } | { ok: false; reason: "overlap" | "invalid-range" };
@@ -242,18 +253,31 @@ function sameText(a: string, b: string): boolean {
  * - 期間の中で消える行は、同じ契約の新しい期間に使い回す（差分が「変更」になり読みやすい）
  * 月が不正な行は触らない。期間の中で行どうしが重なっていれば ok: false（行ごとに直してもらう）
  */
-export function replaceRange(rows: readonly RangeRow[], from: string, to: string, value: string, segments: (from: YearMonth, to: YearMonth) => RangeSegment[]): RangeEditResult {
+export function replaceRange(
+  rows: readonly RangeRow[],
+  from: string,
+  to: string,
+  value: string,
+  segments: (from: YearMonth, to: YearMonth) => RangeSegment[],
+  dates?: { startDate?: string; endDate?: string },
+): RangeEditResult {
   if (!isValidYearMonth(from) || !isValidYearMonth(to) || from > to) return { ok: false, reason: "invalid-range" };
   const valid = rows.filter((r) => isValidYearMonth(r.startMonth) && isValidYearMonth(r.endMonth) && r.startMonth <= r.endMonth);
   const inRange = valid.filter((r) => r.startMonth <= to && r.endMonth >= from);
   // 期間の中の重なり（同じ月に 2 行）は、どれを置き換えるか決められない
-  const sorted = inRange.slice().sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : 0));
+  // 実際の開始日の順（同じ月に始まる行も CSV の順に依らない。§123）
+  const sorted = inRange.slice().sort((a, b) => {
+    const x = periodBounds(a).from;
+    const y = periodBounds(b).from;
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
   for (let i = 1; i < sorted.length; i++) {
     const a = sorted[i - 1] as RangeRow;
     const b = sorted[i] as RangeRow;
     const overlapFrom = b.startMonth > from ? b.startMonth : from;
     const overlapTo = a.endMonth < to ? a.endMonth : to;
-    if (b.startMonth <= a.endMonth && overlapFrom <= overlapTo) return { ok: false, reason: "overlap" };
+    // 同じ月でも日付が重ならなければ（13 日まで・16 日から。§123）重なりではない
+    if (b.startMonth <= a.endMonth && overlapFrom <= overlapTo && periodBounds(b).from <= periodBounds(a).to) return { ok: false, reason: "overlap" };
   }
 
   interface Piece {
@@ -261,22 +285,26 @@ export function replaceRange(rows: readonly RangeRow[], from: string, to: string
     contractId: string;
     startMonth: YearMonth;
     endMonth: YearMonth;
+    startDate: string;
+    endDate: string;
     value: string;
   }
+  const sd = (r: RangeRow) => (r.startDate ?? "").trim();
+  const ed = (r: RangeRow) => (r.endDate ?? "").trim();
   const pieces: Piece[] = [];
   const freed: RangeRow[] = [];
   for (const r of valid) {
     if (r.endMonth < from || r.startMonth > to) {
-      pieces.push({ id: r.id, contractId: r.contractId, startMonth: r.startMonth, endMonth: r.endMonth, value: r.value });
+      pieces.push({ id: r.id, contractId: r.contractId, startMonth: r.startMonth, endMonth: r.endMonth, startDate: sd(r), endDate: ed(r), value: r.value });
       continue;
     }
     let used = false;
     if (r.startMonth < from) {
-      pieces.push({ id: r.id, contractId: r.contractId, startMonth: r.startMonth, endMonth: addMonths(from, -1), value: r.value });
+      pieces.push({ id: r.id, contractId: r.contractId, startMonth: r.startMonth, endMonth: addMonths(from, -1), startDate: sd(r), endDate: "", value: r.value });
       used = true;
     }
     if (r.endMonth > to) {
-      pieces.push({ id: used ? null : r.id, contractId: r.contractId, startMonth: addMonths(to, 1), endMonth: r.endMonth, value: r.value });
+      pieces.push({ id: used ? null : r.id, contractId: r.contractId, startMonth: addMonths(to, 1), endMonth: r.endMonth, startDate: "", endDate: ed(r), value: r.value });
       used = true;
     }
     if (!used) freed.push(r);
@@ -285,16 +313,29 @@ export function replaceRange(rows: readonly RangeRow[], from: string, to: string
   const dropped = new Set<string>();
   if (!isZeroText(value)) {
     for (const sg of segments(from, to)) {
-      const n: Piece = { id: null, contractId: sg.contractId, startMonth: sg.startMonth, endMonth: sg.endMonth, value: value.trim() };
-      const left = pieces.find((p) => p.contractId === n.contractId && addMonths(p.endMonth, 1) === n.startMonth && sameText(p.value, n.value));
-      const right = pieces.find((p) => p.contractId === n.contractId && addMonths(n.endMonth, 1) === p.startMonth && sameText(p.value, n.value));
+      // 期間の端が元の行の端と同じ月なら、その開始日・終了日を引き継ぐ（§123。月の値だけ変えたとき日付が消えないように）
+      // ほかの行がその月のもっと前（後）を受け持っていれば引き継がない（別々の期間の内側の端どうしを 1 行にまとめない）
+      const sameMonthRows = (m: YearMonth) => inRange.filter((r) => r.contractId === sg.contractId && r.startMonth <= m && m <= r.endMonth);
+      const startDate = inRange.find((r) => r.contractId === sg.contractId && r.startMonth === sg.startMonth && sd(r) !== "" && !sameMonthRows(sg.startMonth).some((o) => o !== r && periodBounds(o).from < sd(r)));
+      const endDate = inRange.find((r) => r.contractId === sg.contractId && r.endMonth === sg.endMonth && ed(r) !== "" && !sameMonthRows(sg.endMonth).some((o) => o !== r && periodBounds(o).to > ed(r)));
+      // 開始日・終了日を指定したとき（§123）は、期間の最初・最後の月にそれを付ける
+      const givenStart = dates && sg.startMonth === from ? (dates.startDate ?? "").trim() : null;
+      const givenEnd = dates && sg.endMonth === to ? (dates.endDate ?? "").trim() : null;
+      const n: Piece = { id: null, contractId: sg.contractId, startMonth: sg.startMonth, endMonth: sg.endMonth, startDate: givenStart ?? (startDate ? sd(startDate) : ""), endDate: givenEnd ?? (endDate ? ed(endDate) : ""), value: value.trim() };
+      // 月の途中で終わる・始まる所ではまとめない（まとめると日割りの月が丸 1 か月になる）
+      const left = n.startDate === "" ? pieces.find((p) => p.contractId === n.contractId && addMonths(p.endMonth, 1) === n.startMonth && p.endDate === "" && sameText(p.value, n.value)) : undefined;
+      const right = n.endDate === "" ? pieces.find((p) => p.contractId === n.contractId && addMonths(n.endMonth, 1) === p.startMonth && p.startDate === "" && sameText(p.value, n.value)) : undefined;
       if (left && right) {
         left.endMonth = right.endMonth;
+        left.endDate = right.endDate;
         pieces.splice(pieces.indexOf(right), 1);
         if (right.id !== null) dropped.add(right.id);
-      } else if (left) left.endMonth = n.endMonth;
-      else if (right) {
+      } else if (left) {
+        left.endMonth = n.endMonth;
+        left.endDate = n.endDate;
+      } else if (right) {
         right.startMonth = n.startMonth;
+        right.startDate = n.startDate;
         // 右の残り（元の行の後半）の行 id が無ければ、期間の中で消える行を使い回す
         if (right.id === null) {
           const reuse = freed.find((f) => f.contractId === n.contractId);
@@ -318,12 +359,12 @@ export function replaceRange(rows: readonly RangeRow[], from: string, to: string
   const edit: RangeEdit = { updates: new Map(), deletes: [], adds: [] };
   for (const p of pieces) {
     if (p.id === null) {
-      edit.adds.push({ contractId: p.contractId, startMonth: p.startMonth, endMonth: p.endMonth, value: p.value });
+      edit.adds.push({ contractId: p.contractId, startMonth: p.startMonth, endMonth: p.endMonth, startDate: p.startDate, endDate: p.endDate, value: p.value });
       continue;
     }
     const o = byId.get(p.id) as RangeRow;
-    if (o.startMonth !== p.startMonth || o.endMonth !== p.endMonth || o.contractId !== p.contractId || o.value.trim() !== p.value.trim()) {
-      edit.updates.set(p.id, { contractId: p.contractId, startMonth: p.startMonth, endMonth: p.endMonth, value: p.value });
+    if (o.startMonth !== p.startMonth || o.endMonth !== p.endMonth || sd(o) !== p.startDate || ed(o) !== p.endDate || o.contractId !== p.contractId || o.value.trim() !== p.value.trim()) {
+      edit.updates.set(p.id, { contractId: p.contractId, startMonth: p.startMonth, endMonth: p.endMonth, startDate: p.startDate, endDate: p.endDate, value: p.value });
     }
   }
   edit.adds.sort((a, b) => (a.startMonth < b.startMonth ? -1 : a.startMonth > b.startMonth ? 1 : 0));
@@ -332,9 +373,12 @@ export function replaceRange(rows: readonly RangeRow[], from: string, to: string
   return { ok: true, edit };
 }
 
-/** 月 m の値（期間付きの行の合計。数値でない行は数えない） */
-export function valueAt(rows: readonly Pick<PeriodRowInput, "startMonth" | "endMonth" | "value">[], month: YearMonth): number {
+/**
+ * 月 m の値（期間付きの行の合計。数値でない行は数えない）。
+ * holidays を渡すと、開始日・終了日のある端の月は営業日で日割りした値（§123）。省略時は入れた値のまま
+ */
+export function valueAt(rows: readonly (Pick<PeriodRowInput, "startMonth" | "endMonth" | "value"> & { startDate?: string; endDate?: string })[], month: YearMonth, holidays?: HolidayLookup): number {
   let s = 0;
-  for (const r of rows) if (r.startMonth <= month && month <= r.endMonth && Number.isFinite(r.value)) s += r.value;
+  for (const r of rows) if (r.startMonth <= month && month <= r.endMonth && Number.isFinite(r.value)) s += holidays ? r.value * periodShareAt(r, month, holidays) : r.value;
   return s;
 }

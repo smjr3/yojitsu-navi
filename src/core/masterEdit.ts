@@ -35,6 +35,8 @@ export interface MasterColumnDef {
   onlyIfPresent?: boolean;
   /** true（onlyIfPresent と一緒に使う）: 列が無くても入力欄は出し、値を入れたときだけ見出しの末尾に足す（§103 の provisional） */
   addOnInput?: boolean;
+  /** true: 新しく作るファイルの見出しに入れない（使う行が出たときだけ足す列。§123 の開始日・終了日） */
+  notInNewFile?: boolean;
   /** true: 台帳の一覧の列には出さない（修正のダイアログには出す。§98 の project_id。表を横に広げないため） */
   listHidden?: boolean;
 }
@@ -204,6 +206,9 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "allocation", label: T.masterFiles.colAllocation, input: "allocation", required: true },
+      // 開始日・終了日（§123）。省略可。画面では開始・終了の日付の欄 1 つで入れ、月の初日・末日でないときだけ書く。列が無いファイルは書くときに見出しの末尾に足す
+      { name: "start_date", label: T.masterFiles.colStartDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
+      { name: "end_date", label: T.masterFiles.colEndDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
     ],
   },
   outside: {
@@ -223,6 +228,9 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "person_months", label: T.masterFiles.colPersonMonths, input: "allocation", required: true },
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
+      // 開始日・終了日（§123。アサインと同じ）
+      { name: "start_date", label: T.masterFiles.colStartDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
+      { name: "end_date", label: T.masterFiles.colEndDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
     ],
   },
   targets: {
@@ -254,7 +262,7 @@ export function timeColumnOf(def: Pick<MasterFileDef, "history">): string {
 
 /** 省略可のファイルが無いときの中身（見出しだけ） */
 export function emptyMasterText(fileId: MasterFileId): string {
-  return `${MASTER_FILES[fileId].columns.map((c) => c.name).join(",")}\n`;
+  return `${MASTER_FILES[fileId].columns.filter((c) => !c.notInNewFile).map((c) => c.name).join(",")}\n`;
 }
 
 /** memberSource で取り込める列（§20.2。team_id は取り込まない。実際に取り込むのは config の columns に書いた列だけ） */
@@ -703,6 +711,13 @@ function effectiveDiffColumns(def: MasterFileDef, header: readonly string[], b: 
   return out;
 }
 
+/** 行の開始日・終了日（§123。空なら付けない） */
+function periodDatesOfRecord(v: Record<string, string>): { startDate?: string; endDate?: string } {
+  const sd = (v.start_date ?? "").trim();
+  const ed = (v.end_date ?? "").trim();
+  return { ...(sd !== "" ? { startDate: sd } : {}), ...(ed !== "" ? { endDate: ed } : {}) };
+}
+
 /**
  * 月 m に掛かるアサイン行の署名（その月の計算に使う allocation を並べ替えて連結。行の順序・期間の端は
  * その月の計算に影響しない。キー = メンバー×契約 でまとめてから呼ぶ）
@@ -711,12 +726,17 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
   const si = header.indexOf("start_month");
   const ei = header.indexOf("end_month");
   const ai = header.indexOf(valueColumn);
+  const sdi = header.indexOf("start_date");
+  const edi = header.indexOf("end_date");
   const hits: string[] = [];
   for (const cells of rows) {
     const s = (cells[si] ?? "").trim();
     const e = (cells[ei] ?? "").trim();
     if (!isValidYearMonth(s) || !isValidYearMonth(e) || s > month || e < month) continue;
-    hits.push((cells[ai] ?? "").trim());
+    // 端の月は開始日・終了日でも値が変わる（§123）
+    const sd = s === month && sdi >= 0 ? (cells[sdi] ?? "").trim() : "";
+    const ed = e === month && edi >= 0 ? (cells[edi] ?? "").trim() : "";
+    hits.push(`${(cells[ai] ?? "").trim()}\u0003${sd}\u0003${ed}`);
   }
   return hits.sort().join("\u0002");
 }
@@ -1574,6 +1594,7 @@ export function planSourcesFromDocs(
       contractId: (v.contract_id ?? "").trim(),
       startMonth: (v.start_month ?? "").trim(),
       endMonth: (v.end_month ?? "").trim(),
+      ...periodDatesOfRecord(v),
       allocation: raw === "" ? Number.NaN : parseNumberCell(raw),
     };
   });
@@ -1588,7 +1609,7 @@ export function planSourcesFromDocs(
   const outsidePlans = (docs.outside?.rows ?? []).map((r) => {
     const v = rowRecord(docs.outside as MasterDoc, r);
     const raw = (v.person_months ?? "").trim();
-    return { memberId: (v.member_id ?? "").trim(), startMonth: (v.start_month ?? "").trim(), endMonth: (v.end_month ?? "").trim(), personMonths: raw === "" ? Number.NaN : parseNumberCell(raw) };
+    return { memberId: (v.member_id ?? "").trim(), startMonth: (v.start_month ?? "").trim(), endMonth: (v.end_month ?? "").trim(), ...periodDatesOfRecord(v), personMonths: raw === "" ? Number.NaN : parseNumberCell(raw) };
   });
   return { teams, members, assignments, contractTeams, outsidePlans, worklogMonths };
 }

@@ -251,7 +251,7 @@ test("台帳の「＋ 変更」: メンバーの役職を来月から変える�
   await g.getByRole("button", { name: /小林 玲奈 の変更を追加/ }).click();
   const d = dialog(page);
   await expect(d.locator("#yn-me-dialog-title")).toContainText("小林 玲奈 の変更を追加");
-  await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11");
+  await expect(d.locator("#yn-me-f-effective_from")).toHaveValue("2026-11-01");
   await d.locator("#yn-me-f-title").selectOption("課長");
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);

@@ -13,6 +13,8 @@ import { projectMatcherFor, validateProjectAliases } from "./projectFromTask.js"
 import { findTaskCodeIssues, taskCodeWarnings, validateMappingPeriods } from "./taskCodes.js";
 import { createMasterIndex, isLeftRecord, isWorkingAt, memberAt, statusDateOf, memberMonthKey, rateFor, teamTreeAt, workedMonthKeys } from "./masters.js";
 import type { Dataset, YearMonth } from "./types.js";
+import { HolidaySet } from "./holidays.js";
+import { periodBounds, periodDateErrors, periodShareAt } from "./periodDates.js";
 import { createTaskClassifier, isOutsideWorklog, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import { normalizeName } from "./normalize.js";
 import { customerKey } from "./customers.js";
@@ -133,10 +135,23 @@ function validateTaskCodes(dataset: Dataset, push: IssueSink): void {
   }
 }
 
+/** 開始日・終了日（§123）の誤り: 開始月・終了月の中の日付でない、開始日が終了日より後 */
+function pushPeriodDateErrors(p: { startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string }, file: string, row: number, ref: Record<string, string>, push: IssueSink): void {
+  for (const e of periodDateErrors(p)) {
+    if (e === "inverted") push({ severity: "error", code: "PERIOD_DATE_INVERTED", message: fmt(T.checks.periodDateInverted, { file, row, from: p.startDate || p.startMonth, to: p.endDate || p.endMonth }), file, row, ref });
+    else {
+      const value = (e === "start" ? p.startDate : p.endDate) ?? "";
+      const month = e === "start" ? p.startMonth : p.endMonth;
+      push({ severity: "error", code: "PERIOD_DATE_INVALID", message: fmt(e === "start" ? T.checks.periodStartDateInvalid : T.checks.periodEndDateInvalid, { file, row, value, month }), file, row, ref });
+    }
+  }
+}
+
 function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "assignments.csv";
   const contractById = new Map(dataset.contracts.map((c) => [c.contractId, c]));
   const monthlyTotal = new Map<string, { memberId: string; month: YearMonth; total: number; rows: number[] }>();
+  const holidays = new HolidaySet(dataset.holidays);
   dataset.assignments.forEach((a, i) => {
     const row = rowOf(i);
     if (!memberIds.has(a.memberId)) push({ severity: "error", code: "ASSIGNMENT_UNKNOWN_MEMBER", message: fmt(T.checks.assignmentUnknownMember, { file, row, memberId: a.memberId }), file, row, ref: { memberId: a.memberId } });
@@ -145,6 +160,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     if (!isValidYearMonth(a.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentStartMonthInvalid, { file, row, value: a.startMonth }), file, row });
     if (!isValidYearMonth(a.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.assignmentEndMonthInvalid, { file, row, value: a.endMonth }), file, row });
     if (monthsOk && a.startMonth > a.endMonth) push({ severity: "error", code: "ASSIGNMENT_PERIOD_INVERTED", message: fmt(T.checks.assignmentPeriodInverted, { file, row, from: a.startMonth, to: a.endMonth }), file, row });
+    if (monthsOk && a.startMonth <= a.endMonth) pushPeriodDateErrors(a, file, row, { memberId: a.memberId, contractId: a.contractId }, push);
     if (!Number.isFinite(a.allocation) || a.allocation < 0) {
       push({ severity: "error", code: "ALLOCATION_OUT_OF_RANGE", message: fmt(T.checks.allocationOutOfRange, { file, row, value: Number.isFinite(a.allocation) ? String(a.allocation) : T.checks.notANumber }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
       return;
@@ -158,10 +174,12 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     for (const month of monthRange(a.startMonth, a.endMonth)) {
       const key = `${a.memberId}\u0000${month}`;
       const acc = monthlyTotal.get(key);
+      // 開始日・終了日のある端の月は日割りした量で数える（§123。月の途中で案件を替えた人が 1.0 超にならない）
+      const v = a.allocation * periodShareAt(a, month, holidays);
       if (acc) {
-        acc.total += a.allocation;
+        acc.total += v;
         acc.rows.push(row);
-      } else monthlyTotal.set(key, { memberId: a.memberId, month, total: a.allocation, rows: [row] });
+      } else monthlyTotal.set(key, { memberId: a.memberId, month, total: v, rows: [row] });
     }
   });
   // 1.0 超は警告（保存は止めない。§40）。同じ人の続いた月は 1 件にまとめる（3 か月超えて 3 件並ばないように）
@@ -192,7 +210,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
 /** 契約外予定（§36・§50）: メンバー・種別・月・人月の形式と、同じ人・同じ種別・同じ月の重複 */
 function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, push: IssueSink): void {
   const file = "outside-plans.csv";
-  const seen = new Map<string, number[]>();
+  const seen = new Map<string, Array<{ row: number; from: string; to: string }>>();
   // 種別は分類表（task-types.csv）の契約外の種別と受け皿の「その他」から選ぶ（§50.6）。分類表に契約外の種別が無ければ問わない
   const types = new Set(planOutsideTypes(dataset.taskTypes).map((t) => normalizeName(t)));
   (dataset.outsidePlans ?? []).forEach((o, i) => {
@@ -203,6 +221,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     if (!isValidYearMonth(o.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.outsideMonthInvalid, { file, row, column: "end_month", value: o.endMonth }), file, row });
     const monthsOk = isValidYearMonth(o.startMonth) && isValidYearMonth(o.endMonth);
     if (monthsOk && o.startMonth > o.endMonth) push({ severity: "error", code: "OUTSIDE_PERIOD_INVERTED", message: fmt(T.checks.outsidePeriodInverted, { file, row, from: o.startMonth, to: o.endMonth }), file, row });
+    if (monthsOk && o.startMonth <= o.endMonth) pushPeriodDateErrors(o, file, row, { memberId: o.memberId }, push);
     if (!Number.isFinite(o.personMonths) || o.personMonths < 0) {
       push({ severity: "error", code: "OUTSIDE_OUT_OF_RANGE", message: fmt(T.checks.outsideOutOfRange, { file, row, value: Number.isFinite(o.personMonths) ? String(o.personMonths) : T.checks.notANumber }), file, row, ref: { memberId: o.memberId } });
     } else if (o.personMonths > 1 + 1e-9) {
@@ -210,16 +229,20 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
       push({ severity: "warning", code: "OUTSIDE_OVER_1", message: fmt(T.checks.outsideOver1, { file, row, value: String(o.personMonths) }), file, row, ref: { memberId: o.memberId } });
     }
     if (!monthsOk || o.startMonth > o.endMonth) return;
+    const { from, to } = periodBounds(o);
     for (const month of monthRange(o.startMonth, o.endMonth)) {
       const key = `${o.memberId}\u0000${normalizeName(o.type)}\u0000${month}`;
       const list = seen.get(key);
-      if (list) list.push(row);
-      else seen.set(key, [row]);
+      if (list) list.push({ row, from, to });
+      else seen.set(key, [{ row, from, to }]);
     }
   });
   // 重複は人ごとに最初の月だけ報告する（長い期間の重複で同じ文が並ばないように）
   const reported = new Set<string>();
-  for (const [key, rows] of seen) {
+  for (const [key, spans] of seen) {
+    if (spans.length < 2) continue;
+    // 同じ月でも日付が重ならなければ重複でない（13 日まで・16 日から。§123）
+    const rows = spans.filter((a) => spans.some((b) => b !== a && a.from <= b.to && b.from <= a.to)).map((x) => x.row);
     if (rows.length < 2) continue;
     const [memberId, , month] = key.split("\u0000") as [string, string, string];
     const sig = `${memberId}|${rows.join(",")}`;

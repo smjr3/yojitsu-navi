@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planBudgetChart, planImpact, planRoomAt, planTargetAlerts, rateFor } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -69,19 +69,21 @@ import {
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateJa, dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { dateJa, dateTimeJst, formatPercent, integer, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
 import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
+import { pendingFor } from "../core/mrPending.js";
 import { combobox } from "./combobox.js";
 import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
 import { chartFigure } from "./chart-zoom.js";
-import { planLoadChart, planLoadLegend } from "./work.js";
+import { planAmountChart, planAmountLegend, planLoadChart, planLoadLegend } from "./work.js";
 import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt } from "../core/ledger.js";
+import { endDateOf, firstDayOf, lastDayOf, periodPresenceAt, periodShareAt, splitPeriodDate, startDateOf } from "../core/periodDates.js";
 
 /** アサインの案件欄の name（値は案件のキー。保存時に contract_id へ割り当てる） */
 const PROJECT_FIELD = "__project";
@@ -237,6 +239,8 @@ function safeStorage(kind) {
 
 // リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
 const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+/** リソース計画のグラフの単位（§122）: 人月（既定。保存しない）／金額 */
+const PLAN_CHART_KEY = "yojitsu-navi:plan-chart";
 /** リソース計画の列ごとの絞り込み・並べ替え（§99。タブ単位） */
 const PLAN_LIST_KEY = "yojitsu-navi:plan-list";
 // リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
@@ -305,8 +309,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
+  /** マージ待ちの変更がある対象（§126.3） */
+  let pendingMrs = {};
+  let pendingSig = "";
   // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) }, onPending: (p) => {
+    // マージ待ちの変更がある対象に印（§126.3）。変わったときだけ描き直す
+    const sig = JSON.stringify(Object.entries(p).map(([id, m]) => [id, [...m].map(([k, list]) => [k, list.map((x) => x.iid)])]));
+    if (sig === pendingSig) return;
+    pendingSig = sig;
+    pendingMrs = p;
+    // 操作と関係なく描き直すので、表の中のフォーカス（data-fk）と入力中の欄を保つ
+    const panelSlot = parts.panel;
+    const focused = panelSlot.contains(document.activeElement) ? document.activeElement : null;
+    if (focused && focused.matches("input, textarea, select")) return; // 入力中は描き直さない（次の描き直しで印が出る）
+    const key = focused?.closest?.("[data-fk]")?.dataset.fk;
+    renderPanel();
+    if (key && !panelSlot.contains(document.activeElement)) focusKey(key);
+  } });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
@@ -407,8 +427,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 時間で入れた計画を人月に直す基準の月 = フォームの開始月（無ければ表示中の最初の月）（§114） */
   function hoursBaseMonth(root) {
     const f = root?.closest?.("form");
-    const v = String(f?.elements?.namedItem?.("start_month")?.value ?? f?.querySelector?.("#yn-me-chg-from")?.value ?? "").trim();
-    return /^\d{4}-\d{2}$/.test(v) ? v : plan.months[0];
+    const v = monthOfField(f?.elements?.namedItem?.("start_month")?.value ?? f?.querySelector?.("#yn-me-chg-from")?.value ?? "");
+    return v || plan.months[0];
   }
   // リソース計画タブの状態: 組織（null = すべて）・表示する月の範囲（§71）・強調するメンバー・開いているメンバー
   const initialRange = parsePlanRange(local.get(PLAN_RANGE_KEY), asOfMonth);
@@ -427,6 +447,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertsAll: false,
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
+    /** グラフの単位（§122）。このブラウザに覚える */
+    chartMode: local.get(PLAN_CHART_KEY) === "amount" ? "amount" : "pm",
     /** 列ごとの絞り込み（列 key → 絞り込み。月の列は "m:YYYY-MM"）と並べ替え（§99）。タブ単位で覚える */
     ...loadPlanList(),
   };
@@ -499,6 +521,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
   /** 月別の合計グラフ（§58）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
   let planChartBuild = null;
+  /** 表示中のリソース計画の組織の木（グラフと編集欄の余力で同じ木の目標を使う。§122） */
+  let planTree = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
     tabs: html`<div class="yn-me-tabs-slot"></div>`,
@@ -918,6 +942,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
   }
 
+  /** マージ待ちの変更がある対象の印（§126.3）。title に誰の何の変更か */
+  function pendingChip(fileIds, key) {
+    const list = pendingFor(pendingMrs, fileIds, key);
+    if (list.length === 0) return null;
+    return html`<span class="yn-chip yn-chip-pending" title=${list.map((m) => fmt(T.masters.pendingTitle, { name: m.author, title: m.title })).join("\n")}>${T.masters.pendingChip}${list.length > 1 ? ` ${integer(list.length)}` : ""}</span>`;
+  }
+
   /** 変更・エラーの数（台帳の対象・リソース計画の行のチップ） */
   function stateChips(changed, added, errors) {
     if (!changed && !added && !errors) return null;
@@ -1290,7 +1321,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           ${g.upcoming.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.upcoming, { n: integer(g.upcoming.length) })}</span>` : null}
           ${!g.shown.current && g.entries.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.notYet, { month: monthJa(g.shown.from) })}</span>` : null}
         </td>
-        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}</td>
+        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}${pendingChip([fileId], fileId === "targets" ? `${g.shown.record.target_type ?? ""}\u0001${g.shown.record.target_id ?? ""}` : rawKey)}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`next:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.addChangeAria, { key: keyText })} onclick=${() => openRowDialog({ fileId, mode: "add", template: latestRowOf(g, rowById), focus: `next:${g.shown.rowId}` })}>${T.ledger.addChange}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.editCurrentAria, { key: keyText, month: g.shown.from })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: g.shown.rowId, focus: `edit:${g.shown.rowId}` })}>${T.masters.edit}</button>
@@ -1517,7 +1548,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       .filter((r) => cellOf(doc, r, "member_id") === memberId)
       .map((r) => {
         const text = cellOf(doc, r, vcol);
-        return { rowId: r.id, contractId: fileId === "assignments" ? cellOf(doc, r, "contract_id") : "", type: fileId === "outside" ? cellOf(doc, r, "type") : "", startMonth: cellOf(doc, r, "start_month"), endMonth: cellOf(doc, r, "end_month"), value: text === "" ? Number.NaN : parseNumberCell(text), text };
+        return { rowId: r.id, contractId: fileId === "assignments" ? cellOf(doc, r, "contract_id") : "", type: fileId === "outside" ? cellOf(doc, r, "type") : "", startMonth: cellOf(doc, r, "start_month"), endMonth: cellOf(doc, r, "end_month"), startDate: cellOf(doc, r, "start_date"), endDate: cellOf(doc, r, "end_date"), value: text === "" ? Number.NaN : parseNumberCell(text), text };
       });
   }
   /** 対象（案件 or 契約外予定の種別）の行。target = { kind: "project", key } | { kind: "outside", type } */
@@ -1571,19 +1602,26 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /**
    * 対象の期間 [from, to] の人月を value にした文書（§36）。変更が無ければ doc: null。重なりなどで決められなければ error
    */
-  function rangeEditDoc(baseDoc, memberId, target, from, to, value) {
+  function rangeEditDoc(baseDoc, memberId, target, from, to, value, dates = null) {
     const fileId = targetFile(target);
     const vcol = MASTER_FILES[fileId].valueColumn;
-    const rows = targetRows(memberId, target).map((x) => ({ id: x.rowId, contractId: x.contractId, startMonth: x.startMonth, endMonth: x.endMonth, value: x.text }));
-    const res = replaceRange(rows, from, to, value, targetSegments(target));
+    const rows = targetRows(memberId, target).map((x) => ({ id: x.rowId, contractId: x.contractId, startMonth: x.startMonth, endMonth: x.endMonth, startDate: x.startDate, endDate: x.endDate, value: x.text }));
+    const res = replaceRange(rows, from, to, value, targetSegments(target), dates ?? undefined);
     if (!res.ok) return { error: res.reason === "overlap" ? T.planEdit.overlapError : T.planEdit.rangeError };
     const e = res.edit;
     if (e.updates.size + e.deletes.length + e.adds.length === 0) return { doc: null };
-    let doc = baseDoc;
-    for (const [id, u] of e.updates) doc = updateRow(doc, id, { ...(fileId === "assignments" ? { contract_id: u.contractId } : {}), start_month: u.startMonth, end_month: u.endMonth, [vcol]: u.value });
+    let doc = withDateColumns(baseDoc, [...e.updates.values(), ...e.adds]);
+    for (const [id, u] of e.updates) doc = updateRow(doc, id, { ...(fileId === "assignments" ? { contract_id: u.contractId } : {}), start_month: u.startMonth, end_month: u.endMonth, start_date: u.startDate, end_date: u.endDate, [vcol]: u.value });
     for (const id of e.deletes) doc = deleteRow(doc, id);
-    for (const a of e.adds) doc = addRow(doc, { member_id: memberId, ...(fileId === "assignments" ? { contract_id: a.contractId } : { type: target.type ?? "" }), start_month: a.startMonth, end_month: a.endMonth, [vcol]: a.value }).doc;
+    for (const a of e.adds) doc = addRow(doc, { member_id: memberId, ...(fileId === "assignments" ? { contract_id: a.contractId } : { type: target.type ?? "" }), start_month: a.startMonth, end_month: a.endMonth, start_date: a.startDate, end_date: a.endDate, [vcol]: a.value }).doc;
     return { doc };
+  }
+  /** 開始日・終了日（§123）を書く行があれば、列の無いファイルの見出しに足す */
+  function withDateColumns(doc, pieces) {
+    let d = doc;
+    if (pieces.some((p) => (p.startDate ?? "") !== "")) d = withColumn(d, "start_date");
+    if (pieces.some((p) => (p.endDate ?? "") !== "")) d = withColumn(d, "end_date");
+    return d;
   }
 
   function renderPlanPanel() {
@@ -1596,6 +1634,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
     const tree = teamTreeAt({ teams: src.teams }, treeMonth).tree;
+    planTree = tree;
     const flat = flattenTeamTree(tree);
     const view = planView(src, plan.teamId, months);
     const names = memberNames();
@@ -1751,11 +1790,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return h("td", { class: `num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}` }, btn);
     };
 
+    /** 行 x が月 m の途中から・途中まで（開始日・終了日。§123）か */
+    const partialIn = (x, m) => !!periodPresenceAt(x, m, holidayCache().set);
+    /** 月 m の途中から・途中までの印（「16日から」「15日まで」「10日〜20日」）。無ければ "" */
+    const partialText = (x, m) => {
+      if (!partialIn(x, m)) return "";
+      const s = m === x.startMonth ? startDateOf(x) : null;
+      const e = m === x.endMonth ? endDateOf(x) : null;
+      const day = (d) => String(Number(d.slice(8, 10)));
+      return s && e ? fmt(T.plan.tipDaysBetween, { from: day(s), to: day(e) }) : s ? fmt(T.plan.tipDaysFrom, { day: day(s) }) : fmt(T.plan.tipDaysUntil, { day: day(e) });
+    };
+
     // 人ごとの月の配分（案件＋運用保守以外）。列の絞り込み・並べ替えと表の行の両方で使う
     const round6 = (v) => Math.round(v * 1e6) / 1e6;
     const people = view.rows.map((r) => {
       const oRows = memberPeriodRows("outside", r.memberId);
-      const outsideMonthly = months.map((m) => valueAt(oRows, m));
+      // 開始日・終了日のある端の月は日割り（§123）
+      const outsideMonthly = months.map((m) => valueAt(oRows, m, holidayCache().set));
       const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
       return { r, oRows, outsideMonthly, monthly, empty: new Set(emptyMonthIdx(r, monthly)), total: monthly.reduce((a, b) => a + b, 0), name: r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId }) };
     });
@@ -1872,15 +1923,46 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
     const planChart = () => {
       const isDark = () => document.documentElement.dataset.theme === "dark";
-      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       planChartBuild = planChart;
+      const subtitle = `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`;
+      const controls = planChartModeSwitch();
+      // 金額（§122）: 組織の担当案件の計画の額を顧客ごとに積み上げ、予算と目標の上限を重ねる。絞り込み・検索には連動しない
+      if (plan.chartMode === "amount") {
+        const data = planAmountFor(plan.teamId, tree, treeMonth, months);
+        return chartFigure({
+          title: T.plan.chartAmountTitle,
+          subtitle,
+          controls,
+          legend: planAmountLegend(data, isDark()),
+          draw: (width, height) => planAmountChart({ data, dark: isDark(), width, height, unit: savedState(model).unit }),
+          className: "yn-me-plan-chart is-amount",
+        });
+      }
+      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       return chartFigure({
         title: T.plan.chartTitle,
-        subtitle: `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`,
+        subtitle,
+        controls,
         legend: planLoadLegend(isDark()),
         draw: (width, height) => planLoadChart({ data, dark: isDark(), width, height }),
         className: "yn-me-plan-chart",
       });
+    };
+    /** グラフの単位の切り替え（人月／金額。§122） */
+    const planChartModeSwitch = () => {
+      const btn = (mode, label) => {
+        const b = h("button", { type: "button", class: "yn-seg-btn", "aria-pressed": String(plan.chartMode === mode), "data-fk": `plan:chart:${mode}` }, label);
+        b.addEventListener("click", () => {
+          if (plan.chartMode === mode) return;
+          plan.chartMode = mode;
+          if (mode === "pm") local.remove(PLAN_CHART_KEY);
+          else local.set(PLAN_CHART_KEY, mode);
+          root.querySelector(".yn-me-plan-chart")?.replaceWith(planChart());
+          focusKey(`plan:chart:${mode}`);
+        });
+        return b;
+      };
+      return h("div", { class: "yn-seg yn-me-plan-chart-mode", role: "group", "aria-label": T.plan.chartModeLabel }, btn("pm", T.plan.chartModePm), btn("amount", T.plan.chartModeAmount));
     };
 
     /** 計画が入っていない人だけに絞る（§116）。いなければ出さない */
@@ -1929,7 +2011,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
@@ -1945,14 +2027,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const k = `${r.memberId}|${targetId(target)}`;
         const histOpen = plan.hist.has(k);
         const histId = `yn-me-plan-h-${r.memberId}-${targetId(target).replace(/[^\w-]/g, "_")}`;
-        const mv = months.map((m) => valueAt(rows, m));
+        const mv = months.map((m) => valueAt(rows, m, holidayCache().set));
         const c = rowCounts(fileId, rows);
         const entries = periodHistory(rows);
         const tr = html`<tr class=${`yn-me-plan-sub ${extraCls}`} data-member=${r.memberId} data-target=${targetId(target)}>
           <th scope="row"><div class="yn-me-plan-who yn-me-plan-sub-who">
             <span class="yn-me-plan-name" title=${sub ? `${label} ・ ${sub}` : label}>${label}</span>${sub ? html`<span class="yn-me-plan-team">${sub}</span>` : null}${stateChips(c.changed, c.added, c.errors)}
           </div></th>
-          ${months.map((m, i) => cellButton({ ...r, name }, m, mv[i], `${name} ${label}`, target))}
+          ${months.map((m, i) => cellButton({ ...r, name }, m, mv[i], `${name} ${label}`, target, rows.some((x) => partialIn(x, m)) ? "partial" : null))}
           <td class="num">${pm(mv.reduce((a, b) => a + b, 0))}</td>
           <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
             ${entries.length ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk=${`plan:hist:${k}`} aria-expanded=${histOpen ? "true" : "false"} aria-controls=${histId} aria-label=${fmt(T.planEdit.histAria, { name, target: label, n: entries.length })} onclick=${() => toggleHist(r.memberId, target)}>${fmt(T.planEdit.histToggle, { n: integer(entries.length) })} ${histOpen ? "▴" : "▾"}</button>` : null}
@@ -2015,10 +2097,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const aRows = memberPeriodRows("assignments", r.memberId).filter((x) => x.startMonth <= m && m <= x.endMonth);
       const oRows = memberPeriodRows("outside", r.memberId);
       const outs = memberOutsideTypes(oRows, r.memberId)
-        .map((type) => ({ type, v: valueAt(oRows.filter((x) => sameType(x.type, type)), m) }))
+        .map((type) => {
+          const list = oRows.filter((x) => sameType(x.type, type) && x.startMonth <= m && m <= x.endMonth);
+          return { type, v: valueAt(list, m, holidayCache().set), days: list.map((x) => partialText(x, m)).find(Boolean) ?? "" };
+        })
         .filter((o) => o.v > 0);
       const out = outs.reduce((s, o) => s + o.v, 0);
-      const total = aRows.reduce((s, x) => s + (Number.isFinite(x.value) ? x.value : 0), 0) + out;
+      // 開始日・終了日のある端の月は日割りした人月（§123）
+      const effective = (x) => (Number.isFinite(x.value) ? x.value * periodShareAt(x, m, holidayCache().set) : 0);
+      const total = aRows.reduce((s, x) => s + effective(x), 0) + out;
       const i = months.indexOf(m);
       const presence = i >= 0 ? r.presence?.[i] : null;
       const cap = i >= 0 && r.activeMonths ? limitAt(r, i) : 1;
@@ -2026,7 +2113,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return html`<div class="yn-plan-tip-inner">
         <p class="yn-plan-tip-head">${fmt(T.plan.tipTotal, { month: monthJa(m), pm: pm(total), hours: hoursFromAllocation(total, hoursOfMonth(m)) })}</p>
         ${aRows.length || out > 0
-          ? html`<ul class="yn-plan-tip-list">${aRows.map((x) => html`<li><span>${contractText(x.contractId)}</span><span class="num">${Number.isFinite(x.value) ? pm(x.value) : "?"}</span></li>`)}${outs.map((o) => html`<li class="is-outside"><span>${o.type ? fmt(T.planEdit.outsideTypeTip, { type: o.type }) : T.masterFiles.outside}</span><span class="num">${pm(o.v)}</span></li>`)}</ul>`
+          ? html`<ul class="yn-plan-tip-list">${aRows.map((x) => html`<li><span>${contractText(x.contractId)}${partialText(x, m) ? html` <span class="yn-plan-tip-days">${partialText(x, m)}</span>` : null}</span><span class="num">${Number.isFinite(x.value) ? pm(effective(x)) : "?"}</span></li>`)}${outs.map((o) => html`<li class="is-outside"><span>${o.type ? fmt(T.planEdit.outsideTypeTip, { type: o.type }) : T.masterFiles.outside}${o.days ? html` <span class="yn-plan-tip-days">${o.days}</span>` : null}</span><span class="num">${pm(o.v)}</span></li>`)}</ul>`
           : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
         ${presence ? html`<p class="yn-plan-tip-foot">${fmt(T.plan.tipPresence, { present: integer(presence.present), total: integer(presence.total), pm: pm(presence.present / presence.total) })}</p>` : null}
         <p class="yn-plan-tip-foot">${free < -1e-9 ? html`<strong>${fmt(T.plan.tipOver, { cap: cap === 1 ? "1.0" : pm(cap), pm: pm(-free) })}</strong>` : fmt(T.plan.tipFree, { pm: pm(free) })}${editable ? html` ・ ${T.plan.tipAction}` : null}</p>
@@ -2045,7 +2132,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}</h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span><span class="yn-me-help">${rich(T.plan.amountHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -2129,7 +2216,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         invalid: T.planEdit.kindInvalid,
       }[e.kind];
       const contract = fileId === "assignments" ? cIndex().byId.get(e.contractId) : null;
-      const period = `${e.startMonth || "?"}〜${e.endMonth || "?"}`;
+      // 開始日・終了日（§123）があれば日付で
+      const period = `${e.startDate || e.startMonth || "?"}〜${e.endDate || e.endMonth || "?"}`;
       const li = html`<li class=${`yn-me-plan-entry is-${st} kind-${e.kind}`} data-key=${e.rowId}>
         <span class="yn-me-plan-period">${period}</span>
         <span class="yn-me-plan-alloc">${pmText(e.value)}</span>
@@ -2402,6 +2490,62 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       afterNote.hidden = scope !== "after";
       cellEditor.refresh();
     };
+    // 目標の上限までの余力（§122）: 案件の上限 − 今の計画の額（入力中の値との差を、この人の 1 人月の額で人月に直す）。目標の無い案件は出さない
+    const roomOf = (contractId) => (model ? planRoomAt(model, planInputsNow(), contractId, month, planTree ?? undefined) : null);
+    const perPm = (() => {
+      const rate = rateFor(planInputsNow().masters, r.memberId, month).hourlyRate;
+      return Number.isFinite(rate) ? rate * hoursOfMonth(month) : 0;
+    })();
+    const roomEls = new Map();
+    const rooms = new Map();
+    for (const { a } of inputs) {
+      if (rooms.has(a.contractId)) continue;
+      const room = roomOf(a.contractId);
+      if (room?.room == null || perPm <= 0) continue;
+      rooms.set(a.contractId, room);
+      roomEls.set(a.contractId, h("p", { class: "yn-plan-pop-room", "data-contract": a.contractId, "aria-live": "polite" }));
+    }
+    const newRoomEl = h("p", { class: "yn-plan-pop-room is-new", "aria-live": "polite", hidden: true });
+    const pmOf = (text) => {
+      const v = parseNumberCell(allocationFromInput(text, "personMonth", 0));
+      return Number.isFinite(v) ? v : 0;
+    };
+    /** 選んだ作業（案件）のこの月の契約 */
+    const pickedContract = () => {
+      const picked = proj.getValue();
+      if (!picked || picked.startsWith(OUTSIDE_OPTION)) return null;
+      const p = cIndex().projects.get(picked);
+      return p ? (contractSegments(p.contracts, month, month)[0]?.contractId ?? null) : null;
+    };
+    const showRoom = (el, yen) => {
+      const over = yen < -0.5;
+      // 残りは金額。人月はこの人の単価での目安なので括弧で添える（単価は人によって違う）
+      const abs = Math.abs(yen);
+      const man = abs >= 1e5 ? integer(Math.round(abs / 1e4)) : maxFractionFormat(1).format(abs / 1e4);
+      el.classList.toggle("is-over", over);
+      el.textContent = fmt(over ? T.plan.roomOver : T.plan.roomLeft, { man, pm: pm(abs / perPm) });
+      el.title = fmt(T.plan.roomTitle, { cap: money(rooms.get(el.dataset.contract)?.cap ?? 0, "yen"), name });
+    };
+    const updateRooms = () => {
+      // 入力中の値の差（同じ案件の欄は合わせる）
+      const delta = new Map();
+      for (const { a, input, before } of inputs) delta.set(a.contractId, (delta.get(a.contractId) ?? 0) + pmOf(input.value) - pmOf(before));
+      const nc = pickedContract();
+      if (nc) delta.set(nc, (delta.get(nc) ?? 0) + pmOf(newNum.value));
+      for (const [id, el] of roomEls) showRoom(el, rooms.get(id).room - (delta.get(id) ?? 0) * perPm);
+      newRoomEl.hidden = true;
+      if (nc && !roomEls.has(nc) && perPm > 0) {
+        if (!rooms.has(nc)) {
+          const room = roomOf(nc);
+          if (room?.room != null) rooms.set(nc, room);
+        }
+        if (rooms.has(nc)) {
+          newRoomEl.dataset.contract = nc;
+          showRoom(newRoomEl, rooms.get(nc).room - (delta.get(nc) ?? 0) * perPm);
+          newRoomEl.hidden = false;
+        }
+      }
+    };
     const form = html`<form class="yn-plan-pop-form" novalidate>
       <header class="yn-plan-pop-head">
         <div class="yn-title-with-tip"><h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>${infoTip(T.plan.editLead, { label: T.masters.dialogTipLabel })}</div>
@@ -2410,13 +2554,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${inputs.length
         ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
             const c = cIndex().byId.get(a.contractId);
-            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`;
+            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span>${roomEls.get(a.contractId) ?? null}</li>`;
           })}</ul>`
         : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
       <ul class="yn-plan-pop-rows yn-plan-pop-outside">${outs.map((o) => html`<li><label for=${o.input.id}><span class="yn-plan-pop-project">${o.label}</span><span class="yn-me-hint">${o.before === null ? T.planEdit.outsideOverlapHint : o.type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub}</span></label><span class="yn-plan-pop-val">${o.input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`)}</ul>
       <div class="yn-plan-pop-new">
         <label for="yn-plan-pop-project">${T.plan.editNewRow}</label>
         <div class="yn-plan-pop-new-row">${proj}<span class="yn-plan-pop-val">${newNum}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></div>
+        ${newRoomEl}
       </div>
       <fieldset class="yn-plan-pop-scope"><legend>${T.plan.scopeLabel}</legend><div class="yn-radio-group">${scopeRadios}</div>${afterNote}</fieldset>
       ${msg}${note}
@@ -2430,7 +2575,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </div>
     </form>`;
     afterNote.hidden = scope !== "after";
+    updateRooms();
+    // 作業の選択は hidden の欄なので input が来ないことがある。change でも数え直す
+    form.addEventListener("change", updateRooms);
     form.addEventListener("input", () => {
+      updateRooms();
       msg.textContent = "";
       if (confirmed) reset();
     });
@@ -2500,11 +2649,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         if (same) continue;
         const row = doc.rows.find((x) => x.id === a.rowId);
         if (!row) continue;
-        const pieces = editMonthAllocation({ startMonth: a.startMonth, endMonth: a.endMonth, allocation: before }, month, after, scope);
+        const pieces = editMonthAllocation({ startMonth: a.startMonth, endMonth: a.endMonth, startDate: a.startDate ?? "", endDate: a.endDate ?? "", allocation: before }, month, after, scope);
         if (pieces.length === 0) doc = deleteRow(doc, a.rowId);
         else {
-          doc = updateRow(doc, a.rowId, { start_month: pieces[0].startMonth, end_month: pieces[0].endMonth, allocation: pieces[0].allocation });
-          for (const p of pieces.slice(1)) doc = addRow(doc, { member_id: r.memberId, contract_id: a.contractId, start_month: p.startMonth, end_month: p.endMonth, allocation: p.allocation }).doc;
+          // 開始日・終了日（§123）は元の行の端の月を持つ部分に残す
+          doc = withDateColumns(doc, pieces);
+          doc = updateRow(doc, a.rowId, { start_month: pieces[0].startMonth, end_month: pieces[0].endMonth, start_date: pieces[0].startDate ?? "", end_date: pieces[0].endDate ?? "", allocation: pieces[0].allocation });
+          for (const p of pieces.slice(1)) doc = addRow(doc, { member_id: r.memberId, contract_id: a.contractId, start_month: p.startMonth, end_month: p.endMonth, start_date: p.startDate ?? "", end_date: p.endDate ?? "", allocation: p.allocation }).doc;
         }
         touched.add(a.contractId);
       }
@@ -2520,9 +2671,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       for (const contractId of touched) {
         const rows = doc.rows
           .filter((x) => cellOf(doc, x, "member_id") === r.memberId && cellOf(doc, x, "contract_id") === contractId)
-          .map((x) => ({ id: x.id, startMonth: cellOf(doc, x, "start_month"), endMonth: cellOf(doc, x, "end_month"), allocation: cellOf(doc, x, "allocation") }));
+          .map((x) => ({ id: x.id, startMonth: cellOf(doc, x, "start_month"), endMonth: cellOf(doc, x, "end_month"), startDate: cellOf(doc, x, "start_date"), endDate: cellOf(doc, x, "end_date"), allocation: cellOf(doc, x, "allocation") }));
         const { keep, drop } = mergeAdjacent(rows, new Set(rows.filter((x) => doc.originals[x.id]).map((x) => x.id)));
-        for (const [id, period] of keep) doc = updateRow(doc, id, { start_month: period.startMonth, end_month: period.endMonth });
+        for (const [id, period] of keep) doc = updateRow(doc, id, { start_month: period.startMonth, end_month: period.endMonth, start_date: period.startDate ?? "", end_date: period.endDate ?? "" });
         for (const id of drop) doc = deleteRow(doc, id);
       }
       const changes = touched.size ? [{ fileId: "assignments", doc }] : [];
@@ -2590,9 +2741,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       // 候補を開くたびに、フォームの開始月〜終了月に契約があるかで印を付ける（§31.6）
       const periodOf = (root) => {
         const f = root?.closest?.("form");
-        const from = String(f?.elements?.namedItem?.("start_month")?.value ?? "").trim();
-        const to = String(f?.elements?.namedItem?.("end_month")?.value ?? "").trim() || from;
-        return /^\d{4}-\d{2}$/.test(from) && /^\d{4}-\d{2}$/.test(to) ? { from, to } : null;
+        const from = monthOfField(f?.elements?.namedItem?.("start_month")?.value);
+        const to = monthOfField(f?.elements?.namedItem?.("end_month")?.value) || from;
+        return from && to ? { from, to } : null;
       };
       return combobox({ id, name: PROJECT_FIELD, options: (root) => (withOutside ? [...outsideOptions(), ...projectOptions(periodOf(root))] : projectOptions(periodOf(root))), value: v, required: req, disabled, placeholder: withOutside ? T.masters.workPlaceholder : T.masters.projectPlaceholder, describedBy: `${id}-hint`, unknownLabel: (x) => fmt(T.masters.unknownContractValue, { id: x.replace(/^c:/, "") }) });
     }
@@ -2723,10 +2874,32 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     team_id: T.masters.hintTeamId,
     title: T.masters.hintTitle,
     status: T.masters.statusHint,
-    status_date: T.masters.statusDateHint,
     target_id: T.masters.hintTarget,
     remaining_rate: T.masters.hintRemainingRate,
   };
+
+  /**
+   * 日付の欄 1 つで入れる列（§123）: 月の列 → 日付の列・端（開始 / 終了）。
+   * 画面は日付だけ。CSV は月の列に月、月の初日・末日でないときだけ日付の列に日付を書く（今のデータのまま読める）
+   */
+  const DATE_PAIRS = {
+    assignments: { start_month: { dateCol: "start_date", side: "start", label: T.masterFiles.colStartDate, hint: T.masters.hintStartDate }, end_month: { dateCol: "end_date", side: "end", label: T.masterFiles.colEndDate, hint: T.masters.hintEndDate } },
+    outside: { start_month: { dateCol: "start_date", side: "start", label: T.masterFiles.colStartDate, hint: T.masters.hintStartDate }, end_month: { dateCol: "end_date", side: "end", label: T.masterFiles.colEndDate, hint: T.masters.hintEndDate } },
+    members: { effective_from: { dateCol: "status_date", side: "start", label: T.masterFiles.colEffectiveFromDate, hint: T.masters.hintEffectiveFromDate } },
+  };
+  /** 月の列と日付の列から、画面の日付の欄の値（月だけなら開始は初日・終了は末日。月が不正なら空） */
+  function pairedDateValue(record, monthCol, pair) {
+    const m = String(record?.[monthCol] ?? "").trim();
+    if (!/^\d{4}-\d{2}$/.test(m)) return "";
+    const d = String(record?.[pair.dateCol] ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d.startsWith(m)) return d;
+    return pair.side === "start" ? firstDayOf(m) : lastDayOf(m);
+  }
+  /** フォームの開始の欄（日付か月）の月。無ければ "" */
+  function monthOfField(v) {
+    const t = String(v ?? "").trim();
+    return /^\d{4}-\d{2}(-\d{2})?$/.test(t) ? t.slice(0, 7) : "";
+  }
 
   /**
    * フォームの値（アサインの contract_id 欄は案件のキー）を、書き込む行の値の配列にする（§31.3）
@@ -2744,7 +2917,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const latest = p.contracts.reduce((a, b) => (b.startMonth > a.startMonth ? b : a));
       return [{ ...values, contract_id: latest.contractId }];
     }
-    return segs.map((sg) => ({ ...values, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth }));
+    // 開始日・終了日（§123）は、入れた期間の端の月を持つ行にだけ付ける
+    return segs.map((sg) => ({ ...values, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth, start_date: sg.startMonth === values.start_month ? (values.start_date ?? "") : "", end_date: sg.endMonth === values.end_month ? (values.end_date ?? "") : "" }));
   }
 
   /**
@@ -2764,7 +2938,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const importedCol = (name) => !!def.editableColumns && !def.editableColumns.includes(name) && !newRow;
     // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
     // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す
-    const shownColumns = columns.filter((c) => c.input !== "targetType" && !importedCol(c.name));
+    const pairs = DATE_PAIRS[fileId] ?? {};
+    const pairedDateCols = new Set(Object.values(pairs).map((p) => p.dateCol));
+    // 日付の列は月の列の日付の欄でまとめて入れる（§123）
+    const shownColumns = columns.filter((c) => c.input !== "targetType" && !importedCol(c.name) && !pairedDateCols.has(c.name));
     const fixedColumns = columns.filter((c) => importedCol(c.name));
     let initial = row ? rowRecord(doc, row) : template ? rowRecord(doc, template) : Object.fromEntries(columns.map((c) => [c.name, ""]));
     if (mode === "add") {
@@ -2774,8 +2951,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (def.history === "effective") initial = { ...initial, effective_from: /^\d{4}-\d{2}$/.test(tFrom) && tFrom >= next ? addMonths(tFrom, 1) : next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
-      // 在籍・不在の開始日（§119）は写した行の月の日なので引き継がない
-      if (template && fileId === "members" && "status_date" in initial) initial = { ...initial, status_date: "" };
+      // 日付（§119・§123）は写した行の月の日なので引き継がない
+      if (template) for (const p of Object.values(pairs)) if (p.dateCol in initial) initial = { ...initial, [p.dateCol]: "" };
       // 新しい案件（§103）の案件ID は、今の ID の続き番号を入れておく
       if (!template && fileId === "contracts") initial = { ...initial, contract_id: nextContractId(cIndex().list.map((c) => c.id)) };
       if (preset) initial = { ...initial, ...preset };
@@ -2837,11 +3014,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           const disabled = keyLocked || lockImported(c.name);
           const tType = (initial.target_type ?? "").trim();
           const tId = (initial.target_id ?? "").trim();
-          const value = c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
+          const pair = pairs[c.name];
+          const value = pair ? pairedDateValue(initial, c.name, pair) : c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
           return html`<div class="yn-me-field">
-            <label for=${`yn-me-f-${c.name}`}>${withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
-            ${fieldFor(fileId, c, value, disabled, { withOutside })}
-            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "targets" && c.name === "end_month" ? T.masters.hintEndMonth : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
+            <label for=${`yn-me-f-${c.name}`}>${pair ? pair.label : withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
+            ${fieldFor(fileId, pair ? { ...c, input: "date" } : c, value, disabled, { withOutside })}
+            <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : pair ? pair.hint : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "targets" && c.name === "end_month" ? T.masters.hintEndMonth : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;
         })}
       </div>
@@ -2881,6 +3059,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           values.target_type = at < 0 ? "" : v.slice(0, at);
           values[c.name] = at < 0 ? v : v.slice(at + 1);
         } else values[c.name] = v;
+      }
+      // 日付の欄（§123）→ 月の列と日付の列（月の初日・末日なら日付の列は空）。形式が違えば月の列にそのまま入れて検証で知らせる
+      for (const [monthCol, p] of Object.entries(pairs)) {
+        if (!(monthCol in values)) continue;
+        const sp = splitPeriodDate(values[monthCol], p.side);
+        if (sp) {
+          values[monthCol] = sp.month;
+          values[p.dateCol] = sp.date;
+        } else values[p.dateCol] = "";
       }
       const unitSel = form.querySelector('[name="__allocation_unit"]');
       if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, hoursOfMonth(/^\d{4}-\d{2}$/.test(values.start_month ?? "") ? values.start_month : plan.months[0]));
@@ -2933,7 +3120,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           form.querySelector("#yn-me-f-allocation")?.focus();
           return;
         }
-        const res = rangeEditDoc(docs.outside, memberId, { kind: "outside", type }, values.start_month, values.end_month, value);
+        const res = rangeEditDoc(docs.outside, memberId, { kind: "outside", type }, values.start_month, values.end_month, value, { startDate: values.start_date ?? "", endDate: values.end_date ?? "" });
         if (res.error) {
           msg.textContent = res.error;
           return;
@@ -2984,7 +3171,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       }
       Object.assign(values, pieces[0]);
       const impact = impactBetween(before, next, range, impactContext());
-      const changes = mode === "edit" ? columns.filter((c) => (rowRecord(before, row)[c.name] ?? "").trim() !== (values[c.name] ?? "")) : [];
+      // 日付の列は月の列の変更として 1 つにまとめて見せる（§123）
+      const beforeRec = mode === "edit" ? rowRecord(before, row) : {};
+      const shownValue = (rec, c) => (pairs[c.name] ? pairedDateValue(rec, c.name, pairs[c.name]) : (rec[c.name] ?? "").trim());
+      const changes = mode === "edit" ? columns.filter((c) => !pairedDateCols.has(c.name) && shownValue(beforeRec, c) !== shownValue(values, c)) : [];
       if (mode === "edit" && changes.length === 0 && pieces.length === 1) {
         dialog.close();
         return;
@@ -3002,7 +3192,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       confirmBox.replaceChildren(
         html`<div>
           ${changes.length
-            ? html`<p><strong>${T.masters.willChange}</strong></p><ul class="yn-me-change-list">${changes.map((c) => html`<li>${c.label}: <span class="yn-me-before">${displayValue(fileId, c.name, (rowRecord(before, row)[c.name] ?? "").trim()) || T.masters.emptyValue}</span> → <span class="yn-me-after">${displayValue(fileId, c.name, values[c.name] ?? "") || T.masters.emptyValue}</span></li>`)}</ul>`
+            ? html`<p><strong>${T.masters.willChange}</strong></p><ul class="yn-me-change-list">${changes.map((c) => (pairs[c.name] ? html`<li>${pairs[c.name].label}: <span class="yn-me-before">${shownValue(beforeRec, c) ? dateJa(shownValue(beforeRec, c)) : T.masters.emptyValue}</span> → <span class="yn-me-after">${shownValue(values, c) ? dateJa(shownValue(values, c)) : T.masters.emptyValue}</span></li>` : html`<li>${c.label}: <span class="yn-me-before">${displayValue(fileId, c.name, (rowRecord(before, row)[c.name] ?? "").trim()) || T.masters.emptyValue}</span> → <span class="yn-me-after">${displayValue(fileId, c.name, values[c.name] ?? "") || T.masters.emptyValue}</span></li>`))}</ul>`
             : html`<p><strong>${T.masters.willAdd}</strong></p>`}
           ${pieces.length > 1 ? html`<p class="yn-me-split" role="note">${fmt(T.masters.splitNote, { n: pieces.length, list: pieces.map((p) => `${p.start_month}〜${p.end_month}`).join("、") })}</p>` : null}
           ${impact.months.length
@@ -3320,6 +3510,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertMemo = { key, edited, value };
     return value;
   }
+  // ---- 金額と目標の上限（§122） ----------------------------------------------
+  /** 今の計画（編集中は編集後）の材料。編集の内容が同じなら作り直さない */
+  let planInputsMemo = null;
+  function planInputsNow() {
+    if (!planInputsMemo || planInputsMemo.validation !== validation) planInputsMemo = { validation, value: planInputsOf(validation.dataset) };
+    return planInputsMemo.value;
+  }
+  let amountMemo = null;
+  /** グラフ「金額」のデータ（組織・組織の月・表示する月・編集の内容が同じなら前の結果） */
+  function planAmountFor(teamId, tree, treeMonth, months) {
+    const key = `${teamId ?? ""}|${treeMonth}|${months.join(",")}`;
+    if (amountMemo && amountMemo.key === key && amountMemo.validation === validation) return amountMemo.value;
+    const value = model ? planBudgetChart(model, planInputsNow(), { teamId, tree }, months) : { customers: [], months: [] };
+    amountMemo = { key, validation, value };
+    return value;
+  }
+
   /** 目標の名前（種類・名前・終了月） */
   function alertTargetName(a) {
     const t = a.evaluation.target;

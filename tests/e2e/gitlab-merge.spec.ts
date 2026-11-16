@@ -14,7 +14,7 @@ import { buildMastersPayload } from "../../src/data/_masters.js";
 
 const PAYLOAD = buildMastersPayload(ROOT_DIR);
 const GITLAB = "https://gitlab.test/api/v4";
-const BADGE_LABEL = "マージ待ち {n} 件";
+const BADGE_LABEL = "申請中 {n} 件";
 
 async function patchMasters(page: Page, masterEdit: unknown): Promise<void> {
   await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
@@ -62,11 +62,11 @@ async function saveRateViaCsv(page: Page, line = "部長,14000,2026-11"): Promis
   await page.getByRole("button", { name: "反映", exact: true }).click();
   await expect(page.locator(".yn-me-csv-result")).toContainText("追加 1・変更 0・削除 0");
   await expect(page.locator(".yn-me-diff-table")).toContainText("14000");
-  await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
-  await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+  await page.getByRole("button", { name: "変更を申請する" }).click();
+  await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("変更を申請しました");
 }
 
-test.describe("デモ: 保存 → マージ待ち → マージ", () => {
+test.describe("デモ: 保存 → 申請中 → 承認", () => {
   test("内容は ID ではなく氏名で出す（個人単価の行 = 氏名 / 適用開始月）", async ({ page }) => {
     await useDemo(page);
     await saveRateViaCsv(page, "M002,14000,2026-11");
@@ -77,7 +77,7 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(changes).not.toContainText("M002");
   });
 
-  test("CSV で編集して保存すると MR になり、一覧とヘッダーの件数に出る。内容を見てマージすると消える", { tag: "@smoke" }, async ({ page }) => {
+  test("CSV で編集して保存すると MR になり、一覧とヘッダーの件数に出る。内容を見て承認すると消える", { tag: "@smoke" }, async ({ page }) => {
     await useDemo(page);
     await saveRateViaCsv(page);
     const mr = page.locator(".yn-mr");
@@ -88,7 +88,7 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(badge(page)).toBeVisible();
     await expect(badge(page)).toContainText("1");
     await page.getByRole("button", { name: "その他" }).click();
-    await expect(page.getByRole("link", { name: /マスタ編集.*マージ待ち 1 件/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /マスタ編集.*申請中 1 件/ })).toBeVisible();
     await page.keyboard.press("Escape");
     // 別のページでも件数が出る
     await gotoPage(page, "/teams");
@@ -99,17 +99,17 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(item.locator(".yn-mr-changes")).toContainText("単価: 追加 1・変更 0・削除 0");
     await expect(item.locator(".yn-mr-changes")).toContainText("部長 / 2026-11");
     await expect(item.locator(".yn-mr-changes")).toContainText("時間単価");
-    await item.getByRole("button", { name: /をマージ$/ }).click();
+    await item.getByRole("button", { name: /を承認$/ }).click();
     const dlg = page.locator("dialog[open]");
-    await expect(dlg).toContainText("この変更をマージしますか？");
+    await expect(dlg).toContainText("この変更を承認しますか？");
     await expect(dlg).toContainText("単価: 追加 1・変更 0・削除 0");
     await dlg.getByRole("button", { name: "キャンセル" }).click();
-    await expect(item.getByRole("button", { name: /をマージ$/ })).toBeFocused();
-    await item.getByRole("button", { name: /をマージ$/ }).click();
-    await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
-    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("「マスタ更新: 単価」をマージしました");
+    await expect(item.getByRole("button", { name: /を承認$/ })).toBeFocused();
+    await item.getByRole("button", { name: /を承認$/ }).click();
+    await page.locator("dialog[open]").getByRole("button", { name: "承認する" }).click();
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("「マスタ更新: 単価」を承認しました");
     await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toBeFocused();
-    await expect(page.locator(".yn-mr")).toContainText("マージ待ちの変更はありません");
+    await expect(page.locator(".yn-mr")).toContainText("申請中の変更はありません");
     await expect(badge(page)).toBeHidden();
   });
 
@@ -124,8 +124,8 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await d.locator("#yn-me-f-__value").fill("0.3");
     await d.getByLabel("この月だけ").check();
     await d.getByRole("button", { name: "反映" }).click();
-    await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
-    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+    await page.getByRole("button", { name: "変更を申請する" }).click();
+    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("変更を申請しました");
     const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
     const saved = await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem("yojitsu-navi:gitlab-demo:v1") ?? "{}") as { branches: Record<string, { files: Record<string, string> }> };
@@ -145,12 +145,12 @@ test.describe("デモ: 保存 → マージ待ち → マージ", () => {
     await expect(page.locator(".yn-mr-item")).toHaveCount(0);
   });
 
-  test("リーダーでない人: マージボタンは出ず「マージはリーダーが行います」。自分の MR は取り下げられる", async ({ page }) => {
+  test("リーダーでない人: 承認ボタンは出ず「承認はリーダーが行います」。自分の MR は取り下げられる", async ({ page }) => {
     await useDemo(page, { leader: false });
     await saveRateViaCsv(page);
     const item = page.locator(".yn-mr-item").first();
-    await expect(item.getByRole("button", { name: /をマージ$/ })).toHaveCount(0);
-    await expect(item).toContainText("マージはリーダーが行います");
+    await expect(item.getByRole("button", { name: /を承認$/ })).toHaveCount(0);
+    await expect(item).toContainText("承認はリーダーが行います");
     await expect(item.getByRole("button", { name: /を取り下げ$/ })).toBeVisible();
   });
 
@@ -216,6 +216,7 @@ test.describe("本物の GitLab API の形（モック）", () => {
       calls.push({ method: req.method(), url, body: req.postData() ? JSON.parse(req.postData()!) : undefined });
       const json = (status: number, body: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(body) });
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/diffs?")) return json(200, [{ new_path: "data/masters/rates.csv", old_path: "data/masters/rates.csv" }]);
       if (url.includes("/merge_requests?")) return json(200, merged ? [] : [{ iid: 7, title: "単価改定", source_branch: "masters/20261028-1-sato", target_branch: "main", state: "opened", author: { username: "suzuki", name: "鈴木" }, created_at: "2026-10-28T01:00:00Z", web_url: "https://gitlab.test/grp/yn/-/merge_requests/7" }]);
       if (url.endsWith("/merge_requests/7")) return json(200, { iid: 7, title: "単価改定", source_branch: "masters/20261028-1-sato", target_branch: "main", author: { username: "suzuki", name: "鈴木" }, web_url: "https://gitlab.test/grp/yn/-/merge_requests/7", user: { can_merge: canMerge }, diff_refs: { base_sha: "b0", head_sha: "h1" }, head_pipeline: { status: "running" }, has_conflicts: false });
       if (url.endsWith("/merge_requests/7/merge")) {
@@ -232,7 +233,7 @@ test.describe("本物の GitLab API の形（モック）", () => {
     return calls;
   }
 
-  test("マージできる人: 他の人の MR を GitLab へのリンク付きで出し、sha を付けてマージする", async ({ page }) => {
+  test("承認できる人: 他の人の MR を GitLab へのリンク付きで出し、sha を付けて承認する", async ({ page }) => {
     await patchMasters(page, cfg);
     const calls = await mock(page, { canMerge: true });
     await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
@@ -244,34 +245,34 @@ test.describe("本物の GitLab API の形（モック）", () => {
     await item.getByRole("button", { name: "内容を見る" }).click();
     await expect(item.locator(".yn-mr-changes")).toContainText("単価: 追加 1");
     expect(calls.some((c) => c.url.includes("/repository/files/data%2Fmasters%2Frates.csv/raw?ref=b0"))).toBe(true);
-    await item.getByRole("button", { name: "単価改定（番号 7）をマージ" }).click();
-    await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
+    await item.getByRole("button", { name: "単価改定（番号 7）を承認" }).click();
+    await page.locator("dialog[open]").getByRole("button", { name: "承認する" }).click();
     await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("CI が画面を作り直したあと");
     const merge = calls.find((c) => c.method === "PUT")!;
     expect(merge.url).toBe(`${GITLAB}/projects/grp%2Fyn/merge_requests/7/merge`);
     expect(merge.body).toEqual({ should_remove_source_branch: true, sha: "h1" });
   });
 
-  test("マージできない人（can_merge = false）: マージ・取り下げのボタンを出さない", async ({ page }) => {
+  test("承認できない人（can_merge = false）: 承認・取り下げのボタンを出さない", async ({ page }) => {
     await patchMasters(page, cfg);
     await mock(page, { canMerge: false });
     await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
     await gotoPage(page, "/masters");
     const item = page.locator(".yn-mr-item");
-    await expect(item).toContainText("マージはリーダーが行います");
-    await expect(item.getByRole("button", { name: /マージ$/ })).toHaveCount(0);
+    await expect(item).toContainText("承認はリーダーが行います");
+    await expect(item.getByRole("button", { name: /承認$/ })).toHaveCount(0);
     await expect(item.getByRole("button", { name: /取り下げ$/ })).toHaveCount(0);
   });
 
-  test("マージできない状態（405）: 理由を案内し、一覧は残る", async ({ page, errors }) => {
+  test("承認できない状態（405）: 理由を案内し、一覧は残る", async ({ page, errors }) => {
     await patchMasters(page, cfg);
     await mock(page, { canMerge: true, mergeStatus: 405 });
     await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
     await gotoPage(page, "/masters");
-    await page.getByRole("button", { name: "単価改定（番号 7）をマージ" }).click();
-    await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
+    await page.getByRole("button", { name: "単価改定（番号 7）を承認" }).click();
+    await page.locator("dialog[open]").getByRole("button", { name: "承認する" }).click();
     const err = page.locator(".yn-mr .yn-me-outcome.is-error");
-    await expect(err).toContainText("今はマージできません");
+    await expect(err).toContainText("今は承認できません");
     await expect(err).toBeFocused();
     await expect(page.locator(".yn-mr-item")).toHaveCount(1);
     errors.failedRequests.splice(0, errors.failedRequests.length, ...errors.failedRequests.filter((s) => !s.includes("gitlab.test")));
@@ -298,6 +299,7 @@ test.describe("競合ありの MR を最新に載せ直す（§120）", () => {
       const json = (status: number, b: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(b) });
       const mr = { iid: 8, title: "マスタ更新: data/masters/rates.csv", description: "単価の見直し", source_branch: "masters/20261110-1-sato", target_branch: "main", state: "opened", author: { username: "sato", name: "佐藤" }, created_at: "2026-11-10T01:00:00Z" };
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/diffs?")) return json(200, [{ new_path: "data/masters/rates.csv", old_path: "data/masters/rates.csv" }]);
       if (url.includes("/merge_requests?")) return json(200, remade ? [] : [mr]);
       if (url.endsWith("/merge_requests/8") && req.method() === "GET") return json(200, { ...mr, user: { can_merge: false }, diff_refs: { base_sha: "b0", head_sha: "h1" }, has_conflicts: true, detailed_merge_status: "conflict" });
       if (url.endsWith("/merge_requests/8") && req.method() === "PUT") {
@@ -328,7 +330,7 @@ test.describe("競合ありの MR を最新に載せ直す（§120）", () => {
     const item = page.locator(".yn-mr-item");
     await expect(item).toContainText("競合あり");
     // マージできない人でも、自分の MR なら載せ直せる
-    await expect(item).toContainText("マージはリーダーが行います");
+    await expect(item).toContainText("承認はリーダーが行います");
     await item.getByRole("button", { name: "マスタ更新: 単価（番号 8）を最新に載せ直す" }).click();
     return calls;
   }
@@ -431,11 +433,11 @@ test.describe("設定画面とヘッダー", () => {
     await expect(res).toHaveClass(/is-warn/);
     await expect(res).toContainText("GitLab の設定に 5 件の不足があります");
     await expect(res.locator("[data-warning]")).toHaveText([
-      "トークンに scope「api」がありません（保存・マージができません）",
+      "トークンに scope「api」がありません（保存・承認ができません）",
       "プロジェクトが Private ではありません",
       "Pages を誰でも見られる設定です",
       "main に直接プッシュできる人がいます",
-      "Developer も main にマージできます",
+      "Developer も main への変更を承認できます",
     ]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
@@ -493,7 +495,7 @@ test.describe("設定画面とヘッダー", () => {
     const res = page.locator('[data-role="check-result"]');
     await expect(res).toContainText("接続できました");
     await expect(res).toContainText("Maintainer");
-    await expect(res).toContainText("マージできる立場");
+    await expect(res).toContainText("承認できる立場");
     await expect(res.locator("[data-warning]")).toHaveCount(0);
     expect(await page.evaluate(() => [localStorage.getItem("yojitsu-navi:gitlab-token"), sessionStorage.getItem("yojitsu-navi:gitlab-token")])).toEqual(["demo-token", null]);
     expect(await page.content()).not.toContain("demo-token");
@@ -501,7 +503,7 @@ test.describe("設定画面とヘッダー", () => {
     await page.getByLabel(/リーダーとして操作する/).uncheck();
     await page.getByRole("button", { name: "接続を確認" }).click();
     await expect(res).toContainText("Developer");
-    await expect(res).toContainText("マージはリーダー（Maintainer）が行います");
+    await expect(res).toContainText("承認はリーダー（Maintainer）が行います");
     await page.getByRole("button", { name: "削除" }).click();
     await expect(page.locator("#yn-set-token")).toBeFocused();
     expect(await page.evaluate(() => localStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
@@ -544,7 +546,7 @@ test.describe("設定画面とヘッダー", () => {
 
 test.describe("画面幅・ダーク", () => {
   for (const [w, dark] of [[390, false], [390, true], [768, false], [1024, true], [1280, false]] as const) {
-    test(`${w}px${dark ? " ダーク" : ""}: マージ待ち・設定・ヘッダーが横にはみ出さない`, async ({ page }) => {
+    test(`${w}px${dark ? " ダーク" : ""}: 申請中・設定・ヘッダーが横にはみ出さない`, async ({ page }) => {
       if (dark) await useDarkTheme(page);
       await page.setViewportSize({ width: w, height: 800 });
       await useDemo(page);

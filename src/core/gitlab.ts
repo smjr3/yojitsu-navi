@@ -587,11 +587,29 @@ export async function mergeRequestFileChanges(fetchImpl: FetchLike, cfg: MasterE
   return out.filter((c) => c.before !== c.after);
 }
 
+/**
+ * MR で変わったファイルのパス（`GET …/merge_requests/:iid/diffs`。§126.3）。読めない（古い GitLab など）ときは null（呼び出し側は全ファイルを比べる）
+ */
+export async function mergeRequestChangedPaths(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number): Promise<string[] | null> {
+  ensureConfigured(cfg);
+  try {
+    const list = await request<unknown>(fetchImpl, "list", `${projectPath(cfg)}/merge_requests/${iid}/diffs?per_page=100`, token0(token), "GET");
+    if (!Array.isArray(list)) return null;
+    const paths = new Set<string>();
+    for (const d of list as Array<Record<string, unknown>>) for (const p of [d?.new_path, d?.old_path]) if (typeof p === "string" && p !== "") paths.add(p);
+    return [...paths];
+  } catch {
+    return null;
+  }
+}
+
 /** マージする（sha = 確認した head。違えば GitLab が 409 で拒否する） */
-export async function mergeMergeRequest(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number, sha: string | null): Promise<void> {
+export async function mergeMergeRequest(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, iid: number, sha: string | null, opts: { whenPipelineSucceeds?: boolean } = {}): Promise<void> {
   ensureConfigured(cfg);
   const body: Record<string, unknown> = { should_remove_source_branch: true };
   if (sha) body.sha = sha;
+  // 検証（パイプライン）が通ったら GitLab が自動でマージする（§126.2）。新しい GitLab は auto_merge、古い GitLab は merge_when_pipeline_succeeds
+  if (opts.whenPipelineSucceeds) Object.assign(body, { merge_when_pipeline_succeeds: true, auto_merge: true });
   await request(fetchImpl, "merge", `${projectPath(cfg)}/merge_requests/${iid}/merge`, token0(token), "PUT", body);
 }
 

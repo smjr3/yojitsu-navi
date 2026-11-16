@@ -6,7 +6,8 @@
  * 画面は aggregateMembers / memberMonthlySeries で期間を合算する（Model はプレーンな JSON のままで動く）。
  * 単価は §6 の rateFor をそのまま使う（原価・着地見込みと同じ関数）。
  */
-import { isValidYearMonth, monthRange } from "./calendar.js";
+import { isValidYearMonth, monthRange, type HolidayLookup } from "./calendar.js";
+import { periodShareAt } from "./periodDates.js";
 import { normalizeName } from "./normalize.js";
 import { roundYen } from "./cost.js";
 import { createEffectiveIndex, createMasterIndex, isLeftRecord, leftDateOf, leftMonthOf, memberAt, rateFor, type EffectiveIndex, type MasterIndex } from "./masters.js";
@@ -62,6 +63,7 @@ export function buildMemberMonths(
   masters: MasterIndex,
   monthHours: MonthHours,
   outside: MemberOutsideInput = {},
+  holidays: HolidayLookup = [],
 ): MemberMonth[] {
   // (member, month) → (contract → 集計)
   const cells = new Map<string, Map<string, CellAcc>>();
@@ -98,7 +100,8 @@ export function buildMemberMonths(
     if (from > to) continue;
     for (const month of monthRange(from, to)) {
       const acc = cellOf(a.memberId, month, a.contractId);
-      acc.allocation += a.allocation;
+      // 開始日・終了日のある端の月は営業日で日割り（§123）
+      acc.allocation += a.allocation * periodShareAt(a, month, holidays);
       acc.assignmentCount += 1;
     }
   }
@@ -114,7 +117,7 @@ export function buildMemberMonths(
     if (!Number.isFinite(o.personMonths) || !isValidYearMonth(o.startMonth) || !isValidYearMonth(o.endMonth) || o.startMonth > o.endMonth) continue;
     for (const month of monthRange(o.startMonth, o.endMonth)) {
       const acc = outsideCell(o.memberId, month, o.type);
-      acc.allocation += o.personMonths;
+      acc.allocation += o.personMonths * periodShareAt(o, month, holidays);
       acc.assignmentCount += 1;
     }
   }
