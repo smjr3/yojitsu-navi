@@ -217,7 +217,7 @@ export default {
     costOfType: "実績（{type}）",
     totalAmount: "契約総額",
   },
-  // 開閉できる節と目次（データ確認。§126）
+  // 開閉できる節と目次（データ確認。§127）
   fold: {
     count: "{n} 件",
     tocLabel: "このページの項目",
@@ -240,7 +240,7 @@ export default {
     rowCountTreeCollapsed: "表示 {shown} 行 / 全 {n} 行",
     rowCount: "{n} 件",
     rowCountFiltered: "{shown} 件 / 全 {n} 件",
-    // 先頭の数行だけ出す表（§126）
+    // 先頭の数行だけ出す表（§127）
     showAll: "すべて表示（{n} 件）",
     showFirst: "先頭の {n} 件だけ表示",
     // 列ごとの絞り込み（見出しの漏斗ボタン。SPEC §70）
@@ -813,6 +813,7 @@ export default {
     axisHundredMillionYen: "億円",
     costActual: "実績",
     legendCostForecast: "実績（見込み・破線枠）",
+    legendCostPrelim: "実績（速報・斜線）",
     gpActual: "残予算",
     legendGpForecast: "残予算（見込み・破線）",
     legendTarget: "目標の上限",
@@ -823,6 +824,7 @@ export default {
     hoursAxis: "時間（h）",
     legendPlanned: "計画時間（配分 × 1人月の時間）",
     legendActual: "実績時間（作業実績）",
+    legendActualPrelim: "実績時間（速報・斜線）",
     // グラフの拡大表示（全グラフ共通）
     zoom: "拡大",
     zoomTip: "グラフを大きく表示します",
@@ -898,7 +900,7 @@ export default {
   // ── 全体サマリー ──────────────────────────────────
   index: {
     lead: "保守契約の予算（契約額を営業日で月に按分）と実績（工数 × 単価）を突き合わせ、残予算と期間の終わりの着地見込みを見る画面です。数値をクリックすると計算根拠が開きます。",
-    monthlyHint: "{period} の予算・実績・残予算。{asOfMonth} 以降は着地見込み（{method}）です。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。",
+    monthlyHint: "{period} の予算・実績・残予算。{asOfMonth} 以降は着地見込み（{method}）で、{asOfMonth} に入っている実績は速報として見込みの破線枠の中に斜線で出します。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。",
     deficitHint: "{period} の終わりの着地差がマイナスになる案件（{method}）。クリックで案件詳細へ。",
     noDeficitTitle: "超過見込みの案件はありません",
     noDeficitText: "{team} の案件はすべて予算内で着地する見込みです。",
@@ -1148,7 +1150,7 @@ export default {
     costSub: "{hours} ・ {pm}人月（標準）",
     notInTarget: "期間に掛からない案件",
     outOfScope: "対象外",
-    monthlyHint: "{period}。{asOfMonth} 以降は着地見込み（{method}）です。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。",
+    monthlyHint: "{period}。{asOfMonth} 以降は着地見込み（{method}）で、{asOfMonth} に入っている実績は速報として見込みの破線枠の中に斜線で出します。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。",
     monthlyTableTitle: "月ごとの予実",
     monthlyTableHint: "各月の予算・実績・残予算。予定（未来）の月は選択中の方式（{method}）による見込み額（残り見込みを残り月で均等割り）を「見込」として表示します。数値をクリックすると、その月の計算根拠（予算の月割り・メンバー別の実績行・作業ログ・見込みの算出）が開きます。",
     forecastTitle: "見込み（{method}）",

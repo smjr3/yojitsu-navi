@@ -187,7 +187,7 @@ function minMonth(a: YearMonth | undefined, b: YearMonth): YearMonth {
  * - 同じ探し方（作業コード、または 顧客・案件・キーワード）の行で、契約の期間と行の期間の重なる月が別の契約を指す → warning（一意に決まらない）
  * - 行の期間が契約の期間と 1 か月も重ならない → warning（その行は使われない）
  */
-/** label: メッセージに出す案件 ID に名前を添える（§126） */
+/** label: メッセージに出す案件 ID に名前を添える（§127） */
 export function validateMappingPeriods(rules: readonly MappingRule[], contracts: readonly Contract[], label: (contractId: string) => string = (id) => id): MappingRowIssue[] {
   const issues: MappingRowIssue[] = [];
   const contractById = new Map<string, Contract>();

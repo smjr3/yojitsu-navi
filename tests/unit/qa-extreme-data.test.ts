@@ -88,7 +88,7 @@ describe("validateDataset: 計算は止めないが気付きたいデータ（wa
     });
     expect(issuesOf(d, "ASSIGNMENT_OUTSIDE_CONTRACT").map((i) => [i.severity, i.row])).toEqual([["warning", 3]]);
   });
-  it("メッセージの社員番号・案件IDには名前を添える（ID だけでは誰・どの案件か分からない。§126）", () => {
+  it("メッセージの社員番号・案件IDには名前を添える（ID だけでは誰・どの案件か分からない。§127）", () => {
     const d = dataset({
       rates: [rate("SE", 6000)],
       members: [member({ memberId: "M1", name: "山田 太郎", title: "顧問" }), member({ memberId: "M2", name: "鈴木 花子" })],

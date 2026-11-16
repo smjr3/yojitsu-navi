@@ -3123,7 +3123,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const isId = (id) => names.has(id) || cIndex().byId.has(id);
     const contractLabel = (id) => `「${projectOfContract(id).label}」`;
     return issueText(i)
-      // 検証の文は ID に名前を添えている（「M001（山田 太郎）」。§126）。この画面は ID を名前に置き換えるので、添えた名前は外す
+      // 検証の文は ID に名前を添えている（「M001（山田 太郎）」。§127）。この画面は ID を名前に置き換えるので、添えた名前は外す
       .replace(/([A-Za-z0-9_-]+)（[^（）]+）/g, (m, id) => (isId(id) ? id : m))
       .replace(/^メンバー(?:ID)? ([A-Za-z0-9_-]+) ?(?:の|は) ?/, (m, id) => (id === subjectId && names.get(id) ? "" : m))
       .replace(/メンバー(?:ID)? ([A-Za-z0-9_-]+)/g, (m, id) => names.get(id) || m)

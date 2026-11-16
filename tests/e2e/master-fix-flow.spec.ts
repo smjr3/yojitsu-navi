@@ -50,7 +50,7 @@ test("データ確認: 重要度はエラーと確認要求", async ({ page }) =
 test("マスタに無い正式な案件の「案件に登録」: 正式な案件ID・顧客名・案件名と続き番号の入ったダイアログ。追加は下書きで、保存は人が決める", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/data-check");
   const table = tableByCaption(page, "マスタに無い正式な案件");
-  // 正式な案件ID は「列」で選べる列（名前が先。§126）
+  // 正式な案件ID は「列」で選べる列（名前が先。§127）
   await page.locator(".yn-table-block", { has: table }).locator(".yn-cols-btn").click();
   await page.locator('.yn-cols-pop .yn-cols-item[data-key="projectId"] input').click();
   await page.keyboard.press("Escape");
@@ -87,7 +87,7 @@ test("マスタに無い正式な案件: 正式な案件IDの無い案件の候�
   const unlinked = tableByCaption(page, "正式な案件IDの無い案件");
   const uh = await headerIndex(unlinked);
   const withCandidate = dataRows(unlinked).filter({ hasText: /PJ-\d+/ }).first();
-  // 候補は「顧客 / 案件名（正式な案件ID）」（§126）
+  // 候補は「顧客 / 案件名（正式な案件ID）」（§127）
   const candidate = (await cellText(withCandidate, col(uh, "候補の正式な案件"))).split("、")[0] ?? "";
   const [, customer = "", project = ""] = candidate.match(/^(.+?) \/ (.+)（PJ-\d+）$/) ?? [];
   const table = tableByCaption(page, "マスタに無い正式な案件");

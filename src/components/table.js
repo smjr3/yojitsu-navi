@@ -19,7 +19,7 @@
  *   filter?: false（列ごとの絞り込みを付けない）,
  *   maxHeight?: px, toolbar?: Node,
  *   previewRows?: 行数（先頭のこの行数だけ出し、表の下の「すべて表示」で残りを出す。木構造は対象外。
- *                 たたんでいる間は表の中でスクロールしないので、ページのスクロールが表に取られない。§126）
+ *                 たたんでいる間は表の中でスクロールしないので、ページのスクロールが表に取られない。§127）
  * })
  * 列の表示・並び順: caption があり列が 3 つ以上なら、ツールバーの「列」で利用者が変えられる（先頭の列は固定。§106）。
  * 文字の列（type "text"、文字だけのセル）は上限の幅で「…」にし、全文を title に出す。
@@ -727,7 +727,7 @@ export function dataTable({
     if (!tfoot.isConnected) table.append(tfoot);
   }
 
-  // 先頭の数行だけ出す（§126）。並べ替え・絞り込みの後の行の先頭。Excel は常に全行
+  // 先頭の数行だけ出す（§127）。並べ替え・絞り込みの後の行の先頭。Excel は常に全行
   const preview = !tree && previewRows > 0 ? previewRows : 0;
   let showAll = false;
   function renderBody() {
@@ -774,7 +774,7 @@ export function dataTable({
   const closeFilterPop = (opts) => filterPop.close(opts);
   const openFilterPop = (col, btn) => filterPop.open(col, btn);
 
-  // 「すべて表示（n 件）」／「先頭の n 件だけ表示」（§126）
+  // 「すべて表示（n 件）」／「先頭の n 件だけ表示」（§127）
   const moreBtn = preview > 0 ? html`<button type="button" class="yn-btn yn-btn-sm yn-table-more-btn"></button>` : null;
   const moreBar = moreBtn ? html`<div class="yn-table-more" hidden>${moreBtn}</div>` : null;
   function updateMore(cut) {
@@ -849,7 +849,7 @@ export function dataTable({
   const scrollHint = html`<span class="yn-scroll-hint" aria-live="polite" hidden>${T.table.scrollHint} <span aria-hidden="true">→</span></span>`;
   const wrapEl = html`<div class="yn-table-wrap" tabindex="0" role="region" aria-label=${caption ?? T.table.regionLabel}>${table}</div>`;
   const applyMaxHeight = () => {
-    // 先頭の数行だけ出している間は表の中でスクロールさせない（ページのスクロールが表に取られないように。§126）
+    // 先頭の数行だけ出している間は表の中でスクロールさせない（ページのスクロールが表に取られないように。§127）
     wrapEl.style.maxHeight = maxHeight && !(preview > 0 && !showAll) ? `${maxHeight}px` : "";
   };
   applyMaxHeight();

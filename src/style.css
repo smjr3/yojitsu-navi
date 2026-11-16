@@ -1274,6 +1274,12 @@ h3 {
   border: 1px dashed var(--c);
   box-sizing: border-box;
 }
+/* 今月の速報の実績（§125）: グラフと同じ斜線 */
+.yn-legend-rect-hatched {
+  background: repeating-linear-gradient(-45deg, var(--c) 0 2px, color-mix(in srgb, var(--c) 45%, transparent) 2px 4px);
+  border: 1px solid var(--c);
+  box-sizing: border-box;
+}
 /* 線の凡例: グラフの線種（実線・破線・点線）と同じに見えるよう、幅を取り、破線・点線は背景の繰り返しで描く
    （2px の border の dashed / dotted は 14px 幅では実線と見分けられなかった） */
 .yn-legend-line,
@@ -5442,7 +5448,7 @@ a.yn-org-person:hover {
   margin: 4px 0;
 }
 
-/* 先頭の数行だけ出す表の「すべて表示」（§126） */
+/* 先頭の数行だけ出す表の「すべて表示」（§127） */
 .yn-table-more {
   display: flex;
   justify-content: center;
@@ -5452,7 +5458,7 @@ a.yn-org-person:hover {
   display: none;
 }
 
-/* 開閉できる節と目次（データ確認。§126） */
+/* 開閉できる節と目次（データ確認。§127） */
 .yn-fold {
   scroll-margin-top: 12px;
 }

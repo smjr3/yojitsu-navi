@@ -31,7 +31,7 @@ export interface ValidationIssue {
 
 type IssueSink = (issue: ValidationIssue) => void;
 
-/** メッセージに出す ID に名前を添える（ID だけでは誰・どの案件か分からない。§126）。マスタに無い ID はそのまま */
+/** メッセージに出す ID に名前を添える（ID だけでは誰・どの案件か分からない。§127）。マスタに無い ID はそのまま */
 interface Names {
   member(id: string): string;
   members(ids: readonly string[]): string;

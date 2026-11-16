@@ -33,7 +33,7 @@ const msgCell = (text) => html`<span class="yn-cell-msg">${text}</span>`;
 const linkButton = (href, text, aria) => html`<a class="yn-btn yn-btn-sm yn-row-action" href=${href} aria-label=${aria}>${text}</a>`;
 const officialByName = officialProjectLookup(issuesData?.officialProjects);
 const registerHref = (row) => registerContractHref(row, officialByName);
-// 正式な案件IDは名前で出す（顧客 / 案件名（ID））。一覧に無い ID はそのまま（§126）
+// 正式な案件IDは名前で出す（顧客 / 案件名（ID））。一覧に無い ID はそのまま（§127）
 const officialById = new Map((issuesData?.officialProjects ?? []).map((p) => [p.projectId, p]));
 const officialLabel = (id) => {
   const p = officialById.get(id);
@@ -67,7 +67,7 @@ const summary = (() => {
 ```
 
 ```js
-// 節の一覧（目次・見出しの件数。§126）。出さない節（設定が無い・該当なし）は null
+// 節の一覧（目次・見出しの件数。§127）。出さない節（設定が無い・該当なし）は null
 const sections = (() => {
   if (!model) return null;
   const projectCheck = issuesData?.projects;
@@ -97,7 +97,7 @@ const openSection = (key) => {
   const meta = sections.get(key);
   return foldSection({ id: meta.id, title: meta.title, hint: meta.hint, count: meta.count, tone: meta.tone, defaultOpen: meta.defaultOpen ?? true });
 };
-// 表は先頭の数行だけ出し、残りは「すべて表示」で（ページのスクロールが表に取られないように。§126）
+// 表は先頭の数行だけ出し、残りは「すべて表示」で（ページのスクロールが表に取られないように。§127）
 const PREVIEW_ROWS = 10;
 ```
 
@@ -342,7 +342,7 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
   sec.body.append(
     dataTable({
       columns: [
-        // 名前を先に。正式な案件IDは「列」で選べる列（Excel には常に出す。§126）
+        // 名前を先に。正式な案件IDは「列」で選べる列（Excel には常に出す。§127）
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
         { key: "projectId", label: T.dataCheck.colProjectId, type: "text", optional: true, exportAlways: true },
