@@ -6,7 +6,7 @@
  *   - 作業ログ・作業別の内訳にも付く。狭い画面・ダークでも吹き出しが画面内
  */
 import type { Locator, Page } from "@playwright/test";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, parseNumber, useDarkTheme } from "./helpers/app.js";
+import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, parseNumber, useDarkTheme, showAllRows } from "./helpers/app.js";
 
 function filterBtn(table: Locator, key: string): Locator {
   return table.locator(`thead th[data-key="${key}"] .yn-filter-btn`);
@@ -105,6 +105,7 @@ test("案件詳細の作業ログ: 作業内容で絞ると合計行が絞り込
   await page.getByRole("button", { name: "作業ログを読み込む" }).click();
   const table = tableByCaption(page, "作業ログ");
   await expect(dataRows(table).first()).toBeVisible();
+  await showAllRows(table);
   const total = await dataRows(table).count();
   await filterBtn(table, "task").click();
   const p = pop(page);
@@ -148,6 +149,7 @@ test("日付の列: 年のボタンでその年だけ、もう一度押すと解
   await page.getByRole("button", { name: "作業ログを読み込む" }).click();
   const table = tableByCaption(page, "作業ログ");
   await expect(dataRows(table).first()).toBeVisible();
+  await showAllRows(table);
   const all = await columnValues(table, "日付");
   const year = all[0]!.slice(0, 4);
   await filterBtn(table, "date").click();
@@ -171,6 +173,8 @@ test("日付の列: 年のボタンでその年だけ、もう一度押すと解
   await page.keyboard.press("Escape");
   await page.reload();
   await page.getByRole("button", { name: "作業ログを読み込む" }).click();
+  await expect(dataRows(tableByCaption(page, "作業ログ")).first()).toBeVisible();
+  await showAllRows(tableByCaption(page, "作業ログ"));
   await expect(dataRows(tableByCaption(page, "作業ログ"))).toHaveCount(expected);
 });
 

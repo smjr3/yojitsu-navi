@@ -4,7 +4,7 @@
  * config.json の masterEdit.gitlab.apiBaseUrl・projectId が空のとき、環境変数
  *   YOJITSU_GITLAB_API_URL（例 https://gitlab.example.local/api/v4）
  *   YOJITSU_GITLAB_PROJECT（例 group/yojitsu-navi）
- * で埋める。.gitlab-ci.yml の build ジョブが CI_API_V4_URL・CI_PROJECT_PATH を渡すので、
+ * で埋める。.gitlab-ci.yml の build・pages ジョブが CI_API_V4_URL・CI_PROJECT_PATH を渡すので、
  * 社内 GitLab では config.json を書き換えなくてもマスタ編集の保存先が決まる。
  * config.json に値があればそちらを優先する（別のプロジェクトに保存したい場合）。
  * マスタ編集のローダ（src/data/_masters.ts）とヘッダーのバッジ（observablehq.config.js）が同じ結果を使う。
