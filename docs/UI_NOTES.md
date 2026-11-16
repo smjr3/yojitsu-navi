@@ -317,6 +317,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 - グラフの目標（§63.3）: 月次推移に「目標の上限」を赤の破線（予算と実績の棒をまたぐ横線）。凡例・表の列は目標がある対象だけ（無い対象の凡例を増やさない）。今月の進捗の凡例は「上限（目標）」。
 - 1 か月分の金額は小さく百万円の小数 1 桁では差が見えないので、この節だけ百万円は小数 2 桁（KPI・グラフ・表。Excel は他の表と同じく円）。
 - 赤は「このペースの月末」が上限を超えたときと、今日までの実績が目安を超えたとき（どちらも 100% 超）。黄色は使わない。
+- メンバーごとの今月の時間（チーム詳細）は `dataTable`（`className: "yn-dg-table"`、§124）。日の列は `menu: false`・`sortable: false`・`filter: false` で「列」に出さず末尾に固定し、濃さ・休日・経過前は `cellClass` が `yn-dg-day yn-dg-l0〜4`・`is-off`・`is-future` を付ける（見出しと合計行は `headClass`）。役職などの列は `memberInfoColumns()`（analysis.js。チーム・顧客・案件の詳細の「メンバー別の実績」と共通）。
 
 列幅（SPEC §77）: `dataTable` の各見出しに `.yn-col-resizer`（`bindColResizer` は `src/components/col-resize.js` でマスタ編集と共通）。境目は右隣の見出しにまたがるので、見出しの `z-index` を左ほど大きくしている（先頭の列は最前面）。幅は `localStorage` `yojitsu-navi:col-width:<path>:<caption>`。描き直しのたびに `applyColWidths()` で全行のセルに幅を当てる。
 

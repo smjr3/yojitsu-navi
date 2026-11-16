@@ -12,9 +12,11 @@ import {
   contractsForTeam,
   setForecastPeriod,
   forecastTotals,
+  isLeftRecord,
   monthlySeries,
   teamTreeForMonth,
 } from "../core/index.js";
+import { memberRecordAt } from "../core/members.js";
 
 
 /** 木からチームを引く（URL の team=constructor などで Object.prototype のプロパティを拾わない） */
@@ -258,3 +260,28 @@ export function flattenTree(tree, rootTeamIds) {
 }
 
 export { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL };
+
+/**
+ * メンバーの表に足す列（§124）: 社員番号（Excel だけ）・役職・区分・事業本部・部・課・在籍。月 month に有効なメンバーマスタの行から引く。
+ * 行は memberId を持つこと。既定ではどれも「列」で選べる列（optional）。shown に入れた key は最初から出す
+ */
+export function memberInfoColumns(model, month, { shown = [], idOf = (r) => r.memberId, team = false } = {}) {
+  const cache = new Map();
+  const rec = (r) => {
+    const id = idOf(r);
+    if (!cache.has(id)) cache.set(id, id ? memberRecordAt(model, id, month) : null);
+    return cache.get(id);
+  };
+  const opt = (key) => !shown.includes(key);
+  const text = (v) => (v ? v : null);
+  return [
+    { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true, get: (r) => idOf(r) ?? "" },
+    ...(team ? [{ key: "teamName", label: T.members.colTeam, type: "text", optional: opt("teamName"), get: (r) => { const m = rec(r); return m ? (m.teamId ? teamName(model, m.teamId) : T.members.noTeam) : null; } }] : []),
+    { key: "title", label: T.members.colTitle, type: "text", optional: opt("title"), get: (r) => text(rec(r)?.title) },
+    { key: "kindLabel", label: T.members.colKind, type: "text", optional: opt("kindLabel"), get: (r) => { const m = rec(r); return m ? (m.kind === "partner" ? T.members.kindPartner : T.members.kindEmployee) : T.members.chipUnknown; } },
+    { key: "division", label: T.members.colDivision, type: "text", optional: opt("division"), get: (r) => text(rec(r)?.division) },
+    { key: "department", label: T.members.colDepartment, type: "text", optional: opt("department"), get: (r) => text(rec(r)?.department) },
+    { key: "section", label: T.members.colSection, type: "text", optional: opt("section"), get: (r) => text(rec(r)?.section) },
+    { key: "presence", label: T.members.colPresence, type: "text", optional: opt("presence"), get: (r) => { const m = rec(r); return m ? (isLeftRecord(m) ? T.members.chipLeft : T.members.presenceActive) : null; } },
+  ];
+}

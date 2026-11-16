@@ -4642,63 +4642,36 @@ html:has(dialog.yn-dialog[open]) {
   }
 }
 
-/* ── 今月の進捗: メンバー×日の表（SPEC §61） ───────────── */
-.yn-dg-wrap {
-  overflow-x: auto;
-  padding: 0;
-}
-.yn-dg {
-  border-collapse: separate;
-  border-spacing: 0;
-  width: 100%;
-  max-width: none;
-  font-size: calc(12px * var(--yn-fs));
+/* ── 今月の進捗: メンバー×日の表（SPEC §61。§124 で共通の表 dataTable に載せた） ───────────── */
+.yn-dg-table {
   font-variant-numeric: tabular-nums;
 }
-.yn-dg th,
-.yn-dg td {
-  border-bottom: 1px solid var(--yn-hairline);
+.yn-dg-table th.yn-dg-day,
+.yn-dg-table td.yn-dg-day {
+  min-width: 24px;
   padding: 4px 2px;
-  white-space: nowrap;
+  text-align: center;
+  font-size: calc(12px * var(--yn-fs));
 }
-.yn-dg thead th {
+.yn-dg-table thead th.yn-dg-day {
   font-weight: normal;
   color: var(--yn-text-muted);
 }
-.yn-dg-name {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--yn-card);
-  text-align: left;
-  font-weight: normal;
-  padding: 4px 8px !important;
-  max-width: 10em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.yn-dg-day {
-  min-width: 24px;
-  text-align: center;
-}
-.yn-dg-day.is-off {
+.yn-dg-table th.yn-dg-day.is-off,
+.yn-dg-table td.yn-dg-day.is-off {
   background: var(--yn-wash);
 }
-.yn-dg-day.is-future {
+.yn-dg-table td.yn-dg-day.is-future {
   background: transparent;
 }
-.yn-dg-l1 { background: color-mix(in srgb, var(--yn-series-cost) 12%, transparent); }
-.yn-dg-l2 { background: color-mix(in srgb, var(--yn-series-cost) 22%, transparent); }
-.yn-dg-l3 { background: color-mix(in srgb, var(--yn-series-cost) 34%, transparent); }
-.yn-dg-l4 { background: color-mix(in srgb, var(--yn-series-cost) 48%, transparent); }
-.yn-dg-num {
-  text-align: right;
-  padding: 4px 8px !important;
-}
-.yn-dg-last {
+.yn-dg-table td.yn-dg-l1 { background: color-mix(in srgb, var(--yn-series-cost) 12%, transparent); }
+.yn-dg-table td.yn-dg-l2 { background: color-mix(in srgb, var(--yn-series-cost) 22%, transparent); }
+.yn-dg-table td.yn-dg-l3 { background: color-mix(in srgb, var(--yn-series-cost) 34%, transparent); }
+.yn-dg-table td.yn-dg-l4 { background: color-mix(in srgb, var(--yn-series-cost) 48%, transparent); }
+.yn-dg-table .yn-dg-last {
   border-right: 1px solid var(--yn-hairline-strong);
 }
-.yn-dg-num.is-over {
+.yn-dg-table td.is-over {
   color: var(--yn-danger-text);
   font-weight: bold;
 }

@@ -14,7 +14,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam, originTotals, ownTeamScope, setForecastPeriod, teamMemberCosts, teamOrgChanges, targetForMonth, teamPath } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
-import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt } from "./components/analysis.js";
+import { summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, treeAt, treeMonthFor, memberNameAt, memberInfoColumns } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
@@ -272,13 +272,15 @@ if (vm?.exists) {
         sortValue: (r) => r.memberName,
       },
       { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
+      // 役職・区分・所属組織（「列」で選べる。§124）
+      ...memberInfoColumns(model, treeMonthFor(model, period)),
       { key: "hours", label: T.columns.hours, type: "hours", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
       { key: "amount", label: T.columns.cost, type: "moneyYen", breakdown: (r) => memberCostSpec({ model, contractIds: vm.contractIds, period, unit, member: r, detailHref }) },
       { key: "share", label: T.team.colShare, type: "percent" },
       { key: "contractCount", label: T.columns.contractCount, type: "int", hideOnPhone: true, get: (r) => r.contractIds.length },
       { key: "monthCount", label: T.team.colWorkMonths, type: "int", hideOnPhone: true, hideNarrow: true },
     ];
-    display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `team_${vm.teamId}_members_${period.from}_${period.to}`, sort: { key: "amount", dir: "desc" } }));
+    display(dataTable({ columns, rows, unit, caption: T.team.membersTitle, exportName: `team_${vm.teamId}_members_${period.from}_${period.to}`, sort: { key: "amount", dir: "desc" }, rowHref: (r) => store.href("./member", {}, { id: r.memberId }) }));
   }
 }
 ```
