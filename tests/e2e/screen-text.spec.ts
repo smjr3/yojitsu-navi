@@ -78,7 +78,7 @@ test("説明文の量: デモ（GitLab 方式）でトークン登録済み・�
   await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "demo"));
   await gotoPage(page, "/masters");
   await editAndMeasure(page);
-  await expect(page.getByRole("button", { name: /GitLab に保存/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /GitLab に保存|変更を申請する/ })).toBeEnabled();
   await expect(page.locator('.yn-me-save input[type="password"]')).toHaveCount(0);
 });
 

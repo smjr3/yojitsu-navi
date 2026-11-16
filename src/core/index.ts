@@ -111,6 +111,7 @@ export { TARGET_KINDS, evaluateTarget, headlineTarget, isTargetKind, isUsableTar
 export { planImpact, type PlanImpact, type PlanImpactRow, type PlanImpactTarget, type PlanInputs } from "./planImpact.js";
 export { buildMyHoursPayload, duplicateGitlabUsernames, gitlabUsernameIndex, myHoursRows, myHoursTotals, normalizeGitlabUsername, type MyHoursContractOf, type MyHoursPayload, type MyHoursRow } from "./myHours.js";
 export { planTargetAlerts, type PlanTargetAlert, type PlanTargetScope } from "./planTargets.js";
+export { contractCapAt, contractPlanAmounts, planBudgetChart, planRoomAt, type ContractCap, type PlanBudgetChart, type PlanBudgetMonth, type PlanRoom } from "./planBudget.js";
 export { hasErrors, validateDataset, type ValidationIssue } from "./validate.js";
 export { EMPTY_VALUE, formatHours, formatPercent, formatPersonMonths, formatYen, roundToUnit } from "./money.js";
 export {

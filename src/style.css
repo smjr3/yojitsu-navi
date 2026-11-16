@@ -778,6 +778,13 @@ h3 {
 .yn-chip-icon {
   font-size: calc(10px * var(--yn-fs));
 }
+/* マージ待ちの変更がある対象の印（§126.3）。本体にはまだ入っていないので点線の枠 */
+.yn-chip-pending {
+  background: transparent;
+  color: var(--yn-link);
+  border: 1px dashed currentColor;
+  cursor: help;
+}
 /* ヘルプ（他部署の人。§71）: 応援（塗り）と見分けられるよう枠線だけ */
 .yn-chip-help {
   background: transparent;
@@ -3385,6 +3392,22 @@ html:has(dialog.yn-dialog[open]) {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* 目標の上限までの余力（§122）: 入力欄の下に右寄せ。超えたら赤の太字 */
+.yn-plan-pop-room {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  text-align: right;
+  font-size: calc(12px * var(--yn-fs));
+  color: var(--yn-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.yn-plan-pop-room.is-new {
+  margin-top: 4px;
+}
+.yn-plan-pop-room.is-over {
+  color: var(--yn-danger-text);
+  font-weight: 700;
+}
 .yn-plan-pop-new {
   margin: 10px 0 6px;
   padding-top: 8px;
@@ -3699,6 +3722,27 @@ html:has(dialog.yn-dialog[open]) {
 .yn-mr-bar .yn-section-title {
   margin: 0;
 }
+/* 件数の内訳（対応が必要・自分の分）。見出しのすぐ右、操作ボタンは右端（§126） */
+.yn-mr-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0 auto 0 0;
+  max-width: none;
+  font-size: calc(12px * var(--yn-fs));
+}
+.yn-mr-tally:empty {
+  display: none;
+}
+.yn-mr-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 畳んでいるときは枠を詰める（見出しの 1 段だけ） */
+.yn-mr.is-folded {
+  padding-block: 8px;
+}
 .yn-mr-count {
   display: inline-block;
   margin-left: 4px;
@@ -3750,6 +3794,22 @@ html:has(dialog.yn-dialog[open]) {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
+}
+/* 広い画面では見出しとボタンを 1 段に並べ、1 件の高さを抑える（§126） */
+@media (min-width: 768px) {
+  .yn-mr-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    align-items: center;
+  }
+  .yn-mr-item .yn-mr-actions {
+    margin-top: 0;
+    justify-content: flex-end;
+  }
+  .yn-mr-item .yn-mr-changes {
+    grid-column: 1 / -1;
+  }
 }
 .yn-mr-changes {
   margin-top: 8px;
@@ -4397,6 +4457,10 @@ html:has(dialog.yn-dialog[open]) {
 .yn-chart-head-legend {
   min-width: 0;
   flex: 1 1 auto;
+}
+/* リソース計画のグラフの単位（人月／金額。§122）: 凡例の前、凡例とは行を分ける */
+.yn-me-plan-chart-mode {
+  margin: 0 0 8px;
 }
 .yn-chart-zoom-btn {
   flex: none;
@@ -5206,7 +5270,7 @@ a.yn-org-person:hover {
   gap: 4px;
 }
 .yn-cols-btn.is-active {
-  border-color: var(--yn-accent, currentColor);
+  border-color: var(--yn-accent);
   color: var(--yn-accent, inherit);
 }
 .yn-cols-list {
@@ -5455,4 +5519,87 @@ a.yn-org-person:hover {
   color: var(--yn-text-2);
   font-size: calc(12px * var(--yn-fs));
   margin: 4px 0;
+}
+
+/* 先頭の数行だけ出す表の「すべて表示」（§127） */
+.yn-table-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+.yn-table-more[hidden] {
+  display: none;
+}
+
+/* 開閉できる節と目次（データ確認。§127） */
+.yn-fold {
+  scroll-margin-top: 12px;
+}
+.yn-fold-head .yn-title-with-tip {
+  align-items: center;
+  gap: 6px;
+}
+.yn-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.yn-fold-toggle:hover span:last-child {
+  text-decoration: underline;
+}
+.yn-fold-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: calc(5px * var(--yn-fs)) solid transparent;
+  border-right: calc(5px * var(--yn-fs)) solid transparent;
+  border-top: calc(7px * var(--yn-fs)) solid currentColor;
+  transition: transform 0.15s;
+  flex: none;
+}
+.yn-fold.is-closed .yn-fold-caret {
+  transform: rotate(-90deg);
+}
+.yn-fold.is-closed .yn-fold-head {
+  margin-bottom: 0;
+}
+.yn-fold-count {
+  flex: none;
+}
+.yn-toc ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.yn-toc li {
+  margin: 0;
+  padding: 0;
+}
+.yn-toc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--yn-hairline);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  font-size: calc(13px * var(--yn-fs));
+  text-decoration: none;
+}
+.yn-toc-link:hover {
+  border-color: var(--yn-accent);
+}
+.yn-toc-link.is-zero {
+  color: var(--yn-text-2);
 }

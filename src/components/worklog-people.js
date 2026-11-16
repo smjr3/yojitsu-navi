@@ -93,9 +93,9 @@ const AXES = ["group", "person"];
 
 /**
  * 「案件ごと／人ごと」を切り替えられる表
- * @param {{model, groups, columns, caption, exportName, sort, groupName(g), groupLabel?}} opts
+ * @param {{model, groups, columns, caption, exportName, sort, groupName(g), groupLabel?, previewRows?}} opts
  */
-export function groupedWorklogTable({ model, groups, columns, caption, exportName, sort, groupName, groupLabel = T.dataCheck.groupProject }) {
+export function groupedWorklogTable({ model, groups, columns, caption, exportName, sort, groupName, groupLabel = T.dataCheck.groupProject, previewRows = null }) {
   const root = html`<div class="yn-grouped-worklogs"></div>`;
   let axis = "group";
   const rows = groups.map((g, i) => ({ key: i, ...g }));
@@ -136,8 +136,8 @@ export function groupedWorklogTable({ model, groups, columns, caption, exportNam
   const draw = () => {
     const table =
       axis === "group"
-        ? dataTable({ columns, rows, caption, exportName, sort, maxHeight: 560, toolbar: toolbar() })
-        : dataTable({ columns: personColumns, rows: personRows(), caption, exportName: `${exportName}_by_person`, sort: { key: "hours", dir: "desc" }, maxHeight: 560, toolbar: toolbar() });
+        ? dataTable({ columns, rows, caption, exportName, sort, maxHeight: 560, previewRows, toolbar: toolbar() })
+        : dataTable({ columns: personColumns, rows: personRows(), caption, exportName: `${exportName}_by_person`, sort: { key: "hours", dir: "desc" }, maxHeight: 560, previewRows, toolbar: toolbar() });
     root.replaceChildren(table);
   };
   draw();

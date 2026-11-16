@@ -142,6 +142,16 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
       return reply(200, list.map((m) => mrJson(s, m)));
     }
 
+    // MR で変わったファイル（§126.3）。デモのブランチは変えたファイルだけを持つ
+    const diffsMatch = /^\/merge_requests\/(\d+)\/diffs$/.exec(rest);
+    if (method === "GET" && diffsMatch) {
+      const s = load();
+      const m = s.mrs.find((x) => x.iid === Number(diffsMatch[1]));
+      if (!m) return reply(404, { message: "404 Not found" });
+      const files = Object.keys(s.branches[m.source_branch]?.files ?? {});
+      return reply(200, files.map((f) => ({ new_path: f, old_path: f })));
+    }
+
     const mrMatch = /^\/merge_requests\/(\d+)(\/merge)?$/.exec(rest);
     if (mrMatch) {
       const s = load();

@@ -12,7 +12,7 @@ import { createFilterPopover, matchesFilter, isActiveFilter, parseDateFilterInpu
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt, rich } from "../i18n/index.js";
-import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planImpact, planTargetAlerts } from "../core/index.js";
+import { addMonths, createMasterIndex, createMonthHours, HolidaySet, customerTeamIndex, isProvisionalCell, memberStatus, nextContractId, normalizeGitlabUsername, planChangeSummary, normalizeName, monthRange, planOutsideTypes, parseCsvTable, parseNumberCell, parsePercentCell, parseTaskCategory, planBudgetChart, planImpact, planRoomAt, planTargetAlerts, rateFor } from "../core/index.js";
 import {
   DRAFT_STORAGE_KEY,
   DRAFT_SESSION_KEY,
@@ -69,18 +69,19 @@ import {
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateJa, dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { dateJa, dateTimeJst, formatPercent, integer, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
 import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
 import { mergeRequestsPanel } from "./mr-list.js";
+import { pendingFor } from "../core/mrPending.js";
 import { combobox } from "./combobox.js";
 import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
 import { chartFigure } from "./chart-zoom.js";
-import { planLoadChart, planLoadLegend } from "./work.js";
+import { planAmountChart, planAmountLegend, planLoadChart, planLoadLegend } from "./work.js";
 import { ledgerGroups, nextChangeOf, periodHistory, replaceRange, valueAt } from "../core/ledger.js";
 import { endDateOf, firstDayOf, lastDayOf, periodPresenceAt, periodShareAt, splitPeriodDate, startDateOf } from "../core/periodDates.js";
 
@@ -238,6 +239,8 @@ function safeStorage(kind) {
 
 // リソース計画の名前列の幅（境目をドラッグして変える。このブラウザだけに覚える）
 const PLAN_NAME_W_KEY = "yojitsu-navi:plan-name-width";
+/** リソース計画のグラフの単位（§122）: 人月（既定。保存しない）／金額 */
+const PLAN_CHART_KEY = "yojitsu-navi:plan-chart";
 /** リソース計画の列ごとの絞り込み・並べ替え（§99。タブ単位） */
 const PLAN_LIST_KEY = "yojitsu-navi:plan-list";
 // リソース計画で表示する月の範囲（§71。基準月からのずれと月数で覚える）
@@ -306,8 +309,24 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
   const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
+  /** マージ待ちの変更がある対象（§126.3） */
+  let pendingMrs = {};
+  let pendingSig = "";
   // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) } });
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) }, onPending: (p) => {
+    // マージ待ちの変更がある対象に印（§126.3）。変わったときだけ描き直す
+    const sig = JSON.stringify(Object.entries(p).map(([id, m]) => [id, [...m].map(([k, list]) => [k, list.map((x) => x.iid)])]));
+    if (sig === pendingSig) return;
+    pendingSig = sig;
+    pendingMrs = p;
+    // 操作と関係なく描き直すので、表の中のフォーカス（data-fk）と入力中の欄を保つ
+    const panelSlot = parts.panel;
+    const focused = panelSlot.contains(document.activeElement) ? document.activeElement : null;
+    if (focused && focused.matches("input, textarea, select")) return; // 入力中は描き直さない（次の描き直しで印が出る）
+    const key = focused?.closest?.("[data-fk]")?.dataset.fk;
+    renderPanel();
+    if (key && !panelSlot.contains(document.activeElement)) focusKey(key);
+  } });
   const range = { fromMonth: minMonth, toMonth: asOfMonth };
   const importMode = (data.memberSourceAdapter ?? "none") !== "none";
   // 取り込みで入る列（config の memberSource.columns に書いた列。所属は既定では取り込まない。§20.2・§81）
@@ -428,6 +447,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertsAll: false,
     /** 名前列の幅（px。null = 既定）。境目のドラッグ・矢印キーで変え、このブラウザに覚える */
     nameW: clampPlanNameW(Number(local.get(PLAN_NAME_W_KEY)) || null),
+    /** グラフの単位（§122）。このブラウザに覚える */
+    chartMode: local.get(PLAN_CHART_KEY) === "amount" ? "amount" : "pm",
     /** 列ごとの絞り込み（列 key → 絞り込み。月の列は "m:YYYY-MM"）と並べ替え（§99）。タブ単位で覚える */
     ...loadPlanList(),
   };
@@ -500,6 +521,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const root = html`<div class="yn-me" data-mode=${mode}></div>`;
   /** 月別の合計グラフ（§58）を今の値で作り直す関数（リソース計画の表を描くたびに入れ替わる） */
   let planChartBuild = null;
+  /** 表示中のリソース計画の組織の木（グラフと編集欄の余力で同じ木の目標を使う。§122） */
+  let planTree = null;
   const parts = {
     draft: html`<div class="yn-me-draft-slot"></div>`,
     tabs: html`<div class="yn-me-tabs-slot"></div>`,
@@ -919,6 +942,13 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     }
   }
 
+  /** マージ待ちの変更がある対象の印（§126.3）。title に誰の何の変更か */
+  function pendingChip(fileIds, key) {
+    const list = pendingFor(pendingMrs, fileIds, key);
+    if (list.length === 0) return null;
+    return html`<span class="yn-chip yn-chip-pending" title=${list.map((m) => fmt(T.masters.pendingTitle, { name: m.author, title: m.title })).join("\n")}>${T.masters.pendingChip}${list.length > 1 ? ` ${integer(list.length)}` : ""}</span>`;
+  }
+
   /** 変更・エラーの数（台帳の対象・リソース計画の行のチップ） */
   function stateChips(changed, added, errors) {
     if (!changed && !added && !errors) return null;
@@ -1291,7 +1321,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           ${g.upcoming.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.upcoming, { n: integer(g.upcoming.length) })}</span>` : null}
           ${!g.shown.current && g.entries.length ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.ledger.notYet, { month: monthJa(g.shown.from) })}</span>` : null}
         </td>
-        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}</td>
+        <td class="yn-me-state">${stateChips(nChanged, nAdded, nErrors)}${pendingChip([fileId], fileId === "targets" ? `${g.shown.record.target_type ?? ""}\u0001${g.shown.record.target_id ?? ""}` : rawKey)}</td>
         <td class="yn-me-actions-cell"><div class="yn-me-row-actions">
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`next:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.addChangeAria, { key: keyText })} onclick=${() => openRowDialog({ fileId, mode: "add", template: latestRowOf(g, rowById), focus: `next:${g.shown.rowId}` })}>${T.ledger.addChange}</button>
           <button type="button" class="yn-btn yn-btn-sm" data-fk=${`edit:${g.shown.rowId}`} disabled=${!editable} aria-label=${fmt(T.ledger.editCurrentAria, { key: keyText, month: g.shown.from })} onclick=${() => openRowDialog({ fileId, mode: "edit", rowId: g.shown.rowId, focus: `edit:${g.shown.rowId}` })}>${T.masters.edit}</button>
@@ -1604,6 +1634,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const last = months[months.length - 1];
     const treeMonth = last < asOfMonth ? last : asOfMonth < months[0] ? months[0] : asOfMonth;
     const tree = teamTreeAt({ teams: src.teams }, treeMonth).tree;
+    planTree = tree;
     const flat = flattenTeamTree(tree);
     const view = planView(src, plan.teamId, months);
     const names = memberNames();
@@ -1892,15 +1923,46 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     /** 表の上の月別の合計（§58）。表の合計行と同じ値。配色は描くときのテーマ（自動で PC の設定が変わったら yn-theme で描き直す） */
     const planChart = () => {
       const isDark = () => document.documentElement.dataset.theme === "dark";
-      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       planChartBuild = planChart;
+      const subtitle = `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`;
+      const controls = planChartModeSwitch();
+      // 金額（§122）: 組織の担当案件の計画の額を顧客ごとに積み上げ、予算と目標の上限を重ねる。絞り込み・検索には連動しない
+      if (plan.chartMode === "amount") {
+        const data = planAmountFor(plan.teamId, tree, treeMonth, months);
+        return chartFigure({
+          title: T.plan.chartAmountTitle,
+          subtitle,
+          controls,
+          legend: planAmountLegend(data, isDark()),
+          draw: (width, height) => planAmountChart({ data, dark: isDark(), width, height, unit: savedState(model).unit }),
+          className: "yn-me-plan-chart is-amount",
+        });
+      }
+      const data = months.map((m, i) => ({ month: m, main: totals[i] - outsideTotals[i], outside: outsideTotals[i], capacity: capacity[i], over: overCounts[i] }));
       return chartFigure({
         title: T.plan.chartTitle,
-        subtitle: `${unit ? unit.name : T.plan.allUnits} ・ ${fyLabel}`,
+        subtitle,
+        controls,
         legend: planLoadLegend(isDark()),
         draw: (width, height) => planLoadChart({ data, dark: isDark(), width, height }),
         className: "yn-me-plan-chart",
       });
+    };
+    /** グラフの単位の切り替え（人月／金額。§122） */
+    const planChartModeSwitch = () => {
+      const btn = (mode, label) => {
+        const b = h("button", { type: "button", class: "yn-seg-btn", "aria-pressed": String(plan.chartMode === mode), "data-fk": `plan:chart:${mode}` }, label);
+        b.addEventListener("click", () => {
+          if (plan.chartMode === mode) return;
+          plan.chartMode = mode;
+          if (mode === "pm") local.remove(PLAN_CHART_KEY);
+          else local.set(PLAN_CHART_KEY, mode);
+          root.querySelector(".yn-me-plan-chart")?.replaceWith(planChart());
+          focusKey(`plan:chart:${mode}`);
+        });
+        return b;
+      };
+      return h("div", { class: "yn-seg yn-me-plan-chart-mode", role: "group", "aria-label": T.plan.chartModeLabel }, btn("pm", T.plan.chartModePm), btn("amount", T.plan.chartModeAmount));
     };
 
     /** 計画が入っていない人だけに絞る（§116）。いなければ出さない */
@@ -1949,7 +2011,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
@@ -2070,7 +2132,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}</h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span><span class="yn-me-help">${rich(T.plan.amountHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -2428,6 +2490,62 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       afterNote.hidden = scope !== "after";
       cellEditor.refresh();
     };
+    // 目標の上限までの余力（§122）: 案件の上限 − 今の計画の額（入力中の値との差を、この人の 1 人月の額で人月に直す）。目標の無い案件は出さない
+    const roomOf = (contractId) => (model ? planRoomAt(model, planInputsNow(), contractId, month, planTree ?? undefined) : null);
+    const perPm = (() => {
+      const rate = rateFor(planInputsNow().masters, r.memberId, month).hourlyRate;
+      return Number.isFinite(rate) ? rate * hoursOfMonth(month) : 0;
+    })();
+    const roomEls = new Map();
+    const rooms = new Map();
+    for (const { a } of inputs) {
+      if (rooms.has(a.contractId)) continue;
+      const room = roomOf(a.contractId);
+      if (room?.room == null || perPm <= 0) continue;
+      rooms.set(a.contractId, room);
+      roomEls.set(a.contractId, h("p", { class: "yn-plan-pop-room", "data-contract": a.contractId, "aria-live": "polite" }));
+    }
+    const newRoomEl = h("p", { class: "yn-plan-pop-room is-new", "aria-live": "polite", hidden: true });
+    const pmOf = (text) => {
+      const v = parseNumberCell(allocationFromInput(text, "personMonth", 0));
+      return Number.isFinite(v) ? v : 0;
+    };
+    /** 選んだ作業（案件）のこの月の契約 */
+    const pickedContract = () => {
+      const picked = proj.getValue();
+      if (!picked || picked.startsWith(OUTSIDE_OPTION)) return null;
+      const p = cIndex().projects.get(picked);
+      return p ? (contractSegments(p.contracts, month, month)[0]?.contractId ?? null) : null;
+    };
+    const showRoom = (el, yen) => {
+      const over = yen < -0.5;
+      // 残りは金額。人月はこの人の単価での目安なので括弧で添える（単価は人によって違う）
+      const abs = Math.abs(yen);
+      const man = abs >= 1e5 ? integer(Math.round(abs / 1e4)) : maxFractionFormat(1).format(abs / 1e4);
+      el.classList.toggle("is-over", over);
+      el.textContent = fmt(over ? T.plan.roomOver : T.plan.roomLeft, { man, pm: pm(abs / perPm) });
+      el.title = fmt(T.plan.roomTitle, { cap: money(rooms.get(el.dataset.contract)?.cap ?? 0, "yen"), name });
+    };
+    const updateRooms = () => {
+      // 入力中の値の差（同じ案件の欄は合わせる）
+      const delta = new Map();
+      for (const { a, input, before } of inputs) delta.set(a.contractId, (delta.get(a.contractId) ?? 0) + pmOf(input.value) - pmOf(before));
+      const nc = pickedContract();
+      if (nc) delta.set(nc, (delta.get(nc) ?? 0) + pmOf(newNum.value));
+      for (const [id, el] of roomEls) showRoom(el, rooms.get(id).room - (delta.get(id) ?? 0) * perPm);
+      newRoomEl.hidden = true;
+      if (nc && !roomEls.has(nc) && perPm > 0) {
+        if (!rooms.has(nc)) {
+          const room = roomOf(nc);
+          if (room?.room != null) rooms.set(nc, room);
+        }
+        if (rooms.has(nc)) {
+          newRoomEl.dataset.contract = nc;
+          showRoom(newRoomEl, rooms.get(nc).room - (delta.get(nc) ?? 0) * perPm);
+          newRoomEl.hidden = false;
+        }
+      }
+    };
     const form = html`<form class="yn-plan-pop-form" novalidate>
       <header class="yn-plan-pop-head">
         <div class="yn-title-with-tip"><h2 id="yn-plan-pop-title" class="yn-plan-pop-title">${fmt(T.plan.editTitle, { name, month: monthJa(month) })}</h2>${infoTip(T.plan.editLead, { label: T.masters.dialogTipLabel })}</div>
@@ -2436,13 +2554,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${inputs.length
         ? html`<ul class="yn-plan-pop-rows">${inputs.map(({ a, input }) => {
             const c = cIndex().byId.get(a.contractId);
-            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`;
+            return html`<li><label for=${input.id}><span class="yn-plan-pop-project">${c ? c.project || c.customer : contractText(a.contractId)}</span>${c && c.project ? html`<span class="yn-me-hint">${c.customer}</span>` : null}</label><span class="yn-plan-pop-val">${input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span>${roomEls.get(a.contractId) ?? null}</li>`;
           })}</ul>`
         : html`<p class="yn-muted">${T.plan.tipNone}</p>`}
       <ul class="yn-plan-pop-rows yn-plan-pop-outside">${outs.map((o) => html`<li><label for=${o.input.id}><span class="yn-plan-pop-project">${o.label}</span><span class="yn-me-hint">${o.before === null ? T.planEdit.outsideOverlapHint : o.type ? T.planEdit.outsideTypeSub : T.planEdit.outsideSub}</span></label><span class="yn-plan-pop-val">${o.input}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></li>`)}</ul>
       <div class="yn-plan-pop-new">
         <label for="yn-plan-pop-project">${T.plan.editNewRow}</label>
         <div class="yn-plan-pop-new-row">${proj}<span class="yn-plan-pop-val">${newNum}<span class="yn-me-small">${T.plan.unitPersonMonth}</span></span></div>
+        ${newRoomEl}
       </div>
       <fieldset class="yn-plan-pop-scope"><legend>${T.plan.scopeLabel}</legend><div class="yn-radio-group">${scopeRadios}</div>${afterNote}</fieldset>
       ${msg}${note}
@@ -2456,7 +2575,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </div>
     </form>`;
     afterNote.hidden = scope !== "after";
+    updateRooms();
+    // 作業の選択は hidden の欄なので input が来ないことがある。change でも数え直す
+    form.addEventListener("change", updateRooms);
     form.addEventListener("input", () => {
+      updateRooms();
       msg.textContent = "";
       if (confirmed) reset();
     });
@@ -3187,17 +3310,21 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function issueMessage(i) {
     const names = memberNames();
     const subjectId = issueRowCell(i, "member_id") || (i.ref?.memberId != null ? String(i.ref.memberId) : "");
+    const isId = (id) => names.has(id) || cIndex().byId.has(id);
+    const contractLabel = (id) => `「${projectOfContract(id).label}」`;
     return issueText(i)
+      // 検証の文は ID に名前を添えている（「M001（山田 太郎）」。§127）。この画面は ID を名前に置き換えるので、添えた名前は外す
+      .replace(/([A-Za-z0-9_-]+)（[^（）]+）/g, (m, id) => (isId(id) ? id : m))
       .replace(/^メンバー(?:ID)? ([A-Za-z0-9_-]+) ?(?:の|は) ?/, (m, id) => (id === subjectId && names.get(id) ? "" : m))
       .replace(/メンバー(?:ID)? ([A-Za-z0-9_-]+)/g, (m, id) => names.get(id) || m)
-      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (cIndex().byId.has(id) ? `「${projectOfContract(id).label}」` : m))
-      .replace(/（([A-Za-z0-9_, -]+)）/g, (m, ids) => {
-        // 「（M025, M202）」のような ID の並びも名前に
-        const list = ids.split(/,\s*/);
-        return list.every((id) => names.get(id)) ? `（${list.map((id) => names.get(id)).join("、")}）` : m;
+      // 「別の案件 C150 と C180」のような案件 ID の組も案件名に（§115）
+      .replace(/案件 ([A-Za-z0-9_-]+) と ([A-Za-z0-9_-]+)/g, (m, a, b) => (cIndex().byId.has(a) && cIndex().byId.has(b) ? `案件${contractLabel(a)}と${contractLabel(b)}` : m))
+      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (cIndex().byId.has(id) ? contractLabel(id) : m))
+      // 「: M025、M202」「メンバー M025、M202 に」のような社員番号の並びも名前に
+      .replace(/([A-Za-z0-9_-]+(?:、[A-Za-z0-9_-]+)+|(?<=: )[A-Za-z0-9_-]+$)/g, (m) => {
+        const list = m.split("、");
+        return list.every((id) => names.get(id)) ? list.map((id) => names.get(id)).join("、") : m;
       })
-      // 「（C150 と C180）」のような案件 ID の組も案件名に（§115）
-      .replace(/（([A-Za-z0-9_-]+) と ([A-Za-z0-9_-]+)）/g, (m, a, b) => (cIndex().byId.has(a) && cIndex().byId.has(b) ? `（「${projectOfContract(a).label}」と「${projectOfContract(b).label}」）` : m))
       // 行番号は利用者には意味が無い（該当の行へは「該当箇所へ」で移れる）。ファイル名は画面のタブ名に
       .replace(/（行 [\d, ]+）/g, "")
       .replace(/\d+ 行目と同じ/g, T.masters.issueOtherRow)
@@ -3383,6 +3510,23 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     alertMemo = { key, edited, value };
     return value;
   }
+  // ---- 金額と目標の上限（§122） ----------------------------------------------
+  /** 今の計画（編集中は編集後）の材料。編集の内容が同じなら作り直さない */
+  let planInputsMemo = null;
+  function planInputsNow() {
+    if (!planInputsMemo || planInputsMemo.validation !== validation) planInputsMemo = { validation, value: planInputsOf(validation.dataset) };
+    return planInputsMemo.value;
+  }
+  let amountMemo = null;
+  /** グラフ「金額」のデータ（組織・組織の月・表示する月・編集の内容が同じなら前の結果） */
+  function planAmountFor(teamId, tree, treeMonth, months) {
+    const key = `${teamId ?? ""}|${treeMonth}|${months.join(",")}`;
+    if (amountMemo && amountMemo.key === key && amountMemo.validation === validation) return amountMemo.value;
+    const value = model ? planBudgetChart(model, planInputsNow(), { teamId, tree }, months) : { customers: [], months: [] };
+    amountMemo = { key, validation, value };
+    return value;
+  }
+
   /** 目標の名前（種類・名前・終了月） */
   function alertTargetName(a) {
     const t = a.evaluation.target;

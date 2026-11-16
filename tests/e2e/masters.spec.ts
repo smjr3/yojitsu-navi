@@ -510,7 +510,7 @@ test.describe("gitlab モード", () => {
     await expect(page.getByRole("heading", { name: "保存（GitLab）" })).toBeVisible();
     // トークンの入力欄は保存欄に無い（設定画面だけ。§28）
     await expect(page.locator('.yn-me-save input[type="password"]')).toHaveCount(0);
-    const save = page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" });
+    const save = page.getByRole("button", { name: "変更を申請する" });
     await expect(save).toBeDisabled();
     await expect(page.locator("#yn-me-save-reason")).toContainText("トークンが未登録");
     await expect(page.locator("#yn-me-save-reason").getByRole("link", { name: "設定へ" })).toHaveAttribute("href", "./settings");
@@ -521,7 +521,7 @@ test.describe("gitlab モード", () => {
     await page.locator("#yn-me-message").fill("2026年11月の部長単価改定");
     await save.click();
     const outcome = page.locator(".yn-me-outcome.is-ok");
-    await expect(outcome).toContainText("マージリクエストを作成しました");
+    await expect(outcome).toContainText("変更を申請しました");
     await expect(outcome.getByRole("link", { name: /!12/ })).toHaveAttribute("href", "https://gitlab.test/grp/yojitsu-navi/-/merge_requests/12");
     await expect(outcome).toContainText(/masters\/\d{8}-\d{6}-taro/);
     const calls = saveCalls(mock);
@@ -563,7 +563,7 @@ test.describe("gitlab モード", () => {
     await open(page);
     await addRate(page, "部長", "14000", "2026-11");
     await enterToken(page);
-    await page.getByRole("button", { name: /GitLab に保存/ }).click();
+    await page.getByRole("button", { name: /GitLab に保存|変更を申請する/ }).click();
     const err = page.locator(".yn-me-outcome.is-error");
     await expect(err).toHaveAttribute("data-error-kind", "conflict");
     await expect(err).toContainText("他の人が先に更新しました");
@@ -581,8 +581,8 @@ test.describe("gitlab モード", () => {
     await page.getByRole("radio", { name: /自分の下書きを残す/ }).check();
     await page.getByRole("button", { name: "下書きを復元する" }).click();
     await enterToken(page);
-    await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
-    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+    await page.getByRole("button", { name: "変更を申請する" }).click();
+    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("変更を申請しました");
     const commit = saveCalls(mock)[1]!.body as { actions: Array<{ content: string; last_commit_id?: string }> };
     expect(commit.actions[0]!.content).toBe(expectedRates(true));
     expect(commit.actions[0]!.last_commit_id).not.toBe("0".repeat(40));
@@ -595,7 +595,7 @@ test.describe("gitlab モード", () => {
     await open(page);
     await addRate(page, "部長", "14000", "2026-11");
     await enterToken(page);
-    await page.getByRole("button", { name: /GitLab に保存/ }).click();
+    await page.getByRole("button", { name: /GitLab に保存|変更を申請する/ }).click();
     const err = page.locator(".yn-me-outcome.is-error");
     await expect(err).toHaveAttribute("data-error-kind", "permission");
     await expect(err).toContainText("Developer 以上");
@@ -610,7 +610,7 @@ test.describe("gitlab モード", () => {
     await open(page);
     await addRate(page, "部長", "14000", "2026-11");
     await enterToken(page);
-    await page.getByRole("button", { name: /GitLab に保存/ }).click();
+    await page.getByRole("button", { name: /GitLab に保存|変更を申請する/ }).click();
     const err = page.locator(".yn-me-outcome.is-error");
     await expect(err).toHaveAttribute("data-error-kind", "network");
     await expect(err).toContainText("CORS");
@@ -630,7 +630,7 @@ test.describe("gitlab モード", () => {
     await open(page);
     await addRate(page, "部長", "14000", "2026-11");
     await enterToken(page);
-    await page.getByRole("button", { name: /GitLab に保存/ }).click();
+    await page.getByRole("button", { name: /GitLab に保存|変更を申請する/ }).click();
     await expect(page.locator(".yn-me-outcome.is-error")).toContainText("トークンが無効か期限切れ");
     expect(await page.evaluate(() => sessionStorage.getItem("yojitsu-navi:gitlab-token"))).toBeNull();
     await expect(page.locator("#yn-me-save-reason")).toContainText("トークンが未登録");

@@ -1097,7 +1097,9 @@ describe("CI 定義", () => {
     const ci = readFileSync(join(ROOT, ".gitlab-ci.yml"), "utf-8");
     expect(ci).toContain("node scripts/ci/install.mjs");
     const install = readFileSync(join(ROOT, "scripts", "ci", "install.mjs"), "utf-8");
-    expect(install).toContain('existsSync("vendor/npm-cache")');
+    // 依存込みかどうかは印のキー（installKey の vendor = vendor/npm-cache があるか）で見る（SPEC §128）
+    expect(install).toContain("key.vendor");
+    expect(readFileSync(join(ROOT, "scripts", "lib", "install-stamp.mjs"), "utf-8")).toContain('VENDOR_CACHE = "vendor/npm-cache"');
     expect(install).toContain('["ci", "--offline", "--cache", "vendor/npm-cache"');
     expect(readFileSync(join(ROOT, ".gitignore"), "utf-8")).toContain("vendor/npm-cache/_logs/");
   });

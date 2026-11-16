@@ -159,7 +159,7 @@ describe("エラーの分類", () => {
 
   it("404・その他 → other（どの操作かを文に入れる）", () => {
     expect(classifyHttpError("commit", 404, '{"message":"404 Project Not Found"}').message).toMatch(/projectId/);
-    expect(classifyHttpError("mr", 422, '{"message":["Another open merge request already exists"]}').message).toMatch(/マージリクエストの作成に失敗.*422/);
+    expect(classifyHttpError("mr", 422, '{"message":["Another open merge request already exists"]}').message).toMatch(/申請に失敗.*422/);
     expect(classifyHttpError("user", 500, "oops").message).toMatch(/トークンの確認/);
     expect(classifyHttpError("commit", 500, "").message).toMatch(/コミット/);
   });
