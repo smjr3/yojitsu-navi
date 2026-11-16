@@ -1958,3 +1958,14 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）。npm 側の設定が済むまでは Secrets の `NPM_TOKEN`（2 段階認証を飛ばすトークンは CI からの公開が 2027 年 1 月ごろに終わる予定）。trusted publishing の設定で「Allowed actions」に `npm publish` を許可し、承認なしで公開する（依頼者 2026-11-16、npm での毎回の承認より手を介さないほうを選んだ）。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。
 - `packages/app/package.json` の `repository.url` はこのリポジトリ（trusted publishing の必須条件で、npm のページにリポジトリが出る。依頼者 2026-11-16 了承。アカウント名を書かない決まりの唯一の例外）。`author`・`homepage`・`bugs` は今までどおり入れない。template（利用環境）には入らない。
 - 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）、`tests/integration/app-package.test.ts`（`repository` はこのリポジトリの URL だけ）。
+
+## 126. データ確認を行数が多くても見やすくする（2026-11-16 依頼者）
+「データ確認の表、行数がとても多いと下の項目まで行くのが大変」「データは ID でなく名称で表示されるよね？」への対応。
+- 目次: KPI の下に、出している項目の名前と件数を並べる（`sectionToc`。`<nav>`）。押すとその項目を開いて移る。件数の色は、検証のエラーがあれば赤、確認要求は黄、参考（作業名が変わった作業コード・除外・計算時の警告）は灰、0 件は ✓。
+- 項目の開閉: 見出し（ボタン）で本文を開閉する（`foldSection`）。見出しの横に件数。開閉はこのブラウザに覚える（`localStorage`、画面と項目ごと）。既定は開く。「計算時の警告（すべて）」は上の各項目と重なる一覧なので既定でたたむ。
+- 表は先頭 10 行（並べ替え・絞り込みの後の先頭）だけ出し、表の下の「すべて表示（n 件）」で残りを出す（`dataTable` の `previewRows`）。たたんでいる間は表の中でスクロールしない（ページのスクロールが表に取られて下の項目へ進めない、をなくす）。すべて表示にすると今までどおり高さを抑えて表の中でスクロールし、「先頭の n 件だけ表示」で戻す。件数・Excel 出力はいつも全行。木構造の表は対象外。
+- ID を名前で出す（§115 の横展開）:
+  - 正式な案件IDの無い案件の「候補の正式な案件」は「顧客 / 案件名（正式な案件ID）」（一覧に無い ID はそのまま）。
+  - マスタに無い正式な案件は顧客名・案件名を先頭にし、正式な案件ID は「列」で選べる列（Excel には常に出す。§106.1）。
+  - データ検証（§14）のメッセージの社員番号・案件ID に名前を添える（「メンバー M001（山田 太郎）」「案件 C001（顧客 / 案件名）」。マスタに無い ID・名前が ID と同じときはそのまま）。社員番号の並び（役職の単価が無い人・GitLab ユーザー名の重複）は「: M001（…）、M002（…）」、作業の対応表の期間の重なりは「別の案件 C001（…） と C002（…）」。未紐付けの理由は英語のコードでなく §103 の名前（「紐付けルールなし」など）。
+- 実装: `src/components/fold-section.js`、`src/components/table.js`（`previewRows`）、`src/data-check.md`、`src/core/validate.ts`（`createNames`）、`src/core/taskCodes.ts`（`validateMappingPeriods` の `label`）。

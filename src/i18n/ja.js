@@ -217,6 +217,11 @@ export default {
     costOfType: "実績（{type}）",
     totalAmount: "契約総額",
   },
+  // 開閉できる節と目次（データ確認。§126）
+  fold: {
+    count: "{n} 件",
+    tocLabel: "このページの項目",
+  },
   table: {
     // Excel の列名に付ける単位
     exportYen: "{label}（円）",
@@ -235,6 +240,9 @@ export default {
     rowCountTreeCollapsed: "表示 {shown} 行 / 全 {n} 行",
     rowCount: "{n} 件",
     rowCountFiltered: "{shown} 件 / 全 {n} 件",
+    // 先頭の数行だけ出す表（§126）
+    showAll: "すべて表示（{n} 件）",
+    showFirst: "先頭の {n} 件だけ表示",
     // 列ごとの絞り込み（見出しの漏斗ボタン。SPEC §70）
     filterBy: "{label}で絞り込み",
     filterActive: "{label}で絞り込み中",
@@ -303,7 +311,7 @@ export default {
     mappingUnknownContract: "{file} {row} 行目: 契約ID {contractId} は contracts.csv に存在しません",
     mappingMonthInvalid: "{file} {row} 行目: {column} の形式が不正です: {value}",
     mappingPeriodInverted: "{file} {row} 行目: 開始月 {from} が終了月 {to} より後です",
-    mappingPeriodOverlap: "{file} {row} 行目: {other} 行目と同じ作業が {from}〜{to} に別の案件（{otherContractId} と {contractId}）を指しています。どちらか一方の期間にしてください",
+    mappingPeriodOverlap: "{file} {row} 行目: {other} 行目と同じ作業が {from}〜{to} に別の案件 {otherContractId} と {contractId} を指しています。どちらか一方の期間にしてください",
     mappingOutsideContract: "{file} {row} 行目: 期間が案件 {contractId} の契約期間 {from}〜{to} と重ならないため、この行は使われません",
     assignmentUnknownMember: "{file} {row} 行目: 社員番号 {memberId} は members.csv に存在しません",
     assignmentUnknownContract: "{file} {row} 行目: 契約ID {contractId} は contracts.csv に存在しません",
@@ -332,7 +340,7 @@ export default {
     assignmentAfterLeft: "{file}: メンバー {memberId} は {leftFrom} から不在ですが、{first}〜{last} のアサインが残っています（行 {rows}）。終了月を {leftFrom} までにしてください",
     worklogAfterLeft: "{file}: メンバー {memberId}（{memberName}）は {leftFrom} から不在ですが、不在の期間に作業実績が {count} 件（{hours} 時間、{first}〜{last}）あります。実績には含めています",
     memberUnknownTeam: "{file} {row} 行目: メンバー {memberId} のチーム {teamId} は存在しません",
-    gitlabUsernameDuplicate: "{file}: GitLab ユーザー名 {username} が複数のメンバー（{members}）に付いています。ヘッダーの「今月の残り」はこの人たちに出ません",
+    gitlabUsernameDuplicate: "{file}: GitLab ユーザー名 {username} が複数のメンバー {members} に付いています。ヘッダーの「今月の残り」はこの人たちに出ません",
     memberEffectiveFromInvalid: "{file} {row} 行目: effective_from の形式が不正です: {value}",
     memberStatusDateInvalid: "{file} {row} 行目: メンバー {memberId} の在籍・不在の開始日 {value} は適用開始月 {month} の中の日付（YYYY-MM-DD）にしてください",
     rateKeyEmpty: "{file} {row} 行目: key が空です",
@@ -352,8 +360,8 @@ export default {
     rateMissing: "{file}: {month} のメンバー {memberId} の時間単価がありません（{hours} 時間）",
     rateMissingBeforeMember: "{file}: {month} のメンバー {memberId} の作業は members.csv の effective_from より前のため単価が決まりません（{hours} 時間）",
     assignmentOutsideContract: "{file} {row} 行目: 案件 {contractId} のアサイン {from}〜{to} が契約期間 {cFrom}〜{cTo} の外にはみ出しています（はみ出した月は計画に入りません）",
-    titleRateUndefined: "{file}: 役職「{title}」の単価が rates.csv にありません。実績が 0 円になります（{members}）",
-    memberNoTitleNoRate: "{file}: 役職も個人単価もないメンバーがいます。実績が 0 円になります（{members}）",
+    titleRateUndefined: "{file}: 役職「{title}」の単価が rates.csv にありません。実績が 0 円になります: {members}",
+    memberNoTitleNoRate: "{file}: 役職も個人単価もないメンバーがいます。実績が 0 円になります: {members}",
     worklogDayOver24: "{file}: 1 人 1 日 24 時間を超える作業実績が {count} 件あります（{examples}）。入力ミスでないか確認してください",
     outsideUnknownMember: "{file} {row} 行目: 社員番号 {memberId} は members.csv に存在しません",
     outsideMonthInvalid: "{file} {row} 行目: {column} の形式が不正です: {value}",
@@ -1392,7 +1400,7 @@ export default {
     colCustomer: "顧客名",
     colProject: "案件名",
     colPeriod: "期間",
-    colCandidates: "候補の正式な案件ID",
+    colCandidates: "候補の正式な案件",
     colSameNameContracts: "同じ案件名の案件",
     noCandidate: "なし",
     rateMissingTitle: "単価のないメンバー",

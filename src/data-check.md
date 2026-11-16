@@ -12,7 +12,8 @@ title: データ確認
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { pageHeader, sectionTitle, emptyState, loadJson, note, loadModel } from "./components/layout.js";
+import { pageHeader, emptyState, loadJson, note, loadModel } from "./components/layout.js";
+import { foldSection, sectionToc } from "./components/fold-section.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { dataTable } from "./components/table.js";
 import { formatHours, integer, dateTimeJst, monthJa, WARNING_LABELS, UNMAPPED_REASON_LABELS } from "./components/format.js";
@@ -32,6 +33,12 @@ const msgCell = (text) => html`<span class="yn-cell-msg">${text}</span>`;
 const linkButton = (href, text, aria) => html`<a class="yn-btn yn-btn-sm yn-row-action" href=${href} aria-label=${aria}>${text}</a>`;
 const officialByName = officialProjectLookup(issuesData?.officialProjects);
 const registerHref = (row) => registerContractHref(row, officialByName);
+// 正式な案件IDは名前で出す（顧客 / 案件名（ID））。一覧に無い ID はそのまま（§126）
+const officialById = new Map((issuesData?.officialProjects ?? []).map((p) => [p.projectId, p]));
+const officialLabel = (id) => {
+  const p = officialById.get(id);
+  return p ? `${[p.customerName, p.projectName].filter(Boolean).join(" / ")}（${id}）` : id;
+};
 ```
 
 ```js
@@ -60,6 +67,41 @@ const summary = (() => {
 ```
 
 ```js
+// 節の一覧（目次・見出しの件数。§126）。出さない節（設定が無い・該当なし）は null
+const sections = (() => {
+  if (!model) return null;
+  const projectCheck = issuesData?.projects;
+  const warnRows = model.warnings.filter((w) => w.code === "RATE_MISSING");
+  const excluded = model.warnings.find((x) => x.code === "EXCLUDED_NO_CUSTOMER");
+  const errors = issuesData?.summary?.errors ?? 0;
+  const list = [
+    { key: "unmapped", title: T.dataCheck.unmappedTitle, hint: T.dataCheck.unmappedHint, count: model.unmapped.filter((g) => g.reason !== "OUT_OF_PERIOD").length },
+    { key: "outOfPeriod", title: T.dataCheck.outOfPeriodTitle, hint: T.dataCheck.outOfPeriodHint, count: model.unmapped.filter((g) => g.reason === "OUT_OF_PERIOD").length },
+    (model.keywordUnmatched ?? []).length > 0 ? { key: "keyword", title: T.dataCheck.keywordTitle, hint: T.dataCheck.keywordHint, count: model.keywordUnmatched.length } : null,
+    (model.unregisteredTaskCodes ?? []).length > 0 ? { key: "taskCode", title: T.dataCheck.taskCodeTitle, hint: T.dataCheck.taskCodeHint, count: model.unregisteredTaskCodes.length } : null,
+    (model.taskCodeChanges ?? []).length > 0 ? { key: "taskCodeChanges", title: T.dataCheck.taskCodeChangesTitle, hint: T.dataCheck.taskCodeChangesHint, count: model.taskCodeChanges.length, tone: "neutral" } : null,
+    projectCheck?.enabled && projectCheck.unlinked.length > 0 ? { key: "unlinkedContracts", title: T.dataCheck.unlinkedContractsTitle, hint: T.dataCheck.unlinkedContractsHint, count: projectCheck.unlinked.length } : null,
+    projectCheck?.enabled && projectCheck.unregistered.length > 0 ? { key: "unregisteredProjects", title: T.dataCheck.unregisteredProjectsTitle, hint: T.dataCheck.unregisteredProjectsHint, count: projectCheck.unregistered.length } : null,
+    issuesData ? { key: "unset", title: T.dataCheck.unsetTitle, hint: T.dataCheck.unsetHint, count: (issuesData.unset ?? []).length } : null,
+    { key: "rateMissing", title: T.dataCheck.rateMissingTitle, hint: T.dataCheck.rateMissingHint, count: new Set(warnRows.map((w) => w.ref?.memberId ?? "")).size },
+    { key: "unknown", title: T.dataCheck.unknownTitle, hint: T.dataCheck.unknownHint, count: (model.unknownMembers ?? []).length },
+    { key: "excluded", title: T.dataCheck.excludedTitle, hint: T.dataCheck.excludedHint, count: model.excludedHours > 0 ? (excluded?.count ?? 1) : 0, tone: "neutral" },
+    // 上の各項目と重なる一覧なので既定はたたむ
+    { key: "warnings", title: T.dataCheck.warningsTitle, hint: T.dataCheck.warningsHint, count: model.warnings.length, tone: "neutral", defaultOpen: false },
+    { key: "issues", title: T.dataCheck.issuesTitle, hint: T.dataCheck.issuesHint, count: issuesData ? issuesData.issues.length : null, tone: errors > 0 ? "danger" : "warn" },
+  ].filter(Boolean);
+  return new Map(list.map((x) => [x.key, { ...x, id: `dc-${x.key}`, tone: x.tone ?? "warn" }]));
+})();
+// 節を作る（見出しの開閉・件数）。本文は body に入れる
+const openSection = (key) => {
+  const meta = sections.get(key);
+  return foldSection({ id: meta.id, title: meta.title, hint: meta.hint, count: meta.count, tone: meta.tone, defaultOpen: meta.defaultOpen ?? true });
+};
+// 表は先頭の数行だけ出し、残りは「すべて表示」で（ページのスクロールが表に取られないように。§126）
+const PREVIEW_ROWS = 10;
+```
+
+```js
 if (summary) {
   display(
     kpiRow(
@@ -78,8 +120,13 @@ if (summary) {
 ```
 
 ```js
+if (sections) display(sectionToc([...sections.values()]));
+```
+
+```js
 if (model) {
-  display(sectionTitle(T.dataCheck.unmappedTitle, T.dataCheck.unmappedHint));
+  const sec = openSection("unmapped");
+  display(sec.el);
   // 契約期間外は下の「契約期間外の実績」に分ける（§103）
   const rows = model.unmapped.filter((g) => g.reason !== "OUT_OF_PERIOD").map((g) => ({ ...g, reasonLabel: UNMAPPED_REASON_LABELS[g.reason] ?? g.reason }));
   // 未登録の案件（作業名から抜き出した案件名。§97）は、本当に案件があれば人が登録する（自動では登録しない。§103）
@@ -98,9 +145,9 @@ if (model) {
         },
       ]
     : [];
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.unmappedEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.unmappedEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       groupedWorklogTable({
         model,
         groups: rows,
@@ -119,6 +166,7 @@ if (model) {
           ...registerCol,
         ],
         caption: T.dataCheck.unmappedTitle,
+        previewRows: PREVIEW_ROWS,
         exportName: "unmapped_worklogs",
         sort: { key: "hours", dir: "desc" },
       }),
@@ -129,13 +177,14 @@ if (model) {
 ```js
 // 契約期間外の実績（§103）: 消したり自動で直したりせず、契約期間・実績の日付・時間を並べて人が判断する
 if (model) {
-  display(sectionTitle(T.dataCheck.outOfPeriodTitle, T.dataCheck.outOfPeriodHint));
+  const sec = openSection("outOfPeriod");
+  display(sec.el);
   const groups = model.unmapped.filter((g) => g.reason === "OUT_OF_PERIOD");
   const periodText = (g) => (g.contracts ?? []).map((c) => `${monthJa(c.startMonth)}〜${monthJa(c.endMonth)}`).join("、");
   const rows = groups.map((g) => ({ ...g, contractText: (g.contracts ?? []).map((c) => c.contractId).join("、"), contractPeriod: periodText(g), workPeriod: g.firstDate === g.lastDate ? g.firstDate : `${g.firstDate}〜${g.lastDate}` }));
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.outOfPeriodEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.outOfPeriodEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       groupedWorklogTable({
         model,
         groups: rows,
@@ -171,6 +220,7 @@ if (model) {
           },
         ],
         caption: T.dataCheck.outOfPeriodTitle,
+        previewRows: PREVIEW_ROWS,
         exportName: "out_of_period_worklogs",
         sort: { key: "hours", dir: "desc" },
       }),
@@ -181,8 +231,9 @@ if (model) {
 ```js
 // 作業名のキーワード（§62.3）。キーワードを使っていない・すべて合致したときは出さない
 if (model && (model.keywordUnmatched ?? []).length > 0) {
-  display(sectionTitle(T.dataCheck.keywordTitle, T.dataCheck.keywordHint));
-  display(
+  const sec = openSection("keyword");
+  display(sec.el);
+  sec.body.append(
     groupedWorklogTable({
       model,
       groups: model.keywordUnmatched,
@@ -198,6 +249,7 @@ if (model && (model.keywordUnmatched ?? []).length > 0) {
         { key: "lastDate", label: T.dataCheck.colLastDate, type: "text", hideOnPhone: true },
       ],
       caption: T.dataCheck.keywordTitle,
+      previewRows: PREVIEW_ROWS,
       exportName: "keyword_unmatched",
       sort: { key: "hours", dir: "desc" },
     }),
@@ -208,8 +260,9 @@ if (model && (model.keywordUnmatched ?? []).length > 0) {
 ```js
 // 作業コードの点検（§92）。点検の設定が無い・見つからないときは出さない
 if (model && (model.unregisteredTaskCodes ?? []).length > 0) {
-  display(sectionTitle(T.dataCheck.taskCodeTitle, T.dataCheck.taskCodeHint));
-  display(
+  const sec = openSection("taskCode");
+  display(sec.el);
+  sec.body.append(
     groupedWorklogTable({
       model,
       groups: model.unregisteredTaskCodes.map((g) => ({ ...g, statusLabel: g.status === "none" ? T.dataCheck.statusNone : T.dataCheck.statusPeriod })),
@@ -227,15 +280,17 @@ if (model && (model.unregisteredTaskCodes ?? []).length > 0) {
         { key: "lastDate", label: T.dataCheck.colLastDate, type: "text" },
       ],
       caption: T.dataCheck.taskCodeTitle,
+      previewRows: PREVIEW_ROWS,
       exportName: "unregistered_task_codes",
       sort: { key: "hours", dir: "desc" },
     }),
   );
 }
 if (model && (model.taskCodeChanges ?? []).length > 0) {
-  display(sectionTitle(T.dataCheck.taskCodeChangesTitle, T.dataCheck.taskCodeChangesHint));
+  const sec = openSection("taskCodeChanges");
+  display(sec.el);
   const matchLabel = (c) => (c.matchBefore === null || c.matchAfter === null || c.matchBefore === c.matchAfter ? T.dataCheck.matchKept : c.matchAfter ? T.dataCheck.matchGained : T.dataCheck.matchLost);
-  display(
+  sec.body.append(
     dataTable({
       columns: [
         { key: "taskCode", label: T.dataCheck.colTaskCode, type: "text" },
@@ -246,7 +301,9 @@ if (model && (model.taskCodeChanges ?? []).length > 0) {
       ],
       rows: model.taskCodeChanges.map((c, i) => ({ key: i, ...c, matchLabel: matchLabel(c) })),
       caption: T.dataCheck.taskCodeChangesTitle,
+      previewRows: PREVIEW_ROWS,
       exportName: "task_code_changes",
+      maxHeight: 520,
       sort: { key: "changedOn", dir: "desc" },
     }),
   );
@@ -257,8 +314,9 @@ if (model && (model.taskCodeChanges ?? []).length > 0) {
 // 正式な案件の一覧（案件管理システム）との照合（§98）。一覧を取り込んでいない・見つからないときは出さない
 const projectCheck = issuesData?.projects;
 if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
-  display(sectionTitle(T.dataCheck.unlinkedContractsTitle, T.dataCheck.unlinkedContractsHint));
-  display(
+  const sec = openSection("unlinkedContracts");
+  display(sec.el);
+  sec.body.append(
     dataTable({
       columns: [
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
@@ -267,23 +325,27 @@ if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
         { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true, dateValue: (r) => [r.startMonth, r.endMonth] },
         { key: "candidateText", label: T.dataCheck.colCandidates, type: "text", empty: T.dataCheck.noCandidate },
       ],
-      rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.join(", ") })),
+      rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.map(officialLabel).join("、") })),
       caption: T.dataCheck.unlinkedContractsTitle,
+      previewRows: PREVIEW_ROWS,
       exportName: "contracts_without_project_id",
+      maxHeight: 520,
       sort: { key: "customerName", dir: "asc" },
     }),
   );
 }
 if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
-  display(sectionTitle(T.dataCheck.unregisteredProjectsTitle, T.dataCheck.unregisteredProjectsHint));
+  const sec = openSection("unregisteredProjects");
+  display(sec.el);
   // 正式な案件IDの無い案件の候補になっているもの（同じ案件を二重に登録しないように並べる）
   const sameName = unlinkedByCandidate(projectCheck.unlinked);
-  display(
+  sec.body.append(
     dataTable({
       columns: [
-        { key: "projectId", label: T.dataCheck.colProjectId, type: "text" },
+        // 名前を先に。正式な案件IDは「列」で選べる列（Excel には常に出す。§126）
         { key: "customerName", label: T.dataCheck.colCustomer, type: "text" },
         { key: "projectName", label: T.dataCheck.colProject, type: "text" },
+        { key: "projectId", label: T.dataCheck.colProjectId, type: "text", optional: true, exportAlways: true },
         ...(sameName.size > 0 ? [{ key: "sameNameText", label: T.dataCheck.colSameNameContracts, type: "text", empty: "" }] : []),
         {
           key: "action",
@@ -296,8 +358,10 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
       ],
       rows: projectCheck.unregistered.map((p, i) => ({ key: i, ...p, sameNameText: contractListText(sameName.get(p.projectId)) })),
       caption: T.dataCheck.unregisteredProjectsTitle,
+      previewRows: PREVIEW_ROWS,
       exportName: "projects_without_contract",
-      sort: { key: "projectId", dir: "asc" },
+      maxHeight: 520,
+      sort: { key: "customerName", dir: "asc" },
     }),
   );
 }
@@ -306,7 +370,8 @@ if (model && projectCheck?.enabled && projectCheck.unregistered.length > 0) {
 ```js
 // 未設定・仮の値（§103）。マスタ編集の該当箇所を開くだけで、値は人が入れる
 if (model && issuesData) {
-  display(sectionTitle(T.dataCheck.unsetTitle, T.dataCheck.unsetHint));
+  const sec = openSection("unset");
+  display(sec.el);
   const kinds = T.dataCheck.unsetKinds;
   const hrefOf = (u) =>
     u.kind === "contractTeam"
@@ -323,9 +388,9 @@ if (model && issuesData) {
     target: u.customerName !== undefined ? `${[u.customerName, u.projectName].filter(Boolean).join(" / ")}（${u.key}）` : u.key,
     detail: u.kind === "rateMissing" ? fmt(T.dataCheck.unsetMembers, { n: integer(u.count ?? 0) }) : "",
   }));
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.unsetEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.unsetEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       dataTable({
         columns: [
           { key: "kindLabel", label: T.dataCheck.colUnsetKind, type: "text", sortValue: (r) => ["contractTeam", "contractAmount", "rateMissing", "rateProvisional"].indexOf(r.kind) },
@@ -335,6 +400,7 @@ if (model && issuesData) {
         ],
         rows,
         caption: T.dataCheck.unsetTitle,
+        previewRows: PREVIEW_ROWS,
         exportName: "unset_items",
         sort: { key: "kindLabel", dir: "asc" },
         maxHeight: 520,
@@ -345,7 +411,8 @@ if (model && issuesData) {
 
 ```js
 if (model) {
-  display(sectionTitle(T.dataCheck.rateMissingTitle, T.dataCheck.rateMissingHint));
+  const sec = openSection("rateMissing");
+  display(sec.el);
   // 人ごとにまとめる（メンバー × 月のままだと行が多すぎて読めない）。月ごとの時間は内訳で見る
   const byMember = new Map();
   for (const w of model.warnings) {
@@ -360,9 +427,9 @@ if (model) {
     const months = r.months.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
     return { ...r, months, monthCount: months.length, firstMonth: months[0]?.month ?? "", lastMonth: months[months.length - 1]?.month ?? "" };
   });
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.rateMissingEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.rateMissingEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       dataTable({
         columns: [
           { key: "memberName", label: T.dataCheck.colName, type: "text" },
@@ -390,7 +457,9 @@ if (model) {
         ],
         rows,
         caption: T.dataCheck.rateMissingTitle,
+        previewRows: PREVIEW_ROWS,
         exportName: "rate_missing",
+        maxHeight: 520,
         sort: { key: "hours", dir: "desc" },
       }),
     );
@@ -399,11 +468,12 @@ if (model) {
 
 ```js
 if (model) {
-  display(sectionTitle(T.dataCheck.unknownTitle, T.dataCheck.unknownHint));
+  const sec = openSection("unknown");
+  display(sec.el);
   const rows = (model.unknownMembers ?? []).map((u) => ({ ...u, key: u.memberId || "\u0000", customerText: u.customers.map((c) => c.name || T.numbers.noCustomerName).join("、") }));
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.unknownEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.unknownEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       dataTable({
         columns: [
           // マスタに無い人は作業実績の名前が空のこともあるので、社員番号も出しておく（名前が先）
@@ -428,6 +498,7 @@ if (model) {
         ],
         rows,
         caption: T.dataCheck.unknownCaption,
+        previewRows: PREVIEW_ROWS,
         exportName: "unknown_members",
         sort: { key: "hours", dir: "desc" },
         maxHeight: 560,
@@ -438,19 +509,21 @@ if (model) {
 
 ```js
 if (model) {
-  display(sectionTitle(T.dataCheck.excludedTitle, T.dataCheck.excludedHint));
+  const sec = openSection("excluded");
+  display(sec.el);
   const w = model.warnings.find((x) => x.code === "EXCLUDED_NO_CUSTOMER");
-  display(html`<p class="yn-fact-line">${T.dataCheck.excludedTotal} <strong class="num">${formatHours(model.excludedHours)}</strong>${w?.count ? fmt(T.dataCheck.excludedCount, { n: integer(w.count) }) : null}${w?.message ? html`<span class="yn-muted"> — ${w.message}</span>` : null}</p>`);
+  sec.body.append(html`<p class="yn-fact-line">${T.dataCheck.excludedTotal} <strong class="num">${formatHours(model.excludedHours)}</strong>${w?.count ? fmt(T.dataCheck.excludedCount, { n: integer(w.count) }) : null}${w?.message ? html`<span class="yn-muted"> — ${w.message}</span>` : null}</p>`);
 }
 ```
 
 ```js
 if (model) {
-  display(sectionTitle(T.dataCheck.warningsTitle, T.dataCheck.warningsHint));
+  const sec = openSection("warnings");
+  display(sec.el);
   const rows = model.warnings.map((w, i) => ({ key: i, code: w.code, label: WARNING_LABELS[w.code] ?? w.code, message: w.message, hours: w.hours ?? null, count: w.count ?? null, ref: w.ref ? Object.entries(w.ref).map(([k, v]) => `${k}=${v}`).join(" ") : "" }));
-  if (rows.length === 0) display(emptyState({ title: T.dataCheck.warningsEmpty, icon: "✓" }));
+  if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.warningsEmpty, icon: "✓" }));
   else
-    display(
+    sec.body.append(
       dataTable({
         columns: [
           { key: "label", label: T.dataCheck.colKind, type: "text", sortValue: (r) => r.code },
@@ -461,6 +534,7 @@ if (model) {
         ],
         rows,
         caption: T.dataCheck.warningsCaption,
+        previewRows: PREVIEW_ROWS,
         exportName: "warnings",
         maxHeight: 520,
       }),
@@ -470,13 +544,14 @@ if (model) {
 
 ```js
 if (model) {
-  display(sectionTitle(T.dataCheck.issuesTitle, T.dataCheck.issuesHint));
-  if (!issuesData) display(note(T.dataCheck.issuesLoadFailed, "danger"));
+  const sec = openSection("issues");
+  display(sec.el);
+  if (!issuesData) sec.body.append(note(T.dataCheck.issuesLoadFailed, "danger"));
   else {
     const rows = issuesData.issues.map((i, k) => ({ key: k, severity: i.severity, severityChip: i.severity === "error" ? { kind: "danger", text: T.dataCheck.severityError } : { kind: "warn", text: T.dataCheck.severityWarning }, code: i.code, file: i.file ?? "", row: i.row ?? null, message: i.message }));
-    if (rows.length === 0) display(emptyState({ title: T.dataCheck.issuesEmpty, icon: "✓" }));
+    if (rows.length === 0) sec.body.append(emptyState({ title: T.dataCheck.issuesEmpty, icon: "✓" }));
     else
-      display(
+      sec.body.append(
         dataTable({
           columns: [
             { key: "severityChip", label: T.dataCheck.colSeverity, type: "status", sortValue: (r) => (r.severity === "error" ? 0 : 1) },
@@ -487,6 +562,7 @@ if (model) {
           ],
           rows,
           caption: T.dataCheck.issuesCaption,
+          previewRows: PREVIEW_ROWS,
           exportName: "validation_issues",
           sort: { key: "severityChip", dir: "asc" },
           maxHeight: 520,

@@ -20,9 +20,9 @@ test("正式な案件IDの無い案件（候補つき）とマスタに無い正
   const rows = dataRows(un);
   expect(await rows.count()).toBe(2);
   const candidates = new Map<string, string>();
-  for (let i = 0; i < 2; i++) candidates.set(await cellText(rows.nth(i), col(uh, "案件ID")), await cellText(rows.nth(i), col(uh, "候補の正式な案件ID")));
-  // C009 は同じ案件名の正式な案件がある（候補として出すだけ）。C021 は候補なし
-  expect(candidates.get("C009")).toMatch(/^PJ-\d{4}$/);
+  for (let i = 0; i < 2; i++) candidates.set(await cellText(rows.nth(i), col(uh, "案件ID")), await cellText(rows.nth(i), col(uh, "候補の正式な案件")));
+  // C009 は同じ案件名の正式な案件がある（候補として出すだけ。顧客 / 案件名（正式な案件ID）。§126）。C021 は候補なし
+  expect(candidates.get("C009")).toMatch(/^しらかば医療 \/ 電子カルテ連携保守（PJ-\d{4}）$/);
   expect(candidates.get("C021")).toBe("なし");
 
   const reg = tableByCaption(page, UNREGISTERED);

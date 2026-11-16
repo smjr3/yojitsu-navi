@@ -187,7 +187,8 @@ function minMonth(a: YearMonth | undefined, b: YearMonth): YearMonth {
  * - 同じ探し方（作業コード、または 顧客・案件・キーワード）の行で、契約の期間と行の期間の重なる月が別の契約を指す → warning（一意に決まらない）
  * - 行の期間が契約の期間と 1 か月も重ならない → warning（その行は使われない）
  */
-export function validateMappingPeriods(rules: readonly MappingRule[], contracts: readonly Contract[]): MappingRowIssue[] {
+/** label: メッセージに出す案件 ID に名前を添える（§126） */
+export function validateMappingPeriods(rules: readonly MappingRule[], contracts: readonly Contract[], label: (contractId: string) => string = (id) => id): MappingRowIssue[] {
   const issues: MappingRowIssue[] = [];
   const contractById = new Map<string, Contract>();
   for (const c of contracts) if (!contractById.has(c.contractId)) contractById.set(c.contractId, c);
@@ -214,7 +215,7 @@ export function validateMappingPeriods(rules: readonly MappingRule[], contracts:
     const to = minMonth(r.endMonth, c.endMonth);
     if (from > to) {
       if (r.startMonth || r.endMonth) {
-        issues.push({ severity: "warning", code: "MAPPING_OUTSIDE_CONTRACT", row, message: fmt(T.checks.mappingOutsideContract, { file, row, contractId: r.contractId, from: c.startMonth, to: c.endMonth }), ref: { contractId: r.contractId } });
+        issues.push({ severity: "warning", code: "MAPPING_OUTSIDE_CONTRACT", row, message: fmt(T.checks.mappingOutsideContract, { file, row, contractId: label(r.contractId), from: c.startMonth, to: c.endMonth }), ref: { contractId: r.contractId } });
       }
       return;
     }
@@ -239,7 +240,7 @@ export function validateMappingPeriods(rules: readonly MappingRule[], contracts:
         severity: "warning",
         code: "MAPPING_PERIOD_OVERLAP",
         row: b.row,
-        message: fmt(T.checks.mappingPeriodOverlap, { file, row: b.row, other: a.row, contractId: b.contractId, otherContractId: a.contractId, from, to }),
+        message: fmt(T.checks.mappingPeriodOverlap, { file, row: b.row, other: a.row, contractId: label(b.contractId), otherContractId: label(a.contractId), from, to }),
         ref: { contractId: b.contractId, otherContractId: a.contractId, from, to },
       });
     }
