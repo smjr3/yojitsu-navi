@@ -69,7 +69,7 @@ import {
 import { teamTreeAt } from "../core/masters.js";
 import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateJa, dateTimeJst, formatPercent, integer, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { dateJa, dateTimeJst, formatPercent, integer, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
 import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
@@ -2469,10 +2469,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     };
     const showRoom = (el, yen) => {
       const over = yen < -0.5;
-      const text = fmt(over ? T.plan.roomOver : T.plan.roomLeft, { pm: pm(Math.abs(yen) / perPm) });
+      // 残りは金額。人月はこの人の単価での目安なので括弧で添える（単価は人によって違う）
+      const abs = Math.abs(yen);
+      const man = abs >= 1e5 ? integer(Math.round(abs / 1e4)) : maxFractionFormat(1).format(abs / 1e4);
       el.classList.toggle("is-over", over);
-      el.textContent = text;
-      el.title = fmt(T.plan.roomTitle, { cap: money(rooms.get(el.dataset.contract)?.cap ?? 0, "yen") });
+      el.textContent = fmt(over ? T.plan.roomOver : T.plan.roomLeft, { man, pm: pm(abs / perPm) });
+      el.title = fmt(T.plan.roomTitle, { cap: money(rooms.get(el.dataset.contract)?.cap ?? 0, "yen"), name });
     };
     const updateRooms = () => {
       // 入力中の値の差（同じ案件の欄は合わせる）

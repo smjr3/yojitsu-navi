@@ -85,13 +85,14 @@ async function openTaskCell(page: Page) {
 
 const pmOf = (text: string) => Number(/([\d.]+)人月/.exec(text)?.[1] ?? NaN) * (text.includes("超え") ? -1 : 1);
 
-test("入力欄の余力: 案件ごとに目標の上限までの人月を出し、入力中の値で数え直す", async ({ page }) => {
+test("入力欄の余力: 案件ごとに目標の上限までの金額と人月を出し、入力中の値で数え直す", async ({ page }) => {
   await openTaskCell(page);
   const pop = page.locator("dialog.yn-plan-pop");
   const rows = pop.locator(".yn-plan-pop-rows li");
   const row = rows.filter({ hasText: "倉庫管理システム保守" });
   const room = row.locator(".yn-plan-pop-room");
-  await expect(room).toHaveText(/上限まで あと [\d.]+人月|目標の上限を [\d.]+人月 超え/);
+  // 残りは金額、人月はこの人の単価での目安を括弧で（§122）
+  await expect(room).toHaveText(/^(上限まで あと [\d.,]+万円|目標の上限を [\d.,]+万円 超え)（[\d.]+人月）$/);
   const before = pmOf((await room.textContent()) ?? "");
   const input = row.locator("input");
   const value = Number(await input.inputValue());
