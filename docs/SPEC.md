@@ -1220,7 +1220,7 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 §82 の質問に「npmjs.com にも公開」、ライセンスは「MIT」と回答。社内 GitLab の Package Registry への公開（§43）も残す。
 - ライセンスは MIT（ルートの `LICENSE`。著作権者は「yojitsu-navi contributors」と書き、個人名・年を書かない）。`core:build`・`app:build` がパッケージにも写す。画面フォントは SIL OFL 1.1 のまま（§46）。
 - 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ（→ §121 で版上げのマージから自動で公開・タグ・リリース）。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
-- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
+- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44。→ §121 で `repository` だけ入れる）。npm のユーザー名も個人名・会社名にしない。
 - `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。
 
 ## 84. パッケージを 1 つにする（2026-11-02 依頼者）
@@ -1955,5 +1955,6 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）は、`main` の `packages/app/package.json` が変わったとき（版を上げる PR のマージ）と手動（Run workflow）で動く。タグの push では動かない。
 - 最初に、その版が npmjs.com にあるか（認証なしで読む）と GitHub のリリースがあるかだけを調べ、両方あれば依存も入れずに終わる（Actions の時間を使わない）。無ければ型チェック・テスト・ビルド → `npm publish` → タグ `v<版>` とリリース（`gh release create`、説明は CHANGELOG.md のその版。`scripts/lib/release.mjs` の `releaseNotes()`）。済んだ分は飛ばすので、失敗しても Run workflow で残りだけやり直せる。
 - 版上げは `npm run version:bump -- patch|minor|major|<x.y.z>`（`scripts/bump-version.mjs`）。ルートと `packages/app` の `package.json`・`package-lock.json` の版をそろえ、CHANGELOG.md の「## 次の版」を「## <版>」にする（無ければ止まる）。開発元だけで使う（利用環境に配らない）。
-- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）か Secrets の `NPM_TOKEN`。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。trusted publishing は `repository.url` が要るので、切り替えるまで `repository` は入れない（§82・§83 のまま）。
-- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）。
+- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）。npm 側の設定が済むまでは Secrets の `NPM_TOKEN`（2 段階認証を飛ばすトークンは CI からの公開が 2027 年 1 月ごろに終わる予定）。trusted publishing の設定で「Allowed actions」に `npm publish` を許可し、承認なしで公開する（依頼者 2026-11-16、npm での毎回の承認より手を介さないほうを選んだ）。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。
+- `packages/app/package.json` の `repository.url` はこのリポジトリ（trusted publishing の必須条件で、npm のページにリポジトリが出る。依頼者 2026-11-16 了承。アカウント名を書かない決まりの唯一の例外）。`author`・`homepage`・`bugs` は今までどおり入れない。template（利用環境）には入らない。
+- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）、`tests/integration/app-package.test.ts`（`repository` はこのリポジトリの URL だけ）。
