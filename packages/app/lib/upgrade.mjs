@@ -4,29 +4,14 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CliError, VENDOR_CACHE, check, configCompat, missingConfigReport, update } from "./project.mjs";
+import { installKey, installUpToDate, writeInstallStamp } from "./install-stamp.mjs";
+import { CliError, check, configCompat, missingConfigReport, update } from "./project.mjs";
 
 /** 依存を入れたときの印（node_modules の中。lock ファイル・Node の版・OS が同じなら入れ直さない。SPEC §104） */
-export const INSTALL_STAMP = "node_modules/.yojitsu-navi-install.json";
-
-/** 依存の中身を決めるもの（package-lock.json・依存込みのキャッシュの有無・Node の主な版・OS） */
-export function installKey(dir, nodeVersion = process.version, platform = `${process.platform}-${process.arch}`) {
-  const lock = join(dir, "package-lock.json");
-  const h = createHash("sha256").update(existsSync(lock) ? readFileSync(lock) : Buffer.alloc(0)).digest("hex");
-  return { lock: h, vendor: existsSync(join(dir, VENDOR_CACHE)), node: nodeVersion.split(".")[0], platform };
-}
-
-/** 前に入れた依存がそのまま使えるか（node_modules があり、印が今の lock ファイルなどと同じ） */
-export function installUpToDate(dir, key = installKey(dir)) {
-  try {
-    const s = JSON.parse(readFileSync(join(dir, INSTALL_STAMP), "utf-8"));
-    return s.lock === key.lock && s.vendor === key.vendor && s.node === key.node && s.platform === key.platform;
-  } catch {
-    return false;
-  }
-}
+// 依存を入れ直さなくてよいかの印は CI（scripts/ci/install.mjs）と同じもの（scripts/lib/install-stamp.mjs を npm run app:build が写す）
+export { INSTALL_STAMP, installKey, installUpToDate } from "./install-stamp.mjs";
 
 /** 社内で手を加えたコード（テストを動かす理由）。社内の版のまま残したパッケージのファイルと、社内で足した画面・スクリプト・テスト・設定のファイル */
 export function localCodeChanges(kept, extras) {
@@ -198,7 +183,7 @@ export async function upgrade(o) {
         const script = join(dir, "scripts", "ci", "install.mjs");
         const [cmd, args, shell] = existsSync(script) ? [process.execPath, [script], false] : npm(["ci", "--no-audit", "--no-fund"]);
         const r = await run(cmd, args, { cwd: dir, env, shell, out });
-        if (r.ok && existsSync(join(dir, "node_modules"))) writeFileSync(join(dir, INSTALL_STAMP), `${JSON.stringify(key)}\n`);
+        if (r.ok) writeInstallStamp(dir, key);
         return r;
       },
     },

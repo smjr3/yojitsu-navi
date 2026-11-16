@@ -33,7 +33,7 @@ GitLab 側の構成・権限はこの文書の「推奨構成」に合わせて�
 | `.yojitsu-navi.json` | 入れた版とファイルの記録 | （コマンドが書く） | 手で編集しない |
 | `.yojitsu-navi-backup/` | `update` が上書き・削除する前のファイル | （コマンドが書く） | git に入れない。要らなければ消す |
 
-マスタ編集の接続先（`config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId`）は空のままで構いません。CI の build ジョブが、このプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）を自動で入れます。
+マスタ編集の接続先（`config.json` の `masterEdit.gitlab.apiBaseUrl`・`projectId`）は空のままで構いません。CI の build・pages ジョブが、このプロジェクト（`CI_API_V4_URL`・`CI_PROJECT_PATH`）を自動で入れます。
 
 ### 権限（ロール）
 
@@ -148,8 +148,9 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 
 **パイプラインの流れ**: 変わったファイルを見て、要るジョブだけが動きます（SPEC §102.3）。
 - MR: プログラム（パッケージの更新）なら `build`、データ（`data/`・`config.json`。画面の保存・定期取り込みの MR）だけなら `validate`、それ以外（文書・CI の設定）だけなら `ci-check`。どの MR にもジョブが 1 つあるので、「Pipelines must succeed」のままマージできます。
-- `main` へのマージ: プログラム・データ・CI の設定のどれかが変わっていれば `build` → `pages`。文書だけなら何も動きません。
-- `build` は増分ビルドです。ローダのキャッシュを `cache:` で使い回し、データだけが変わったときは変わった出力だけを作り直します（SPEC §102）。
+- `main` へのマージ: プログラム・データ・CI の設定のどれかが変わっていれば `pages`（検証・ビルド・公開を 1 つのジョブで。SPEC §126）。文書だけなら何も動きません。
+- 依存（`node_modules/`）は、Runner が作業フォルダを使い回すときは残し、`package-lock.json`・Node の版・OS が同じなら `npm ci` を飛ばします。必ず入れ直すときは CI/CD 変数か Run pipeline で `YOJITSU_FRESH_INSTALL=1`。
+- `build`・`pages` は増分ビルドです。ローダのキャッシュを `cache:` で使い回し、データだけが変わったときは変わった出力だけを作り直します（SPEC §102）。
 - データだけの MR でもビルドまで確かめたいときは CI/CD 変数 `YOJITSU_MR_BUILD=1`、キャッシュを使わずに作り直したいときは Run pipeline で `YOJITSU_FULL_BUILD=1`。
 
 **CI/CD 変数**（Settings > CI/CD > Variables）は、社内から外に出られないときだけ設定します（依存込みのパッケージで作ったプロジェクトは `NPM_CONFIG_REGISTRY` が要りません）。
@@ -179,7 +180,7 @@ Runner は **Windows・Linux のどちらでも**動きます（SPEC §79。`.gi
 
 ### 5. 公開と接続を確認する
 
-1. 手順 1 の push で CI/CD > Pipelines にパイプラインが出る。`build` → `pages` が緑になるのを待つ（手順 2 より前に終わっていてもよい）。
+1. 手順 1 の push で CI/CD > Pipelines にパイプラインが出る。`pages`（ビルドと公開）が緑になるのを待つ（手順 2 より前に終わっていてもよい）。
 2. Deploy > **Pages** に公開 URL が出る（例: `https://yojitsu-navi.pages.<社内ドメイン>/yojitsu-navi/`。「Use unique domain」が有効なら `https://yojitsu-navi-xxxx.pages.<社内ドメイン>/`。どちらでも動きます）。
 3. 下の「社内で確認すること」を順に確かめる。
 
@@ -358,7 +359,7 @@ yojitsu-navi reset-data             # 上のとおりに直す（作業実績の
   - 期待: (1)「マージできる立場です」と出て、「GitLab の設定に N 件の不足があります」が **出ない**（出たら、その項目を手順 2 で直す）。(2) MR ができる。(3) マージボタンが出ず「マージはリーダーが行います」と出る。(4) パイプラインの成功後にマージでき、数分後に画面の数値が変わる。
 - [ ] **マージ後の反映**
   - 手順: (4) のあと CI/CD > Pipelines を見る。
-  - 期待: `main` のパイプライン（build → pages）が走り、MR の一覧に「検証: 成功」などのパイプライン状態が出る。ヘッダー右端の「⋯」の件数バッジが減る（取得は 1 分ごと）。
+  - 期待: `main` のパイプライン（pages。ビルドと公開を 1 つのジョブで）が走り、MR の一覧に「検証: 成功」などのパイプライン状態が出る。ヘッダー右端の「⋯」の件数バッジが減る（取得は 1 分ごと）。
 
 設定画面の「接続を確認」は、次の不足を見つけると「GitLab の設定に N 件の不足があります」と一覧で出します（直し方は手順 2）。
 

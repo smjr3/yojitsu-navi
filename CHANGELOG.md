@@ -4,6 +4,22 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 `yojitsu-navi update` は、今の版から新しい版までの「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します（「新しい設定と推奨値」には導入先の `config.json` の今の値を添えます）。
 書き方と、版を上げるときの手順は [docs/RELEASE.md](docs/RELEASE.md)。
 
+## 次の版
+
+### 更新後に行うこと
+
+- `.gitlab-ci.local.yml` で `build:` にタグ・変数などを足しているなら、同じものを `pages:` にも足す（既定ブランチではビルドを `pages` ジョブが行うようになった。`default:` に書いたタグはそのままでよい）。足したら `npm run ci:check`
+- それ以外は何もしなくてよい（`.gitlab-ci.yml` はパッケージの新しいものになる）。最初のパイプラインは依存を入れる（2 回目から、`package-lock.json` が同じなら飛ばす）
+
+### テスト・CI の前提
+
+- 既定ブランチのパイプラインは `pages` 1 つになる（ビルドと公開を同じジョブで行う）。MR・既定ブランチ以外のブランチはこれまでどおり `build`（SPEC §126）
+- Runner が作業フォルダを使い回すとき（shell executor など）、`node_modules/` を消さずに残し、`package-lock.json`・Node の版・OS が前に入れたときと同じなら `npm ci` を飛ばす（`GIT_CLEAN_FLAGS`）。必ず入れ直すなら CI/CD 変数か Run pipeline で `YOJITSU_FRESH_INSTALL` = `1`
+
+### 変更
+
+- マージ後に画面へ反映されるまでを短くした: 既定ブランチではビルドと公開を 1 つのジョブにして、ジョブの待ち・取り直しと `dist/` の受け渡しを省いた。依存が変わっていなければ `npm ci` を飛ばす（マスタ編集の保存の MR の検証も同じ。SPEC §126）
+
 ## 0.3.0
 
 ### 更新後に行うこと

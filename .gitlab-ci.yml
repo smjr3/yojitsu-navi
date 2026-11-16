@@ -5,23 +5,26 @@
 #              データ（data/・config.json）だけが変わった              → validate（データ検証だけ。ビルドしない）
 #              それ以外（文書・CI の設定など）だけ                     → ci-check（CI の設定の点検だけ。依存も取らない）
 #   既定ブランチへの push（MR のマージ・自動取り込みのマージ）:
-#              プログラム・データ・CI の設定のどれかが変わった         → build → pages
+#              プログラム・データ・CI の設定のどれかが変わった         → pages（ビルドと公開を 1 つのジョブで。SPEC §126）
 #              文書だけ                                                → 何も動かない（公開中のサイトはそのまま）
-#   Run pipeline（手動）・API: build → pages（既定ブランチのとき）。test は既定で動かさない
+#   Run pipeline（手動）・API: 既定ブランチなら pages、ほかのブランチなら build。test は既定で動かさない
 #   - validate : データ検証（scripts/validate-data.ts。error があれば止める）。MR のパイプラインだけ
 #   - ci-check : CI 定義が使うファイルが揃っているか・GitLab が受け付けない書き方が無いか（scripts/ci/check.mjs）。MR のパイプラインだけ
 #   - test     : 型チェック + 運用のテスト（取り込み・データ検証・CI のスクリプト。SPEC §93）。既定は動かさない（CI/CD 変数 YOJITSU_RUN_TESTS=1 のときだけ）。
 #                アプリ本体のテスト（計算・画面・パッケージ・性能など）は開発元で公開前に済ませていて、このプロジェクトには入っていない。
 #                導入先で変わるのはデータと config.json だけで、それは build（データ検証を含む）と取り込みで確かめる（SPEC §79.2）。
 #                テストは本番の config.json・data/ を使わない（設定はテストの中、データは tests/fixtures/）
-#   - build    : データ検証 → Observable Framework で dist/ を生成。
+#   - build    : MR・既定ブランチ以外。データ検証 → Observable Framework で dist/ を生成（公開はしない）。
 #                検証とビルドを 1 つのジョブにして、依存の取得（npm ci）を 1 回にする（Windows の Runner では 1 回に数分かかる。SPEC §79.3）。
 #                ビルドは増分（SPEC §102）: ローダのキャッシュを cache: でパイプラインをまたいで使い回し、データだけが変わったときは
 #                変わった出力だけを作り直す。プログラムが変わったときと、CI/CD 変数 YOJITSU_FULL_BUILD=1 のときはフルビルド
-#   - pages    : 既定ブランチのみ。dist/ を public/ として GitLab Pages に公開
+#   - pages    : 既定ブランチのみ。build と同じ検証・ビルドをして、dist/ を public/ として GitLab Pages に公開。
+#                ジョブを分けないので、ジョブの待ち・取り直しと dist/ の受け渡し（成果物の上げ下ろし）が無い（SPEC §126）
+#   依存（node_modules）は、Runner が作業フォルダを使い回すときは消さずに残し、package-lock.json・Node の版・OS が同じなら
+#   npm ci を飛ばす（GIT_CLEAN_FLAGS と scripts/ci/install.mjs。SPEC §126）。CI/CD 変数 YOJITSU_FRESH_INSTALL=1 で必ず入れ直す
 #   - fetch-worklogs : スケジュール実行時のみ。作業実績 API から直近 N か月を取り直し、
 #                      data/worklogs/ の変更を MR にして自動マージする（main は直接プッシュ不可のため。
-#                      MR では validate だけが動き、マージで既定ブランチの build → pages まで流れる）
+#                      MR では validate だけが動き、マージで既定ブランチの pages（ビルドと公開）まで流れる）
 #
 # 推奨のプロジェクト構成・権限・保護ブランチは docs/DEPLOY_GITLAB.md（SPEC §39）。
 # 設定の確認・適用は `npm run gitlab:setup`（scripts/gitlab-setup.ts）
@@ -36,6 +39,7 @@
 #   FETCH_MODE          （任意。Run pipeline で入れる。CI/CD 変数には登録しない）initial = 初回の取り込み（今年度の初めから今月まで。§96）
 #   GIT_PUSH_TOKEN      data/ の取り込み結果を MR で反映するための Project Access Token
 #                       （role: Maintainer = 自動マージに必要、scope: write_repository。Protected + Masked）
+#   YOJITSU_FRESH_INSTALL（任意）"1" にすると残っている node_modules を使わずに npm ci で入れ直す（Run pipeline で入れてもよい）
 #   NPM_CONFIG_REGISTRY （任意）社内ミラーの npm レジストリ URL。例: https://nexus.example.local/repository/npm/
 #   YOJITSU_RUN_TESTS   （任意）"1" にすると test ジョブ（型チェック・運用のテスト）も動く。既定は動かさない
 #   YOJITSU_MR_BUILD    （任意）"1" にすると MR でも毎回 build を動かす（データだけの MR でも。既定はデータだけなら validate だけ）
@@ -91,6 +95,9 @@ variables:
   # npm のキャッシュをプロジェクト内に置いて cache: で共有する
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
   GIT_DEPTH: "20"
+  # 作業フォルダを使い回す Runner（shell executor など）で node_modules/ を消さずに残す（既定は -ffdx で全部消す）。
+  # 残った node_modules は scripts/ci/install.mjs が package-lock.json などの印で確かめ、同じなら npm ci を飛ばす（SPEC §126）
+  GIT_CLEAN_FLAGS: "-ffdx -e node_modules/"
 
 # npm のダウンロードキャッシュを lock ファイル単位で共有する。
 # node_modules/ は入れない（npm ci は毎回 node_modules を消して入れ直すので、固めて戻す時間がまるごと無駄になる。
@@ -200,11 +207,15 @@ test:
 
 # --------------------------------------------------------------------------
 # build: データの整合性チェック（案件ID重複・期間逆転・未知のチーム等で止める）→ 静的サイトを dist/ に生成
+#   MR と既定ブランチ以外で動く。既定ブランチでは pages が同じことをして公開まで行う（SPEC §126）
 # --------------------------------------------------------------------------
 build:
   stage: build
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    # 既定ブランチは pages がビルドする
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: never
     # MR: プログラムが変わったときだけ（データだけなら validate、それ以外は ci-check）。YOJITSU_MR_BUILD=1 なら毎回
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $YOJITSU_MR_BUILD == "1"
@@ -251,12 +262,12 @@ build:
     expire_in: 1 week
 
 # --------------------------------------------------------------------------
-# pages: 既定ブランチの dist/ を public/ として公開
+# pages: 既定ブランチで、build と同じ検証・ビルドをして dist/ を public/ として公開する（SPEC §126）
+#   ビルドと公開を 1 つのジョブにして、ジョブの待ち・リポジトリの取り直し・dist/ の成果物の上げ下ろしを省く
+#   （.gitlab-ci.local.yml で build: にタグなどを足しているときは、同じものを pages: にも足す）
 # --------------------------------------------------------------------------
 pages:
   stage: pages
-  needs: ["build"]
-  # build と同じ条件（build が動かないパイプラインに pages だけがあると、パイプラインが作れない）
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -271,12 +282,23 @@ pages:
     - if: $CI_PIPELINE_SOURCE == "push"
       when: never
     - when: on_success
-  # build の成果物を移すだけなので、npm ci・キャッシュは不要（移すスクリプトのためにリポジトリは浅く取る）
+  # variables・cache は build と同じ（tests/unit/ci-rules.test.ts で確かめる）
   variables:
-    GIT_DEPTH: "1"
-  before_script: []
-  cache: []
+    GIT_DEPTH: "0"
+    YOJITSU_GITLAB_API_URL: $CI_API_V4_URL
+    YOJITSU_GITLAB_PROJECT: $CI_PROJECT_PATH
+  cache:
+    - key:
+        files:
+          - package-lock.json
+      paths:
+        - .npm/
+    - key: yojitsu-navi-build
+      paths:
+        - src/.observablehq/cache/
   script:
+    - npm run validate
+    - npm run build
     # dist/ を public/ に移し、圧縮版（.gz）を並べる（GitLab Pages が gzip で配信し、約 3 MB の JSON が数百 KB になる）
     - node scripts/ci/pages.mjs
   artifacts:
