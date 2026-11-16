@@ -31,6 +31,28 @@ export interface ValidationIssue {
 
 type IssueSink = (issue: ValidationIssue) => void;
 
+/** メッセージに出す ID に名前を添える（ID だけでは誰・どの案件か分からない。§127）。マスタに無い ID はそのまま */
+interface Names {
+  member(id: string): string;
+  members(ids: readonly string[]): string;
+  contract(id: string): string;
+}
+const withName = (id: string, name: string | null | undefined) => (name && name !== id ? `${id}（${name}）` : id);
+function createNames(dataset: Dataset): Names {
+  const member = new Map<string, { name: string; from: string }>();
+  for (const m of dataset.members) {
+    const hit = member.get(m.memberId);
+    if (m.name && (!hit || m.effectiveFrom >= hit.from)) member.set(m.memberId, { name: m.name, from: m.effectiveFrom });
+  }
+  const contract = new Map<string, string>();
+  for (const c of dataset.contracts) if (!contract.has(c.contractId)) contract.set(c.contractId, [c.customerName, c.projectName].filter(Boolean).join(" / "));
+  const one = (id: string) => withName(id, member.get(id)?.name);
+  return { member: one, members: (ids) => ids.map(one).join("、"), contract: (id) => withName(id, contract.get(id)) };
+}
+/** validateDataset の実行中だけ使う（各検証の引数を増やさないため。同期処理なので呼び出しが重ならない） */
+const PLAIN_NAMES: Names = { member: (id) => id, members: (ids) => ids.join("、"), contract: (id) => id };
+let names: Names = PLAIN_NAMES;
+
 /** 配列の添字からファイル行番号（ヘッダ = 1 行目） */
 function rowOf(index: number): number {
   return index + 2;
@@ -62,21 +84,21 @@ function validateContracts(dataset: Dataset, teamIds: ReadonlySet<string>, push:
     if (!isValidYearMonth(c.startMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.contractStartMonthInvalid, { file, row, value: c.startMonth }), file, row, ref: { contractId: c.contractId } });
     if (!isValidYearMonth(c.endMonth)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.contractEndMonthInvalid, { file, row, value: c.endMonth }), file, row, ref: { contractId: c.contractId } });
     if (isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && c.startMonth > c.endMonth) {
-      push({ severity: "error", code: "CONTRACT_PERIOD_INVERTED", message: fmt(T.checks.contractPeriodInverted, { file, row, contractId: c.contractId, from: c.startMonth, to: c.endMonth }), file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_PERIOD_INVERTED", message: fmt(T.checks.contractPeriodInverted, { file, row, contractId: names.contract(c.contractId), from: c.startMonth, to: c.endMonth }), file, row, ref: { contractId: c.contractId } });
     }
     if (typeof c.totalAmount !== "number" || !Number.isFinite(c.totalAmount)) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotNumber, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotNumber, { file, row, contractId: names.contract(c.contractId) }), file, row, ref: { contractId: c.contractId } });
     } else if (c.totalAmount < 0) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNegative, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNegative, { file, row, contractId: names.contract(c.contractId), value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
     } else if (!Number.isInteger(c.totalAmount)) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotInteger, { file, row, contractId: c.contractId, value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountNotInteger, { file, row, contractId: names.contract(c.contractId), value: c.totalAmount }), file, row, ref: { contractId: c.contractId } });
     } else if (!Number.isSafeInteger(c.totalAmount)) {
-      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountTooLarge, { file, row, contractId: c.contractId }), file, row, ref: { contractId: c.contractId } });
+      push({ severity: "error", code: "CONTRACT_AMOUNT_INVALID", message: fmt(T.checks.contractAmountTooLarge, { file, row, contractId: names.contract(c.contractId) }), file, row, ref: { contractId: c.contractId } });
     }
     // 主担当チームが teams.csv に無い: 打ち間違いのまま「未設定」に集計されるのを防ぐ（メンバーの MEMBER_UNKNOWN_TEAM と同じ扱い）
     // 顧客の既定（§103）から入れた担当チームは customer-teams.csv の側で知らせる
     if (c.teamId !== null && c.teamId !== "" && !c.teamFromCustomer && !teamIds.has(c.teamId)) {
-      push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: fmt(T.checks.contractUnknownTeam, { file, row, contractId: c.contractId, teamId: c.teamId }), file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
+      push({ severity: "error", code: "CONTRACT_UNKNOWN_TEAM", message: fmt(T.checks.contractUnknownTeam, { file, row, contractId: names.contract(c.contractId), teamId: c.teamId }), file, row, ref: { contractId: c.contractId, teamId: c.teamId } });
     }
   });
 }
@@ -90,7 +112,7 @@ function validateMappings(dataset: Dataset, contractIds: ReadonlySet<string>, pu
     }
   });
   // 行の期間（§92）: 形式・逆転・重なり（一意に決まらない）・契約期間の外
-  for (const issue of validateMappingPeriods(dataset.mappings, dataset.contracts)) {
+  for (const issue of validateMappingPeriods(dataset.mappings, dataset.contracts, names.contract)) {
     push({ severity: issue.severity, code: issue.code, message: issue.message, file, row: issue.row, ref: issue.ref });
   }
 }
@@ -131,7 +153,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     // 契約期間の外の月は計画に入らない（着地見込みにも効かない）ので、気付けるよう警告する
     const c = contractById.get(a.contractId);
     if (c && isValidYearMonth(c.startMonth) && isValidYearMonth(c.endMonth) && a.startMonth <= a.endMonth && (a.startMonth < c.startMonth || a.endMonth > c.endMonth)) {
-      push({ severity: "warning", code: "ASSIGNMENT_OUTSIDE_CONTRACT", message: fmt(T.checks.assignmentOutsideContract, { file, row, contractId: a.contractId, from: a.startMonth, to: a.endMonth, cFrom: c.startMonth, cTo: c.endMonth }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
+      push({ severity: "warning", code: "ASSIGNMENT_OUTSIDE_CONTRACT", message: fmt(T.checks.assignmentOutsideContract, { file, row, contractId: names.contract(a.contractId), from: a.startMonth, to: a.endMonth, cFrom: c.startMonth, cTo: c.endMonth }), file, row, ref: { memberId: a.memberId, contractId: a.contractId } });
     }
     for (const month of monthRange(a.startMonth, a.endMonth)) {
       const key = `${a.memberId}\u0000${month}`;
@@ -151,7 +173,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     const rows = [...run.rows].sort((a, b) => a - b);
     const max = Math.round(run.max * 10000) / 10000;
     const period = run.from === run.to ? run.from : `${run.from}〜${run.to}`;
-    push({ severity: "warning", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: run.memberId, period, max, rows: rows.join(", ") }), file, row: rows[0] as number, ref: { memberId: run.memberId, month: run.from, toMonth: run.to, total: run.max } });
+    push({ severity: "warning", code: "ALLOCATION_OVER_1", message: fmt(T.checks.allocationOver1, { file, memberId: names.member(run.memberId), period, max, rows: rows.join(", ") }), file, row: rows[0] as number, ref: { memberId: run.memberId, month: run.from, toMonth: run.to, total: run.max } });
     run = null;
   };
   for (const acc of overs) {
@@ -203,7 +225,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
     const sig = `${memberId}|${rows.join(",")}`;
     if (reported.has(sig)) continue;
     reported.add(sig);
-    push({ severity: "error", code: "OUTSIDE_OVERLAP", message: fmt(T.checks.outsideOverlap, { file, memberId, month, rows: rows.join(", ") }), file, row: rows[rows.length - 1] as number, ref: { memberId, month } });
+    push({ severity: "error", code: "OUTSIDE_OVERLAP", message: fmt(T.checks.outsideOverlap, { file, memberId: names.member(memberId), month, rows: rows.join(", ") }), file, row: rows[rows.length - 1] as number, ref: { memberId, month } });
   }
 }
 
@@ -252,7 +274,7 @@ function validateTeams(dataset: Dataset, teamIds: ReadonlySet<string>, memberIds
     if (t.teamId === "") push({ severity: "error", code: "TEAM_ID_EMPTY", message: fmt(T.checks.teamIdEmpty, { file, row }), file, row });
     if (!isValidYearMonth(t.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.teamEffectiveFromInvalid, { file, row, value: t.effectiveFrom }), file, row });
     if (t.parentTeamId !== null && t.parentTeamId !== "" && t.parentTeamId === t.teamId) {
-      push({ severity: "error", code: "TEAM_SELF_PARENT", message: fmt(T.checks.teamSelfParent, { file, row, teamId: t.teamId }), file, row, ref: { teamId: t.teamId } });
+      push({ severity: "error", code: "TEAM_SELF_PARENT", message: fmt(T.checks.teamSelfParent, { file, row, teamId: withName(t.teamId, t.name) }), file, row, ref: { teamId: t.teamId } });
     } else if (t.parentTeamId !== null && t.parentTeamId !== "" && !teamIds.has(t.parentTeamId)) {
       push({ severity: "error", code: "TEAM_UNKNOWN_PARENT", message: fmt(T.checks.teamUnknownParent, { file, row, parentTeamId: t.parentTeamId }), file, row, ref: { teamId: t.teamId, parentTeamId: t.parentTeamId } });
     }
@@ -282,18 +304,18 @@ function validateMembers(dataset: Dataset, teamIds: ReadonlySet<string>, push: I
     const row = rowOf(i);
     if (m.memberId === "") push({ severity: "error", code: "MEMBER_ID_EMPTY", message: fmt(T.checks.memberIdEmpty, { file, row }), file, row });
     if (m.kind !== "employee" && m.kind !== "partner") {
-      push({ severity: "error", code: "MEMBER_KIND_INVALID", message: fmt(T.checks.memberKindInvalid, { file, row, memberId: m.memberId, value: String(m.kind) }), file, row, ref: { memberId: m.memberId } });
+      push({ severity: "error", code: "MEMBER_KIND_INVALID", message: fmt(T.checks.memberKindInvalid, { file, row, memberId: withName(m.memberId, m.name), value: String(m.kind) }), file, row, ref: { memberId: m.memberId } });
     }
     if (m.teamId !== null && m.teamId !== "" && !teamIds.has(m.teamId)) {
-      push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: m.memberId, teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
+      push({ severity: "error", code: "MEMBER_UNKNOWN_TEAM", message: fmt(T.checks.memberUnknownTeam, { file, row, memberId: withName(m.memberId, m.name), teamId: m.teamId }), file, row, ref: { memberId: m.memberId, teamId: m.teamId } });
     }
     if (!isValidYearMonth(m.effectiveFrom)) push({ severity: "error", code: "INVALID_MONTH", message: fmt(T.checks.memberEffectiveFromInvalid, { file, row, value: m.effectiveFrom }), file, row });
     // 在籍・不在の開始日（§119）は適用開始月の中の日付
-    else if (m.statusDate !== undefined && statusDateOf(m) === null) push({ severity: "error", code: "MEMBER_STATUS_DATE_INVALID", message: fmt(T.checks.memberStatusDateInvalid, { file, row, memberId: m.memberId, value: m.statusDate, month: m.effectiveFrom }), file, row, ref: { memberId: m.memberId } });
+    else if (m.statusDate !== undefined && statusDateOf(m) === null) push({ severity: "error", code: "MEMBER_STATUS_DATE_INVALID", message: fmt(T.checks.memberStatusDateInvalid, { file, row, memberId: withName(m.memberId, m.name), value: m.statusDate, month: m.effectiveFrom }), file, row, ref: { memberId: m.memberId } });
   });
   // 同じ GitLab のユーザー名が複数の人に付いている（§113）。ヘッダーの「今月の残り」でどの人か決められないので出さない
   for (const d of duplicateGitlabUsernames(dataset.members)) {
-    push({ severity: "warning", code: "GITLAB_USERNAME_DUPLICATE", message: fmt(T.checks.gitlabUsernameDuplicate, { file, username: d.username, members: d.memberIds.join("、") }), file, ref: { username: d.username, members: d.memberIds.join(",") } });
+    push({ severity: "warning", code: "GITLAB_USERNAME_DUPLICATE", message: fmt(T.checks.gitlabUsernameDuplicate, { file, username: d.username, members: names.members(d.memberIds) }), file, ref: { username: d.username, members: d.memberIds.join(",") } });
   }
 }
 
@@ -318,7 +340,7 @@ function validateAssignmentsAfterLeft(dataset: Dataset, push: IssueSink): void {
     }
   });
   for (const [memberId, h] of [...hit].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId, leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId, month: h.first } });
+    push({ severity: "warning", code: "ASSIGNMENT_AFTER_LEFT", message: fmt(T.checks.assignmentAfterLeft, { file, memberId: names.member(memberId), leftFrom: h.leftFrom, first: h.first, last: h.last, rows: h.rows.join(", ") }), file, row: h.rows[0] as number, ref: { memberId, month: h.first } });
   }
 }
 
@@ -389,7 +411,7 @@ function validateTitleRates(dataset: Dataset, push: IssueSink): void {
   }
   const file = "masters/members.csv";
   for (const [title, ids] of byTitle) {
-    const members = [...ids].join(", ");
+    const members = names.members([...ids]);
     const message = title === "" ? fmt(T.checks.memberNoTitleNoRate, { file, members }) : fmt(T.checks.titleRateUndefined, { file, title, members });
     push({ severity: "warning", code: "MEMBER_RATE_UNDEFINED", message, file, ref: { title, count: ids.size } });
   }
@@ -456,7 +478,7 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
     push({ severity: "warning", code: w.code, message: w.message, file: "task-types.csv", ref: { task: String(w.ref?.task ?? ""), hours: w.hours ?? 0, count: w.count ?? 0 } });
   }
   for (const g of mapping.unmapped) {
-    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
+    push({ severity: "warning", code: "UNMAPPED_WORKLOG", message: fmt(T.checks.unmappedWorklog, { file, customer: g.customerName, project: g.taskCode !== undefined ? fmt(T.calcWarnings.taskCodeLabel, { code: g.taskCode }) : g.projectName, count: g.count, hours: g.hours, firstDate: g.firstDate, lastDate: g.lastDate, reason: (T.unmappedReasons as Record<string, string>)[g.reason] ?? g.reason }), file, ref: { customerName: g.customerName, projectName: g.projectName, reason: g.reason, hours: g.hours, count: g.count } });
   }
   if (mapping.excludedHours > 0) {
     push({ severity: "warning", code: "EXCLUDED_NO_CUSTOMER", message: fmt(T.checks.excludedNoCustomer, { file, hours: mapping.excludedHours }), file, ref: { hours: mapping.excludedHours } });
@@ -484,12 +506,21 @@ function validateWorklogs(dataset: Dataset, push: IssueSink): void {
   }
   for (const m of missing.values()) {
     const before = memberAt(masters, m.memberId, m.month) === null;
-    push({ severity: "warning", code: "RATE_MISSING", message: fmt(before ? T.checks.rateMissingBeforeMember : T.checks.rateMissing, { file, month: m.month, memberId: m.memberId, hours: m.hours }), file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
+    push({ severity: "warning", code: "RATE_MISSING", message: fmt(before ? T.checks.rateMissingBeforeMember : T.checks.rateMissing, { file, month: m.month, memberId: names.member(m.memberId), hours: m.hours }), file, ref: { memberId: m.memberId, month: m.month, hours: m.hours } });
   }
 }
 
 /** Dataset を検証する。error が 1 件でもあれば CI は非0終了にする */
 export function validateDataset(dataset: Dataset): ValidationIssue[] {
+  names = createNames(dataset);
+  try {
+    return validateAll(dataset);
+  } finally {
+    names = PLAIN_NAMES;
+  }
+}
+
+function validateAll(dataset: Dataset): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const push: IssueSink = (issue) => issues.push(issue);
   const contractIds = new Set(dataset.contracts.map((c) => c.contractId));

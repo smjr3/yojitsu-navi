@@ -3120,17 +3120,21 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   function issueMessage(i) {
     const names = memberNames();
     const subjectId = issueRowCell(i, "member_id") || (i.ref?.memberId != null ? String(i.ref.memberId) : "");
+    const isId = (id) => names.has(id) || cIndex().byId.has(id);
+    const contractLabel = (id) => `「${projectOfContract(id).label}」`;
     return issueText(i)
+      // 検証の文は ID に名前を添えている（「M001（山田 太郎）」。§127）。この画面は ID を名前に置き換えるので、添えた名前は外す
+      .replace(/([A-Za-z0-9_-]+)（[^（）]+）/g, (m, id) => (isId(id) ? id : m))
       .replace(/^メンバー(?:ID)? ([A-Za-z0-9_-]+) ?(?:の|は) ?/, (m, id) => (id === subjectId && names.get(id) ? "" : m))
       .replace(/メンバー(?:ID)? ([A-Za-z0-9_-]+)/g, (m, id) => names.get(id) || m)
-      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (cIndex().byId.has(id) ? `「${projectOfContract(id).label}」` : m))
-      .replace(/（([A-Za-z0-9_, -]+)）/g, (m, ids) => {
-        // 「（M025, M202）」のような ID の並びも名前に
-        const list = ids.split(/,\s*/);
-        return list.every((id) => names.get(id)) ? `（${list.map((id) => names.get(id)).join("、")}）` : m;
+      // 「別の案件 C150 と C180」のような案件 ID の組も案件名に（§115）
+      .replace(/案件 ([A-Za-z0-9_-]+) と ([A-Za-z0-9_-]+)/g, (m, a, b) => (cIndex().byId.has(a) && cIndex().byId.has(b) ? `案件${contractLabel(a)}と${contractLabel(b)}` : m))
+      .replace(/(?:契約ID|案件) ([A-Za-z0-9_-]+)/g, (m, id) => (cIndex().byId.has(id) ? contractLabel(id) : m))
+      // 「: M025、M202」「メンバー M025、M202 に」のような社員番号の並びも名前に
+      .replace(/([A-Za-z0-9_-]+(?:、[A-Za-z0-9_-]+)+|(?<=: )[A-Za-z0-9_-]+$)/g, (m) => {
+        const list = m.split("、");
+        return list.every((id) => names.get(id)) ? list.map((id) => names.get(id)).join("、") : m;
       })
-      // 「（C150 と C180）」のような案件 ID の組も案件名に（§115）
-      .replace(/（([A-Za-z0-9_-]+) と ([A-Za-z0-9_-]+)）/g, (m, a, b) => (cIndex().byId.has(a) && cIndex().byId.has(b) ? `（「${projectOfContract(a).label}」と「${projectOfContract(b).label}」）` : m))
       // 行番号は利用者には意味が無い（該当の行へは「該当箇所へ」で移れる）。ファイル名は画面のタブ名に
       .replace(/（行 [\d, ]+）/g, "")
       .replace(/\d+ 行目と同じ/g, T.masters.issueOtherRow)
