@@ -13,7 +13,7 @@ import { T, fmt } from "../i18n/index.js";
 import { personMonths, workByTask } from "../core/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, money, monthJa, monthShort } from "./format.js";
 import { chartColors, chartLegend } from "./charts.js";
-import { dataTable } from "./table.js";
+import { dataTable, PREVIEW_ROWS } from "./table.js";
 import { sectionTitle, note } from "./layout.js";
 
 /** 人月の表示（小数 2 桁） */
@@ -105,7 +105,7 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
     ${sectionTitle(title, outside.length ? `${hint ?? ""} ${T.work.outsideTip}`.trim() : hint)}
     ${all.length === 0
       ? note(emptyText)
-      : html`${dataTable({ columns, rows: all, unit, caption: title, exportName, sort: null, summary, maxHeight: 520 })}
+      : html`${dataTable({ columns, rows: all, unit, caption: title, exportName, sort: null, summary, maxHeight: 520, previewRows: PREVIEW_ROWS })}
           ${months.length > shownMonths.length ? note(fmt(T.work.monthsTrimmed, { n: shownMonths.length })) : null}`}
   </section>`;
   return section;

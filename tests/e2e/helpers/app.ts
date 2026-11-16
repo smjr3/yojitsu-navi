@@ -137,6 +137,12 @@ export function tableByCaption(page: Page, caption: string): Locator {
   return page.locator("table.yn-table").filter({ has: page.locator("caption", { hasText: caption }) });
 }
 
+/** 先頭の数行だけ出している表（§127）で「すべて表示」を押して全行を出す。ボタンが無ければ何もしない */
+export async function showAllRows(table: Locator): Promise<void> {
+  const more = table.page().locator(".yn-table-block", { has: table }).locator(".yn-table-more:not([hidden]) button[aria-expanded=false]");
+  if (await more.count()) await more.click();
+}
+
 /** 表の本体行（空行・合計行を除く） */
 export function dataRows(table: Locator): Locator {
   return table.locator("tbody tr[data-key]");

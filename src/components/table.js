@@ -35,6 +35,9 @@ import { statusChip } from "./kpi.js";
 import { onTextInput } from "./text-input.js";
 import { T, fmt } from "../i18n/index.js";
 
+/** 表の中でスクロールする長い表は先頭のこの行数だけ出す（§127） */
+export const PREVIEW_ROWS = 10;
+
 const NUMERIC_TYPES = new Set(["money", "moneyYen", "percent", "hours", "int"]);
 
 /**

@@ -15,7 +15,7 @@ import { T, fmt } from "./i18n/index.js";
 import { pageHeader, emptyState, loadJson, note, loadModel } from "./components/layout.js";
 import { foldSection, sectionToc } from "./components/fold-section.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
-import { dataTable } from "./components/table.js";
+import { dataTable, PREVIEW_ROWS } from "./components/table.js";
 import { formatHours, integer, dateTimeJst, monthJa, WARNING_LABELS, UNMAPPED_REASON_LABELS } from "./components/format.js";
 import { groupedWorklogTable, peopleColumn } from "./components/worklog-people.js";
 import { mastersHref, officialProjectLookup, registerContractHref, unlinkedByCandidate, contractListText } from "./components/register-links.js";
@@ -97,8 +97,7 @@ const openSection = (key) => {
   const meta = sections.get(key);
   return foldSection({ id: meta.id, title: meta.title, hint: meta.hint, count: meta.count, tone: meta.tone, defaultOpen: meta.defaultOpen ?? true });
 };
-// 表は先頭の数行だけ出し、残りは「すべて表示」で（ページのスクロールが表に取られないように。§127）
-const PREVIEW_ROWS = 10;
+// 表は先頭の PREVIEW_ROWS 行だけ出し、残りは「すべて表示」で（ページのスクロールが表に取られないように。§127）
 ```
 
 ```js

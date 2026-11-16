@@ -23,7 +23,7 @@ import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
 import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
-import { dataTable } from "./components/table.js";
+import { dataTable, PREVIEW_ROWS } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
 import { originChips, originOrgText, withOrigin } from "./components/team-detail.js";
@@ -398,7 +398,7 @@ function worklogExplorer(entries, unit, id) {
     const sum = shown.reduce((s, r) => ({ hours: s.hours + r.hours, amount: s.amount + r.amount }), { hours: 0, amount: 0 });
     return { name: fmt(T.contracts.totalRow, { n: integer(shown.length) }), hours: sum.hours, amount: sum.amount, date: null, memberName: null, task: null, hourlyRate: null, status: null };
   };
-  return html`<div class="yn-worklog">${dataTable({ columns, rows, unit, caption: T.contract.worklogCaption, exportName: `contract_${id}_worklogs`, sort: { key: "date", dir: "asc" }, maxHeight: 480, summary })}</div>`;
+  return html`<div class="yn-worklog">${dataTable({ columns, rows, unit, caption: T.contract.worklogCaption, exportName: `contract_${id}_worklogs`, sort: { key: "date", dir: "asc" }, maxHeight: 480, previewRows: PREVIEW_ROWS, summary })}</div>`;
 }
 ```
 
