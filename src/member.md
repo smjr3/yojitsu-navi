@@ -193,7 +193,7 @@ if (vm) {
   display(chartFigure({
     title: T.charts.memberHoursTitle,
     subtitle: periodJa(period),
-    legend: memberHoursLegend(dark),
+    legend: memberHoursLegend(dark, series, model.meta.asOfMonth),
     draw: (width, height) => memberHoursChart({ series, dark, width, height, asOfMonth: model.meta.asOfMonth }),
   }));
   const contractHref = (id) => store.href("./contract", {}, { id });
