@@ -127,6 +127,10 @@
 
 `planTargetAlerts(model, after, { teamId, tree })` は、組織に関わる目標（終了月が基準月以降）を先に絞り、`after`（編集後のマスタとアサイン）があればその目標に入る案件だけ `assignmentPlanOf` で計画を作り直してから `evaluateTarget(…, "assignment")` を呼ぶ（判定は §63 と共有、重複実装なし）。未達見込みだけ返す。超える月は計画の明細（`assignmentPlan.lines`）の月ごとの額と、`ContractMonth.budget` ×（1 − 目標）を比べる。`after = null` なら Model の計画のまま（編集が無いときは作り直さない）。
 
+## 金額と目標の上限（SPEC §122）— `src/core/planBudget.ts`
+
+`contractCapAt(model, row, month, tree)` は案件の月の目標を `targetForMonth`（§61 と共有）で案件 → 顧客 → 担当チームから上位の順に探し、上限 = 予算 ×（1 − 残予算率）。`contractPlanAmounts(model, inputs, ids, months)` は対象の案件だけ `assignmentPlanOf` で計画の明細を作り直す（基準月を表示する月の最初にして、過去の月も計画で数える）。`planBudgetChart` は組織の担当案件を顧客（`customerKey`）ごとに合計し、組織の上限は案件の上限の合計（目標の無い案件は予算）。`planRoomAt` はセルの編集欄の余力（上限 − 今の計画の額）。入力中の値の差は画面側でその人の 1 人月の額（`rateFor` × 月の稼働時間）を掛けて引く。
+
 ## 計画なしの人（SPEC §116）— `src/core/plan.ts`
 - `planView` の行に `planNeededMonths`（月ごとに「計画が入っているべきか」）。在籍（不在の行でない）で、所属組織があり、その月に選んだ組織か配下に所属している月だけ true。応援の人（他組織から）・所属組織の無い人（他部署のヘルプ）・入社前（部長など上位の組織の直属は対象）・不在の月は false。
 - 「今月以降」と「月の合計が 0」は画面側（運用保守以外の予定は編集中の値で足すため）。人ごとに、対象の月がすべて 0 のときだけ印を付ける（月ごとの空きで出すと、年度の切り替わりで次の年度の計画がまだ無い全員に付く）。

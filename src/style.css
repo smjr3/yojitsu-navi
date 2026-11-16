@@ -3383,6 +3383,22 @@ html:has(dialog.yn-dialog[open]) {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* 目標の上限までの余力（§122）: 入力欄の下に右寄せ。超えたら赤の太字 */
+.yn-plan-pop-room {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  text-align: right;
+  font-size: calc(12px * var(--yn-fs));
+  color: var(--yn-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.yn-plan-pop-room.is-new {
+  margin-top: 4px;
+}
+.yn-plan-pop-room.is-over {
+  color: var(--yn-danger-text);
+  font-weight: 700;
+}
 .yn-plan-pop-new {
   margin: 10px 0 6px;
   padding-top: 8px;
@@ -4432,6 +4448,10 @@ html:has(dialog.yn-dialog[open]) {
 .yn-chart-head-legend {
   min-width: 0;
   flex: 1 1 auto;
+}
+/* リソース計画のグラフの単位（人月／金額。§122）: 凡例の前、凡例とは行を分ける */
+.yn-me-plan-chart-mode {
+  margin: 0 0 8px;
 }
 .yn-chart-zoom-btn {
   flex: none;
