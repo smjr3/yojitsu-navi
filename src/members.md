@@ -25,7 +25,7 @@ const memberKpiRow = (tiles) => {
   row.classList.add("yn-kpi-4");
   return row;
 };
-import { dataTable, contractNameCell } from "./components/table.js";
+import { dataTable, contractNameCell, PREVIEW_ROWS } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, dateJa, monthJa, periodJa } from "./components/format.js";
 ```
@@ -326,6 +326,7 @@ if (vm) {
         sort: { key: "diffHours", dir: "desc" },
         rowHref: (r) => store.href("./member", {}, { id: r.memberId }),
         maxHeight: 420,
+        previewRows: PREVIEW_ROWS,
       }),
     );
   }

@@ -5,7 +5,7 @@
  *   - 軸の切替が URL に残る、内訳パネル、チーム絞り込み、Excel、ダーク・390px で横スクロールなし
  */
 import { aggregateWork, elapsedMonthCount, filterWorkRows, memberTeamsAt, personMonths, workByTask, workTotals, type WorkRow } from "../../src/core/index.js";
-import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, kpiValue, dialog, dialogRow, query } from "./helpers/app.js";
+import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, kpiValue, dialog, dialogRow, query, showAllRows } from "./helpers/app.js";
 import { fiscalPeriod, getModel, treeAt, aggregate } from "./helpers/core.js";
 
 const model = getModel();
@@ -116,6 +116,9 @@ test.describe("工数 /workload", () => {
     const table = tableByCaption(page, "作業種別の内訳");
     const h = await headerIndex(table);
     const lines = workByTask(inFy);
+    // 先頭 10 行だけ出している（§127）。合計行は全行
+    await expect(dataRows(table)).toHaveCount(Math.min(lines.length, 10));
+    await showAllRows(table);
     await expect(dataRows(table)).toHaveCount(lines.length);
     const foot = table.locator("tfoot tr");
     const all = aggregate(model, { period: FY });
