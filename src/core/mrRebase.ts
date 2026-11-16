@@ -195,6 +195,8 @@ export async function mergeRemade(
     if (d.hasConflicts) return "pending";
     const status = d.mergeStatus ?? "";
     if (CHECKING.has(status)) continue;
+    // 検証に失敗した・取り消された変更は、GitLab がマージできると言っても入れない（検証を必須にしていない GitLab もあるため）
+    if (d.pipelineStatus === "failed" || d.pipelineStatus === "canceled") return "pending";
     const pipelineRunning = d.pipelineStatus !== null && PIPELINE_RUNNING.has(d.pipelineStatus);
     if (status === "mergeable" || status === "can_be_merged") {
       await mergeMergeRequest(fetchImpl, cfg, token, iid, d.headSha, pipelineRunning ? { whenPipelineSucceeds: true } : {});
@@ -203,7 +205,6 @@ export async function mergeRemade(
     if (WAIT_PIPELINE.has(status) || pipelineRunning) {
       // パイプラインがまだ作られていなければ待つ（無いと自動マージを予約できない）
       if (d.pipelineStatus === null) continue;
-      if (d.pipelineStatus === "failed" || d.pipelineStatus === "canceled") return "pending";
       await mergeMergeRequest(fetchImpl, cfg, token, iid, d.headSha, { whenPipelineSucceeds: true });
       return "scheduled";
     }

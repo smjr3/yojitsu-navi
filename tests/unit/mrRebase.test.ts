@@ -259,7 +259,7 @@ describe("mergeRemade（載せ直した MR をそのままマージ。§126.2）
   });
 
   it("競合・検証の失敗・待っても判定が終わらないときはマージしない", async () => {
-    for (const s of [{ has_conflicts: true, detailed_merge_status: "conflict" }, { detailed_merge_status: "ci_must_pass", head_pipeline: { status: "failed" } }, { detailed_merge_status: "checking" }, { detailed_merge_status: "not_approved" }]) {
+    for (const s of [{ has_conflicts: true, detailed_merge_status: "conflict" }, { detailed_merge_status: "ci_must_pass", head_pipeline: { status: "failed" } }, { detailed_merge_status: "mergeable", head_pipeline: { status: "failed" } }, { merge_status: "can_be_merged", head_pipeline: { status: "canceled" } }, { detailed_merge_status: "checking" }, { detailed_merge_status: "not_approved" }]) {
       const { f, merges } = fake([s]);
       expect(await mergeRemade(f, cfg, "t", 9, { sleep, tries: 3 })).toBe("pending");
       expect(merges()).toHaveLength(0);
