@@ -2,7 +2,7 @@
  * 利用環境の .gitlab-ci.yml が、変わったファイルに応じて要るジョブだけを選ぶこと（SPEC §102.3）。
  * GitLab の rules:（if・changes・when）の評価をここで真似て、パイプラインの種類と変わったファイルごとに、動くジョブを確かめる。
  *   - MR: プログラムが変わった → build、データだけ → validate、それ以外 → ci-check（どれか 1 つだけ）
- *   - 既定ブランチへの push: プログラム・データ・CI の設定が変わった → build → pages、文書だけ → 何も動かない
+ *   - 既定ブランチへの push: プログラム・データ・CI の設定が変わった → pages（ビルドと公開を 1 つのジョブで。SPEC §128）、文書だけ → 何も動かない
  *   - 依存を取る（npm ci する）ジョブはパイプライン 1 回につき 1 つまで（test を有効にしたときを除く。SPEC §79.3）
  */
 import { readFileSync } from "node:fs";
@@ -128,12 +128,14 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
   });
 
   it.each([
-    ["作業実績の自動 MR のマージ", ["data/worklogs/2026-10.csv"], ["build", "pages"]],
-    ["パッケージの更新のマージ", ["src/index.md", "package-lock.json"], ["build", "pages"]],
-    ["社内の CI の設定", [".gitlab-ci.local.yml"], ["build", "pages"]],
+    ["作業実績の自動 MR のマージ", ["data/worklogs/2026-10.csv"], ["pages"]],
+    ["パッケージの更新のマージ", ["src/index.md", "package-lock.json"], ["pages"]],
+    ["社内の CI の設定", [".gitlab-ci.local.yml"], ["pages"]],
     ["文書だけ", ["README.md", "docs/OPERATIONS.md"], null],
   ])("既定ブランチへの push: %s → %j", (_label, files, want) => {
-    expect(pipeline("push", { files: files as string[] })).toEqual(want);
+    const jobs = pipeline("push", { files: files as string[] });
+    expect(jobs).toEqual(want);
+    if (jobs) expect(installs(jobs).length).toBe(1);
   });
 
   it("MR の無いほかのブランチへの push はビルドだけ（公開しない）。文書だけなら何も動かない", () => {
@@ -143,9 +145,9 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
     expect(pipeline("push", { branch: "work", files: ["data/masters/rates.csv"], vars: { CI_OPEN_MERGE_REQUESTS: "group/p!1" } })).toBeNull();
   });
 
-  it("Run pipeline（手動）は build → pages。過去の取り直し・初回の取り込みは取り込みも動く", () => {
-    expect(pipeline("web")).toEqual(["build", "pages"]);
-    expect(pipeline("web", { vars: { FETCH_MODE: "initial" } })).toEqual(["build", "fetch-worklogs", "pages"]);
+  it("Run pipeline（手動）は既定ブランチなら pages、ほかのブランチなら build。過去の取り直し・初回の取り込みは取り込みも動く", () => {
+    expect(pipeline("web")).toEqual(["pages"]);
+    expect(pipeline("web", { vars: { FETCH_MODE: "initial" } })).toEqual(["fetch-worklogs", "pages"]);
     expect(pipeline("web", { branch: "work" })).toEqual(["build"]);
   });
 
@@ -156,7 +158,7 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
 
   it("test は YOJITSU_RUN_TESTS=1 のときだけ足される", () => {
     expect(pipeline("merge_request_event", { files: ["src/index.md"], vars: { YOJITSU_RUN_TESTS: "1" } })).toEqual(["build", "test"]);
-    expect(pipeline("push", { files: ["data/worklogs/2026-10.csv"], vars: { YOJITSU_RUN_TESTS: "1" } })).toEqual(["build", "pages", "test"]);
+    expect(pipeline("push", { files: ["data/worklogs/2026-10.csv"], vars: { YOJITSU_RUN_TESTS: "1" } })).toEqual(["pages", "test"]);
   });
 
   it("ci-check は依存を取らない（Node の標準モジュールだけ）", () => {
@@ -165,10 +167,25 @@ describe("変わったファイルを見て要るジョブだけを選ぶ（SPEC
     expect(job.script).toEqual(["node scripts/ci/check.mjs"]);
   });
 
-  it("build はローダのキャッシュ（src/.observablehq/cache/）を cache: で使い回し、npm のダウンロードのキャッシュも残す", () => {
-    const cache = (CI.build as Obj).cache as Array<{ key: unknown; paths: string[] }>;
+  it.each(["build", "pages"])("%s はローダのキャッシュ（src/.observablehq/cache/）を cache: で使い回し、npm のダウンロードのキャッシュも残す", (name) => {
+    const cache = (CI[name] as Obj).cache as Array<{ key: unknown; paths: string[] }>;
     expect(cache.flatMap((c) => c.paths)).toEqual([".npm/", "src/.observablehq/cache/"]);
     expect(cache[0]!.key).toEqual((CI.cache as Obj).key);
+  });
+
+  it("pages は build と同じ検証・ビルドをしてから公開する（ジョブを分けず、dist/ の受け渡しが無い。SPEC §128）", () => {
+    const build = CI.build as Obj;
+    const pages = CI.pages as Obj;
+    expect(pages.needs).toBeUndefined();
+    expect(pages.before_script).toBeUndefined();
+    expect(pages.script).toEqual([...(build.script as string[]), "node scripts/ci/pages.mjs"]);
+    expect(pages.variables).toEqual(build.variables);
+    expect((pages.variables as Obj).GIT_DEPTH).toBe("0");
+    expect((pages.artifacts as Obj).paths).toEqual(["public/"]);
+  });
+
+  it("作業フォルダを使い回す Runner では node_modules/ を消さずに残す（npm ci を飛ばせるように。SPEC §128）", () => {
+    expect((CI.variables as Obj).GIT_CLEAN_FLAGS).toBe("-ffdx -e node_modules/");
   });
 
   it("このテストの真似の確かめ: ** は 0 個以上のフォルダ、* は / をまたがない", () => {

@@ -1168,15 +1168,15 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 
 ### 79.2 社内のパイプラインではテストを既定で動かさない（2026-11-04 依頼者）
 テスト（型チェック・ユニット・結合・性能）はアプリ本体の確認で、このリポジトリで公開前に済ませている。導入先で変わるのはデータと `config.json` だけなので、毎回の push・MR で動かす必要がない（Windows の Runner では時間がかかり、タイムアウトの原因にもなっていた）。
-- `.gitlab-ci.yml` の `test` ジョブは CI/CD 変数 `YOJITSU_RUN_TESTS=1` のときだけ動く（Run pipeline で入れても同じ）。既定のパイプラインは `build → pages`（§79.3）、スケジュールは取り込み。E2E は社内のプロジェクトに入れない（§93。`PLAYWRIGHT_E2E` と `scripts/ci/e2e.mjs` は廃止）。
+- `.gitlab-ci.yml` の `test` ジョブは CI/CD 変数 `YOJITSU_RUN_TESTS=1` のときだけ動く（Run pipeline で入れても同じ）。既定のパイプラインは既定ブランチで `pages`（ビルドと公開。§79.3・§128）、スケジュールは取り込み。E2E は社内のプロジェクトに入れない（§93。`PLAYWRIGHT_E2E` と `scripts/ci/e2e.mjs` は廃止）。
 - 導入先で確かめるのは、データ検証とビルド（`build`）・取り込み（`fetch-worklogs`・`fetch-members`）の成否。`yojitsu-navi check`（CI が使うファイルの不足）は `init`・`update` で動く。
 - `tests/unit/ci-portable.test.ts` で、`test` ジョブが既定で動かないことを検査する。
 
 ### 79.3 パイプラインの待ち時間を短くする（2026-11-04 依頼者）
 マスタ編集の保存から画面に反映されるまで、MR とマージ後の 2 回のパイプラインを待つ（それまで合わせて約 40 分かかっていた）。Windows の Runner では依存の取得とキャッシュの圧縮・展開が特に遅いので、次のようにする。
-- データ検証（`npm run validate`）は `build` ジョブの最初で行う。依存の取得（`npm ci`）はパイプライン 1 回につき 1 回（`build` か、MR でデータだけが変わったときの `validate` のどちらか 1 つ。`pages`・`ci-check` は取らない。§102.3）。
-- `cache:` に `node_modules/` を入れない。`npm ci` は毎回 node_modules を消して入れ直すので、固めて戻すのは時間の無駄。npm のダウンロードキャッシュ（`.npm/`）だけを共有する。
-- `tests/unit/ci-portable.test.ts` で、依存を取るジョブが build と validate だけであることと、キャッシュに `node_modules/` が無いことを検査する（同じパイプラインで両方が動かないことは `tests/unit/ci-rules.test.ts`）。
+- データ検証（`npm run validate`）は `build` ジョブの最初で行う。依存の取得（`npm ci`）はパイプライン 1 回につき 1 回（MR・ほかのブランチの `build`、既定ブランチの `pages`（ビルドも行う。§128）、MR でデータだけが変わったときの `validate` のどれか 1 つ。`ci-check` は取らない。§102.3）。
+- `cache:` に `node_modules/` を入れない。`npm ci` は毎回 node_modules を消して入れ直すので、固めて戻すのは時間の無駄。npm のダウンロードキャッシュ（`.npm/`）だけを共有する。代わりに、作業フォルダに残った `node_modules/` を使い回す（§128）。
+- `tests/unit/ci-portable.test.ts` で、依存を取るジョブが build・pages・validate だけであることと、キャッシュに `node_modules/` が無いことを検査する（同じパイプラインで両方が動かないことは `tests/unit/ci-rules.test.ts`）。
 
 ## 80. マスタ編集の「案件」「祝日」（2026-11-01 依頼者）
 保守案件（`data/contracts.csv`）と祝日（`data/holidays.csv`）を、マスタ編集のタブに出す（それまでは GitLab の Web IDE で CSV を直していた）。保存は他のマスタと同じ GitLab のマージ。作業種別（`task-types.csv`）はタブにしない（作業名から抜き出す運用になる予定。依頼者）。名称の対応（`mapping.csv`）もタブにしない。
@@ -1632,12 +1632,12 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 | MR | プログラム（`src/`・`scripts/`・`tests/`・`vendor/`・`package.json`・`package-lock.json`・`observablehq.config.js`・`tsconfig.json`・`vitest.config.ts`・`.npmrc`） | `build`（データ検証つき。公開しない） |
 | MR | データ（`data/`・`config.json`）だけ | `validate`（データ検証だけ） |
 | MR | それ以外（文書・`.gitlab-ci.yml`・`.gitlab-ci.local.yml`）だけ | `ci-check`（CI の設定の点検。依存を取らない） |
-| 既定ブランチへの push（MR のマージ） | プログラム・データ・CI の設定のどれか | `build` → `pages` |
+| 既定ブランチへの push（MR のマージ） | プログラム・データ・CI の設定のどれか | `pages`（ビルドと公開。§128） |
 | 既定ブランチへの push | 文書だけ | なし（公開中のサイトはそのまま） |
-| Run pipeline・API | — | `build` → `pages`（既定ブランチのとき） |
+| Run pipeline・API | — | 既定ブランチなら `pages`、ほかのブランチなら `build`（§128） |
 | スケジュール | — | 取り込み（`fetch-*`）だけ（従来どおり） |
 
-- 取り込みの自動 MR（`fetch-worklogs` など）とマスタ編集の保存の MR はデータだけなので `validate` だけが動き、成功後の自動マージは従来どおり。マージ後の既定ブランチで `build` → `pages`。
+- 取り込みの自動 MR（`fetch-worklogs` など）とマスタ編集の保存の MR はデータだけなので `validate` だけが動き、成功後の自動マージは従来どおり。マージ後の既定ブランチで `pages`（§128）。
 - MR に必ず 1 つはジョブがあるようにする（ジョブが無いとパイプラインが作られず、「Pipelines must succeed」の設定ではマージできない）。そのため `ci-check` を「ほかに何も動かないとき」に置く。
 - CI/CD 変数 `YOJITSU_MR_BUILD=1` で、MR でも毎回 `build` を動かす（データだけの MR でもビルドまで確かめたいとき）。`test` は従来どおり `YOJITSU_RUN_TESTS=1` のときだけ（§79.2）。
 - 再発防止: `tests/unit/ci-rules.test.ts`（GitLab の rules の評価を真似て、パイプラインの種類と変わったファイルごとに動くジョブを確かめる。依存を取るジョブがパイプライン 1 回につき 1 つまで、`pages` があれば `build` もある）、`tests/integration/incremental-build.test.ts`（変わったものだけ書き換える・明細は影響のある契約だけ・消えたものを消す・失敗したら記録を残さない・ローダとの対応）、`tests/unit/loader-integrity.test.ts`（フル／増分の分かれ目・出力の記録との突き合わせ）。
@@ -1959,7 +1959,6 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - `packages/app/package.json` の `repository.url` はこのリポジトリ（trusted publishing の必須条件で、npm のページにリポジトリが出る。依頼者 2026-11-16 了承。アカウント名を書かない決まりの唯一の例外）。`author`・`homepage`・`bugs` は今までどおり入れない。template（利用環境）には入らない。
 - 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）、`tests/integration/app-package.test.ts`（`repository` はこのリポジトリの URL だけ）。
 
-
 ## 125. 月次推移に今月の実績を速報で出す（2026-11-16 依頼者）
 「月次推移のグラフ、今月の棒グラフ、速報値でもいいので実績が登録されているやつは可視化したい」への対応。これまで今月（asOf の月）は見込みの破線枠だけで、入っている実績はマウスの表示と「表で見る」の「（速報）」にしか出ていなかった。
 - 月次推移（全体・チーム・顧客・案件の詳細、`monthlyChart`）: 基準月以降で状態が速報、実績が 0 より大きい月（＝今月）に、実績の棒を **見込みの破線枠の中に斜線** で重ねる。枠＝月末までの見込み、斜線＝今日までに入っている分なので、月の途中の少ない棒を満額の予算と比べて誤解しない（日々のペースは今月の進捗 §61 で見る）。確定・速報済みの前の月（実線の塗り）とは塗り方で見分ける（色だけに頼らない）。残予算の折れ線・着地見込みの計算は変えない（§54）。
@@ -1980,3 +1979,10 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
   - マスタに無い正式な案件は顧客名・案件名を先頭にし、正式な案件ID は「列」で選べる列（Excel には常に出す。§106.1）。
   - データ検証（§14）のメッセージの社員番号・案件ID に名前を添える（「メンバー M001（山田 太郎）」「案件 C001（顧客 / 案件名）」。マスタに無い ID・名前が ID と同じときはそのまま）。社員番号の並び（役職の単価が無い人・GitLab ユーザー名の重複）は「: M001（…）、M002（…）」、作業の対応表の期間の重なりは「別の案件 C001（…） と C002（…）」。未紐付けの理由は英語のコードでなく §103 の名前（「紐付けルールなし」など）。マスタ編集・リソース計画の検証の一覧（§115）は今までどおり ID を名前に置き換えて出す（添えた名前は外してから置き換える）。
 - 実装: `src/components/fold-section.js`、`src/components/table.js`（`previewRows`）、`src/data-check.md`、`src/core/validate.ts`（`createNames`）、`src/core/taskCodes.ts`（`validateMappingPeriods` の `label`）、`src/components/masters.js`（`issueMessage`）。
+
+## 128. マージ後に画面へ反映されるまでを短くする（2026-11-16 依頼者）
+「マージリクエスト後の処理を速くしてほしい」。開発元で測ると、ビルド（検証・ローダ・`observable build`）は実運用と同じくらいの量のデータで十数秒〜数十秒で、待ちの大半はビルドの外（ジョブの待ち・リポジトリの取得・依存の取得・成果物の上げ下ろし）にあった。Windows の Runner ではとくに `npm ci` と、多数のファイルの圧縮・展開が遅い（§79.3）。
+- 既定ブランチでは、`pages` ジョブが検証・ビルド・公開（`scripts/ci/pages.mjs`）を続けて行う。`build` ジョブは既定ブランチでは動かない（MR・ほかのブランチだけ）。ジョブ 1 つ分の待ちと取得、`dist/` の成果物の上げ下ろしが無くなる。`variables`・`cache` は `build` と同じ（`tests/unit/ci-rules.test.ts`）。社内で `.gitlab-ci.local.yml` の `build:` に足したタグなどは `pages:` にも足す（CHANGELOG「更新後に行うこと」）。
+- 依存の使い回し: `GIT_CLEAN_FLAGS: "-ffdx -e node_modules/"` で、作業フォルダを使い回す Runner では `node_modules/` を消さない。`scripts/ci/install.mjs` は、`node_modules/.yojitsu-navi-install.json` の印（`package-lock.json` と `package.json` の依存の項目の SHA-256・依存込みのキャッシュの有無・Node の主な版・OS）が今と同じなら `npm ci` を飛ばす。入れる前に印を消し、入れ終わってから書く（途中で止まった `node_modules/` を使わない）。印は `yojitsu-navi upgrade` と同じもの（`scripts/lib/install-stamp.mjs`。`npm run app:build` が `packages/app/lib` に写す。§104）。CI/CD 変数 `YOJITSU_FRESH_INSTALL=1` で必ず入れ直す（`upgrade` が入れるときもこれを付けるので、`--install` は印があっても入れ直す）。作業フォルダを使い回さない Runner ではこれまでどおり毎回入れる。
+- `cache:` に `node_modules/` は入れない（§79.3 のまま）。
+- 画面の切り替え: 同じ量のデータで CPU を 4 倍遅くして測ると 1 画面 0.7〜2 秒で、大半は表の配置の計算（レイアウト）と描画。データ（JSON）の読み込みを HTML の先頭で先に始める（`<link rel="preload">`）案は、読み込みは早まるが画面の組み立てが遅れて合計は変わらなかったので入れない。戻る・進むはブラウザの前後のキャッシュから即座に戻る。Chrome・Edge ではリンクに載せたところからの先読み（§108）が効く。
