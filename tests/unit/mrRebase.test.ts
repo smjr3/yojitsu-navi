@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addRow, deleteRow, insertionIndex, MASTER_FILES, parseMasterDoc, rebaseDraftFile, draftFileOf, restoreRow, serializeMasterDoc, updateRow } from "../../src/core/masterEdit.js";
-import { rebaseRemake, rebaseRemakeFile, remakeMergeRequest, type RemakeFile } from "../../src/core/mrRebase.js";
+import { mergeRemade, rebaseRemake, rebaseRemakeFile, remakeMergeRequest, type RemakeFile } from "../../src/core/mrRebase.js";
 import type { FetchLike } from "../../src/core/gitlab.js";
 
 const ASSIGN = [
@@ -223,6 +223,46 @@ describe("remakeMergeRequest（作り直しと取り下げ）", () => {
       const { f, calls } = fake(head, state);
       await expect(remakeMergeRequest(f, cfg, "t", { iid: 8 }, rebaseRemake(plan), { message: "m", description: "d", headSha: "h1" })).rejects.toMatchObject({ kind: "conflict" });
       expect(calls.some((c) => c.method === "POST")).toBe(false);
+    }
+  });
+});
+
+describe("mergeRemade（載せ直した MR をそのままマージ。§126.2）", () => {
+  const cfg = { mode: "gitlab", gitlab: { apiBaseUrl: "https://gl.test/api/v4", projectId: "g/p", targetBranch: "main", commitMode: "mr" } } as never;
+  /** GET /merge_requests/9 は states を順に返す（最後の値を繰り返す） */
+  function fake(states: Array<Record<string, unknown>>) {
+    const calls: Array<{ method: string; url: string; body: Record<string, unknown> }> = [];
+    let i = 0;
+    const f: FetchLike = async (url, init) => {
+      const body = init.body ? JSON.parse(init.body) : {};
+      calls.push({ method: init.method, url, body });
+      const reply = (status: number, b: unknown) => ({ ok: status < 300, status, text: async () => JSON.stringify(b) });
+      if (url.endsWith("/merge_requests/9") && init.method === "GET") return reply(200, { iid: 9, state: "opened", diff_refs: { head_sha: "h9" }, ...states[Math.min(i++, states.length - 1)] });
+      if (url.endsWith("/merge_requests/9/merge")) return reply(200, {});
+      return reply(404, {});
+    };
+    return { f, calls, merges: () => calls.filter((c) => c.url.endsWith("/merge")) };
+  }
+  const sleep = async () => {};
+
+  it("判定が終わるまで待ち、マージできればその head でマージする", async () => {
+    const { f, merges } = fake([{ detailed_merge_status: "checking" }, { detailed_merge_status: "mergeable", head_pipeline: { status: "success" } }]);
+    expect(await mergeRemade(f, cfg, "t", 9, { sleep })).toBe("merged");
+    expect(merges()).toHaveLength(1);
+    expect(merges()[0]!.body).toEqual({ should_remove_source_branch: true, sha: "h9" });
+  });
+
+  it("検証の途中なら、検証が通ったら自動でマージする予約をする。パイプラインがまだ無ければ待つ", async () => {
+    const { f, merges } = fake([{ detailed_merge_status: "ci_must_pass" }, { detailed_merge_status: "ci_still_running", head_pipeline: { status: "running" } }]);
+    expect(await mergeRemade(f, cfg, "t", 9, { sleep })).toBe("scheduled");
+    expect(merges()[0]!.body).toMatchObject({ merge_when_pipeline_succeeds: true, auto_merge: true, sha: "h9" });
+  });
+
+  it("競合・検証の失敗・待っても判定が終わらないときはマージしない", async () => {
+    for (const s of [{ has_conflicts: true, detailed_merge_status: "conflict" }, { detailed_merge_status: "ci_must_pass", head_pipeline: { status: "failed" } }, { detailed_merge_status: "checking" }, { detailed_merge_status: "not_approved" }]) {
+      const { f, merges } = fake([s]);
+      expect(await mergeRemade(f, cfg, "t", 9, { sleep, tries: 3 })).toBe("pending");
+      expect(merges()).toHaveLength(0);
     }
   });
 });

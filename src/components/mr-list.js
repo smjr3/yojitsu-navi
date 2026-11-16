@@ -11,7 +11,7 @@ import { T, fmt } from "../i18n/index.js";
 import { closeMergeRequest, fetchCurrentUser, getMergeRequest, gitlabConfigured, listMasterMergeRequests, mergeMergeRequest, mergeRequestFileChanges } from "../core/gitlab.js";
 import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, parseMasterDoc, timeColumnOf } from "../core/masterEdit.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { prepareRemake, rebaseRemake, remakeMergeRequest } from "../core/mrRebase.js";
+import { mergeRemade, prepareRemake, rebaseRemake, remakeMergeRequest } from "../core/mrRebase.js";
 import { getToken, publishMrCount } from "./gitlab-client.js";
 import { dateTimeJst, integer } from "./format.js";
 import { infoTip } from "./layout.js";
@@ -107,6 +107,37 @@ export function needsRemake(d) {
   return d.hasConflicts === true || d.mergeStatus === "conflict" || d.mergeStatus === "need_rebase";
 }
 
+/** 一覧を開いておくか（このブラウザに覚える。§126）。null = まだ選んでいない */
+const OPEN_KEY = "yojitsu-navi:mr-list-open";
+/** 選んでいないとき、この件数までは開いて出す（それより多ければ畳む） */
+export const MR_AUTO_OPEN_MAX = 2;
+function readOpenPref() {
+  try {
+    const v = window.localStorage.getItem(OPEN_KEY);
+    return v === "1" ? true : v === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+function writeOpenPref(on) {
+  try {
+    window.localStorage.setItem(OPEN_KEY, on ? "1" : "0");
+  } catch {
+    /* 無視 */
+  }
+}
+
+/** 対応が要る MR か（競合あり・検証の失敗）。畳んでいても出す */
+export function needsAttention(d) {
+  return needsRemake(d) || d.pipelineStatus === "failed";
+}
+
+/** 並び: 対応が要るもの → 自分の分 → その他（それぞれの中は新しい順のまま） */
+export function sortMergeRequests(items, me) {
+  const rank = (d) => (needsAttention(d) ? 0 : me && d.author?.username === me ? 1 : 2);
+  return items.map((it, i) => ({ it, i, r: rank(it.detail) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.it);
+}
+
 export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {} }) {
   const el = html`<div class="yn-mr-slot"></div>`;
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-mr-dialog-title"></dialog>`;
@@ -123,6 +154,9 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
   /** トークンの持ち主の username（自分の MR は取り下げられる） */
   let me = null;
   let meToken = null;
+  /** 一覧を開いているか（null = 件数で決める） */
+  let listOpen = readOpenPref();
+  const isOpen = (n) => listOpen ?? n <= MR_AUTO_OPEN_MAX;
 
   const enabled = () => gitlabConfigured(cfg);
   /** リポジトリ内のパス（導入先でデータを下のフォルダに置いているときは masters.js から渡す） */
@@ -193,7 +227,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">
-        <p>${fmt(isMerge ? T.mr.confirmMergeText : T.mr.confirmCloseText, { iid: d.iid, title: mrTitleText(d.title), branch: cfg.gitlab.targetBranch })}</p>
+        <p>${fmt(isMerge ? (needsRemake(d) ? T.mr.confirmMergeRemakeText : T.mr.confirmMergeText) : T.mr.confirmCloseText, { iid: d.iid, title: mrTitleText(d.title), branch: cfg.gitlab.targetBranch })}</p>
         ${isMerge && item.changes?.status === "ok" ? html`<ul class="yn-mr-summary">${summaryLines(item)}</ul>` : isMerge ? html`<p class="yn-me-small">${T.mr.confirmMergeCheck}</p>` : null}
         <div class="yn-me-form-foot">
           <button type="button" class="yn-btn" onclick=${() => dialog.close()}>${T.mr.cancel}</button>
@@ -213,13 +247,13 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
   /** {item, status: "loading"|"ready"|"error", plan, choices, message, msg} */
   let remake = null;
 
-  async function openRemake(item, opener) {
+  async function openRemake(item, opener, { thenMerge = false, plan: given = null } = {}) {
     returnFocus = opener;
-    remake = { item, status: "loading", plan: null, choices: {}, message: "", msg: "" };
+    remake = { item, status: "loading", plan: null, choices: {}, message: "", msg: "", thenMerge };
     renderRemake();
     if (!dialog.open) dialog.showModal();
     try {
-      const plan = await prepareRemake(fetchImpl, cfg, getToken(), item.detail, paths);
+      const plan = given ?? (await prepareRemake(fetchImpl, cfg, getToken(), item.detail, paths));
       if (remake?.item !== item) return;
       remake = { ...remake, status: "ready", plan };
     } catch (e) {
@@ -285,15 +319,16 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
           }
           returnFocus = null;
           const rebased = { ...r, headSha: remake.plan.headSha ?? null };
+          const thenMerge = remake.thenMerge;
           remake = null;
           dialog.close();
-          runRemake(item, rebased);
-        }}>${T.mr.remakeConfirm}</button>`;
+          runRemake(item, rebased, { thenMerge });
+        }}>${remake.thenMerge ? T.mr.remakeMergeConfirm : T.mr.remakeConfirm}</button>`;
       }
     }
     dialog.replaceChildren(html`<div class="yn-dialog-inner">
       <header class="yn-dialog-head">
-        <h2 id="yn-mr-dialog-title" class="yn-dialog-title">${T.mr.remakeTitle}</h2>
+        <h2 id="yn-mr-dialog-title" class="yn-dialog-title">${remake.thenMerge ? T.mr.remakeMergeTitle : T.mr.remakeTitle}</h2>
         <button type="button" class="yn-btn yn-btn-icon" aria-label=${T.breakdown.close} onclick=${() => dialog.close()}>×</button>
       </header>
       <div class="yn-dialog-body">
@@ -307,15 +342,27 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     </div>`);
   }
 
-  async function runRemake(item, rebased) {
+  async function runRemake(item, rebased, { thenMerge = false } = {}) {
     const d = item.detail;
-    state = { ...state, busy: { kind: "remake", iid: d.iid }, notice: null };
+    state = { ...state, busy: { kind: thenMerge ? "merge" : "remake", iid: d.iid }, notice: null };
     render();
     try {
       const description = [d.description, fmt(T.mr.remakeDescription, { iid: d.iid })].filter((x) => x && x.trim() !== "").join("\n\n");
-      const { closeError } = await remakeMergeRequest(fetchImpl, cfg, getToken(), d, rebased, { message: d.title, description, now: now(), headSha: rebased.headSha });
-      const text = fmt(closeError ? T.mr.remadeCloseFailed : T.mr.remade, { iid: d.iid, title: mrTitleText(d.title) });
-      await refresh({ notice: { kind: closeError ? "error" : "ok", text } });
+      const { result, closeError } = await remakeMergeRequest(fetchImpl, cfg, getToken(), d, rebased, { message: d.title, description, now: now(), headSha: rebased.headSha });
+      const vars = { iid: d.iid, title: mrTitleText(d.title) };
+      if (closeError) return await refresh({ notice: { kind: "error", text: fmt(T.mr.remadeCloseFailed, vars) } });
+      if (!thenMerge || result.mergeRequestIid === null) return await refresh({ notice: { kind: "ok", text: fmt(T.mr.remade, vars) } });
+      // 載せ直した新しい MR をそのままマージする（§126.2）
+      let outcome;
+      let error = null;
+      try {
+        outcome = await mergeRemade(fetchImpl, cfg, getToken(), result.mergeRequestIid);
+      } catch (e) {
+        outcome = "pending";
+        error = e;
+      }
+      const text = fmt(outcome === "merged" ? T.mr.remadeMerged : outcome === "scheduled" ? T.mr.remadeScheduled : T.mr.remadeNotMerged, vars);
+      await refresh({ notice: { kind: outcome === "pending" ? "error" : "ok", text, detail: error ? (error?.message ?? String(error)) : "" } });
     } catch (e) {
       state = { ...state, busy: null, notice: { kind: "error", text: e?.message ?? String(e), detail: e?.detail ?? "" } };
       render();
@@ -323,8 +370,30 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     fk("mr:notice")?.focus();
   }
 
+  /** 競合ありの MR のマージ: 本体の今の内容に載せ直してからマージする。同じ行の重なりがあれば選ぶダイアログ（§126.2） */
+  async function mergeWithRemake(item) {
+    const d = item.detail;
+    state = { ...state, busy: { kind: "merge", iid: d.iid }, notice: null };
+    render();
+    let plan;
+    try {
+      plan = await prepareRemake(fetchImpl, cfg, getToken(), d, paths);
+    } catch (e) {
+      state = { ...state, busy: null, notice: { kind: "error", text: `${T.mr.remakeLoadFailed} ${e?.message ?? String(e)}`, detail: e?.detail ?? "" } };
+      render();
+      fk("mr:notice")?.focus();
+      return;
+    }
+    const r = rebaseRemake(plan, {});
+    if (!r.blocked && !r.empty && r.unresolved === 0) return runRemake(item, { ...r, headSha: plan.headSha ?? null }, { thenMerge: true });
+    state = { ...state, busy: null };
+    render();
+    openRemake(item, fk(`mr:merge:${d.iid}`), { thenMerge: true, plan });
+  }
+
   async function run(kind, item) {
     const d = item.detail;
+    if (kind === "merge" && needsRemake(d)) return mergeWithRemake(item);
     state = { ...state, busy: { kind, iid: d.iid }, notice: null };
     render();
     try {
@@ -410,14 +479,32 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     else if (state.status === "loading" && state.items.length === 0) body = html`<p class="yn-mr-empty" role="status">${T.mr.loading}</p>`;
     else if (state.status === "error") body = html`<p class="yn-note yn-note-warn">${T.mr.loadFailed} ${state.error.message}${state.error.detail ? html` <code>${state.error.detail}</code>` : null}</p>`;
     else if (state.items.length === 0) body = html`<p class="yn-mr-empty">${T.mr.none}</p>`;
-    else body = html`<ul class="yn-mr-list">${state.items.map(renderItem)}</ul>`;
+    else {
+      const items = sortMergeRequests(state.items, me);
+      const open = isOpen(items.length);
+      const shown = open ? items : items.filter((it) => needsAttention(it.detail));
+      body = shown.length ? html`<ul class="yn-mr-list" id="yn-mr-list">${shown.map(renderItem)}</ul>` : null;
+    }
     const notice = state.notice
       ? html`<div class=${`yn-me-outcome ${state.notice.kind === "ok" ? "is-ok" : "is-error"}`} role=${state.notice.kind === "ok" ? "status" : "alert"} tabindex="-1" data-fk="mr:notice"><p>${state.notice.text}</p>${state.notice.detail ? html`<p class="yn-me-small"><code>${state.notice.detail}</code></p>` : null}</div>`
       : null;
-    el.replaceChildren(html`<section class="yn-me-section yn-mr" aria-labelledby="yn-mr-title">
+    const attention = n ? state.items.filter((it) => needsAttention(it.detail)).length : 0;
+    const mineN = n && me ? state.items.filter((it) => it.detail.author?.username === me).length : 0;
+    const open = n ? isOpen(n) : false;
+    const toggleList = () => {
+      listOpen = !open;
+      writeOpenPref(listOpen);
+      render();
+      fk("mr:list")?.focus();
+    };
+    el.replaceChildren(html`<section class=${`yn-me-section yn-mr${n && !open ? " is-folded" : ""}`} aria-labelledby="yn-mr-title">
       <div class="yn-mr-bar">
         <div class="yn-title-with-tip"><h2 id="yn-mr-title" class="yn-section-title">${T.mr.title}${n ? html` <span class="yn-mr-count">${fmt(T.mr.countLabel, { n: integer(n) })}</span>` : null}</h2>${infoTip(cfg.mode === "demo" ? `${T.mr.hint} ${T.mr.demoNote}` : T.mr.hint, { label: fmt(T.layout.aboutSection, { title: T.mr.title }) })}</div>
-        ${token !== "" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk="mr:refresh" disabled=${state.status === "loading"} onclick=${() => refresh()}>${state.status === "loading" ? T.mr.loading : T.mr.refresh}</button>` : null}
+        ${n ? html`<div class="yn-mr-tally">${attention ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.mr.attentionCount, { n: integer(attention) })}</span>` : null}${mineN ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.mr.mineCount, { n: integer(mineN) })}</span>` : null}</div>` : null}
+        <div class="yn-mr-bar-actions">
+          ${n ? html`<button type="button" class="yn-btn yn-btn-sm" aria-expanded=${String(open)} aria-controls="yn-mr-list" data-fk="mr:list" onclick=${toggleList}>${open ? T.mr.foldList : fmt(T.mr.unfoldList, { n: integer(n) })}</button>` : null}
+          ${token !== "" ? html`<button type="button" class="yn-btn yn-btn-sm" data-fk="mr:refresh" disabled=${state.status === "loading"} onclick=${() => refresh()}>${state.status === "loading" ? T.mr.loading : T.mr.refresh}</button>` : null}
+        </div>
       </div>
       ${notice}
       ${body}
