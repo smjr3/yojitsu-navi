@@ -48,6 +48,7 @@
 
 - 原価の種類: `CostProvider { costType, compute(contractId, month) }` を `buildModel(dataset, { extraProviders })` で追加できる。`config.costTypes` に ID を足せば `costs` のキーに現れる。
 - 性能: 作業ログは `(契約ID, 月)` で索引化（`indexWorklogs`）、マスタは `(キー → effectiveFrom 昇順)` で二分探索。5 万件 × 100 契約で 0.5 秒程度（`tests/unit/perf.test.ts`）。
+- `isValidISODate`・`normalizeName` は結果が引数の文字列だけで決まるので、文字列 → 結果を覚えて使い回す（上限 `MEMO_MAX` 件で作り直し。中身は `〜Uncached`。SPEC §129）。設定やデータで結果が変わる処理に同じことをしない。
 
 ## 取り込みアダプタの設定化（api-adapter, SPEC §20）の決定事項
 

@@ -48,8 +48,32 @@ function hasBoundary(value: string, suffix: string, neighborIndex: number): bool
   return neighbor === undefined || neighbor === " ";
 }
 
-/** 名称を照合用に正規化する。冪等（2回かけても同じ結果）。 */
+/**
+ * 覚えておく結果の上限（normalizeName・isValidISODate 共通。SPEC §129）。超えたら全部捨てて作り直す。
+ * 名称・日付は同じ値が作業実績の行数ぶん繰り返すので、実際に覚えるのは数百〜数千件
+ */
+export const MEMO_MAX = 50000;
+const nameMemo = new Map<string, string>();
+
+/**
+ * 名称を照合用に正規化する。冪等（2回かけても同じ結果）。
+ * 結果は入力の文字列だけで決まるので、同じ文字列の 2 回目からは覚えた結果を返す（計算は normalizeNameUncached のまま。SPEC §129）
+ */
 export function normalizeName(raw: string | null | undefined): string {
+  if (raw === null || raw === undefined) return "";
+  // 文字列以外（型の外の値）は覚えない
+  if (typeof raw !== "string") return normalizeNameUncached(raw);
+  let value = nameMemo.get(raw);
+  if (value === undefined) {
+    value = normalizeNameUncached(raw);
+    if (nameMemo.size >= MEMO_MAX) nameMemo.clear();
+    nameMemo.set(raw, value);
+  }
+  return value;
+}
+
+/** normalizeName の計算そのもの（覚えない。テストで覚えた結果と突き合わせるために出している） */
+export function normalizeNameUncached(raw: string | null | undefined): string {
   if (raw === null || raw === undefined) return "";
   // 1. NFKC（全角英数→半角、半角カナ→全角カナ、㈱→(株)、㈲→(有)、全角空白→半角空白）
   let value = String(raw).normalize("NFKC");

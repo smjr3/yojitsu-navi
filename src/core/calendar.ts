@@ -4,6 +4,7 @@
  * 年月は "YYYY-MM"、日付は "YYYY-MM-DD" の文字列。タイムゾーンに依存しないよう
  * 曜日計算は UTC で行い、Date オブジェクトは外に出さない。
  */
+import { MEMO_MAX } from "./normalize.js";
 import type { Config, Holiday, ISODate, YearMonth } from "./types.js";
 
 const YEAR_MONTH_RE = /^(\d{4})-(\d{2})$/;
@@ -79,8 +80,25 @@ export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-/** "YYYY-MM-DD" 形式で、実在する日付であること（2027-02-29 は不可） */
+const dateMemo = new Map<string, boolean>();
+
+/**
+ * "YYYY-MM-DD" 形式で、実在する日付であること（2027-02-29 は不可）。
+ * 結果は文字列だけで決まるので、同じ文字列の 2 回目からは覚えた結果を返す（判定は isValidISODateUncached のまま。SPEC §129）
+ */
 export function isValidISODate(value: unknown): value is ISODate {
+  if (typeof value !== "string") return false;
+  let valid = dateMemo.get(value);
+  if (valid === undefined) {
+    valid = isValidISODateUncached(value);
+    if (dateMemo.size >= MEMO_MAX) dateMemo.clear();
+    dateMemo.set(value, valid);
+  }
+  return valid;
+}
+
+/** isValidISODate の判定そのもの（覚えない。テストで覚えた結果と突き合わせるために出している） */
+export function isValidISODateUncached(value: unknown): value is ISODate {
   if (typeof value !== "string") return false;
   const m = ISO_DATE_RE.exec(value);
   if (!m) return false;
