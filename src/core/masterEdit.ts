@@ -35,7 +35,7 @@ export interface MasterColumnDef {
   onlyIfPresent?: boolean;
   /** true（onlyIfPresent と一緒に使う）: 列が無くても入力欄は出し、値を入れたときだけ見出しの末尾に足す（§103 の provisional） */
   addOnInput?: boolean;
-  /** true: 新しく作るファイルの見出しに入れない（使う行が出たときだけ足す列。§121 の開始日・終了日） */
+  /** true: 新しく作るファイルの見出しに入れない（使う行が出たときだけ足す列。§123 の開始日・終了日） */
   notInNewFile?: boolean;
   /** true: 台帳の一覧の列には出さない（修正のダイアログには出す。§98 の project_id。表を横に広げないため） */
   listHidden?: boolean;
@@ -206,7 +206,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "allocation", label: T.masterFiles.colAllocation, input: "allocation", required: true },
-      // 開始日・終了日（§121）。省略可。画面では開始・終了の日付の欄 1 つで入れ、月の初日・末日でないときだけ書く。列が無いファイルは書くときに見出しの末尾に足す
+      // 開始日・終了日（§123）。省略可。画面では開始・終了の日付の欄 1 つで入れ、月の初日・末日でないときだけ書く。列が無いファイルは書くときに見出しの末尾に足す
       { name: "start_date", label: T.masterFiles.colStartDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
       { name: "end_date", label: T.masterFiles.colEndDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
     ],
@@ -228,7 +228,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "person_months", label: T.masterFiles.colPersonMonths, input: "allocation", required: true },
       { name: "note", label: T.masterFiles.colNote, input: "text", required: false },
-      // 開始日・終了日（§121。アサインと同じ）
+      // 開始日・終了日（§123。アサインと同じ）
       { name: "start_date", label: T.masterFiles.colStartDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
       { name: "end_date", label: T.masterFiles.colEndDate, input: "date", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true, notInNewFile: true },
     ],
@@ -711,7 +711,7 @@ function effectiveDiffColumns(def: MasterFileDef, header: readonly string[], b: 
   return out;
 }
 
-/** 行の開始日・終了日（§121。空なら付けない） */
+/** 行の開始日・終了日（§123。空なら付けない） */
 function periodDatesOfRecord(v: Record<string, string>): { startDate?: string; endDate?: string } {
   const sd = (v.start_date ?? "").trim();
   const ed = (v.end_date ?? "").trim();
@@ -733,7 +733,7 @@ function periodSignature(header: readonly string[], rows: readonly CellRow[], mo
     const s = (cells[si] ?? "").trim();
     const e = (cells[ei] ?? "").trim();
     if (!isValidYearMonth(s) || !isValidYearMonth(e) || s > month || e < month) continue;
-    // 端の月は開始日・終了日でも値が変わる（§121）
+    // 端の月は開始日・終了日でも値が変わる（§123）
     const sd = s === month && sdi >= 0 ? (cells[sdi] ?? "").trim() : "";
     const ed = e === month && edi >= 0 ? (cells[edi] ?? "").trim() : "";
     hits.push(`${(cells[ai] ?? "").trim()}\u0003${sd}\u0003${ed}`);

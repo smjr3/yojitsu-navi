@@ -1586,7 +1586,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     for (const a of e.adds) doc = addRow(doc, { member_id: memberId, ...(fileId === "assignments" ? { contract_id: a.contractId } : { type: target.type ?? "" }), start_month: a.startMonth, end_month: a.endMonth, start_date: a.startDate, end_date: a.endDate, [vcol]: a.value }).doc;
     return { doc };
   }
-  /** 開始日・終了日（§121）を書く行があれば、列の無いファイルの見出しに足す */
+  /** 開始日・終了日（§123）を書く行があれば、列の無いファイルの見出しに足す */
   function withDateColumns(doc, pieces) {
     let d = doc;
     if (pieces.some((p) => (p.startDate ?? "") !== "")) d = withColumn(d, "start_date");
@@ -1759,7 +1759,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return h("td", { class: `num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}` }, btn);
     };
 
-    /** 行 x が月 m の途中から・途中まで（開始日・終了日。§121）か */
+    /** 行 x が月 m の途中から・途中まで（開始日・終了日。§123）か */
     const partialIn = (x, m) => !!periodPresenceAt(x, m, holidayCache().set);
     /** 月 m の途中から・途中までの印（「16日から」「15日まで」「10日〜20日」）。無ければ "" */
     const partialText = (x, m) => {
@@ -1774,7 +1774,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const round6 = (v) => Math.round(v * 1e6) / 1e6;
     const people = view.rows.map((r) => {
       const oRows = memberPeriodRows("outside", r.memberId);
-      // 開始日・終了日のある端の月は日割り（§121）
+      // 開始日・終了日のある端の月は日割り（§123）
       const outsideMonthly = months.map((m) => valueAt(oRows, m, holidayCache().set));
       const monthly = months.map((m, i) => r.monthly[i] + outsideMonthly[i]);
       return { r, oRows, outsideMonthly, monthly, empty: new Set(emptyMonthIdx(r, monthly)), total: monthly.reduce((a, b) => a + b, 0), name: r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId }) };
@@ -2041,7 +2041,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         })
         .filter((o) => o.v > 0);
       const out = outs.reduce((s, o) => s + o.v, 0);
-      // 開始日・終了日のある端の月は日割りした人月（§121）
+      // 開始日・終了日のある端の月は日割りした人月（§123）
       const effective = (x) => (Number.isFinite(x.value) ? x.value * periodShareAt(x, m, holidayCache().set) : 0);
       const total = aRows.reduce((s, x) => s + effective(x), 0) + out;
       const i = months.indexOf(m);
@@ -2154,7 +2154,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         invalid: T.planEdit.kindInvalid,
       }[e.kind];
       const contract = fileId === "assignments" ? cIndex().byId.get(e.contractId) : null;
-      // 開始日・終了日（§121）があれば日付で
+      // 開始日・終了日（§123）があれば日付で
       const period = `${e.startDate || e.startMonth || "?"}〜${e.endDate || e.endMonth || "?"}`;
       const li = html`<li class=${`yn-me-plan-entry is-${st} kind-${e.kind}`} data-key=${e.rowId}>
         <span class="yn-me-plan-period">${period}</span>
@@ -2529,7 +2529,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         const pieces = editMonthAllocation({ startMonth: a.startMonth, endMonth: a.endMonth, startDate: a.startDate ?? "", endDate: a.endDate ?? "", allocation: before }, month, after, scope);
         if (pieces.length === 0) doc = deleteRow(doc, a.rowId);
         else {
-          // 開始日・終了日（§121）は元の行の端の月を持つ部分に残す
+          // 開始日・終了日（§123）は元の行の端の月を持つ部分に残す
           doc = withDateColumns(doc, pieces);
           doc = updateRow(doc, a.rowId, { start_month: pieces[0].startMonth, end_month: pieces[0].endMonth, start_date: pieces[0].startDate ?? "", end_date: pieces[0].endDate ?? "", allocation: pieces[0].allocation });
           for (const p of pieces.slice(1)) doc = addRow(doc, { member_id: r.memberId, contract_id: a.contractId, start_month: p.startMonth, end_month: p.endMonth, start_date: p.startDate ?? "", end_date: p.endDate ?? "", allocation: p.allocation }).doc;
@@ -2756,7 +2756,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   };
 
   /**
-   * 日付の欄 1 つで入れる列（§121）: 月の列 → 日付の列・端（開始 / 終了）。
+   * 日付の欄 1 つで入れる列（§123）: 月の列 → 日付の列・端（開始 / 終了）。
    * 画面は日付だけ。CSV は月の列に月、月の初日・末日でないときだけ日付の列に日付を書く（今のデータのまま読める）
    */
   const DATE_PAIRS = {
@@ -2794,7 +2794,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const latest = p.contracts.reduce((a, b) => (b.startMonth > a.startMonth ? b : a));
       return [{ ...values, contract_id: latest.contractId }];
     }
-    // 開始日・終了日（§121）は、入れた期間の端の月を持つ行にだけ付ける
+    // 開始日・終了日（§123）は、入れた期間の端の月を持つ行にだけ付ける
     return segs.map((sg) => ({ ...values, contract_id: sg.contractId, start_month: sg.startMonth, end_month: sg.endMonth, start_date: sg.startMonth === values.start_month ? (values.start_date ?? "") : "", end_date: sg.endMonth === values.end_month ? (values.end_date ?? "") : "" }));
   }
 
@@ -2817,7 +2817,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す
     const pairs = DATE_PAIRS[fileId] ?? {};
     const pairedDateCols = new Set(Object.values(pairs).map((p) => p.dateCol));
-    // 日付の列は月の列の日付の欄でまとめて入れる（§121）
+    // 日付の列は月の列の日付の欄でまとめて入れる（§123）
     const shownColumns = columns.filter((c) => c.input !== "targetType" && !importedCol(c.name) && !pairedDateCols.has(c.name));
     const fixedColumns = columns.filter((c) => importedCol(c.name));
     let initial = row ? rowRecord(doc, row) : template ? rowRecord(doc, template) : Object.fromEntries(columns.map((c) => [c.name, ""]));
@@ -2828,7 +2828,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       if (def.history === "effective") initial = { ...initial, effective_from: /^\d{4}-\d{2}$/.test(tFrom) && tFrom >= next ? addMonths(tFrom, 1) : next };
       else if (template) initial = { ...initial, start_month: next };
       if (!template && fileId === "members") initial = { ...initial, kind: "employee" };
-      // 日付（§119・§121）は写した行の月の日なので引き継がない
+      // 日付（§119・§123）は写した行の月の日なので引き継がない
       if (template) for (const p of Object.values(pairs)) if (p.dateCol in initial) initial = { ...initial, [p.dateCol]: "" };
       // 新しい案件（§103）の案件ID は、今の ID の続き番号を入れておく
       if (!template && fileId === "contracts") initial = { ...initial, contract_id: nextContractId(cIndex().list.map((c) => c.id)) };
@@ -2937,7 +2937,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           values[c.name] = at < 0 ? v : v.slice(at + 1);
         } else values[c.name] = v;
       }
-      // 日付の欄（§121）→ 月の列と日付の列（月の初日・末日なら日付の列は空）。形式が違えば月の列にそのまま入れて検証で知らせる
+      // 日付の欄（§123）→ 月の列と日付の列（月の初日・末日なら日付の列は空）。形式が違えば月の列にそのまま入れて検証で知らせる
       for (const [monthCol, p] of Object.entries(pairs)) {
         if (!(monthCol in values)) continue;
         const sp = splitPeriodDate(values[monthCol], p.side);
@@ -3048,7 +3048,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       }
       Object.assign(values, pieces[0]);
       const impact = impactBetween(before, next, range, impactContext());
-      // 日付の列は月の列の変更として 1 つにまとめて見せる（§121）
+      // 日付の列は月の列の変更として 1 つにまとめて見せる（§123）
       const beforeRec = mode === "edit" ? rowRecord(before, row) : {};
       const shownValue = (rec, c) => (pairs[c.name] ? pairedDateValue(rec, c.name, pairs[c.name]) : (rec[c.name] ?? "").trim());
       const changes = mode === "edit" ? columns.filter((c) => !pairedDateCols.has(c.name) && shownValue(beforeRec, c) !== shownValue(values, c)) : [];

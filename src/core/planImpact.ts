@@ -55,7 +55,7 @@ export function monthHoursOfInputs(model: Model, inputs: PlanInputs | null): Mon
 }
 
 const holidaySets = new WeakMap<readonly Holiday[], HolidaySet>();
-/** 計画の入力の祝日（行の無い年は国民の祝日で補う。§49。開始日・終了日の日割り §121 に使う）。祝日を持たなければ model の祝日 */
+/** 計画の入力の祝日（行の無い年は国民の祝日で補う。§49。開始日・終了日の日割り §123 に使う）。祝日を持たなければ model の祝日 */
 export function holidaysOfInputs(model: Model, inputs: PlanInputs | null): HolidaySet {
   const list = inputs?.holidays ?? model.holidays;
   let set = holidaySets.get(list);

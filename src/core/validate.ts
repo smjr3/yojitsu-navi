@@ -113,7 +113,7 @@ function validateTaskCodes(dataset: Dataset, push: IssueSink): void {
   }
 }
 
-/** 開始日・終了日（§121）の誤り: 開始月・終了月の中の日付でない、開始日が終了日より後 */
+/** 開始日・終了日（§123）の誤り: 開始月・終了月の中の日付でない、開始日が終了日より後 */
 function pushPeriodDateErrors(p: { startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string }, file: string, row: number, ref: Record<string, string>, push: IssueSink): void {
   for (const e of periodDateErrors(p)) {
     if (e === "inverted") push({ severity: "error", code: "PERIOD_DATE_INVERTED", message: fmt(T.checks.periodDateInverted, { file, row, from: p.startDate || p.startMonth, to: p.endDate || p.endMonth }), file, row, ref });
@@ -152,7 +152,7 @@ function validateAssignments(dataset: Dataset, contractIds: ReadonlySet<string>,
     for (const month of monthRange(a.startMonth, a.endMonth)) {
       const key = `${a.memberId}\u0000${month}`;
       const acc = monthlyTotal.get(key);
-      // 開始日・終了日のある端の月は日割りした量で数える（§121。月の途中で案件を替えた人が 1.0 超にならない）
+      // 開始日・終了日のある端の月は日割りした量で数える（§123。月の途中で案件を替えた人が 1.0 超にならない）
       const v = a.allocation * periodShareAt(a, month, holidays);
       if (acc) {
         acc.total += v;
@@ -219,7 +219,7 @@ function validateOutsidePlans(dataset: Dataset, memberIds: ReadonlySet<string>, 
   const reported = new Set<string>();
   for (const [key, spans] of seen) {
     if (spans.length < 2) continue;
-    // 同じ月でも日付が重ならなければ重複でない（13 日まで・16 日から。§121）
+    // 同じ月でも日付が重ならなければ重複でない（13 日まで・16 日から。§123）
     const rows = spans.filter((a) => spans.some((b) => b !== a && a.from <= b.to && b.from <= a.to)).map((x) => x.row);
     if (rows.length < 2) continue;
     const [memberId, , month] = key.split("\u0000") as [string, string, string];

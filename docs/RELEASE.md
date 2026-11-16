@@ -2,7 +2,7 @@
 
 npm パッケージ `yojitsu-navi` を npmjs.com に公開する手順です。パッケージは 1 つだけで、アプリ一式を作るコマンド（`npx yojitsu-navi init`）と、ほかのプロジェクトから import して使う計算コア（`import { buildModel } from "yojitsu-navi"`）の両方が入っています。ライセンスは MIT（ルートの `LICENSE`。画面フォントは別に SIL OFL 1.1、`src/fonts/OFL.txt`）。
 
-公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml`）だけが行います。手元の PC で `npm publish` すると、公開前の確認（`scripts/check-publish.mjs`）が止めます。
+公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml`）だけが行います。版を上げる PR が `main` にマージされると、npm への公開・タグ `v<版>`・GitHub のリリースまで自動で終わります（タグを手で作らない。SPEC §121）。手元の PC で `npm publish` すると、公開前の確認（`scripts/check-publish.mjs`）が止めます。
 
 ## 最初に 1 回（npmjs.com と GitHub の画面）
 
@@ -15,9 +15,21 @@ npm パッケージ `yojitsu-navi` を npmjs.com に公開する手順です。�
 
 ## 公開するたび
 
-1. 版を上げる PR を作り、`main` にマージする。ルートの `package.json` と `packages/app/package.json` の `version` を同じ値にする（互換が崩れる変更は 1 桁目、機能の追加は 2 桁目、直しは 3 桁目）。同じ PR で [CHANGELOG.md](../CHANGELOG.md) の「## 次の版」を「## <版>」にし、中身を見直す（下の「変更履歴の書き方」）。新しい「## 次の版」は、次に導入先へ届く変更の PR で足す。
-2. GitHub の **Releases > Draft a new release > Choose a tag** で、新しいタグ `v<版>`（例 `v0.1.0`）を入力し、Target を `main` にして **Publish release**。
-3. **Actions > Publish npm** が、版とタグの一致・型チェック・テスト・ビルドを確かめてから公開する（数分）。CHANGELOG.md にその版の見出しが無いと公開前の確認が止める。npmjs.com のパッケージのページで版を確認する。
+1. 版を上げる PR を作る。`npm run version:bump -- patch`（直し）・`minor`（機能の追加）・`major`（互換が崩れる変更）が、ルートと `packages/app/package.json`・`package-lock.json` の `version` を同じ値にし、[CHANGELOG.md](../CHANGELOG.md) の「## 次の版」を「## <版>」にする（「## 次の版」が無ければ止まる）。中身を見直す（下の「変更履歴の書き方」）。新しい「## 次の版」は、次に導入先へ届く変更の PR で足す。
+2. PR を `main` にマージする。**Actions > Publish npm** が、その版がまだ npm に無いことを確かめ、型チェック・テスト・ビルドのあと公開し、タグ `v<版>` と GitHub のリリース（説明は CHANGELOG.md のその版）を作る（数分）。版の変わらないマージでは動かない。
+3. 途中で失敗したら、原因を直してから **Actions > Publish npm > Run workflow**（main）。npm に版があれば公開を飛ばし、リリースだけ作る。
+
+公開済みかどうかは npmjs.com で調べるので、同じ版を二度出すことはありません。
+
+### トークンを使わない公開（trusted publishing）
+
+npm は 2 段階認証を飛ばすトークンでの CI からの公開を 2027 年 1 月ごろにやめる予定なので、`publish-npm` は npm の trusted publishing（OIDC）で公開します（`id-token: write`、Node 24。`packages/app/package.json` の `repository.url` はそのための必須条件）。npm 側の設定は 1 回だけ:
+
+1. npmjs.com で **yojitsu-navi > Settings > Trusted publishing** の **GitHub Actions** を選ぶ。
+2. Organization or user・Repository にこのリポジトリの持ち主と名前、Workflow filename に `publish-npm.yml` を入れる（大文字・小文字も同じに）。Environment name は空のまま。
+3. **Allowed actions** で `npm publish` も許可して保存する（許可しないと仮公開だけになり、毎回 npm での承認が要る）。
+
+設定から 2 日以内に 1 回公開しないと設定が無効になるので、版上げ PR をマージする直前に行う（無効になったら消して作り直す）。trusted publishing で公開できたら、Secrets の `NPM_TOKEN` を消し、パッケージの Settings > Publishing access を「Require two-factor authentication and disallow tokens」にしてよい（trusted publishing はそのまま使える）。
 
 ## 変更履歴の書き方
 
@@ -37,8 +49,9 @@ npm パッケージ `yojitsu-navi` を npmjs.com に公開する手順です。�
 
 | 症状 | 原因と対処 |
 |---|---|
-| 「タグ … と … の version が一致しません」 | タグの版と package.json が違う。Release とタグを消して、正しい版で作り直す |
+| 「npmjs.com を確かめられませんでした」 | npm の障害など。時間をおいて Run workflow でやり直す |
 | `npm publish` が 403 | 同じ版が公開済み（上書きできない）か、トークンに書き込み権限がない |
-| `npm publish` が 401 / `ENEEDAUTH` | `NPM_TOKEN` が未設定か期限切れ。作り直して Secrets を更新する |
+| `npm publish` が 401 / `ENEEDAUTH` / `EOTP` | `NPM_TOKEN` が未設定・期限切れ・2 段階認証を飛ばさない設定。作り直して Secrets を更新するか、trusted publishing に切り替える |
+| `gh release create` が 403 | リポジトリの設定（ルールセットなど）が Actions のタグ作成を止めている。npm には公開済みなので、設定を直して Run workflow |
 
 公開した版は 72 時間を過ぎると取り消せません（npm の決まり）。中身は `npm run app:pack` で `.tgz` を作って確かめられます。

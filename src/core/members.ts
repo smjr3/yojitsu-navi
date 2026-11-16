@@ -100,7 +100,7 @@ export function buildMemberMonths(
     if (from > to) continue;
     for (const month of monthRange(from, to)) {
       const acc = cellOf(a.memberId, month, a.contractId);
-      // 開始日・終了日のある端の月は営業日で日割り（§121）
+      // 開始日・終了日のある端の月は営業日で日割り（§123）
       acc.allocation += a.allocation * periodShareAt(a, month, holidays);
       acc.assignmentCount += 1;
     }

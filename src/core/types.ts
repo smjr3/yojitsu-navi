@@ -295,7 +295,7 @@ export interface Assignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 開始日・終了日（任意の列 start_date / end_date。§121）。端の月は営業日で日割り。省略 = 月の初めから・終わりまで */
+  /** 開始日・終了日（任意の列 start_date / end_date。§123）。端の月は営業日で日割り。省略 = 月の初めから・終わりまで */
   startDate?: string;
   endDate?: string;
   /** 配分人月（0 以上。1.0 = その月の営業日ぶんの時間。§114。1.0 超も可） */
@@ -309,7 +309,7 @@ export interface OutsidePlan {
   type: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 開始日・終了日（任意。§121。アサインと同じ） */
+  /** 開始日・終了日（任意。§123。アサインと同じ） */
   startDate?: string;
   endDate?: string;
   /** 人月（0 以上。1.0 超も可） */

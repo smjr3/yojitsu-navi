@@ -1219,8 +1219,8 @@ GitHub Actions の無料枠を使い切ったため、CI の分数を減らす�
 ## 83. npmjs.com に公開する（2026-11-02 依頼者）
 §82 の質問に「npmjs.com にも公開」、ライセンスは「MIT」と回答。社内 GitLab の Package Registry への公開（§43）も残す。
 - ライセンスは MIT（ルートの `LICENSE`。著作権者は「yojitsu-navi contributors」と書き、個人名・年を書かない）。`core:build`・`app:build` がパッケージにも写す。画面フォントは SIL OFL 1.1 のまま（§46）。
-- 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
-- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44）。npm のユーザー名も個人名・会社名にしない。
+- 公開は GitHub Actions の `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）だけ（→ §121 で版上げのマージから自動で公開・タグ・リリース）。タグ `core-v<版>`／`app-v<版>` で、版とタグの一致・型チェック・テスト・ビルドのあと `npm publish --access public`。認証は Secrets の `NPM_TOKEN`。`scripts/check-publish.mjs` は npmjs.com への公開を `YOJITSU_PUBLIC_PUBLISH=1`（このジョブ）のときだけ通す（手元の PC からうっかり公開しない）。
+- `--provenance` は付けない（npm のページに GitHub のアカウント名が出るため）。`repository`・`author` も入れない（§44。→ §121 で `repository` だけ入れる）。npm のユーザー名も個人名・会社名にしない。
 - `@yojitsu-navi/core` は npm の Organization `yojitsu-navi`（無料）が要る。手順は `docs/RELEASE.md`。
 
 ## 84. パッケージを 1 つにする（2026-11-02 依頼者）
@@ -1919,7 +1919,7 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
   - リソース計画: セルの色（§41）と「1.0 超 n か月」のチップ・グラフの「1.0超 n人」（§58・§115）は、稼働できる量を超えたもので数える。グラフの「人数 × 1.0」は稼働できる量の合計。セルのマウスの吹き出しに「在籍 n / m 営業日（x 人月まで）」。名前の横の不在のチップは「不在 YYYY年M月D日」。計画なし（§116）は、不在になる日より前に在籍していればその月も対象。
   - 体制図の負荷の色（§41）も稼働できる量で判定する。
   - メンバー一覧・詳細の不在のチップは日付まで。詳細の所属の変遷の在籍の列は「不在（YYYY年M月D日から）」。
-  - マスタ編集のメンバー: 行の編集の「適用開始日」の 1 欄で日付まで入れる（§121。月の初日なら `status_date` は空。台帳の一覧には出さず、在籍の列に「D日から」と添える。先の変更の予告は「YYYY年M月D日〜 不在」）。列の無いファイルは月の途中の日を入れたときだけ見出しの末尾に足す。「＋ 変更」で前の行を写すときは日付を写さない（翌月の 1 日）。
+  - マスタ編集のメンバー: 行の編集の「適用開始日」の 1 欄で日付まで入れる（§123。月の初日なら `status_date` は空。台帳の一覧には出さず、在籍の列に「D日から」と添える。先の変更の予告は「YYYY年M月D日〜 不在」）。列の無いファイルは月の途中の日を入れたときだけ見出しの末尾に足す。「＋ 変更」で前の行を写すときは日付を写さない（翌月の 1 日）。
 - 検証: 不在になる日を書いた月は、その日からの作業実績も `WORKLOG_AFTER_LEFT`（前日までは警告しない）。
 - 人事データの取り込み（§20.2）は `status_date` を書き換えず、足す行には引き継がない。
 - 変えない: 実績の計算（作業実績はそのまま数える）、今月の残り（§113。計画 − 実績）、取り込み対象者（§91。1 か月でも在籍していれば対象）。
@@ -1949,18 +1949,28 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - すべて本体に入っていれば「取り下げてください」と出す。MR でファイルを消した・読めないファイルがあれば載せ直せない（GitLab で直す）。
 - デモ（§29）では本体が変わらないので競合は起きず、ボタンは出ない。
 
-## 121. アサイン・運用保守以外の予定を日付で指定する（2026-11-16 依頼者）
+
+## 121. リリースを自動で終わらせる（2026-11-16 依頼者）
+「リリースとかも勝手に終わらせてほしい」への対応。§83 のタグの手作り（GitHub の Releases でタグ `v<版>` を作る）をやめる。
+- `publish-npm`（`.github/workflows/publish-npm.yml` → `scripts/ci/publish-npm.mjs`）は、`main` の `packages/app/package.json` が変わったとき（版を上げる PR のマージ）と手動（Run workflow）で動く。タグの push では動かない。
+- 最初に、その版が npmjs.com にあるか（認証なしで読む）と GitHub のリリースがあるかだけを調べ、両方あれば依存も入れずに終わる（Actions の時間を使わない）。無ければ型チェック・テスト・ビルド → `npm publish` → タグ `v<版>` とリリース（`gh release create`、説明は CHANGELOG.md のその版。`scripts/lib/release.mjs` の `releaseNotes()`）。済んだ分は飛ばすので、失敗しても Run workflow で残りだけやり直せる。
+- 版上げは `npm run version:bump -- patch|minor|major|<x.y.z>`（`scripts/bump-version.mjs`）。ルートと `packages/app` の `package.json`・`package-lock.json` の版をそろえ、CHANGELOG.md の「## 次の版」を「## <版>」にする（無ければ止まる）。開発元だけで使う（利用環境に配らない）。
+- 認証は npm の trusted publishing（OIDC、`id-token: write`、Node 24）。npm 側の設定が済むまでは Secrets の `NPM_TOKEN`（2 段階認証を飛ばすトークンは CI からの公開が 2027 年 1 月ごろに終わる予定）。trusted publishing の設定で「Allowed actions」に `npm publish` を許可し、承認なしで公開する（依頼者 2026-11-16、npm での毎回の承認より手を介さないほうを選んだ）。provenance は付けない（`NPM_CONFIG_PROVENANCE=false`、§83）。
+- `packages/app/package.json` の `repository.url` はこのリポジトリ（trusted publishing の必須条件で、npm のページにリポジトリが出る。依頼者 2026-11-16 了承。アカウント名を書かない決まりの唯一の例外）。`author`・`homepage`・`bugs` は今までどおり入れない。template（利用環境）には入らない。
+- 再発防止: `tests/unit/release.test.ts`（版の決め方・見出しの書き換え・リリースの説明・ワークフローの起動条件と権限）、`tests/integration/app-package.test.ts`（`repository` はこのリポジトリの URL だけ）。
+
+## 123. アサイン・運用保守以外の予定を日付で指定する（2026-11-16 依頼者）
 
 依頼: 「いなくなる日だけじゃなくてアサイン日とか、全てを月次ではなく日付指定するようにできるか」「アサインも日割りで」「前の在籍みたいに、日付入れる箇所が複数あるのが気持ち悪いので、それを排除したい」「月選んでも日は入るようにして一応」。案件の契約期間・異動・単価は月のまま（依頼者「一旦月次で」）。
 
-### 121.1 データ
+### 123.1 データ
 - `assignments.csv`・`outside-plans.csv` に任意の列 `start_date`・`end_date`（`YYYY-MM-DD`）。`start_date` は `start_month` の月の中、`end_date` は `end_month` の月の中の日付だけ使う。空・列なし = 月の初めから・終わりまで（これまでどおり）。
   - 月の初日の `start_date`・月の末日の `end_date` は書かない（画面は空にする。書いてあっても日割りしない）。
   - 別の月の日付・形式違いはエラー `PERIOD_DATE_INVALID`、開始日が終了日より後はエラー `PERIOD_DATE_INVERTED`（その行の値を直す）。
   - 新しく作るファイルの見出しには入れない。画面で月の途中の日を入れた行が出たときだけ見出しの末尾に足す（今のファイルはそのまま読める。本番側の作業なし）。
 - 月の列は残す（月ごとの集計・期間の分割・コンフリクト軽減 §120 の仕組みを変えないため）。
 
-### 121.2 日割り
+### 123.2 日割り
 ```
 端の月（start_date / end_date のある月）の人月 = 入れた人月 × 期間に入る営業日 ÷ その月の営業日
 営業日 = 土日・holidays.csv（行の無い年は国民の祝日）を除いた日（§9）。営業日の無い月は暦日
@@ -1969,7 +1979,7 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - 運用保守以外の予定の「同じ人・同じ種別・同じ月の重なり」（`OUTSIDE_OVERLAP`）は日付で比べる（13 日まで・16 日からは重ならない）。リソース計画の変更の履歴でも重なりと出さない。
 - 変えない: 実績（作業実績はそのまま数える）、時間で入れた計画の換算（開始月の 1 人月の時間。§114）、不在の月の稼働の判定（§35）。
 
-### 121.3 画面
+### 123.3 画面
 - 計画を追加・行の修正（リソース計画・マスタ編集）: 開始・終了は**日付の 1 欄**（`type="date"`。「開始日」「終了日」）。月の欄と日付の欄に分けない。月の行は開始 = 1 日・終了 = 月末を入れて出す。保存は月の列と、月の初日・末日でないときだけ日付の列。案件の契約の切り替わりで行を分けるとき（§31.3）は、入れた期間の最初・最後の行にだけ日付を付ける。修正の確認は「開始日: A → B」の 1 行。
 - メンバーの「適用開始日」も同じ 1 欄（`effective_from` と `status_date`。§119）。月の途中の日は在籍・不在の切り替えにだけ効く（所属・役職は月の初めから）。
 - 単価・組織・案件・目標の月の欄は月のまま。リソース計画の「＋ 変更」（何月から何人月）とセルの修正も月単位。

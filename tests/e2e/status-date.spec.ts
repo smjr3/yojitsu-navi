@@ -2,7 +2,7 @@
  * 退職・休みなどを日付で指定する（SPEC §119。members.csv の任意列 status_date）
  * - リソース計画: 不在のチップに日付、その月の吹き出しに在籍の営業日と稼働できる量
  * - メンバー詳細: 不在のチップに日付、所属の変遷の在籍の列に「（日付から）」
- * - マスタ編集: 行の編集の「適用開始日」（日付 1 欄。§121）、台帳の在籍の列に添える。「＋ 変更」では写さない
+ * - マスタ編集: 行の編集の「適用開始日」（日付 1 欄。§123）、台帳の在籍の列に添える。「＋ 変更」では写さない
  * - 390px・ダークで横スクロール無し
  */
 import type { Page } from "@playwright/test";
@@ -49,7 +49,7 @@ test("メンバー詳細: 不在のチップと所属の変遷に日付", async 
   await expect(page.locator(".yn-member-history")).toContainText("不在（2026年6月6日から）");
 });
 
-test("マスタ編集: 適用開始日の 1 欄で日付まで入れ、台帳の在籍の列に添える。「＋ 変更」では写さない（§121）", async ({ page }) => {
+test("マスタ編集: 適用開始日の 1 欄で日付まで入れ、台帳の在籍の列に添える。「＋ 変更」では写さない（§123）", async ({ page }) => {
   await gotoPage(page, "/masters");
   await expect(group(page, LEAVER)).toContainText("6日から");
   const d = page.locator("dialog.yn-me-dialog[open]");

@@ -19,7 +19,7 @@ export interface PlanAssignment {
   contractId: string;
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 開始日・終了日（§121。端の月は営業日で日割り） */
+  /** 開始日・終了日（§123。端の月は営業日で日割り） */
   startDate?: string;
   endDate?: string;
   /** 数値でなければ NaN（合計には 0 として数える） */
@@ -152,7 +152,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
   const totals = ms.map(() => 0);
   const rows: PlanMemberRow[] = ids.map((memberId) => {
     const list = (byMember.get(memberId) ?? []).slice().sort((x, y) => (x.contractId < y.contractId ? -1 : x.contractId > y.contractId ? 1 : x.startMonth < y.startMonth ? -1 : x.startMonth > y.startMonth ? 1 : 0));
-    // 開始日・終了日のある端の月は営業日で日割り（§121）
+    // 開始日・終了日のある端の月は営業日で日割り（§123）
     const monthly = ms.map((m) => list.reduce((s, a) => (a.startMonth <= m && m <= a.endMonth && Number.isFinite(a.allocation) ? s + a.allocation * periodShareAt(a, m, holidays) : s), 0));
     monthly.forEach((v, i) => (totals[i] = (totals[i] as number) + v));
     let last: MemberRecord | null = null;
@@ -310,7 +310,7 @@ export function contractsCover(contracts: readonly ContractPeriod[], from: YearM
 export interface AllocationPiece {
   startMonth: YearMonth;
   endMonth: YearMonth;
-  /** 開始日・終了日（§121。CSV の値。空・省略 = 月の初めから・終わりまで） */
+  /** 開始日・終了日（§123。CSV の値。空・省略 = 月の初めから・終わりまで） */
   startDate?: string;
   endDate?: string;
   /** CSV に書く人月の文字列 */
@@ -337,11 +337,11 @@ export function editMonthAllocation(row: AllocationPiece, month: YearMonth, valu
   const until = scope === "month" ? month : row.endMonth;
   pieces.push({ startMonth: month, endMonth: until, allocation: value.trim() });
   if (until < row.endMonth) pieces.push({ startMonth: addMonths(until, 1), endMonth: row.endMonth, allocation: row.allocation });
-  // 開始日・終了日（§121）は、元の行の端の月を引き継いだ部分に残す
+  // 開始日・終了日（§123）は、元の行の端の月を引き継いだ部分に残す
   return pieces.filter((p) => !isZeroAllocation(p.allocation)).map((p) => withEdgeDates(p, row));
 }
 
-/** 元の行 row の開始日・終了日を、同じ端の月を持つ部分 p に付ける（§121。月が変わった端の日付は消す） */
+/** 元の行 row の開始日・終了日を、同じ端の月を持つ部分 p に付ける（§123。月が変わった端の日付は消す） */
 function withEdgeDates(p: AllocationPiece, row: AllocationPiece): AllocationPiece {
   const sd = p.startMonth === row.startMonth ? (row.startDate ?? "").trim() : "";
   const ed = p.endMonth === row.endMonth ? (row.endDate ?? "").trim() : "";
@@ -366,7 +366,7 @@ export function mergeAdjacent<T extends AllocationPiece & { id: string }>(rows: 
   for (const r of sorted) {
     const g = groups[groups.length - 1];
     const prev = g?.[g.length - 1];
-    // 月の途中で終わる・始まる行（§121）とはまとめない（まとめると日割りの月が丸 1 か月になる）
+    // 月の途中で終わる・始まる行（§123）とはまとめない（まとめると日割りの月が丸 1 か月になる）
     if (g && prev && addMonths(prev.endMonth, 1) === r.startMonth && sameAllocation(prev.allocation, r.allocation) && !(prev.endDate ?? "").trim() && !(r.startDate ?? "").trim()) g.push(r);
     else groups.push([r]);
   }

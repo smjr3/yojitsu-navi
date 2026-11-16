@@ -72,7 +72,7 @@ test("リソース計画: 時間で入力すると人月に直して保存し、
   await pickCombo(d.locator("#yn-me-f-contract_id"), "倉庫管理");
   await d.locator("#yn-me-f-start_month").fill("2026-11-01");
   await d.locator("#yn-me-f-end_month").fill("2027-03-31");
-  // 終了日の説明は計画用（目標の「累計で判定」は出さない。§121）
+  // 終了日の説明は計画用（目標の「累計で判定」は出さない。§123）
   await expect(d.locator("#yn-me-f-end_month-hint")).toHaveText("この日まで（月の途中は営業日で日割り）");
   await d.locator("#yn-me-f-allocation-unit").selectOption("hours");
   // 1 人月の時間は開始月の営業日数 × 8h（§114。ダミーの祝日表で 2026-11 は 19 日 = 152h）

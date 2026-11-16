@@ -21,7 +21,7 @@ export interface ForecastContext {
   monthHours: MonthHours;
   /** 全契約のアサイン（契約IDで絞って使う） */
   assignments: readonly Assignment[];
-  /** 祝日（開始日・終了日のある端の月の日割り。§121）。省略時は土日だけ除く */
+  /** 祝日（開始日・終了日のある端の月の日割り。§123）。省略時は土日だけ除く */
   holidays?: HolidayLookup;
 }
 
@@ -46,7 +46,7 @@ export function assignmentPlanOf(ctx: ForecastContext, contract: Contract): Assi
         if (!(a.startMonth <= month && month <= a.endMonth)) continue;
         if (!Number.isFinite(a.allocation)) continue;
         const rate = rateFor(ctx.masters, a.memberId, month);
-        // 開始日・終了日のある端の月は営業日で日割り（§121）
+        // 開始日・終了日のある端の月は営業日で日割り（§123）
         const allocation = a.allocation * periodShareAt(a, month, ctx.holidays ?? []);
         const hours = allocation * ctx.monthHours(month);
         lines.push({ month, memberId: a.memberId, allocation, hours, hourlyRate: rate.hourlyRate, amount: roundYen(hours * rate.hourlyRate) });

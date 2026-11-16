@@ -93,7 +93,9 @@ describe("パッケージの中身", () => {
     expect(pkgJson.version).toBe(rootJson.version);
     expect(pkgJson.dependencies ?? {}).toEqual({});
     expect(pkgJson.bin).toEqual({ "yojitsu-navi": "bin/yojitsu-navi.mjs" });
-    for (const k of ["author", "repository", "homepage", "bugs", "publishConfig"]) expect(pkgJson[k]).toBeUndefined();
+    for (const k of ["author", "homepage", "bugs", "publishConfig"]) expect(pkgJson[k]).toBeUndefined();
+    // repository は npm の trusted publishing の必須条件なので、このリポジトリの URL だけを入れる（SPEC §121）
+    expect(pkgJson.repository).toEqual({ type: "git", url: expect.stringMatching(/^git\+https:\/\/github\.com\/[^/]+\/yojitsu-navi\.git$/) });
   });
 
   it("入るのは bin・lib・dist・template・sample・README・LICENSE だけで、利用環境に配るファイルが揃っている", () => {

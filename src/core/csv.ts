@@ -278,7 +278,7 @@ export function applyCustomerTeams(contracts: Contract[], rows: readonly Custome
   }
 }
 
-/** 期間の開始日・終了日（任意の列 start_date / end_date。§121）。空なら付けない */
+/** 期間の開始日・終了日（任意の列 start_date / end_date。§123）。空なら付けない */
 function periodDateCells(r: { get(name: string): string }): { startDate?: string; endDate?: string } {
   const s = r.get("start_date").trim();
   const e = r.get("end_date").trim();
