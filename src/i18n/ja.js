@@ -878,6 +878,8 @@ export default {
     colTotal: "累計",
     colPlan: "計画",
     colPerDay: "残り/日",
+    colRemaining: "残り",
+    totalRow: "合計（{n}人）",
     overPlan: "超過",
   },
 

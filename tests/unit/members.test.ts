@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { aggregate } from "../../src/core/aggregate.js";
 import { buildModel } from "../../src/core/model.js";
-import { aggregateMembers, memberBaseMonth, memberMonthlySeries, memberRateHistory, memberRecordsOf } from "../../src/core/members.js";
+import { aggregateMembers, memberBaseMonth, memberMonthlySeries, memberRateHistory, memberRecordAt, memberRecordsOf } from "../../src/core/members.js";
 import type { Dataset, MemberMonth, Model } from "../../src/core/types.js";
 import { assignment, contract, dataset, member, rate, rule, team, weekdayHours, worklog } from "./fixtures.js";
 
@@ -341,5 +341,21 @@ describe("memberRateHistory / memberRecordsOf", () => {
     // 未登録メンバーは全期間（単価なし）
     expect(memberRateHistory(ds, "M99", { from: "2026-01", to: "2026-03" })).toEqual([{ from: "2026-01", to: "2026-03", hourlyRate: 0, rateSource: null, rateMissing: true, title: null }]);
     expect(memberRecordsOf(ds as unknown as Model, "M1").map((m) => m.effectiveFrom)).toEqual(["2025-10", "2026-07"]);
+  });
+});
+
+describe("memberRecordAt（表の役職・所属組織の列。§124）", () => {
+  const members = [
+    member({ memberId: "M1", title: "SE", effectiveFrom: "2030-04" }),
+    member({ memberId: "M1", title: "PL", department: "第二部", effectiveFrom: "2030-10" }),
+  ];
+  const model = { members };
+  it("その月に有効な行", () => {
+    expect(memberRecordAt(model, "M1", "2030-09")?.title).toBe("SE");
+    expect(memberRecordAt(model, "M1", "2030-10")?.department).toBe("第二部");
+  });
+  it("まだ有効な行が無い月は最も早い行、マスタに無ければ null", () => {
+    expect(memberRecordAt(model, "M1", "2030-01")?.title).toBe("SE");
+    expect(memberRecordAt(model, "MX", "2030-10")).toBeNull();
   });
 });

@@ -11,13 +11,15 @@
  *               sublabel?: 見出しの 2 行目（母集団の注記など。幅を増やさずに補足する）,
  *               filter?: "values"|"range"|"date"|false（見出しの絞り込み。既定は数値列 range、値がすべて年月・日付の列 date、それ以外 values）, filterValue?(row) -> string|string[],
  *               dateValue?(row) -> "YYYY-MM"|"YYYY-MM-DD"|[from, to]（日付の絞り込みに使う値。期間の列は [開始, 終了] で、重なれば残す）,
- *               rangeUnit?: 範囲の絞り込みの単位の表示（既定は型から。リソース計画の「人月」など） }],
+ *               rangeUnit?: 範囲の絞り込みの単位の表示（既定は型から。リソース計画の「人月」など）,
+ *               cellClass?(row) -> string（セルに足す class。日ごとの濃さなど）, headClass?: string（見出しと合計行のセルに足す class）, headTitle?: string（見出しの title）,
+ *               menu?: false（「列」に出さず、常に末尾に出す列。日ごとの列など §124） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
  *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
  *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
  *   filter?: false（列ごとの絞り込みを付けない）,
- *   maxHeight?: px, toolbar?: Node
+ *   maxHeight?: px, toolbar?: Node, className?: string（table に足す class）
  * })
  * 列の表示・並び順: caption があり列が 3 つ以上なら、ツールバーの「列」で利用者が変えられる（先頭の列は固定。§106）。
  * 文字の列（type "text"、文字だけのセル）は上限の幅で「…」にし、全文を title に出す。
@@ -408,23 +410,27 @@ export function dataTable({
   toolbar = null,
   id = null,
   filter = true,
+  className = null,
 }) {
   const baseCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   // 列の表示・並び順（§106）。先頭（名前）の列は固定。画面と表ごとにこのブラウザに覚える
   const colPrefsId = caption && baseCols.length >= 3 ? `${location.pathname}:${caption}` : null;
   let colPrefs = colPrefsId ? loadColumnPrefs(colPrefsId) : { order: [], hidden: [], shown: [] };
   // 選べる列（optional）は「列」でチェックしたときだけ出す。「列」が無い表では出さない
+  // menu: false の列（日ごとの列など）は「列」に出さず、並べ替えもせず末尾に置く
   const arrange = (cols) => {
     if (!colPrefsId || cols.length === 0) return cols.filter((c) => !c.optional);
     const lead = cols[0] === baseCols[0] ? [cols[0]] : [];
-    return [...lead, ...arrangeColumns(cols.slice(lead.length), colPrefs)];
+    const rest = cols.slice(lead.length);
+    return [...lead, ...arrangeColumns(rest.filter((c) => c.menu !== false), colPrefs), ...rest.filter((c) => c.menu === false)];
   };
   let visibleCols = arrange(baseCols);
   // Excel も画面の列の並び・表示に合わせる。Excel だけの列（exportOnly）と exportAlways の列は画面で隠していても出す
   const exportColsNow = () => {
     const all = columns.filter((c) => !c.hidden && c.export !== false);
     const lead = colPrefsId && all[0] === baseCols[0] ? [all[0]] : [];
-    const ordered = colPrefsId ? [...lead, ...orderColumns(all.slice(lead.length), colPrefs)] : all;
+    const rest = all.slice(lead.length);
+    const ordered = colPrefsId ? [...lead, ...orderColumns(rest.filter((c) => c.menu !== false), colPrefs), ...rest.filter((c) => c.menu === false)] : all;
     const shown = new Set(visibleCols);
     return ordered.filter((c) => c.exportOnly || c.exportAlways || shown.has(c));
   };
@@ -557,7 +563,7 @@ export function dataTable({
     return handle;
   }
 
-  const table = html`<table class="yn-table" id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
+  const table = html`<table class=${className ? `yn-table ${className}` : "yn-table"} id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
   const thead = html`<thead></thead>`;
   const tbody = html`<tbody></tbody>`;
   table.append(thead, tbody);
@@ -594,7 +600,7 @@ export function dataTable({
         const numeric = isNumeric(col);
         const sortable = !tree && col.sortable !== false;
         const active = sortState && sortState.key === col.key;
-        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}`} style=${col.width ? `width:${col.width}` : null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
+        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.headClass ? ` ${col.headClass}` : ""}`} style=${col.width ? `width:${col.width}` : null} title=${col.headTitle ?? null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
           const btn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label: col.label })}>${headLabel(col)}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
           btn.addEventListener("click", () => {
@@ -662,7 +668,7 @@ export function dataTable({
     const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`, "data-key": String(rowKey(row, i)) });
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
-      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}`;
+      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
       const cell = ci === 0 ? h("th", { scope: "row", class: cls }) : h("td", { class: cls });
       let content = cellNode(col, row);
       if (ci === 0) {
@@ -719,7 +725,7 @@ export function dataTable({
       const numeric = isNumeric(col);
       const has = sm[col.key] !== undefined && sm[col.key] !== null;
       const content = ci === 0 ? (sm.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, sm, true);
-      return h("td", { class: `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}` }, content);
+      return h("td", { class: `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.headClass ? ` ${col.headClass}` : ""}` }, content);
     })));
     if (!tfoot.isConnected) table.append(tfoot);
   }
@@ -781,7 +787,7 @@ export function dataTable({
   const colsBtn = colPrefsId
     ? columnsButton({
         id: colPrefsId,
-        columns: baseCols.slice(1).map((c) => ({ key: c.key, label: c.label, optional: !!c.optional })),
+        columns: baseCols.slice(1).filter((c) => c.menu !== false).map((c) => ({ key: c.key, label: c.label, optional: !!c.optional })),
         lead: baseCols[0]?.label ?? null,
         onChange: (prefs) => {
           colPrefs = prefs;

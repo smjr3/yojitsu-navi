@@ -143,19 +143,47 @@ test("今月の進捗: チーム詳細のメンバー×日の表（累計・計�
   const p = dailyProgress(model, daily, teamIds)!;
   const rows = dailyMembers(model, daily, p, teamIds);
   await gotoPage(page, `/team?id=${TEAM}`);
-  const table = section(page).locator("table.yn-dg");
+  const table = section(page).locator("table.yn-dg-table");
   await expect(table.locator("tbody tr")).toHaveCount(rows.length);
   // 日の列は今月の日数
   await expect(table.locator("thead th.yn-dg-day")).toHaveCount(p.points.length);
   const first = rows[0]!;
   const tr = table.locator("tbody tr").first();
-  await expect(tr.locator("td.yn-dg-num").nth(0)).toHaveText(`${Number(first.total.toFixed(2))}h`);
+  const col = async (label: string) => (await table.locator("thead th").allTextContents()).findIndex((t) => t.trim().startsWith(label));
+  await expect(tr.locator("th, td").nth(await col("累計"))).toHaveText(`${Number(first.total.toFixed(2))}h`);
   // 計画を超えた人は「超過」
   const over = rows.filter((r) => r.plan > 0 && r.remaining < 0).length;
-  await expect(table.locator("td.is-over")).toHaveCount(over);
+  await expect(table.locator("tbody td.is-over")).toHaveCount(over);
+  // 合計行
+  await expect(table.locator("tfoot tr")).toHaveCount(1);
   // 全体・案件詳細には出さない
   await gotoPage(page, "/");
-  await expect(section(page).locator("table.yn-dg")).toHaveCount(0);
+  await expect(section(page).locator("table.yn-dg-table")).toHaveCount(0);
+});
+
+test("今月の進捗: メンバー×日の表は他の表と同じく役職・並べ替え・絞り込み・列の設定・Excel（§124）", async ({ page }) => {
+  const p = dailyProgress(model, daily, teamIds)!;
+  const rows = dailyMembers(model, daily, p, teamIds);
+  await gotoPage(page, `/team?id=${TEAM}`);
+  const block = section(page).locator(".yn-table-block").filter({ has: page.locator("table.yn-dg-table") });
+  const table = block.locator("table.yn-dg-table");
+  // 役職の列は最初から出る
+  await expect(table.locator("thead th", { hasText: "役職" })).toHaveCount(1);
+  // 累計で並べ替え（多い順）
+  await table.locator("thead th", { hasText: "累計" }).locator("button.yn-sort").click();
+  const max = Math.max(...rows.map((r) => r.total));
+  await expect(table.locator("tbody tr").first().locator("td").nth(await table.locator("thead th").evaluateAll((ths) => ths.findIndex((t) => t.textContent!.trim().startsWith("累計")) - 1))).toHaveText(`${Number(max.toFixed(2))}h`);
+  // 列の絞り込みの漏斗は名前・役職などにあり、日の列には無い
+  await expect(table.locator("thead th.yn-dg-day .yn-filter-btn")).toHaveCount(0);
+  await expect(table.locator("thead th", { hasText: "役職" }).locator(".yn-filter-btn")).toHaveCount(1);
+  // 「列」に部・課などがあり、日の列は出ない
+  await block.locator(".yn-table-actions button", { hasText: "列" }).click();
+  const pop = page.locator(".yn-cols-pop");
+  await expect(pop).toContainText("事業本部");
+  await expect(pop.locator("label", { hasText: /^\s*1\s*$/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // Excel 出力のボタン
+  await expect(block.locator(".yn-table-actions button", { hasText: "Excel" })).toHaveCount(1);
 });
 
 for (const [w, dark] of [
@@ -180,9 +208,9 @@ for (const [w, dark] of [
     );
     expect(clipped).toBe(0);
     // 名前の列は固定（横に送っても見える）
-    const wrap = section(page).locator(".yn-dg-wrap");
+    const wrap = section(page).locator(".yn-table-wrap").filter({ has: page.locator("table.yn-dg-table") });
     await wrap.evaluate((el) => (el.scrollLeft = el.scrollWidth));
-    const name = section(page).locator("tbody th.yn-dg-name").first();
+    const name = wrap.locator("tbody th").first();
     const nb = (await name.boundingBox())!;
     const wb = (await wrap.boundingBox())!;
     expect(nb.x).toBeGreaterThanOrEqual(wb.x - 1);

@@ -244,6 +244,18 @@ function memberIndexOf(members: readonly MemberRecord[]): EffectiveIndex<MemberR
   return index;
 }
 
+/**
+ * 月 m のメンバーのレコード（その月に有効な行。まだ有効な行が無ければ最も早い行、マスタに無ければ null）。
+ * 表の役職・区分・所属組織の列（§124）に使う。氏名の memberNameAt と同じ選び方
+ */
+export function memberRecordAt(model: Pick<Model, "members">, memberId: string, month: YearMonth): MemberRecord | null {
+  const index = memberIndexOf(model.members);
+  const rec = index.at(memberId, month);
+  if (rec) return rec;
+  if (!index.has(memberId)) return null;
+  return memberRecordsOf(model, memberId)[0] ?? null;
+}
+
 function emptyContractTotals(contractId: string, outsideType?: string): MemberContractTotals {
   return { contractId, ...(outsideType !== undefined ? { outsideType } : {}), plannedHours: 0, plannedCost: 0, actualHours: 0, actualCost: 0, variance: 0, utilization: null, unplannedHours: 0, unplannedCost: 0, assignedMonths: 0, months: [] };
 }

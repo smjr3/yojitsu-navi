@@ -11,6 +11,7 @@ import { maxFractionFormat } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
 import { chartColors, chartLegend } from "./charts.js";
 import { chartFigure } from "./chart-zoom.js";
+import { memberInfoColumns } from "./analysis.js";
 import { statTile } from "./kpi.js";
 import { sectionTitle } from "./layout.js";
 import { dataTable } from "./table.js";
@@ -203,39 +204,81 @@ export function dailyTable(p, { unit, exportName }) {
 const h1 = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
 
 /**
- * メンバー×日の時間（チーム詳細）。名前・累計・計画・残りの 1 日あたりの右に今月の日の列。
- * 日の列は横に送れる（名前の列は固定）。計画を超えた人は「超過」を赤で出す。
+ * メンバー×日の時間（チーム詳細）。名前・役職・累計・計画・残りの 1 日あたりの右に今月の日の列。
+ * 他の表と同じ dataTable（並べ替え・列の絞り込み・列の設定・Excel。§124）。日の列は「列」に出さず常に末尾（名前の列は横に送っても固定）。
+ * 計画を超えた人は「超過」を赤で出す。
  */
-export function dailyMemberTable(p, rows, { nameOf, hrefOf }) {
+export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = null }) {
   if (rows.length === 0) return null;
+  const month = p.month;
   const off = (d) => !p.points[d - 1].businessDay;
-  const cell = (v, d) => {
-    if (v === null) return html`<td class=${`yn-dg-day is-future${off(d) ? " is-off" : ""}`}></td>`;
-    const level = v <= 0 ? 0 : Math.min(4, Math.ceil(v / 2.5));
-    return html`<td class=${`yn-dg-day yn-dg-l${level}${off(d) ? " is-off" : ""}`}>${v > 0 ? h1.format(v) : ""}</td>`;
+  const plan = (r) => (r.plan > 0 ? r.plan : null);
+  const isOver = (r) => r.plan > 0 && r.remaining < 0;
+  const perDay = (r) => (r.plan > 0 && r.perDayRemaining !== null ? Math.round(r.perDayRemaining * 10) / 10 : null);
+  const data = rows.map((r) => ({ ...r, key: r.memberId, memberName: nameOf(r.memberId) }));
+  const dayCols = p.points.map((x, i) => ({
+    key: `d${x.day}`,
+    label: String(x.day),
+    exportLabel: fmt(T.table.exportHours, { label: fmt(T.daily.tipDateValue, { month: monthJa(month), d: x.day, off: "" }) }),
+    type: "hours",
+    menu: false,
+    sortable: false,
+    filter: false,
+    headClass: `yn-dg-day${x.businessDay ? "" : " is-off"}`,
+    headTitle: fmt(T.daily.tipDateValue, { month: monthJa(month), d: x.day, off: x.businessDay ? "" : T.daily.offDay }),
+    get: (r) => r.hours[i],
+    render: (r) => (r.hours[i] > 0 ? h1.format(r.hours[i]) : ""),
+    cellClass: (r) => {
+      const v = r.hours[i];
+      if (v === null) return `yn-dg-day is-future${off(x.day) ? " is-off" : ""}`;
+      const level = v <= 0 ? 0 : Math.min(4, Math.ceil(v / 2.5));
+      return `yn-dg-day yn-dg-l${level}${off(x.day) ? " is-off" : ""}`;
+    },
+  }));
+  const columns = [
+    { key: "memberName", label: T.daily.colMember, type: "text" },
+    ...memberInfoColumns(model, month, { shown: ["title"], team: true }),
+    { key: "total", label: T.daily.colTotal, type: "hours" },
+    { key: "plan", label: T.daily.colPlan, type: "hours", get: plan, summaryDash: true },
+    { key: "remaining", label: T.daily.colRemaining, type: "hours", optional: true, get: (r) => (r.plan > 0 ? r.remaining : null) },
+    {
+      key: "perDay",
+      label: T.daily.colPerDay,
+      type: "hours",
+      get: perDay,
+      render: (r) => (perDay(r) === null ? "—" : isOver(r) ? T.daily.overPlan : formatHours(perDay(r))),
+      cellClass: (r) => `yn-dg-last${isOver(r) ? " is-over" : ""}`,
+      headClass: "yn-dg-last",
+      summary: false,
+    },
+    ...dayCols,
+  ];
+  const summary = (shown) => {
+    const hours = p.points.map((_, i) => {
+      let any = false;
+      let sum = 0;
+      for (const r of shown) {
+        if (r.hours[i] === null) continue;
+        any = true;
+        sum += r.hours[i];
+      }
+      return any ? Math.round(sum * 100) / 100 : null;
+    });
+    const total = Math.round(shown.reduce((a, r) => a + r.total, 0) * 100) / 100;
+    const planSum = shown.reduce((a, r) => a + r.plan, 0);
+    return { name: fmt(T.daily.totalRow, { n: shown.length }), total, plan: planSum, remaining: planSum > 0 ? planSum - total : null, hours };
   };
-  return html`<div class="yn-card yn-dg-wrap" tabindex="0" role="region" aria-label=${T.daily.membersTitle}>
-    <table class="yn-dg">
-      <thead><tr>
-        <th scope="col" class="yn-dg-name">${T.daily.colMember}</th>
-        <th scope="col" class="yn-dg-num">${T.daily.colTotal}</th>
-        <th scope="col" class="yn-dg-num">${T.daily.colPlan}</th>
-        <th scope="col" class="yn-dg-num yn-dg-last">${T.daily.colPerDay}</th>
-        ${p.points.map((x) => html`<th scope="col" class=${`yn-dg-day${x.businessDay ? "" : " is-off"}`} title=${fmt(T.daily.tipDateValue, { month: monthJa(p.month), d: x.day, off: x.businessDay ? "" : T.daily.offDay })}>${x.day}</th>`)}
-      </tr></thead>
-      <tbody>${rows.map((r) => {
-        const over = r.plan > 0 && r.remaining < 0;
-        const href = hrefOf(r.memberId);
-        return html`<tr>
-          <th scope="row" class="yn-dg-name">${href ? html`<a href=${href}>${nameOf(r.memberId)}</a>` : nameOf(r.memberId)}</th>
-          <td class="yn-dg-num">${formatHours(r.total)}</td>
-          <td class="yn-dg-num">${r.plan > 0 ? formatHours(r.plan) : "—"}</td>
-          <td class=${`yn-dg-num yn-dg-last${over ? " is-over" : ""}`}>${r.plan <= 0 || r.perDayRemaining === null ? "—" : over ? T.daily.overPlan : formatHours(Math.round(r.perDayRemaining * 10) / 10)}</td>
-          ${r.hours.map((v, i) => cell(v, i + 1))}
-        </tr>`;
-      })}</tbody>
-    </table>
-  </div>`;
+  return dataTable({
+    columns,
+    rows: data,
+    caption: T.daily.membersTitle,
+    exportName,
+    className: "yn-dg-table",
+    // 既定は計画の多い順、同じなら時間の多い順（dailyMembers の並び）
+    sort: null,
+    rowHref: (r) => hrefOf(r.memberId),
+    summary,
+  });
 }
 
 /**
@@ -258,7 +301,7 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
       after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName })}</details>`,
     })}
     ${memberRows.length > 0
-      ? html`${sectionTitle(T.daily.membersTitle, fmt(T.daily.membersHint, { date: p.lastDate ?? "—" }))}${dailyMemberTable(p, memberRows, members)}`
+      ? html`${sectionTitle(T.daily.membersTitle, fmt(T.daily.membersHint, { date: p.lastDate ?? "—" }))}${dailyMemberTable(p, memberRows, { ...members, exportName: exportName ? `${exportName}_members` : null })}`
       : null}
   </section>`;
 }

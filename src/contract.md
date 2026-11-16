@@ -16,7 +16,7 @@ import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } 
 import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCosts } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
-import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf } from "./components/analysis.js";
+import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf, memberInfoColumns } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
@@ -274,6 +274,8 @@ if (vm) {
   const columns = [
     { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`, sortValue: (r) => r.memberName },
     { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
+    // 役職・区分・所属組織（「列」で選べる。§124）
+    ...memberInfoColumns(model, treeMonthFor(model, vm.period)),
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "rateText", label: T.breakdown.colRate, type: "text", align: "num", sortValue: (r) => Math.max(...r.rates), hideOnPhone: true, exportLabel: T.contract.rateExportLabel, exportValue: (r) => (r.rates.length === 1 ? r.rates[0] : r.rates.join(" / ")) },
     { key: "amount", label: T.columns.cost, type: "moneyYen" },
