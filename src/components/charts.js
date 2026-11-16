@@ -41,13 +41,13 @@ const hasTarget = (series) => series.some((d) => d.targetCap != null);
 const isPrelimNow = (d) => !d.isActual && d.status === "preliminary" && d.cost > 0;
 const hasPrelimNow = (series) => series.some(isPrelimNow);
 
-let hatchSeq = 0;
 /**
  * 斜線の塗り（今月の速報の実績）。Plot の fill に url(#id) を渡し、描いた svg に pattern を足す。
- * 色だけに頼らず、確定・速報済みの月の実線の棒と見分けられるようにする
+ * 色だけに頼らず、確定・速報済みの月の実線の棒と見分けられるようにする。
+ * id は色で決める（描き直し・テーマの往復で同じ値になる。同じ id の pattern が複数あっても中身は同じ）
  */
 function hatchFill(color) {
-  const id = `yn-hatch-${++hatchSeq}`;
+  const id = `yn-hatch-${color.replace(/[^0-9a-z]/gi, "")}`;
   const attach = (plot) => {
     const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
     if (!svg) return;
