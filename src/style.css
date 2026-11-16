@@ -778,6 +778,13 @@ h3 {
 .yn-chip-icon {
   font-size: calc(10px * var(--yn-fs));
 }
+/* マージ待ちの変更がある対象の印（§126.3）。本体にはまだ入っていないので点線の枠 */
+.yn-chip-pending {
+  background: transparent;
+  color: var(--yn-link);
+  border: 1px dashed currentColor;
+  cursor: help;
+}
 /* ヘルプ（他部署の人。§71）: 応援（塗り）と見分けられるよう枠線だけ */
 .yn-chip-help {
   background: transparent;

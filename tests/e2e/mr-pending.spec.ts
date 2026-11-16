@@ -6,6 +6,7 @@
  * - 広い画面では 1 件を見出しとボタンの 1 段に並べる。390px・ダークでもはみ出さない
  * - 競合ありの MR の「マージ」: 本体の今の内容に載せ直して新しい MR を作り、そのままマージする（§126.2）。
  *   同じ行の重なりがあれば、どちらを残すか選んでから載せ直してマージする
+ * - 編集画面: マージ待ちの変更がある対象（台帳の対象・リソース計画の人）に「マージ待ち」の印（§126.3）
  */
 import type { Page, Route } from "@playwright/test";
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
@@ -59,6 +60,7 @@ async function open(page: Page, mrs: Mr[]): Promise<void> {
     const summary = (m: Mr) => ({ iid: m.iid, title: m.title, source_branch: `masters/20261116-${m.iid}-${m.author}`, target_branch: "main", state: "opened", author: { username: m.author, name: PEOPLE[m.author] }, created_at: `2026-11-${String(m.iid).padStart(2, "0")}T01:00:00Z` });
     if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
     if (url.includes("/merge_requests?")) return json(200, mrs.map(summary));
+    if (url.includes("/diffs?")) return json(200, []);
     const hit = /\/merge_requests\/(\d+)$/.exec(url);
     const m = hit ? mrs.find((x) => x.iid === Number(hit[1])) : null;
     if (m) return json(200, { ...summary(m), user: { can_merge: true }, diff_refs: { base_sha: "b0", head_sha: `h${m.iid}` }, head_pipeline: { status: m.failed ? "failed" : "success" }, has_conflicts: !!m.conflict, detailed_merge_status: m.conflict ? "conflict" : "mergeable" });
@@ -66,7 +68,11 @@ async function open(page: Page, mrs: Mr[]): Promise<void> {
   });
   await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
   await gotoPage(page, "/masters");
+  await settled(page);
 }
+
+/** 一覧と各 MR の内容を読み終わるまで待つ（読み終わると描き直す） */
+const settled = (page: Page) => expect(page.locator('.yn-mr[aria-busy="false"]')).toHaveCount(1);
 
 const panel = (page: Page) => page.locator(".yn-mr");
 const items = (page: Page) => page.locator(".yn-mr-item");
@@ -166,6 +172,7 @@ test.describe("競合ありの MR をマージすると載せ直してマージ�
       const mr = { iid: 8, title: "マスタ更新: data/masters/rates.csv", description: "", source_branch: "masters/20261110-1-suzuki", target_branch: "main", state: "opened", author: { username: "suzuki", name: "鈴木" }, created_at: "2026-11-10T01:00:00Z" };
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
       if (url.includes("/merge_requests?")) return json(200, done ? [] : [mr]);
+      if (url.includes("/diffs?")) return json(200, [{ new_path: "data/masters/rates.csv", old_path: "data/masters/rates.csv" }]);
       if (url.endsWith("/merge_requests/8") && req.method() === "GET") return json(200, { ...mr, user: { can_merge: true }, diff_refs: { base_sha: "b0", head_sha: "h1" }, has_conflicts: true, detailed_merge_status: "conflict" });
       if (url.endsWith("/merge_requests/8") && req.method() === "PUT") return json(200, { ...mr, state: "closed" });
       if (url.endsWith("/merge_requests/8/merge")) return json(406, { message: "Branch cannot be merged" });
@@ -227,5 +234,85 @@ test.describe("競合ありの MR をマージすると載せ直してマージ�
     const content = (calls.find((c) => c.url.endsWith("/repository/commits"))!.body as { actions: Array<{ content: string }> }).actions[0]!.content;
     expect(content).toContain("部長,12500,2025-04");
     expect(content).not.toContain("部長,13000,2025-04");
+  });
+});
+
+test.describe("マージ待ちの変更がある対象の印（§126.3）", () => {
+  const DEMO = { mode: "demo", gitlab: { apiBaseUrl: "https://gitlab.demo.invalid/api/v4", projectId: "demo/yojitsu-navi", targetBranch: "main", commitMode: "mr" } };
+  async function useDemo(page: Page) {
+    await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
+      try {
+        const res = await route.fetch();
+        const json = await res.json();
+        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: DEMO }), headers: { ...res.headers(), "content-type": "application/json" } });
+      } catch (e) {
+        if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
+      }
+    });
+    await page.addInitScript(() => {
+      try {
+        if (!sessionStorage.getItem("__init")) {
+          sessionStorage.setItem("__init", "1");
+          localStorage.setItem("yojitsu-navi:gitlab-demo-role", "leader");
+          sessionStorage.setItem("yojitsu-navi:gitlab-token", "demo");
+        }
+      } catch {}
+    });
+  }
+
+  test("単価を保存すると、その対象（部長）に印。title に作成者とタイトル。マージすると消える", async ({ page }) => {
+    await useDemo(page);
+    await gotoPage(page, "/masters?view=rates");
+    await page.getByRole("button", { name: "CSV で編集" }).click();
+    const area = page.getByRole("textbox", { name: "単価 の CSV" });
+    await area.fill((await area.inputValue()) + "部長,14000,2026-11\n");
+    await page.getByRole("button", { name: "反映", exact: true }).click();
+    await page.getByRole("button", { name: "GitLab に保存（マージリクエストを作成）" }).click();
+    await expect(page.locator(".yn-me-outcome.is-ok")).toContainText("マージリクエストを作成しました");
+    // 表で見る（CSV の編集欄を閉じる）
+    await gotoPage(page, "/masters?view=rates");
+    const chips = page.locator(".yn-me-panel-slot .yn-chip-pending");
+    await expect(chips).toHaveCount(1);
+    await expect(page.locator("tr.yn-me-group", { has: page.locator(".yn-chip-pending") })).toContainText("部長");
+    await expect(chips.first()).toHaveText("マージ待ち");
+    await expect(chips.first()).toHaveAttribute("title", "デモ利用者 さん: マスタ更新: 単価");
+    await items(page).first().getByRole("button", { name: /をマージ$/ }).click();
+    await page.locator("dialog[open]").getByRole("button", { name: "マージする" }).click();
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toBeVisible();
+    await expect(chips).toHaveCount(0);
+  });
+
+  test("リソース計画: アサインを変える MR があれば、その人の行に印", async ({ page }) => {
+    const assign = buildMastersPayload(ROOT_DIR).files.assignments.text;
+    await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
+      try {
+        const res = await route.fetch();
+        const json = await res.json();
+        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG }), headers: { ...res.headers(), "content-type": "application/json" } });
+      } catch (e) {
+        if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
+      }
+    });
+    await page.route(`${GITLAB}/**`, async (route: Route) => {
+      const req = route.request();
+      if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
+      const url = req.url();
+      const json = (status: number, b: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(b) });
+      const mr = { iid: 5, title: "マスタ更新: data/assignments.csv", source_branch: "masters/x", target_branch: "main", state: "opened", author: { username: "suzuki", name: "鈴木" }, created_at: "2026-11-10T01:00:00Z" };
+      if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/merge_requests?")) return json(200, [mr]);
+      if (url.endsWith("/merge_requests/5")) return json(200, { ...mr, user: { can_merge: true }, diff_refs: { base_sha: "b0", head_sha: "h5" }, detailed_merge_status: "mergeable" });
+      if (url.includes("/merge_requests/5/diffs")) return json(200, [{ new_path: "data/assignments.csv", old_path: "data/assignments.csv" }]);
+      if (url.includes("/raw?ref=")) {
+        const ref = new URL(url).searchParams.get("ref");
+        expect(url).toContain("assignments.csv");
+        return route.fulfill({ status: 200, headers: { ...CORS, "content-type": "text/plain" }, body: ref === "h5" ? assign + "M010,C001,2026-12,2027-03,0.2\n" : assign });
+      }
+      return json(404, { message: "404" });
+    });
+    await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
+    await gotoPage(page, "/plan");
+    await expect(page.locator('tr.yn-me-plan-row[data-member="M010"] .yn-chip-pending')).toHaveText("マージ待ち");
+    await expect(page.locator(".yn-me-plan-row .yn-chip-pending")).toHaveCount(1);
   });
 });

@@ -8,7 +8,8 @@
  */
 import { html } from "htl";
 import { T, fmt } from "../i18n/index.js";
-import { closeMergeRequest, fetchCurrentUser, getMergeRequest, gitlabConfigured, listMasterMergeRequests, mergeMergeRequest, mergeRequestFileChanges } from "../core/gitlab.js";
+import { closeMergeRequest, fetchCurrentUser, getMergeRequest, gitlabConfigured, listMasterMergeRequests, mergeMergeRequest, mergeRequestChangedPaths, mergeRequestFileChanges } from "../core/gitlab.js";
+import { pendingKeysOf } from "../core/mrPending.js";
 import { MASTER_FILES, MASTER_FILE_IDS, diffMasterDoc, parseMasterDoc, timeColumnOf } from "../core/masterEdit.js";
 import { docFromCsvText } from "../core/csvEdit.js";
 import { mergeRemade, prepareRemake, rebaseRemake, remakeMergeRequest } from "../core/mrRebase.js";
@@ -138,7 +139,7 @@ export function sortMergeRequests(items, me) {
   return items.map((it, i) => ({ it, i, r: rank(it.detail) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.it);
 }
 
-export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {} }) {
+export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {}, onPending = null }) {
   const el = html`<div class="yn-mr-slot"></div>`;
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-mr-dialog-title"></dialog>`;
   dialog.addEventListener("click", (ev) => ev.target === dialog && dialog.close());
@@ -168,7 +169,8 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     const token = getToken();
     if (token === "") {
       state = { status: "idle", items: [], error: null, notice, busy: null };
-      return render();
+      render();
+      return publishPending();
     }
     const my = ++seq;
     state = { ...state, status: "loading", notice };
@@ -182,21 +184,49 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
       const details = await Promise.all(list.map((m) => getMergeRequest(fetchImpl, cfg, token, m.iid).catch(() => ({ ...m, canMerge: false, headSha: null, baseSha: null, pipelineStatus: null, mergeStatus: null }))));
       if (my !== seq) return;
       const prevOpen = new Set(state.items.filter((i) => i.open).map((i) => i.detail.iid));
-      state = { status: "ok", items: details.map((d) => ({ detail: d, open: prevOpen.has(d.iid), changes: null })), error: null, notice, busy: null };
+      state = { status: "ok", items: details.map((d) => ({ detail: d, open: prevOpen.has(d.iid), changes: null })), error: null, notice, busy: null, loadingChanges: details.length > 0 };
       publishMrCount(details.length);
-      for (const it of state.items) if (it.open) loadChanges(it);
+      render();
+      loadAllChanges(my);
+      return;
     } catch (e) {
       if (my !== seq) return;
       state = { status: "error", items: [], error: { message: e?.message ?? String(e), detail: e?.detail ?? "" }, notice, busy: null };
     }
     render();
+    publishPending();
   }
 
-  async function loadChanges(item) {
-    item.changes = { status: "loading" };
+  /** すべての MR の内容を読む（3 本ずつ）。編集画面の「マージ待ち」の印に使う（§126.3） */
+  async function loadAllChanges(my) {
+    const queue = state.items.filter((it) => !it.changes);
+    state.loadingChanges = queue.length > 0;
+    const worker = async () => {
+      for (let it = queue.shift(); it; it = queue.shift()) {
+        if (my !== seq) return;
+        await loadChanges(it, { quiet: true });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    if (my !== seq) return;
+    state.loadingChanges = false;
     render();
+    publishPending();
+  }
+
+  function publishPending() {
+    if (!onPending) return;
+    const entries = state.status === "ok" ? state.items.filter((it) => it.changes?.status === "ok").map((it) => ({ mr: { iid: it.detail.iid, title: mrTitleText(it.detail.title), author: it.detail.author.name || it.detail.author.username }, files: it.changes.files })) : [];
+    onPending(pendingKeysOf(entries));
+  }
+
+  async function loadChanges(item, { quiet = false } = {}) {
+    item.changes = { status: "loading" };
+    if (!quiet) render();
     try {
-      const changes = await mergeRequestFileChanges(fetchImpl, cfg, getToken(), item.detail, MASTER_FILE_IDS.map(pathOf));
+      const all = MASTER_FILE_IDS.map(pathOf);
+      const changed = await mergeRequestChangedPaths(fetchImpl, cfg, getToken(), item.detail.iid);
+      const changes = await mergeRequestFileChanges(fetchImpl, cfg, getToken(), item.detail, changed ? all.filter((p) => changed.includes(p)) : all);
       item.changes = {
         status: "ok",
         files: changes.map((c) => {
@@ -207,7 +237,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     } catch (e) {
       item.changes = { status: "error", message: e?.message ?? String(e) };
     }
-    render();
+    if (!quiet) render();
   }
 
   function toggle(item) {
@@ -468,6 +498,13 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
   }
 
   function render() {
+    // 描き直してもフォーカスを保つ（内容の読み込みが終わったときなど、操作と関係なく描き直すため）
+    const active = el.contains(document.activeElement) ? document.activeElement?.closest?.("[data-fk]")?.dataset.fk : null;
+    draw();
+    if (active && !el.contains(document.activeElement)) fk(active)?.focus();
+  }
+
+  function draw() {
     if (!enabled()) {
       el.replaceChildren();
       return;
@@ -497,7 +534,7 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
       render();
       fk("mr:list")?.focus();
     };
-    el.replaceChildren(html`<section class=${`yn-me-section yn-mr${n && !open ? " is-folded" : ""}`} aria-labelledby="yn-mr-title">
+    el.replaceChildren(html`<section class=${`yn-me-section yn-mr${n && !open ? " is-folded" : ""}`} aria-labelledby="yn-mr-title" aria-busy=${state.status === "loading" || state.loadingChanges ? "true" : "false"}>
       <div class="yn-mr-bar">
         <div class="yn-title-with-tip"><h2 id="yn-mr-title" class="yn-section-title">${T.mr.title}${n ? html` <span class="yn-mr-count">${fmt(T.mr.countLabel, { n: integer(n) })}</span>` : null}</h2>${infoTip(cfg.mode === "demo" ? `${T.mr.hint} ${T.mr.demoNote}` : T.mr.hint, { label: fmt(T.layout.aboutSection, { title: T.mr.title }) })}</div>
         ${n ? html`<div class="yn-mr-tally">${attention ? html`<span class="yn-chip yn-chip-warn"><span aria-hidden="true">!</span> ${fmt(T.mr.attentionCount, { n: integer(attention) })}</span>` : null}${mineN ? html`<span class="yn-chip yn-chip-neutral">${fmt(T.mr.mineCount, { n: integer(mineN) })}</span>` : null}</div>` : null}

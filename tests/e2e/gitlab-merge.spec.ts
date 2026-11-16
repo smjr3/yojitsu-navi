@@ -216,6 +216,7 @@ test.describe("本物の GitLab API の形（モック）", () => {
       calls.push({ method: req.method(), url, body: req.postData() ? JSON.parse(req.postData()!) : undefined });
       const json = (status: number, body: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(body) });
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/diffs?")) return json(200, [{ new_path: "data/masters/rates.csv", old_path: "data/masters/rates.csv" }]);
       if (url.includes("/merge_requests?")) return json(200, merged ? [] : [{ iid: 7, title: "単価改定", source_branch: "masters/20261028-1-sato", target_branch: "main", state: "opened", author: { username: "suzuki", name: "鈴木" }, created_at: "2026-10-28T01:00:00Z", web_url: "https://gitlab.test/grp/yn/-/merge_requests/7" }]);
       if (url.endsWith("/merge_requests/7")) return json(200, { iid: 7, title: "単価改定", source_branch: "masters/20261028-1-sato", target_branch: "main", author: { username: "suzuki", name: "鈴木" }, web_url: "https://gitlab.test/grp/yn/-/merge_requests/7", user: { can_merge: canMerge }, diff_refs: { base_sha: "b0", head_sha: "h1" }, head_pipeline: { status: "running" }, has_conflicts: false });
       if (url.endsWith("/merge_requests/7/merge")) {
@@ -298,6 +299,7 @@ test.describe("競合ありの MR を最新に載せ直す（§120）", () => {
       const json = (status: number, b: unknown) => route.fulfill({ status, headers: CORS, body: JSON.stringify(b) });
       const mr = { iid: 8, title: "マスタ更新: data/masters/rates.csv", description: "単価の見直し", source_branch: "masters/20261110-1-sato", target_branch: "main", state: "opened", author: { username: "sato", name: "佐藤" }, created_at: "2026-11-10T01:00:00Z" };
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
+      if (url.includes("/diffs?")) return json(200, [{ new_path: "data/masters/rates.csv", old_path: "data/masters/rates.csv" }]);
       if (url.includes("/merge_requests?")) return json(200, remade ? [] : [mr]);
       if (url.endsWith("/merge_requests/8") && req.method() === "GET") return json(200, { ...mr, user: { can_merge: false }, diff_refs: { base_sha: "b0", head_sha: "h1" }, has_conflicts: true, detailed_merge_status: "conflict" });
       if (url.endsWith("/merge_requests/8") && req.method() === "PUT") {
