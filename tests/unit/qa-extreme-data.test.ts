@@ -76,7 +76,7 @@ describe("validateDataset: 計算は止めないが気付きたいデータ（wa
     expect(issues).toHaveLength(1);
     expect(issues[0]!.severity).toBe("warning");
     expect(issues[0]!.message).toContain("顧問");
-    expect(issues[0]!.message).toContain("M1, M2");
+    expect(issues[0]!.message).toContain("M1、M2");
     expect(issues[0]!.message).not.toContain("M3");
   });
   it("契約期間の外にはみ出したアサイン", () => {
@@ -87,6 +87,20 @@ describe("validateDataset: 計算は止めないが気付きたいデータ（wa
       assignments: [assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-04", endMonth: "2026-09" }), assignment({ memberId: "M1", contractId: "C1", startMonth: "2026-08", endMonth: "2026-12", allocation: 0.2 })],
     });
     expect(issuesOf(d, "ASSIGNMENT_OUTSIDE_CONTRACT").map((i) => [i.severity, i.row])).toEqual([["warning", 3]]);
+  });
+  it("メッセージの社員番号・案件IDには名前を添える（ID だけでは誰・どの案件か分からない。§127）", () => {
+    const d = dataset({
+      rates: [rate("SE", 6000)],
+      members: [member({ memberId: "M1", name: "山田 太郎", title: "顧問" }), member({ memberId: "M2", name: "鈴木 花子" })],
+      contracts: [contract({ contractId: "C1", customerName: "北斗建設", projectName: "基盤運用", startMonth: "2026-04", endMonth: "2026-09" })],
+      assignments: [assignment({ memberId: "M2", contractId: "C1", startMonth: "2026-08", endMonth: "2026-12", allocation: 0.6 }), assignment({ memberId: "M2", contractId: "C1", startMonth: "2026-08", endMonth: "2026-08", allocation: 0.6 })],
+    });
+    const msg = (code: string) => issuesOf(d, code)[0]?.message ?? "";
+    expect(msg("ASSIGNMENT_OUTSIDE_CONTRACT")).toContain("案件 C1（北斗建設 / 基盤運用）");
+    expect(msg("ALLOCATION_OVER_1")).toContain("メンバー M2（鈴木 花子）");
+    expect(msg("MEMBER_RATE_UNDEFINED")).toContain("M1（山田 太郎）");
+    // 続けて呼んでも前の名前が残らない
+    expect(validateDataset(dataset({ members: [member({ memberId: "M1", title: "顧問" })] })).find((i) => i.code === "MEMBER_RATE_UNDEFINED")?.message).toContain(": M1");
   });
   it("1 人 1 日 24 時間超", () => {
     const d = dataset({

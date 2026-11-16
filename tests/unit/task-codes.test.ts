@@ -190,7 +190,7 @@ describe("mapping.csv の行の期間の検証（validateMappingPeriods）", () 
       ["MAPPING_OUTSIDE_CONTRACT", 10, "warning"],
       ["MAPPING_PERIOD_OVERLAP", 7, "warning"],
     ]);
-    expect(issues[3]!.message).toBe("mapping.csv 7 行目: 6 行目と同じ作業が 2026-06〜2026-07 に別の案件（C2 と C3）を指しています。どちらか一方の期間にしてください");
+    expect(issues[3]!.message).toBe("mapping.csv 7 行目: 6 行目と同じ作業が 2026-06〜2026-07 に別の案件 C2 と C3 を指しています。どちらか一方の期間にしてください");
   });
 
   it("キーワードの違う名前の行は、同じ月に別の案件を指してもよい（キーワードで分ける。§62）", () => {
