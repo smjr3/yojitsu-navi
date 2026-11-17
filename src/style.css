@@ -5576,3 +5576,288 @@ a.yn-org-person:hover {
 .yn-toc-link.is-zero {
   color: var(--yn-text-2);
 }
+
+/* ── 案件一覧の「期間」表示（§132） ───────────────────── */
+.yn-tl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 8px;
+}
+.yn-tl-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+}
+.yn-tl-select {
+  width: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: calc(13px * var(--yn-fs));
+}
+.yn-tl {
+  --yn-tl-label: 300px;
+  /* 1 か月の最小の幅。長い期間（5 年など）は表示の中だけ横にスクロール */
+  --yn-tl-month: 34px;
+  overflow: auto;
+  max-height: max(360px, calc(100vh - 220px));
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: var(--yn-radius);
+  background: var(--yn-card);
+}
+.yn-tl-grid {
+  position: relative;
+  min-width: calc(var(--yn-tl-label) + var(--yn-tl-n) * var(--yn-tl-month));
+}
+.yn-tl-row {
+  display: grid;
+  grid-template-columns: var(--yn-tl-label) minmax(0, 1fr);
+  height: calc(42px * var(--yn-fs));
+}
+.yn-tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 10px;
+  border-right: 1px solid var(--yn-hairline-strong);
+  border-bottom: 1px solid var(--yn-hairline);
+  background: var(--yn-card);
+}
+.yn-tl-track {
+  position: relative;
+  min-width: 0;
+  border-bottom: 1px solid var(--yn-hairline);
+  /* 月の区切り（1 行に 1 つの背景。月ごとの要素は作らない） */
+  background-image: linear-gradient(to right, var(--yn-hairline) 1px, transparent 1px);
+  background-size: calc(100% / var(--yn-tl-n)) 100%;
+}
+.yn-tl-name {
+  overflow: hidden;
+  color: var(--yn-link);
+  font-size: calc(13px * var(--yn-fs));
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+.yn-tl-name:hover {
+  text-decoration: underline;
+}
+.yn-tl-sub {
+  overflow: hidden;
+  color: var(--yn-text-2);
+  font-size: calc(11px * var(--yn-fs));
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.yn-tl-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: calc(40px * var(--yn-fs));
+}
+.yn-tl-head .yn-tl-label {
+  z-index: 5;
+  justify-content: flex-end;
+  padding-bottom: 4px;
+  border-bottom-color: var(--yn-hairline-strong);
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+  font-weight: 700;
+}
+.yn-tl-head .yn-tl-track {
+  background-color: var(--yn-card);
+  border-bottom-color: var(--yn-hairline-strong);
+}
+.yn-tl-months {
+  display: grid;
+  grid-template-columns: repeat(var(--yn-tl-n), minmax(0, 1fr));
+  height: 100%;
+}
+.yn-tl-m {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 0 4px;
+  color: var(--yn-text-2);
+  font-size: calc(11px * var(--yn-fs));
+  text-align: center;
+  white-space: nowrap;
+}
+.yn-tl-m.is-year {
+  border-left: 1px solid var(--yn-hairline-strong);
+}
+.yn-tl-y {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  color: var(--yn-text-1);
+  font-weight: 700;
+}
+.yn-tl-group {
+  height: calc(30px * var(--yn-fs));
+}
+.yn-tl-group .yn-tl-label,
+.yn-tl-group .yn-tl-track {
+  background-color: color-mix(in srgb, var(--yn-text-1) 5%, var(--yn-card));
+}
+.yn-tl-group-btn {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--yn-text-1);
+  font: 700 calc(13px * var(--yn-fs)) var(--sans-serif);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.yn-tl-group-sum {
+  position: sticky;
+  left: var(--yn-tl-label);
+  display: inline-block;
+  padding-left: 8px;
+  line-height: calc(30px * var(--yn-fs));
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+  white-space: nowrap;
+}
+.yn-tl-band {
+  position: absolute;
+  top: calc(5px * var(--yn-fs));
+  height: calc(16px * var(--yn-fs));
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--yn-series-budget);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--yn-series-budget) 14%, var(--yn-card));
+}
+.yn-tl-band.is-cut-l {
+  border-left-style: dashed;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.yn-tl-band.is-cut-r {
+  border-right-style: dashed;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.yn-tl-bar {
+  position: absolute;
+  bottom: 0;
+  box-sizing: border-box;
+  border-right: 2px solid transparent;
+  border-left: 2px solid transparent;
+  background: var(--yn-series-cost) content-box;
+}
+.yn-tl-bar.is-over {
+  background-color: var(--yn-danger);
+}
+.yn-tl-facts-box {
+  position: absolute;
+  bottom: calc(3px * var(--yn-fs));
+  display: flex;
+}
+.yn-tl-facts-box.is-right {
+  justify-content: flex-end;
+}
+.yn-tl-facts {
+  position: sticky;
+  left: var(--yn-tl-label);
+  padding: 0 3px;
+  color: var(--yn-text-1);
+  font-size: calc(11px * var(--yn-fs));
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.yn-tl-end {
+  position: absolute;
+  top: calc(13px * var(--yn-fs));
+  z-index: 1;
+  transform: translate(4px, -50%);
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--yn-neutral-bg);
+  color: var(--yn-text-1);
+  font-size: calc(11px * var(--yn-fs));
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.yn-tl-row.is-ended .yn-tl-track > *,
+.yn-tl-row.is-ended .yn-tl-name {
+  opacity: 0.5;
+}
+.yn-tl-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--yn-tl-label) + (100% - var(--yn-tl-label)) * var(--yn-tl-x));
+  z-index: 3;
+  border-left: 2px solid var(--yn-text-1);
+  pointer-events: none;
+}
+.yn-tl-today-label {
+  position: absolute;
+  top: 3px;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--yn-text-1);
+  color: var(--yn-card);
+  font-size: calc(10px * var(--yn-fs));
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.yn-tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 2px 0;
+  color: var(--yn-text-2);
+  font-size: calc(12px * var(--yn-fs));
+}
+.yn-tl-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.yn-tl-sw-band {
+  border: 1px solid var(--yn-series-budget);
+  background: color-mix(in srgb, var(--yn-series-budget) 14%, var(--yn-card));
+}
+.yn-tl-sw-bar {
+  background: var(--yn-series-cost);
+}
+.yn-tl-sw-over {
+  background: var(--yn-danger);
+}
+/* 狭い画面: 名前の列を細くし、月は 1 か月 34px 以上（横にスクロール） */
+@media (max-width: 719px) {
+  .yn-tl {
+    --yn-tl-label: 132px;
+    --yn-tl-month: 34px;
+  }
+  .yn-tl-label {
+    padding: 0 6px;
+  }
+}
+@media (min-width: 720px) and (max-width: 1023px) {
+  .yn-tl {
+    --yn-tl-label: 220px;
+  }
+}
