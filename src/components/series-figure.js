@@ -62,7 +62,7 @@ export function monthlyFigure({ model, series, unit, dark, history, contractIds 
       subtitle: sub,
       legend: monthlyLegend(dark, data),
       controls,
-      draw: (width, height) => monthlyChart({ series: data, unit, dark, width, height, asOfMonth, title, ...opts }),
+      draw: (width, height) => monthlyChart({ series: data, monthSeries: series, unit, dark, width, height, asOfMonth, title, ...opts }),
       after: table ? tableDetails(seriesTable(data, { unit, exportName: isMonth ? exportName : `${exportName}_${u}`, ...(isMonth ? {} : { label: (d) => bucketLabel(d, startMonth) }) })) : null,
     });
   };

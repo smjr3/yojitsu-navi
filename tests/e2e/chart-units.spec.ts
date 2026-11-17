@@ -135,16 +135,20 @@ test("月次推移: 予算は段の線、棒は実績だけ。予算を超えた
   const id = model.contracts.find((c) => c.months.some((m) => m.cost > m.budget && m.budget > 0))!.contract.contractId;
   await gotoPage(page, `/contract?id=${id}`);
   await expect(plot(page)).toBeVisible();
-  const colors = await plot(page).evaluate((svg) => ({
-    budgetLine: [...svg.querySelectorAll("path")].some((p) => /^#(2a78d6|3987e5)$/i.test(p.closest("[stroke]")?.getAttribute("stroke") ?? "")),
-    budgetRect: [...svg.querySelectorAll("rect")].some((r) => /^#(2a78d6|3987e5)$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
-    overRect: [...svg.querySelectorAll("rect")].some((r) => /^#d03b3b$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
-  }));
+  // 消化率の帯（.yn-budget-strip。青・赤の極細のバー）は除いて、グラフ本体の棒・線を見る
+  const colors = await plot(page).evaluate((svg) => {
+    const own = (sel: string) => [...svg.querySelectorAll(sel)].filter((e) => !e.closest(".yn-budget-strip"));
+    return {
+      budgetLine: own("path").some((p) => /^#(2a78d6|3987e5)$/i.test(p.closest("[stroke]")?.getAttribute("stroke") ?? "")),
+      budgetRect: own("rect").some((r) => /^#(2a78d6|3987e5)$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
+      overRect: own("rect").some((r) => /^#d03b3b$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
+    };
+  });
   expect(colors).toEqual({ budgetLine: true, budgetRect: false, overRect: true });
   await expect(figure(page).locator(".yn-legend")).toContainText("予算超過");
 });
 
-test("日・週: 予算は出さない（線・超過の赤・残予算・凡例・表）。月は予算を出す", async ({ page }) => {
+test("日・週: 予算は棒に配らない（線・超過の赤・残予算・凡例・表）。月は予算を出す", async ({ page }) => {
   // 予算を超えた月のある案件（週・月なら赤が出る）
   const id = model.contracts.find((c) => c.months.some((m) => m.cost > m.budget && m.budget > 0 && m.month <= model.meta.asOfMonth))!.contract.contractId;
   await gotoPage(page, `/contract?id=${id}`);
@@ -152,13 +156,14 @@ test("日・週: 予算は出さない（線・超過の赤・残予算・凡例
     plot(page).evaluate((svg) => {
       const color = (el: Element, attr: string) => el.getAttribute(attr) ?? el.closest(`[${attr}]`)?.getAttribute(attr) ?? "";
       return {
-        budget: [...svg.querySelectorAll("path")].some((p) => /^#(2a78d6|3987e5)$/i.test(color(p, "stroke"))),
-        red: [...svg.querySelectorAll("rect")].some((r) => /^#d03b3b$/i.test(color(r, "fill"))),
+        // 消化率の帯（.yn-budget-strip）は別に見る
+        budget: [...svg.querySelectorAll("path")].some((p) => !p.closest(".yn-budget-strip") && /^#(2a78d6|3987e5)$/i.test(color(p, "stroke"))),
+        red: [...svg.querySelectorAll("rect")].some((r) => !r.closest(".yn-budget-strip") && /^#d03b3b$/i.test(color(r, "fill"))),
         gp: [...svg.querySelectorAll("path, circle")].some((p) => /^#(1baf7a|199e70)$/i.test(color(p, "stroke") || color(p, "fill"))),
       };
     });
   await unitBtn(page, "日").click();
-  await expect(plot(page)).toHaveAttribute("aria-label", /日・週では予算を出しません/);
+  await expect(plot(page)).toHaveAttribute("aria-label", /日・週では予算を棒に配らず/);
   expect(await marks()).toEqual({ budget: false, red: false, gp: false });
   const legend = figure(page).locator(".yn-legend li");
   await expect(legend.filter({ hasText: /^予算/ })).toHaveCount(0);
@@ -177,4 +182,39 @@ test("日・週: 予算は出さない（線・超過の赤・残予算・凡例
   await expect(heads.filter({ hasText: /^予算/ })).toHaveCount(0);
   await expect(heads.filter({ hasText: /^残予算/ })).toHaveCount(0);
   await expect(heads.filter({ hasText: /^実績/ }).first()).toBeVisible();
+});
+
+test("予算の消化率の帯: どの単位でも横軸の下に出る。日・週は月ごと、月は棒ごと、超えた期間は赤", async ({ page }) => {
+  const c = model.contracts.find((x) => x.months.some((m) => m.cost > m.budget && m.budget > 0 && m.month < model.meta.asOfMonth))!;
+  await gotoPage(page, `/contract?id=${c.contract.contractId}`);
+  const strip = () =>
+    plot(page).evaluate((svg) => {
+      const segs = [...svg.querySelectorAll(".yn-budget-strip-seg")];
+      return {
+        count: segs.length,
+        texts: segs.map((s) => s.querySelector("text")?.textContent ?? ""),
+        over: segs.filter((s) => s.classList.contains("is-over")).length,
+        titles: segs.map((s) => s.querySelector("title")?.textContent ?? ""),
+      };
+    });
+  for (const u of ["日", "週"] as const) {
+    await unitBtn(page, u).click();
+    await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
+    const s = await strip();
+    expect(s.count).toBeGreaterThan(0);
+    // 月ごと: 「10月 139%」または月の名前だけ（未来の月）
+    for (const t of s.texts) expect(t).toMatch(/^(\d{1,2}月( \d+%)?|\d+%)?$/);
+    expect(s.texts.some((t) => /^\d{1,2}月 \d+%$/.test(t))).toBe(true);
+    if (u === "週") expect(s.over).toBeGreaterThan(0);
+  }
+  await unitBtn(page, "月").click();
+  await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
+  const m = await strip();
+  // 月は棒（期間）ごと: 帯の区切りの数 = 期間の月数（副題の期間。既定は今年度の 6 か月以上）
+  expect(m.count).toBeGreaterThanOrEqual(6);
+  expect(m.over).toBeGreaterThan(0);
+  expect(m.texts.filter((t) => /^\d+%$/.test(t)).length).toBeGreaterThan(0);
+  expect(m.titles.some((t) => /実績 .+ ／ 予算 .+（\d+%）/.test(t))).toBe(true);
+  await unitBtn(page, "四半期").click();
+  await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
 });

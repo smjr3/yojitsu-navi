@@ -89,7 +89,91 @@ function hatchFill(color) {
  * series は analysis.seriesWithForecast() の出力（isActual, forecastCost, forecastGrossProfit を持つ。withTargets を通すと targetCap も）。
  * 日・週・四半期・年度（§130）は core の bucketMonths / bucketDays の出力を渡し、tick（目盛り）・tipLabel（ツールチップの 1 行目）を渡す
  */
-export function monthlyChart({ series, unit = "yen", dark = false, width = 640, height = 300, asOfMonth, title = T.charts.monthlyTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, minBar = 6, fitDots = false }) {
+/**
+ * 予算の消化率の帯（§130。2026-11-17 依頼者が C＋D 案を選択）: 横軸のすぐ下に期間ごとの極細のバー（予算の青、超えたら赤）、その下に消化率。
+ * どの単位でも同じ位置・同じ見た目にして、単位を切り替えても見方が変わらないようにする。
+ * 日・週は予算を棒に配らない（予算管理は月次から）ので、月ごとにまとめて「10月 139%」と出す（monthSeries = 月の単位の series）。
+ * 月・四半期・年度は棒ごと。消化率 = 実績（今の期間は今日までの速報）÷ 期間の予算。実績のない未来の期間はバーの地だけ
+ */
+function budgetSegments(data, { noBudget, monthSeries, asOfMonth, nameOf }) {
+  const segs = [];
+  if (noBudget) {
+    if (!monthSeries) return [];
+    const byMonth = new Map(monthSeries.map((m) => [m.month, m]));
+    for (const d of data) {
+      const month = d.months[0];
+      const last = segs[segs.length - 1];
+      if (last && last.month === month) last.i1 = d.i;
+      else segs.push({ month, i0: d.i, i1: d.i });
+    }
+    for (const g of segs) {
+      const m = byMonth.get(g.month);
+      g.budget = m?.budget ?? 0;
+      g.cost = m?.cost ?? 0;
+      g.has = !!m && (m.isActual || g.month === asOfMonth);
+      g.label = fmt(T.charts.stripMonth, { month: Number(g.month.slice(5)) });
+      g.name = monthJa(g.month);
+    }
+  } else {
+    for (const d of data) {
+      const months = d.months ?? [d.month];
+      segs.push({ i0: d.i, i1: d.i, budget: d.budget, cost: d.cost, has: d.isActual || months.includes(asOfMonth), label: "", name: nameOf(d) });
+    }
+  }
+  for (const g of segs) {
+    g.rate = g.has && g.budget > 0 ? g.cost / g.budget : null;
+    g.over = g.rate != null && g.rate > 1;
+  }
+  return segs;
+}
+
+/** 帯を描く Plot の関数マーク。文字が期間の幅に収まらないときは全期間で「月」を省き、それでも収まらなければ文字を出さない（バーとホバーは残る） */
+function budgetStripMark(segs, { c, unit }) {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (name, attrs) => {
+    const e = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    return e;
+  };
+  return (_index, scales, _values, dimensions) => {
+    const g = el("g", { class: "yn-budget-strip" });
+    const base = dimensions.height - dimensions.marginBottom;
+    const barY = base + scaledPx(3);
+    const barH = scaledPx(5);
+    const fontSize = scaledPx(11);
+    const textY = dimensions.height - scaledPx(6);
+    // 文字の幅の目安: 全角は 1 文字ぶん、半角は 0.62 文字ぶん
+    const textW = (t) => [...t].reduce((w, ch) => w + (/[\x20-\x7e]/.test(ch) ? 0.62 : 1), 0) * fontSize;
+    // 文字の出し方は全期間でそろえる: すべて収まれば「10月 139%」、% だけなら収まれば %、それも無理なら文字なし（ばらばらに欠けないように）
+    const pctOf = (s) => (s.rate == null ? "" : formatPercent(s.rate, 0));
+    const fullOf = (s) => [s.label, pctOf(s)].filter(Boolean).join(" ");
+    const room = (s) => scales.x(s.i1 + 0.5) - scales.x(s.i0 - 0.5) - 4;
+    const level = segs.every((s) => textW(fullOf(s)) <= room(s)) ? 0 : segs.every((s) => textW(pctOf(s)) <= room(s)) ? 1 : 2;
+    for (const s of segs) {
+      const x1 = scales.x(s.i0 - 0.5);
+      const x2 = scales.x(s.i1 + 0.5);
+      const pad = Math.min(2, (x2 - x1) * 0.1);
+      const w = Math.max(0, x2 - x1 - pad * 2);
+      const seg = el("g", { class: s.over ? "yn-budget-strip-seg is-over" : "yn-budget-strip-seg" });
+      seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.grid }));
+      if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.budget }));
+      const pct = pctOf(s);
+      const text = level === 0 ? fullOf(s) : level === 1 ? pct : "";
+      if (text) {
+        const t = el("text", { x: (x1 + x2) / 2, y: textY, "text-anchor": "middle", "font-size": fontSize, fill: s.over ? c.danger : c.muted, "font-weight": s.over ? 700 : 400 });
+        t.textContent = text;
+        seg.append(t);
+      }
+      const title = el("title", {});
+      title.textContent = s.rate == null ? s.name : fmt(T.charts.stripTip, { name: s.name, cost: money(s.cost, unit), budget: money(s.budget, unit), rate: pct });
+      seg.append(title);
+      g.append(seg);
+    }
+    return g;
+  };
+}
+
+export function monthlyChart({ series, unit = "yen", dark = false, width = 640, height = 300, asOfMonth, title = T.charts.monthlyTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, minBar = 6, fitDots = false, monthSeries = null }) {
   const c = chartColors(dark);
   const data = series.map((d, i) => ({ ...d, i }));
   const n = data.length;
@@ -136,15 +220,19 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const prelim = data.filter(isPrelimNow);
   const hatch = prelim.length ? hatchFill(c.cost) : null;
 
+  const segs = budgetSegments(data, { noBudget, monthSeries, asOfMonth, nameOf: (d) => (tipLabel ? tipLabel(d) : monthJa(d.month)) });
+  const strip = segs.length > 0;
+
   const plot = Plot.plot({
     width,
     height,
     marginLeft,
     marginRight: scaledPx(20),
     marginTop: scaledPx(28),
-    marginBottom: scaledPx(32),
+    // 消化率の帯（§130）の分だけ下を広げる。グラフ全体の高さは変えない
+    marginBottom: scaledPx(strip ? 54 : 32),
     style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
-    x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, label: null, line: false },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, tickPadding: scaledPx(strip ? 12 : 3), label: null, line: false },
     // 値がすべて 0（契約 0 件など）だと y の domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, ...(peak === 0 && low === 0 ? { domain: [0, axisUnit.div] } : {}) },
     marks: [
@@ -175,6 +263,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       // 粗利（見込み）
       noBudget ? null : Plot.line(forecastLine, { x: "i", y: "forecastGrossProfit", stroke: c.gp, strokeWidth: 2, strokeDasharray: "5 4", curve: "linear" }),
       noBudget ? null : Plot.dot(remaining, { x: "i", y: "forecastGrossProfit", fill: c.surface, r: dotR, stroke: c.gp, strokeWidth: dotStroke }),
+      // 予算の消化率の帯（§130）
+      strip ? budgetStripMark(segs, { c, unit }) : null,
+      // 日・週は月の境目に点線（帯の月と棒の対応が分かるように）
+      strip && noBudget && segs.length > 1 ? Plot.ruleX(segs.slice(1), { x: (g) => g.i0 - 0.5, stroke: c.axis, strokeDasharray: "2 3" }) : null,
       // クロスヘア ＋ ツールチップ
       Plot.ruleX(data, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
