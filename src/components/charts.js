@@ -37,10 +37,10 @@ export function withTargets(series, targetOf) {
 
 const hasTarget = (series) => series.some((d) => d.targetCap != null);
 /**
- * 日の単位（§130）は予算を出さない（2026-11-17 依頼者「日次で予算は設定しなくていい」）。実績・見込み・速報の棒だけで、
- * 予算の線・予算超過の赤・残予算・目標の上限は、グラフ・凡例・ツールチップ・表（Excel）のどれにも出さない。予算との比較は週以上で見る
+ * 日・週の単位（§130）は予算を出さない（2026-11-17 依頼者「日次で予算は設定しなくていい」「予算管理は月次から」）。実績・見込み・速報の棒だけで、
+ * 予算の線・予算超過の赤・残予算・目標の上限は、グラフ・凡例・ツールチップ・表（Excel）のどれにも出さない。予算との比較は月以上で見る
  */
-const isDaySeries = (series) => series.length > 0 && series[0].unit === "day";
+const isDaySeries = (series) => series.length > 0 && (series[0].unit === "day" || series[0].unit === "week");
 /** 予算を超えた実績・見込みがあるか（§130 の赤い部分の凡例を出すか） */
 const hasOverBudget = (series) => !isDaySeries(series) && series.some((d) => (d.isActual ? d.cost : (d.forecastCost ?? 0)) > d.budget);
 

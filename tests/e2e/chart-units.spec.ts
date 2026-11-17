@@ -71,19 +71,18 @@ test("選んだ単位はブラウザに覚える（再読み込み・チーム�
   await expect(unitBtn(page, "月")).toHaveAttribute("aria-pressed", "true");
 });
 
-test("今月の進捗: 今週・今四半期・今年度に切り替えられる（見出し・KPI・凡例の言葉も変わる）", { tag: "@smoke" }, async ({ page }) => {
+test("今月の進捗: 今四半期・今年度に切り替えられる（週・日は無い）（見出し・KPI・凡例の言葉も変わる）", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/");
   const sec = page.locator("#yn-daily");
   const btn = (label: string) => sec.locator(".yn-chart-unit button", { hasText: new RegExp(`^(✓ )?${label}$`) });
   await expect(sec.locator("h2").first()).toContainText("今月の進捗");
   await expect(btn("日")).toHaveCount(0);
+  await expect(btn("週")).toHaveCount(0);
   await btn("年度").click();
   await expect(sec.locator("h2").first()).toContainText(`今年度の進捗（${fy}年度・速報）`);
   await expect(sec.locator(".yn-kpi").first()).toContainText("今年度の上限");
   await expect(sec.locator(".yn-legend")).toContainText("年度末見込み");
   await expect(sec.locator(".yn-kpi")).toHaveCount(4);
-  await btn("週").click();
-  await expect(sec.locator("h2").first()).toContainText("今週の進捗");
   await expect(sec.locator('svg[role="img"]')).toBeVisible();
   await btn("四半期").click();
   await expect(sec.locator("h2").first()).toContainText("今四半期の進捗");
@@ -120,10 +119,10 @@ for (const [w, dark] of [
     if (dark) await useDarkTheme(page);
     await page.setViewportSize({ width: w, height: 900 });
     await gotoPage(page, "/");
-    for (const label of ["週", "年度"]) {
+    for (const [label, progress] of [["週", "四半期"], ["年度", "年度"]]) {
       await unitBtn(page, label).click();
       await expect(plot(page)).toBeVisible();
-      await page.locator("#yn-daily .yn-chart-unit button", { hasText: label }).click();
+      await page.locator("#yn-daily .yn-chart-unit button", { hasText: progress }).click();
       await expect(page.locator("#yn-daily svg[role='img']")).toBeVisible();
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${label}`).toBeLessThanOrEqual(0);
@@ -145,7 +144,7 @@ test("月次推移: 予算は段の線、棒は実績だけ。予算を超えた
   await expect(figure(page).locator(".yn-legend")).toContainText("予算超過");
 });
 
-test("日: 予算は出さない（線・超過の赤・残予算・凡例・表）。週は予算を出す", async ({ page }) => {
+test("日・週: 予算は出さない（線・超過の赤・残予算・凡例・表）。月は予算を出す", async ({ page }) => {
   // 予算を超えた月のある案件（週・月なら赤が出る）
   const id = model.contracts.find((c) => c.months.some((m) => m.cost > m.budget && m.budget > 0 && m.month <= model.meta.asOfMonth))!.contract.contractId;
   await gotoPage(page, `/contract?id=${id}`);
@@ -159,14 +158,17 @@ test("日: 予算は出さない（線・超過の赤・残予算・凡例・表
       };
     });
   await unitBtn(page, "日").click();
-  await expect(plot(page)).toHaveAttribute("aria-label", /日の単位では予算を出しません/);
+  await expect(plot(page)).toHaveAttribute("aria-label", /日・週では予算を出しません/);
   expect(await marks()).toEqual({ budget: false, red: false, gp: false });
   const legend = figure(page).locator(".yn-legend li");
   await expect(legend.filter({ hasText: /^予算/ })).toHaveCount(0);
   await expect(legend.filter({ hasText: /^残予算/ })).toHaveCount(0);
   await unitBtn(page, "週").click();
   await expect(plot(page)).toBeVisible();
-  expect((await marks()).budget).toBe(true);
+  expect(await marks()).toEqual({ budget: false, red: false, gp: false });
+  await unitBtn(page, "月").click();
+  await expect(plot(page)).toBeVisible();
+  expect(await marks()).toEqual({ budget: true, red: true, gp: true });
   // 表（案件詳細は表なし）: 全体サマリーの日
   await gotoPage(page, "/");
   await unitBtn(page, "日").click();

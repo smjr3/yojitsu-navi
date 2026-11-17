@@ -314,7 +314,8 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
 }
 
 /** 進捗の範囲の単位（§130）。日は 1 日だけになるので出さない */
-const PROGRESS_UNITS = ["week", "month", "quarter", "year"];
+// 今週の進捗は出さない（予算管理は月次から。2026-11-17 依頼者。§130）。core の week は残す
+const PROGRESS_UNITS = ["month", "quarter", "year"];
 
 /** 見出し ＋ KPI ＋ グラフ（表つき） */
 function progressBody(p, { unit, dark, subtitle, exportName, controls = null, startMonth = 4 }) {
