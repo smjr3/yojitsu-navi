@@ -349,6 +349,16 @@ describe("マスタ履歴（DUMMY_DATA.md のエッジケース）", () => {
     expect(unassigned[0]).toBe("C009");
     expect(contractsForTeam(model, "HQ")).toHaveLength(model.contracts.length - unassigned.length);
   });
+  it("顧客の既定の担当チーム（§103.6）: 未設定の例の顧客を除いてある。C114 は担当チームが空で顧客の既定の T321", () => {
+    const names = (ds.customerTeams ?? []).map((r) => r.customerName);
+    expect(names.length).toBeGreaterThan(30);
+    expect(names).not.toContain("しらかば医療");
+    expect(names).not.toContain("ひかり生命保険");
+    expect(new Set(names).size).toBe(names.length);
+    const c114 = ds.contracts.find((c) => c.contractId === "C114");
+    expect(c114).toMatchObject({ teamId: "T321", teamFromCustomer: true });
+    expect(contractsForTeam(model, "T321").map((c) => c.contractId)).toContain("C114");
+  });
 });
 
 describe("月の状態・年度（asOf = 2026-10-27）", () => {

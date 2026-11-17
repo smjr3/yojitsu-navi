@@ -103,6 +103,8 @@ describe("ダミーデータのマスタで往復", () => {
     const dir = mkdtempSync(join(tmpdir(), "yojitsu-masters-rt-"));
     try {
       cpSync(root, dir, { recursive: true });
+      // 顧客の既定（§103）はファイルが無いところから作る場合を確かめる（ダミーデータの customer-teams.csv は消す）
+      rmSync(join(dir, "data", "customer-teams.csv"));
       const p = buildMastersPayload(dir);
       const docs = docsOf(p);
       const g = generate({ seed: 42, asOf: AS_OF });
