@@ -218,3 +218,24 @@ test("予算の消化率の帯: どの単位でも横軸の下に出る。日・
   await unitBtn(page, "四半期").click();
   await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
 });
+
+test("予算の消化率の帯: スマートフォンの幅でも月・週の消化率が出て、% はバーのすぐ下（目盛りより上）", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await gotoPage(page, "/");
+  for (const u of ["月", "週"] as const) {
+    await unitBtn(page, u).click();
+    await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
+    const r = await plot(page).evaluate((svg) => {
+      const texts = [...svg.querySelectorAll(".yn-budget-strip-seg text")];
+      const bar = svg.querySelector(".yn-budget-strip-seg rect")!.getBoundingClientRect();
+      const tick = svg.querySelector('[aria-label="x-axis tick label"] text')!.getBoundingClientRect();
+      const t = texts.find((e) => /\d/.test(e.textContent ?? ""));
+      const tb = t?.getBoundingClientRect();
+      return { n: texts.filter((e) => /\d/.test(e.textContent ?? "")).length, barBottom: bar.bottom, textTop: tb?.top ?? 0, textBottom: tb?.bottom ?? 0, tickTop: tick.top };
+    });
+    expect(r.n).toBeGreaterThan(0);
+    expect(r.textTop).toBeGreaterThanOrEqual(r.barBottom - 1);
+    expect(r.textTop - r.barBottom).toBeLessThan(8);
+    expect(r.textBottom).toBeLessThanOrEqual(r.tickTop + 1);
+  }
+});

@@ -140,15 +140,30 @@ function budgetStripMark(segs, { c, unit }) {
     const base = dimensions.height - dimensions.marginBottom;
     const barY = base + scaledPx(3);
     const barH = scaledPx(5);
-    const fontSize = scaledPx(11);
-    const textY = dimensions.height - scaledPx(6);
+    // 消化率の文字はバーのすぐ下（目盛りの文字はその下。バーと % が離れないように。2026-11-18 依頼者）
     // 文字の幅の目安: 全角は 1 文字ぶん、半角は 0.62 文字ぶん
-    const textW = (t) => [...t].reduce((w, ch) => w + (/[\x20-\x7e]/.test(ch) ? 0.62 : 1), 0) * fontSize;
-    // 文字の出し方は全期間でそろえる: すべて収まれば「10月 139%」、% だけなら収まれば %、それも無理なら文字なし（ばらばらに欠けないように）
+    const textW = (t, size) => [...t].reduce((w, ch) => w + (/[\x20-\x7e]/.test(ch) ? 0.62 : 1), 0) * size;
     const pctOf = (s) => (s.rate == null ? "" : formatPercent(s.rate, 0));
+    const numOf = (s) => (s.rate == null ? "" : String(Math.round(s.rate * 100)));
     const fullOf = (s) => [s.label, pctOf(s)].filter(Boolean).join(" ");
     const room = (s) => scales.x(s.i1 + 0.5) - scales.x(s.i0 - 0.5) - 4;
-    const level = segs.every((s) => textW(fullOf(s)) <= room(s)) ? 0 : segs.every((s) => textW(pctOf(s)) <= room(s)) ? 1 : 2;
+    // 出し方は全期間でそろえる（ばらばらに欠けないように）。狭い画面（スマートフォン）でも % が出るよう、
+    // 「10月 139%」→「139%」→ 文字を小さく →「139」（% は左端に 1 つ）の順に詰める。それでも無理なら文字なし
+    const LEVELS = [
+      { text: fullOf, size: 11 },
+      { text: pctOf, size: 11 },
+      { text: pctOf, size: 10 },
+      { text: pctOf, size: 9 },
+      { text: numOf, size: 9, unit: true },
+    ];
+    const level = LEVELS.find((lv) => segs.every((s) => textW(lv.text(s), scaledPx(lv.size)) <= room(s))) ?? null;
+    const fontSize = scaledPx(level?.size ?? 11);
+    const textY = barY + barH + fontSize + scaledPx(2);
+    if (level?.unit) {
+      const u = el("text", { x: dimensions.marginLeft - scaledPx(6), y: textY, "text-anchor": "end", "font-size": fontSize, fill: c.muted });
+      u.textContent = "%";
+      g.append(u);
+    }
     for (const s of segs) {
       const x1 = scales.x(s.i0 - 0.5);
       const x2 = scales.x(s.i1 + 0.5);
@@ -158,7 +173,7 @@ function budgetStripMark(segs, { c, unit }) {
       seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.grid }));
       if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.cost }));
       const pct = pctOf(s);
-      const text = level === 0 ? fullOf(s) : level === 1 ? pct : "";
+      const text = level ? level.text(s) : "";
       if (text) {
         const t = el("text", { x: (x1 + x2) / 2, y: textY, "text-anchor": "middle", "font-size": fontSize, fill: s.over ? c.danger : c.muted, "font-weight": s.over ? 700 : 400 });
         t.textContent = text;
@@ -230,9 +245,9 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
     marginRight: scaledPx(20),
     marginTop: scaledPx(28),
     // 消化率の帯（§130）の分だけ下を広げる。グラフ全体の高さは変えない
-    marginBottom: scaledPx(strip ? 54 : 32),
+    marginBottom: scaledPx(strip ? 56 : 32),
     style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
-    x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, tickPadding: scaledPx(strip ? 12 : 3), label: null, line: false },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat, tickSize: 0, tickPadding: scaledPx(strip ? 28 : 3), label: null, line: false },
     // 値がすべて 0（契約 0 件など）だと y の domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, ...(peak === 0 && low === 0 ? { domain: [0, axisUnit.div] } : {}) },
     marks: [
