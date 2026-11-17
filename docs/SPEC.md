@@ -1684,7 +1684,8 @@ GitLab の `rules:changes`（MR は対象ブランチとの差分、push は前�
 - 案件の `team_id` が空なら、顧客名（正規化して完全一致。§86）の既定の担当チームを使う（読み込み時。計算・集計・画面はすべてそのチーム）。案件に書いた `team_id` が優先（例外の上書き）。計算コア: `Contract.teamFromCustomer`。
 - マスタ編集に「顧客」タブ（案件と目標の間）。顧客名は案件の顧客名から選べる。案件タブで担当チームが空の案件は、顧客の既定のチームを薄く「顧客の既定」と添えて出す。
 - 検証: 顧客名の空・重複・チームの空・存在しないチームは error、案件の無い顧客は確認要求。顧客の既定から入れたチームを案件の行のエラーにはしない。
-- 再発防止: `tests/unit/unset.test.ts`、`tests/integration/masters.test.ts`（顧客の書き戻し）、`tests/e2e/master-fix-flow.spec.ts`。
+- ダミーデータ（試用版）にも入れる: 顧客ごとにいちばん後に始まる案件の担当チーム。主担当チーム未設定の例の顧客は除く。C114 は担当チームを空にして顧客の既定を使う例（docs/DUMMY_DATA.md）。
+- 再発防止: `tests/unit/unset.test.ts`、`tests/integration/masters.test.ts`（顧客の書き戻し）、`tests/integration/dummy-data.test.ts`（ダミーデータの顧客の既定）、`tests/e2e/master-fix-flow.spec.ts`。
 
 ## 104. 本番の設定を守ったまま 1 回で版を上げる（2026-11-09 依頼者。導入先のレビュー指摘）
 「本番運用の開始後は、版上げを更新ボタンに近い手間にしたい。`config.json`・`.gitlab-ci.local.yml`・CI・`.npmrc`・本番のデータ・社内レジストリ・API の設定を確実に守り、毎回差分を人が確かめなくても安全に更新したい」「upgrade・互換確認・npm ci・validate・必要なときだけテスト・ビルドを自動で判断してほしい」「パッケージ側で設定が増えたら、既存の設定を残して不足分だけ示し、移せるようにしたい」「main 保護を前提にした本番の GitLab の構成を標準にしたい」への対応。§91・§94・§96 の続き。

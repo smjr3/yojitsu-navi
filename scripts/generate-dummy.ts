@@ -17,6 +17,7 @@
  *   data/worklogs/YYYY-MM.csv, data/worklogs/_meta.json
  *   data/task-types.csv（作業種別の分類表。SPEC §30）
  *   data/projects.csv（案件管理システムの正式な案件の一覧。SPEC §98）と contracts.csv の project_id
+ *   data/customer-teams.csv（顧客の既定の担当チーム。SPEC §103.6）
  */
 import { mkdirSync, writeFileSync, readdirSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -826,6 +827,34 @@ export function dummyProjects(contracts: readonly ContractRow[]): { contracts: A
   return { contracts: out, projects };
 }
 
+/** 担当チームを空にして顧客の既定（§103.6）を使う案件の例。顧客の既定は元の担当チームと同じなので数字は変わらない */
+const DUMMY_TEAM_FROM_CUSTOMER = new Set(["C114"]);
+
+/**
+ * 顧客の既定の担当チーム（§103.6。data/customer-teams.csv）。顧客ごとに、いちばん後に始まる案件の担当チーム。
+ * 担当チーム未設定の例（C009 など。DUMMY_TEAM_FROM_CUSTOMER 以外で team_id が空の案件）の顧客は入れない（未設定のまま残す）。
+ * 並びは顧客名の符号位置順（ロケールに依らない）
+ */
+export function dummyCustomerTeams<T extends ContractRow>(contracts: readonly T[]): { contracts: T[]; customerTeams: Array<{ customer_name: string; team_id: string; note: string }> } {
+  const unset = new Set(contracts.filter((c) => c.team_id === "").map((c) => c.customer_name));
+  const latest = new Map<string, T>();
+  const teams = new Map<string, Set<string>>();
+  for (const c of contracts) {
+    if (c.team_id === "" || unset.has(c.customer_name)) continue;
+    const cur = latest.get(c.customer_name);
+    if (cur === undefined || c.start_month > cur.start_month || (c.start_month === cur.start_month && c.contract_id > cur.contract_id)) latest.set(c.customer_name, c);
+    const set = teams.get(c.customer_name) ?? new Set<string>();
+    set.add(c.team_id);
+    teams.set(c.customer_name, set);
+  }
+  const customerTeams = [...latest.keys()]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((name) => ({ customer_name: name, team_id: latest.get(name)!.team_id, note: (teams.get(name)?.size ?? 0) > 1 ? "案件により他のチームも担当" : "" }));
+  const def = new Map(customerTeams.map((r) => [r.customer_name, r.team_id]));
+  const out = contracts.map((c) => (DUMMY_TEAM_FROM_CUSTOMER.has(c.contract_id) && def.get(c.customer_name) === c.team_id ? { ...c, team_id: "" } : c));
+  return { contracts: out, customerTeams };
+}
+
 export interface WriteOptions extends GenOptions {
   outDir: string;
 }
@@ -838,8 +867,10 @@ export function writeDummy(opts: WriteOptions): { members: number; contracts: nu
   mkdirSync(join(out, "worklogs"), { recursive: true });
 
   const pj = dummyProjects(g.contracts);
-  writeFileSync(join(out, "contracts.csv"), csv(pj.contracts, ["contract_id", "project_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
+  const ct = dummyCustomerTeams(pj.contracts);
+  writeFileSync(join(out, "contracts.csv"), csv(ct.contracts, ["contract_id", "project_id", "customer_name", "project_name", "team_id", "start_month", "end_month", "total_amount", "note"]));
   writeFileSync(join(out, "projects.csv"), csv(pj.projects, ["project_id", "customer_name", "project_name"]));
+  writeFileSync(join(out, "customer-teams.csv"), csv(ct.customerTeams, ["customer_name", "team_id", "note"]));
   writeFileSync(join(out, "mapping.csv"), csv(g.mappings, ["worklog_customer_name", "worklog_project_name", "contract_id", "task_include", "task_code", "start_month", "end_month"]));
   writeFileSync(join(out, "assignments.csv"), csv(withStamps(g.assignments, opts.asOf), ["member_id", "contract_id", "start_month", "end_month", "allocation", "updated_by", "updated_at"]));
   writeFileSync(join(out, "outside-plans.csv"), csv(withStamps(g.outsidePlans, opts.asOf), ["member_id", "type", "start_month", "end_month", "person_months", "note", "updated_by", "updated_at"]));
