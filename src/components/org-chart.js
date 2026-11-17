@@ -123,7 +123,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
   const legend = html`<div class="yn-org-legend" aria-hidden="true">
     ${gapMode
       ? [sw("is-over", T.orgChart.legendGapOver), sw("is-under", T.orgChart.legendGapUnder), sw("is-full", T.orgChart.legendGapNone)]
-      : [sw("is-over", T.orgChart.legendOver), sw("is-full", T.orgChart.legendFull), sw("is-under", T.orgChart.legendUnder), sw("is-none", T.orgChart.legendNone)]}
+      : [sw("is-over", T.orgChart.legendOver), sw("is-full", T.orgChart.legendFull), sw("is-under", T.orgChart.legendUnder), sw("is-empty", T.orgChart.legendNone)]}
     <span class="yn-org-legend-item">${T.orgChart.legendJoined}</span>
     <span class="yn-org-legend-item yn-org-legend-left">${T.orgChart.legendLeft}</span>
     <span class="yn-org-legend-item"><span class="yn-chip yn-chip-neutral">${T.orgChart.legendSupport}</span></span>
@@ -163,7 +163,9 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
       const k = planGapKindOf(p.plannedHours, p.actualHours);
       return k === "over" || k === "unplanned" ? "is-over" : k === "under" || k === "noActual" ? "is-under" : "is-full";
     }
-    return `is-${loadLevelOf(personMonths(p.plannedHours, std), p.capacity ?? 1)}`;
+    // 計画なしはリソース計画（§116）と同じ赤紫（is-empty）。ずれの表示の「データなし」（is-none）とは分ける
+    const level = loadLevelOf(personMonths(p.plannedHours, std), p.capacity ?? 1);
+    return level === "none" ? "is-empty" : `is-${level}`;
   };
   const chipValue = (p) => {
     if (p.change === "left") return "";

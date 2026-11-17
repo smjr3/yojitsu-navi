@@ -41,7 +41,9 @@ test("組織とメンバーが core（orgChartAt）と一致し、色は計画�
     const own = page.locator(`.yn-org-node[data-team="${n.teamId}"] > .yn-org-people > [data-origin="own"]`);
     await expect(own).toHaveCount(n.members.length);
     for (const p of n.members) {
-      const level = p.change === "left" ? "is-left" : `is-${loadLevelOf(personMonths(p.plannedHours, std))}`;
+      // 計画なしはリソース計画と同じ赤紫の is-empty（§131）
+      const lv = loadLevelOf(personMonths(p.plannedHours, std));
+      const level = p.change === "left" ? "is-left" : lv === "none" ? "is-empty" : `is-${lv}`;
       await expect(chip(page, n.teamId, p.memberId)).toHaveClass(new RegExp(level));
     }
   }

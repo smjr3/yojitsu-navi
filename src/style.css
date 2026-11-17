@@ -1129,10 +1129,11 @@ h3 {
   background: color-mix(in srgb, var(--yn-series-budget) 18%, transparent);
   overflow: visible;
 }
+/* 消化率: 地＝予算（青の薄い色）、塗り＝実績（橙）。グラフと同じ色の意味（§131） */
 .yn-meter-fill {
   height: 100%;
   border-radius: 4px;
-  background: var(--yn-series-budget);
+  background: var(--yn-series-cost);
   transition: width 240ms ease;
 }
 .yn-meter.is-danger .yn-meter-fill {
@@ -3999,10 +4000,11 @@ html:has(dialog.yn-dialog[open]) {
 .yn-my-hours-btn[aria-expanded="true"] {
   border-color: var(--yn-focus);
 }
+/* 計画より多く作業した: 黄（リソース計画の 1.0 超・体制図の「実績が多い」と同じ。赤は予算の超過だけ §131） */
 .yn-my-hours-btn.is-over {
-  border-color: var(--yn-danger);
-  background: var(--yn-danger-bg);
-  color: var(--yn-danger-text);
+  border-color: var(--yn-warn-text);
+  background: var(--yn-warn-bg);
+  color: var(--yn-warn-text);
 }
 /* 「今月の残り」は右上に置くので、ヘッダーの「作業実績の取得」は外す（各画面の見出しの下にも出ている） */
 .yn-topbar.has-my-hours .yn-filter-fetched {
@@ -4073,7 +4075,7 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-my-hours-big.is-over,
 .yn-my-hours-table .is-over {
-  color: var(--yn-danger-text);
+  color: var(--yn-warn-text);
 }
 .yn-my-hours-table .is-over {
   font-weight: 600;
@@ -4096,7 +4098,7 @@ html:has(dialog.yn-dialog[open]) {
 /* 計画を超えた分。計画の分との境目が分かるよう 2px 空ける */
 .yn-my-hours-bar-over {
   margin-left: 2px;
-  background: var(--yn-danger);
+  background: var(--yn-warn-text);
 }
 .yn-my-hours-sub {
   margin-top: 6px;
@@ -4671,8 +4673,9 @@ html:has(dialog.yn-dialog[open]) {
 .yn-dg-table .yn-dg-last {
   border-right: 1px solid var(--yn-hairline-strong);
 }
+/* 計画より多く作業した（黄。今月の残りと同じ §131） */
 .yn-dg-table td.is-over {
-  color: var(--yn-danger-text);
+  color: var(--yn-warn-text);
   font-weight: bold;
 }
 /* リソース計画の変更の影響（§65）: 前 → 後。マイナスの残予算・増えた着地は赤 */
@@ -5000,7 +5003,7 @@ html:has(dialog.yn-dialog[open]) {
   font-size: calc(13px * var(--yn-fs));
   color: var(--yn-text-2);
 }
-/* 色: 計画の 1.0 超 = 黄、1.0 未満 = 青系、ちょうど = 緑、計画なし = 地（リソース計画 §41・§58 と同じ） */
+/* 色: 計画の 1.0 超 = 黄、1.0 未満 = 青系、ちょうど = 緑、計画なし = 赤紫（リソース計画 §41・§58・§116 と同じ）。ずれの表示でデータなし = 地 */
 .yn-org-swatch.is-over,
 .yn-org-person.is-over {
   background: var(--yn-warn-bg);
@@ -5020,6 +5023,12 @@ html:has(dialog.yn-dialog[open]) {
 .yn-org-person.is-none {
   background: var(--yn-card);
   color: var(--yn-text-1);
+}
+/* 計画なし（リソース計画 §116 と同じ赤紫。§131） */
+.yn-org-swatch.is-empty,
+.yn-org-person.is-empty {
+  background: var(--yn-empty-bg);
+  color: var(--yn-empty-text);
 }
 .yn-org-tree {
   display: grid;

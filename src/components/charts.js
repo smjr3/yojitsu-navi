@@ -90,7 +90,7 @@ function hatchFill(color) {
  * 日・週・四半期・年度（§130）は core の bucketMonths / bucketDays の出力を渡し、tick（目盛り）・tipLabel（ツールチップの 1 行目）を渡す
  */
 /**
- * 予算の消化率の帯（§130。2026-11-17 依頼者が C＋D 案を選択）: 横軸のすぐ下に期間ごとの極細のバー（予算の青、超えたら赤）、その下に消化率。
+ * 予算の消化率の帯（§130。2026-11-17 依頼者が C＋D 案を選択）: 横軸のすぐ下に期間ごとの極細のバー（消化した分を実績の橙、超えたら赤。消化率メーターと同じ §131）、その下に消化率。
  * どの単位でも同じ位置・同じ見た目にして、単位を切り替えても見方が変わらないようにする。
  * 日・週は予算を棒に配らない（予算管理は月次から）ので、月ごとにまとめて「10月 139%」と出す（monthSeries = 月の単位の series）。
  * 月・四半期・年度は棒ごと。消化率 = 実績（今の期間は今日までの速報）÷ 期間の予算。実績のない未来の期間はバーの地だけ
@@ -156,7 +156,7 @@ function budgetStripMark(segs, { c, unit }) {
       const w = Math.max(0, x2 - x1 - pad * 2);
       const seg = el("g", { class: s.over ? "yn-budget-strip-seg is-over" : "yn-budget-strip-seg" });
       seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.grid }));
-      if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.budget }));
+      if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.cost }));
       const pct = pctOf(s);
       const text = level === 0 ? fullOf(s) : level === 1 ? pct : "";
       if (text) {

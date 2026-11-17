@@ -339,10 +339,13 @@ export function planLoadLegend(dark) {
   ]);
 }
 
-/** 顧客の色（dataviz の分類色 1〜7 を固定の順で。8 色目の赤は目標の上限の線と紛れるので使わない）。8 社目以降は「その他」にまとめて灰色 */
+/**
+ * 顧客の色（dataviz の分類色を固定の順で）。青＝予算・橙＝実績・赤＝超過と目標の上限はアプリ全体で意味が決まっているので使わない（§131）。
+ * 6 社目以降は「その他」にまとめて灰色
+ */
 const CUSTOMER_COLORS = {
-  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
-  dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9"],
+  light: ["#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
+  dark: ["#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9"],
 };
 const MAX_CUSTOMER_SERIES = CUSTOMER_COLORS.light.length;
 
@@ -396,7 +399,7 @@ export function planAmountChart({ data, dark = false, width = 640, height = 200,
       Plot.ruleY([0], { stroke: c.axis }),
       Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "v", z: "k", fill: (d) => series[d.k].color, order: (d) => d.k, stroke: c.surface, strokeWidth: 1 })),
       // 予算（月ごとの段）と目標の上限（予算 ×（1 − 目標の残予算率）の合計。§63.3 と同じ赤の破線）
-      Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.text, strokeOpacity: 0.7, strokeWidth: 1.5 }),
+      Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.budget, strokeWidth: 2.5 }),
       Plot.link(caps, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "cap", y2: "cap", stroke: c.danger, strokeWidth: 2, strokeDasharray: "5 3" }),
       Plot.text(pts.filter((d) => d.over), { x: "i", y: (d) => Math.max(d.plan, d.budget, d.cap ?? 0), dy: scaledPx(-9), text: () => (slot < 72 ? T.plan.chartAmountOverShort : T.plan.chartAmountOver), fill: c.danger, fontWeight: 700, fontSize: scaledPx(11) }),
       Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
@@ -431,8 +434,9 @@ export function planAmountChart({ data, dark = false, width = 640, height = 200,
 export function planAmountLegend(data, dark) {
   const c = chartColors(dark);
   return chartLegend([
+    // 予算を先頭に（他のグラフと同じ並び。§131）
+    { label: T.charts.tipBudget, color: c.budget, shape: "line" },
     ...amountSeries(data, dark).map((s) => ({ label: s.name, color: s.color })),
-    { label: T.charts.tipBudget, color: c.text, shape: "line" },
     ...(data.months.some((m) => m.cap !== null) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
   ]);
 }
