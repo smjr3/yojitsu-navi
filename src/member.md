@@ -26,7 +26,8 @@ const memberKpiRow = (tiles) => {
   return row;
 };
 import { chartFigure } from "./components/chart-zoom.js";
-import { memberHoursChart, memberHoursLegend } from "./components/charts.js";
+import { memberHoursFigure } from "./components/series-figure.js";
+import { lazyJson } from "./components/chart-units.js";
 import { dataTable, contractNameCell } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, dateJa, monthJa, periodJa, periodCompact, STATUS_LABELS } from "./components/format.js";
@@ -47,6 +48,8 @@ const model = loaded?.model ?? null;
 const rateHistory = loaded?.rateHistory ?? {};
 const memberId = new URLSearchParams(location.search).get("id") ?? "";
 const records = model ? memberRecordsOf(model, memberId) : [];
+// グラフの日・週（§130）。日ごとの時間は日・週を選んだときに初めて読む
+const memberDays = lazyJson(FileAttachment("./data/member-days.json"));
 const allMonths = model ? model.memberMonths.filter((mm) => mm.memberId === memberId) : [];
 // マスタにあるか、作業実績・アサインのどちらかに出てくれば「存在する」
 const exists = records.length > 0 || allMonths.length > 0;
@@ -189,13 +192,8 @@ if (vm) {
 if (vm) {
   const { unit, member, series } = vm;
   const period = vm.fullPeriod;
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.member.monthlyHint, { period: periodJa(period), asOfMonth: monthJa(model.meta.asOfMonth) })));
-  display(chartFigure({
-    title: T.charts.memberHoursTitle,
-    subtitle: periodJa(period),
-    legend: memberHoursLegend(dark, series, model.meta.asOfMonth),
-    draw: (width, height) => memberHoursChart({ series, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-  }));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.member.monthlyHint, { period: periodJa(period), asOfMonth: monthJa(model.meta.asOfMonth), fyStart: model.config.fiscalYearStartMonth })));
+  display(memberHoursFigure({ model, series, memberId, memberMonths: allMonths, includeOutside: vm.includeOutside, dark, days: memberDays, period }));
   const contractHref = (id) => store.href("./contract", {}, { id });
   const monthRows = (m) => vm.fullMonths.filter((mm) => mm.month === m);
   const rows = series.map((p) => ({ ...p, key: p.month, isFuture: p.month > model.meta.asOfMonth }));

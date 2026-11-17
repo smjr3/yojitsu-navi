@@ -13,6 +13,9 @@
  */
 import { daysInMonth, isBusinessDay, parseYearMonth, type HolidayLookup } from "./calendar.js";
 import { HolidaySet } from "./holidays.js";
+import { contractDailyActuals, datesBetween, fiscalQuarterOf, monthDayPool, weekStartOf, addDays, type DailyHistoryFile } from "./timeBuckets.js";
+import { addMonths, fiscalYearOf, formatYearMonth, monthOfDate } from "./calendar.js";
+import { firstDayOf, lastDayOf } from "./periodDates.js";
 import type { Holiday, ISODate, Model, YearMonth } from "./types.js";
 
 /** data/daily.json の中身。days[contractId] = [日, 実績額（円・小数）, 時間][] */
@@ -40,6 +43,11 @@ export interface DailyPoint {
 }
 
 export interface DailyProgress {
+  /** 今月の進捗は month。今週・今四半期・今年度（§130）は week / quarter / year */
+  unit?: ProgressUnit;
+  /** 範囲の最初の日・最後の日（unit があるとき） */
+  from?: ISODate;
+  to?: ISODate;
   month: YearMonth;
   lastDate: ISODate | null;
   budget: number;
@@ -258,4 +266,127 @@ export function dailyMembers(
     r.perDayRemaining = rest > 0 ? r.remaining / rest : null;
   }
   return [...rows.values()].sort((a, b) => b.plan - a.plan || b.total - a.total || a.memberId.localeCompare(b.memberId));
+}
+
+// ---------------------------------------------------------------------------
+// 今週・今四半期・今年度の進捗（§130）
+// ---------------------------------------------------------------------------
+
+export type ProgressUnit = "week" | "month" | "quarter" | "year";
+
+/** 今日を含む週（月曜〜日曜）・月・年度の四半期・年度 */
+export function progressRangeOf(unit: ProgressUnit, today: ISODate, startMonth: number): { from: ISODate; to: ISODate } {
+  const month = monthOfDate(today);
+  if (unit === "week") {
+    const from = weekStartOf(today);
+    return { from, to: addDays(from, 6) };
+  }
+  if (unit === "month") return { from: firstDayOf(month), to: lastDayOf(month) };
+  const fy = fiscalYearOf(month, startMonth);
+  const fyStart = formatYearMonth(fy, startMonth);
+  if (unit === "year") return { from: firstDayOf(fyStart), to: lastDayOf(addMonths(fyStart, 11)) };
+  const q = fiscalQuarterOf(month, startMonth).quarter;
+  const qStart = addMonths(fyStart, (q - 1) * 3);
+  return { from: firstDayOf(qStart), to: lastDayOf(addMonths(qStart, 2)) };
+}
+
+/**
+ * 範囲（今週・今四半期・今年度など）の進捗。上限 = 範囲の日の予算（月の予算をその月の営業日に配った値）× 上限の割合（月ごと）。
+ * 実績は data/daily-history.json の日ごとの割合で、案件・月の実績を配った値（§130）。予算が 0 なら null。
+ * points[].day は範囲の何日目か（1 始まり）
+ */
+export function progressOverRange(
+  model: Pick<Model, "contracts" | "holidays" | "meta">,
+  history: DailyHistoryFile | null,
+  contractIds: readonly string[],
+  { unit, from, to, capRatioOf = () => 1, today = null }: { unit: ProgressUnit; from: ISODate; to: ISODate; capRatioOf?: (month: YearMonth) => number; today?: ISODate | null },
+): DailyProgress | null {
+  const ids = new Set(contractIds);
+  const months = { from: monthOfDate(from), to: monthOfDate(to) };
+  const dates = datesBetween(from, to);
+  const set = model.holidays instanceof Set ? model.holidays : new HolidaySet(model.holidays as readonly Holiday[]);
+  // 日ごとの予算・上限
+  const budgetDay = new Map<ISODate, number>();
+  const capDay = new Map<ISODate, number>();
+  let budget = 0;
+  let cap = 0;
+  for (const r of model.contracts) {
+    if (!ids.has(r.contract.contractId)) continue;
+    for (const cm of r.months) {
+      if (cm.month < months.from || cm.month > months.to || cm.budget === 0) continue;
+      const pool = monthDayPool(cm.month, model.holidays);
+      if (pool.length === 0) continue;
+      const each = cm.budget / pool.length;
+      const ratio = Math.max(0, capRatioOf(cm.month));
+      for (const d of pool) {
+        if (d < from || d > to) continue;
+        budgetDay.set(d, (budgetDay.get(d) ?? 0) + each);
+        capDay.set(d, (capDay.get(d) ?? 0) + each * ratio);
+        budget += each;
+        cap += each * ratio;
+      }
+    }
+  }
+  if (budget <= 0) return null;
+  const actuals = contractDailyActuals(model, history, contractIds, months);
+  const lastDate = history?.lastDate && history.lastDate >= from ? (history.lastDate > to ? to : history.lastDate) : null;
+  const todayIn = today && today >= from && today <= to ? today : null;
+  // 今日の分はまだ実績に入っていないものとして、今日も残りの営業日に数える（今月の進捗と同じ）
+  const restAfter = [lastDate, todayIn ? addDays(todayIn, -1) : null].filter((x): x is ISODate => x !== null).sort().pop() ?? addDays(from, -1);
+  let cumulative = 0;
+  let hours = 0;
+  let pace = 0;
+  let paceToDate = 0;
+  let businessDays = 0;
+  let elapsedBusinessDays = 0;
+  let remainingBusinessDays = 0;
+  const points: DailyPoint[] = dates.map((date, i) => {
+    const isBiz = isBusinessDay(date, set);
+    const elapsed = lastDate !== null && date <= lastDate;
+    pace += capDay.get(date) ?? 0;
+    if (isBiz) {
+      businessDays++;
+      if (elapsed) elapsedBusinessDays++;
+      if (date > restAfter) remainingBusinessDays++;
+    }
+    if (elapsed) paceToDate = pace;
+    const v = actuals.get(date);
+    if (elapsed) {
+      cumulative += v?.cost ?? 0;
+      hours += v?.hours ?? 0;
+    }
+    return {
+      date,
+      day: i + 1,
+      businessDay: isBiz,
+      amount: elapsed ? (v?.cost ?? 0) : null,
+      hours: elapsed ? (v?.hours ?? 0) : null,
+      cumulative: elapsed ? cumulative : null,
+      pace,
+    };
+  });
+  const actual = cumulative;
+  const remaining = cap - actual;
+  const averagePerDay = elapsedBusinessDays > 0 ? actual / elapsedBusinessDays : null;
+  return {
+    unit,
+    from,
+    to,
+    month: monthOfDate(todayIn ?? from),
+    lastDate,
+    budget,
+    cap,
+    businessDays,
+    elapsedBusinessDays,
+    remainingBusinessDays,
+    today: todayIn,
+    actual,
+    hours,
+    paceToDate,
+    remaining,
+    perDayRemaining: remainingBusinessDays > 0 ? remaining / remainingBusinessDays : null,
+    averagePerDay,
+    projection: actual + (averagePerDay ?? 0) * (businessDays - elapsedBusinessDays),
+    points,
+  };
 }

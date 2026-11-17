@@ -1,6 +1,6 @@
 /**
  * 月次推移の今月の速報（SPEC §125）: 月の途中でも、入っている今月の実績を斜線の棒で出す。
- * 全体・チーム・案件の月次推移、メンバー詳細の計画と実績の時間に出て、凡例にも「速報・斜線」が出る
+ * 全体・チーム・案件の月次推移、メンバー詳細の計画と実績の時間に出て、凡例にも「実績（速報）」が出る
  */
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
 
@@ -20,7 +20,7 @@ for (const dark of [false, true]) {
       return !!id && !!svg.querySelector(`pattern#${CSS.escape(id)}`) && !!rect && rect.getBoundingClientRect().height > 0;
     });
     expect(ok).toBe(true);
-    await expect(page.locator(".yn-legend li", { hasText: "速報・斜線" }).first()).toBeVisible();
+    await expect(page.locator(".yn-legend li", { hasText: /^実績(時間)?（速報）$/ }).first()).toBeVisible();
   });
 }
 
@@ -30,7 +30,7 @@ test("月次推移の今月の速報: チーム詳細・メンバー詳細にも
   await gotoPage(page, "/members");
   await page.locator("table tbody tr a").first().click();
   await expect(page.locator(HATCH).first()).toBeAttached();
-  await expect(page.locator(".yn-legend li", { hasText: "速報・斜線" }).first()).toBeVisible();
+  await expect(page.locator(".yn-legend li", { hasText: /^実績(時間)?（速報）$/ }).first()).toBeVisible();
 });
 
 test("月次推移の今月の速報: 先月だけの期間では出さない", async ({ page }) => {
@@ -40,5 +40,5 @@ test("月次推移の今月の速報: 先月だけの期間では出さない", 
   await btn.click();
   await expect(page.locator('svg[role="img"][aria-label*="月次推移"]').first()).toBeVisible();
   await expect(page.locator(HATCH)).toHaveCount(0);
-  await expect(page.locator(".yn-legend li", { hasText: "速報・斜線" })).toHaveCount(0);
+  await expect(page.locator(".yn-legend li", { hasText: /^実績(時間)?（速報）$/ })).toHaveCount(0);
 });

@@ -191,11 +191,24 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
       plans: dataset.outsidePlans ?? [],
       actuals: outsideIn.map((o) => ({ memberId: o.worklog.memberId, memberName: o.worklog.memberName, month: o.month, type: classifier.classifyWorklog(o.worklog).group, hours: o.worklog.hours })),
     }, holidays),
+    // 運用保守以外の日ごとの時間（§130。data/member-days.json 用）
+    outsideDays: outsideDaysOf(outsideIn),
     // 工数の明細（§30.2）
     workRows: buildWorkRows(results, outsideIn, classifier, masters),
     outsideTypes: planOutsideTypes(dataset.taskTypes, classifier.enabled),
     targets: dataset.targets ?? [],
   };
+}
+
+/** 運用保守以外の作業を 社員番号 → 日付 → 時間 にまとめる（§130） */
+function outsideDaysOf(inputs: ReadonlyArray<{ worklog: { memberId: string; date: string; hours: number } }>): Record<string, Record<ISODate, number>> {
+  const out: Record<string, Record<ISODate, number>> = {};
+  for (const { worklog: w } of inputs) {
+    if (!(w.hours > 0)) continue;
+    const byDate = (out[w.memberId] ??= {});
+    byDate[w.date] = (byDate[w.date] ?? 0) + w.hours;
+  }
+  return out;
 }
 
 /**
