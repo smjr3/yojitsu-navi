@@ -166,7 +166,7 @@ const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 ```js
 if (vm) {
   const ids = vm.scope.contractIds ?? model.contracts.map((c) => c.contract.contractId);
-  display(dailySection(dailyFor(model, daily, ids, vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}`, range: { model, history: dailyHistory, contractIds: ids } }));
+  display(dailySection(dailyFor(model, daily, ids, vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}`, range: { model, period: vm.scope.period, history: dailyHistory, contractIds: ids } }));
 }
 ```
 

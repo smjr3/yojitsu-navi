@@ -167,6 +167,17 @@ describe("contractDailyActuals と bucketDays（日・週）", () => {
     expect(inMonth(months[3]!).every((d) => d.targetCap === undefined)).toBe(true);
   });
 
+  it("今月の実績が着地を超えていれば、差（負）を今日に置き、足すと月の着地と同じ", () => {
+    const over = series.map((d) => (d.month === months[2] ? { ...d, forecastCost: 80 } : d));
+    const act = contractDailyActuals(model, history, ["A"], { from: months[0]!, to: months[3]! });
+    for (const unit of ["day", "week"] as const) {
+      const b = bucketDays(over, act, { unit, range: { from: months[2]!, to: months[2]! }, asOf, holidays: [] });
+      expect(sum(b.map((d) => d.forecastCost ?? 0))).toBeCloseTo(80);
+    }
+    const q = bucketMonths(over, "quarter", 4);
+    expect(q[0]!.forecastCost).toBe(510 + 80);
+  });
+
   it("週: 月曜始まり。月をまたぐ週は両方の月を含み、足すと期間の合計", () => {
     const act = contractDailyActuals(model, history, ["A"], { from: months[0]!, to: months[3]! });
     const weeks = bucketDays(series, act, { unit: "week", range: { from: months[0]!, to: months[3]! }, asOf, holidays: [] });
@@ -225,13 +236,19 @@ describe("encodeMemberDays", () => {
     const model = {
       meta: { asOf: `${m}-30` },
       holidays: [],
-      contracts: [{ months: [{ month: m, worklogs: [{ memberId: "M1", date: pool[0], hours: 3 }, { memberId: "M1", date: pool[0], hours: 1 }] }] }],
+      contracts: [
+        { contract: { contractId: "A", startMonth: m, endMonth: ym(Y, 8) }, months: [{ month: m, worklogs: [{ memberId: "M1", date: pool[0], hours: 3 }, { memberId: "M1", date: pool[0], hours: 1 }] }] },
+        { contract: { contractId: "OLD", startMonth: ym(Y - 1, 4), endMonth: ym(Y - 1, 12) }, months: [] },
+      ],
       outsideDays: { M1: { [pool[1]!]: 2 } },
     } as never;
     const f = encodeMemberDays(model, {
       assignments: [
         { memberId: "M1", contractId: "A", startMonth: m, endMonth: ym(Y, 8), startDate: start, allocation: 0.5 },
         { memberId: "M2", contractId: "A", startMonth: m, endMonth: m, allocation: 1 },
+        // 契約期間の外・無い案件のアサインは重みに入れない（月の計算と同じ）
+        { memberId: "M1", contractId: "OLD", startMonth: m, endMonth: m, allocation: 1 },
+        { memberId: "M1", contractId: "NONE", startMonth: m, endMonth: m, allocation: 1 },
       ],
       outsidePlans: [],
     });

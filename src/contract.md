@@ -206,7 +206,7 @@ const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}`, range: { model, history: dailyHistory, contractIds: [vm.contract.contractId], targetOf: (m) => targetForMonth(model, "project", vm.contract.contractId, m) } }));
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}`, range: { model, period: vm.period, history: dailyHistory, contractIds: [vm.contract.contractId], targetOf: (m) => targetForMonth(model, "project", vm.contract.contractId, m) } }));
 }
 ```
 

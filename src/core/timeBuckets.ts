@@ -313,7 +313,7 @@ export function bucketMonths(series: readonly SeriesMonth[], unit: "quarter" | "
 
 /**
  * 日・週にまとめる。予算・見込み・目標の上限は月の値をその月の営業日に配り、実績は actuals（contractDailyActuals）を使う。
- * 今月の見込みは「月の着地 − 今日までの実績」を今日より後の営業日に配る（無ければ月末に寄せる）。
+ * 今月の見込みは「月の着地 − 今日までの実績」を今日より後の営業日に配る（無ければ月末に寄せる。負なら今日に置く）。
  * range は出す月（両端含む）。asOf は今日（閲覧者の日本時間。§75）
  */
 export function bucketDays(
@@ -337,8 +337,9 @@ export function bucketDays(
     let fcTotal = 0;
     if (!d.isActual) {
       if (month === asOfMonth) {
-        fcTotal = Math.max(0, (d.forecastCost ?? 0) - d.cost);
-        fcDays = pool.filter((x) => x > asOf);
+        // 着地 − 今日までの実績。実績が着地を超えていれば負のまま今日に置く（月・四半期の着地と同じ値になるように）
+        fcTotal = (d.forecastCost ?? 0) - d.cost;
+        fcDays = fcTotal < 0 ? [asOf] : pool.filter((x) => x > asOf);
         if (fcDays.length === 0) fcDays = [lastDayOf(month)];
       } else {
         fcTotal = d.forecastCost ?? 0;
@@ -548,9 +549,14 @@ export function encodeMemberDays(
     for (const [month, arr] of byMonth) slot(id, month).a = arr;
   }
   // 計画の重み（日付のある端の月だけ）
-  type Row = { memberId: string; startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string; w: number; i: 0 | 1 };
+  // アサインは月の計算（buildMemberMonths）と同じく、有効な案件の契約期間の月だけ数える
+  type Row = { memberId: string; startMonth: YearMonth; endMonth: YearMonth; startDate?: string; endDate?: string; w: number; i: 0 | 1; within?: { startMonth: YearMonth; endMonth: YearMonth } };
+  const contractPeriod = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
   const rows: Row[] = [
-    ...plans.assignments.map((a) => ({ ...a, w: a.allocation, i: 0 as const })),
+    ...plans.assignments.flatMap((a) => {
+      const c = contractPeriod.get(a.contractId);
+      return c ? [{ ...a, w: a.allocation, i: 0 as const, within: { startMonth: c.startMonth, endMonth: c.endMonth } }] : [];
+    }),
     ...plans.outsidePlans.map((o) => ({ ...o, w: o.personMonths, i: 1 as const })),
   ].filter((r) => Number.isFinite(r.w) && r.w > 0 && r.startMonth <= r.endMonth);
   const byMember = new Map<string, Row[]>();
@@ -561,16 +567,17 @@ export function encodeMemberDays(
   }
   for (const [id, list] of byMember) {
     const edgeMonths = new Set<YearMonth>();
+    const counts = (r: Row, month: YearMonth) => r.startMonth <= month && month <= r.endMonth && (!r.within || (r.within.startMonth <= month && month <= r.within.endMonth));
     for (const r of list) {
-      if (startDateOf(r)) edgeMonths.add(r.startMonth);
-      if (endDateOf(r)) edgeMonths.add(r.endMonth);
+      if (startDateOf(r) && counts(r, r.startMonth)) edgeMonths.add(r.startMonth);
+      if (endDateOf(r) && counts(r, r.endMonth)) edgeMonths.add(r.endMonth);
     }
     for (const month of [...edgeMonths].sort()) {
       const out: Array<[number, number, number]> = [];
       for (const date of monthDayPool(month, model.holidays)) {
         const w: [number, number] = [0, 0];
         for (const r of list) {
-          if (r.startMonth > month || r.endMonth < month) continue;
+          if (!counts(r, month)) continue;
           const s = spanOf(r);
           if (date >= s.from && date <= s.to) w[r.i] += r.w;
         }

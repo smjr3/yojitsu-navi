@@ -360,15 +360,29 @@ export function rangeProgress(model, history, contractIds, unit, targetOf = null
   return { ...p, target };
 }
 
+/** 選択中の期間が今月を含み、対象の案件に今年度の予算があるか（範囲の進捗を出せるか） */
+function hasYearBudget({ model, contractIds, period }) {
+  const month = model.meta.asOfMonth;
+  if (!period || period.from > month || period.to < month) return false;
+  const { from, to } = progressRangeOf("year", model.meta.asOf, model.config.fiscalYearStartMonth);
+  return hasBudgetIn({ model, contractIds }, from.slice(0, 7), to.slice(0, 7));
+}
+
+function hasBudgetIn({ model, contractIds }, from, to) {
+  const ids = new Set(contractIds);
+  return model.contracts.some((r) => ids.has(r.contract.contractId) && r.months.some((cm) => cm.budget !== 0 && cm.month >= from && cm.month <= to));
+}
+
 /**
- * 見出し ＋ KPI ＋ グラフ（表つき）。p が null なら何も出さない。
+ * 見出し ＋ KPI ＋ グラフ（表つき）。p が null なら、範囲の切り替え（range）で今年度に予算があるときだけ出す。
  * members を渡すと（チーム詳細）、下にメンバー×日の表を足す（今月のまま）。
- * range を渡すと、グラフの上に 週・月・四半期・年度 の切り替えを出す（§130）: { model, history（lazyJson）, contractIds, targetOf }
+ * range を渡すと、グラフの上に 週・月・四半期・年度 の切り替えを出す（§130）: { model, history（lazyJson）, contractIds, targetOf, period（選択中の期間） }
  */
 export function dailySection(p, { unit, dark, subtitle, exportName, members = null, range = null }) {
   // display(null) は「null」と表示されるので、出さないときは空の断片を返す
-  if (!p) return document.createDocumentFragment();
-  const memberRows = members ? dailyMembers(members.model, p.daily ?? members.daily, p, members.contractIds) : [];
+  // 今月の予算が無くても、今年度のどこかに予算があれば範囲の切り替えは出す（今月は「予算のある案件がありません」）
+  if (!p && !(range && hasYearBudget(range))) return document.createDocumentFragment();
+  const memberRows = p && members ? dailyMembers(members.model, p.daily ?? members.daily, p, members.contractIds) : [];
   const startMonth = range?.model.config.fiscalYearStartMonth ?? 4;
   const body = h("div", { class: "yn-daily-body" });
   let cur = range ? loadUnit("progress", PROGRESS_UNITS) : "month";
@@ -390,12 +404,13 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
         })
       : null;
     const opts = { unit, dark, subtitle, exportName, controls, startMonth };
-    if (cur === "month") {
-      body.replaceChildren(progressBody(p, opts));
-      return;
-    }
     const sp = { span: T.daily.spans[cur] };
     const msg = (text) => html`${sectionTitle(fmt(T.daily.title, sp))}${chartFigure({ title: fmt(T.daily.title, sp), controls, draw: () => chartMessage(text) })}`;
+    if (cur === "month") {
+      // 今月の予算があるのに p が無い = data/daily.json が読めない
+      body.replaceChildren(p ? progressBody(p, opts) : msg(hasBudgetIn(range, range.model.meta.asOfMonth, range.model.meta.asOfMonth) ? T.daily.loadFailed : T.daily.noBudget));
+      return;
+    }
     body.replaceChildren(msg(T.daily.loading));
     range.history().then((hist) => {
       if (my !== token) return;
@@ -409,7 +424,7 @@ export function dailySection(p, { unit, dark, subtitle, exportName, members = nu
   return html`<section class="yn-daily" id="yn-daily">
     ${body}
     ${memberRows.length > 0
-      ? html`${sectionTitle(T.daily.membersTitle, fmt(T.daily.membersHint, { date: p.lastDate ?? "—" }))}${dailyMemberTable(p, memberRows, { ...members, exportName: exportName ? `${exportName}_members` : null })}`
+      ? html`${sectionTitle(T.daily.membersTitle, fmt(T.daily.membersHint, { date: p?.lastDate ?? "—" }))}${dailyMemberTable(p, memberRows, { ...members, exportName: exportName ? `${exportName}_members` : null })}`
       : null}
   </section>`;
 }
