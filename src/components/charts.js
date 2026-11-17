@@ -36,8 +36,13 @@ export function withTargets(series, targetOf) {
 }
 
 const hasTarget = (series) => series.some((d) => d.targetCap != null);
+/**
+ * 日の単位（§130）は予算を出さない（2026-11-17 依頼者「日次で予算は設定しなくていい」）。実績・見込み・速報の棒だけで、
+ * 予算の線・予算超過の赤・残予算・目標の上限は、グラフ・凡例・ツールチップ・表（Excel）のどれにも出さない。予算との比較は週以上で見る
+ */
+const isDaySeries = (series) => series.length > 0 && series[0].unit === "day";
 /** 予算を超えた実績・見込みがあるか（§130 の赤い部分の凡例を出すか） */
-const hasOverBudget = (series) => series.some((d) => (d.isActual ? d.cost : (d.forecastCost ?? 0)) > d.budget);
+const hasOverBudget = (series) => !isDaySeries(series) && series.some((d) => (d.isActual ? d.cost : (d.forecastCost ?? 0)) > d.budget);
 
 /** 今月（月の途中）の速報の実績（§125）。基準月以降で実績が入っている月だけ */
 // 日・週・四半期・年度（§130）は、今日を含む・見込みの月を含む棒（partial）の今日までの実績も斜線
@@ -104,12 +109,13 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
     const d = data[i];
     return d ? (tick ? tick(d, i) : monthShort(d.month, i === 0)) : "";
   };
-  const targets = data.filter((d) => d.targetCap != null);
-  const peak = Math.max(0, ...data.map((d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0, d.targetCap ?? 0)));
+  const noBudget = isDaySeries(data);
+  const targets = noBudget ? [] : data.filter((d) => d.targetCap != null);
+  const peak = Math.max(0, ...data.map((d) => Math.max(noBudget ? 0 : d.budget, d.cost, d.forecastCost ?? 0, noBudget ? 0 : d.targetCap ?? 0)));
   const axisUnit = peak >= 5e10 ? { label: T.charts.axisHundredMillionYen, div: 1e8 } : peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
   const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
   // 左余白は最も長い目盛り（負の粗利を含む）に合わせる。固定だと桁が増えたとき符号が切れる
-  const low = Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
+  const low = noBudget ? 0 : Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
   const marginLeft = scaledPx(Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1)));
   const barW = Math.max(minBar, Math.min(24, ((width - 90) / n) * 0.42));
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
@@ -117,12 +123,11 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   // 実績の棒の半幅: 以前の予算・実績 2 本ぶんの幅を 1 本で使う
   const half = Math.min(0.36, bw + gap);
   // 予算の段の線: 各期間の幅いっぱいの水平線をつなぐ。見込みの期間は別の線（薄く）にし、境目は縦につなぐ
-  // 日の単位で予算の無い日（休日）は線を切る（0 まで縦に落ちる線が並んで櫛のようにならないように）
-  const step = (d) => (d.unit === "day" && d.budget === 0 ? [{ x: d.i, y: NaN }] : [{ x: d.i - 0.5, y: d.budget }, { x: d.i + 0.5, y: d.budget }]);
+  const step = (d) => [{ x: d.i - 0.5, y: d.budget }, { x: d.i + 0.5, y: d.budget }];
   const budgetPast = data.filter((d) => d.isActual).flatMap(step);
   const budgetFuture = data.filter((d) => !d.isActual).flatMap(step);
   if (budgetPast.length && budgetFuture.length) budgetFuture.unshift(budgetPast[budgetPast.length - 1]);
-  const yMax = (d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0);
+  const yMax = (d) => Math.max(noBudget ? 0 : d.budget, d.cost, d.forecastCost ?? 0);
   // 棒が細かいとき（日・週。§130）は残予算の点を小さくする（月は今までどおり）
   const band = (width - 90) / n;
   const dotR = fitDots ? Math.max(1.5, Math.min(4, band * 0.25)) : 4;
@@ -152,24 +157,24 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       // 実績（§130: 予算は棒にせず段の線。棒は実績だけにして本数を半分にする）
       Plot.rectY(actual, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "cost", fill: c.cost, ry2: 4 }),
       // 実績のうち予算を超えた分は赤
-      Plot.rectY(actual.filter((d) => d.cost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "cost", fill: c.danger }),
+      noBudget ? null : Plot.rectY(actual.filter((d) => d.cost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "cost", fill: c.danger }),
       // 実績（見込み）: 薄い塗り ＋ 破線の枠
       Plot.rectY(remaining, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "forecastCost", fill: c.cost, fillOpacity: 0.35, stroke: c.cost, strokeWidth: 1, strokeDasharray: "3 2", ry2: 4 }),
       // 実績（今月の速報）: 斜線
       hatch ? Plot.rectY(prelim, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "cost", fill: hatch.fill, stroke: c.cost, strokeWidth: 1, ry2: 4 }) : null,
       // 見込みのうち予算を超える分は薄い赤（速報の斜線の上に重ねても斜線が透けて見える）
-      Plot.rectY(remaining.filter((d) => d.forecastCost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "forecastCost", fill: c.danger, fillOpacity: 0.35, stroke: c.danger, strokeWidth: 1, strokeDasharray: "3 2" }),
+      noBudget ? null : Plot.rectY(remaining.filter((d) => d.forecastCost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "forecastCost", fill: c.danger, fillOpacity: 0.35, stroke: c.danger, strokeWidth: 1, strokeDasharray: "3 2" }),
       // 予算の線は棒より前に出す（超えた分の境目が見えるように）
-      Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
-      budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
+      noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
+      !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
       // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ赤の破線。実績の棒が線を超えたら目標を外れている
-      targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
+      !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
-      Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
-      Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
+      noBudget ? null : Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
+      noBudget ? null : Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
       // 粗利（見込み）
-      Plot.line(forecastLine, { x: "i", y: "forecastGrossProfit", stroke: c.gp, strokeWidth: 2, strokeDasharray: "5 4", curve: "linear" }),
-      Plot.dot(remaining, { x: "i", y: "forecastGrossProfit", fill: c.surface, r: dotR, stroke: c.gp, strokeWidth: dotStroke }),
+      noBudget ? null : Plot.line(forecastLine, { x: "i", y: "forecastGrossProfit", stroke: c.gp, strokeWidth: 2, strokeDasharray: "5 4", curve: "linear" }),
+      noBudget ? null : Plot.dot(remaining, { x: "i", y: "forecastGrossProfit", fill: c.surface, r: dotR, stroke: c.gp, strokeWidth: dotStroke }),
       // クロスヘア ＋ ツールチップ
       Plot.ruleX(data, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
@@ -184,11 +189,11 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
           fontSize: scaledPx(12),
           channels: {
             [tipName]: (d) => (tipLabel ? tipLabel(d) : fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : T.charts.suffixForecast })),
-            [T.charts.tipBudget]: (d) => money(d.budget, unit),
+            [T.charts.tipBudget]: (d) => (noBudget ? null : money(d.budget, unit)),
             [T.charts.tipCost]: (d) => (d.isActual ? money(d.cost, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastCost, unit) })),
             [T.charts.tipPrelim]: (d) => (hasPrelimValue(d) && d.cost !== 0 ? money(d.cost, unit) : null),
-            [T.charts.tipGrossProfit]: (d) => (d.isActual ? money(d.grossProfit, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastGrossProfit, unit) })),
-            [T.charts.tipTarget]: (d) => (d.targetCap == null ? null : fmt(T.charts.targetValue, { value: money(d.targetCap, unit), rate: formatPercent(d.targetRate, Math.abs(Math.round(d.targetRate * 100) - d.targetRate * 100) < 1e-9 ? 0 : 1) })),
+            [T.charts.tipGrossProfit]: (d) => (noBudget ? null : d.isActual ? money(d.grossProfit, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastGrossProfit, unit) })),
+            [T.charts.tipTarget]: (d) => (noBudget || d.targetCap == null ? null : fmt(T.charts.targetValue, { value: money(d.targetCap, unit), rate: formatPercent(d.targetRate, Math.abs(Math.round(d.targetRate * 100) - d.targetRate * 100) < 1e-9 ? 0 : 1) })),
             [T.charts.tipHours]: (d) => (d.hours > 0 ? formatHours(d.hours) : null),
           },
           format: { x: false, y: false },
@@ -197,7 +202,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
     ].filter(Boolean),
   });
   plot.setAttribute("role", "img");
-  plot.setAttribute("aria-label", fmt(T.charts.monthlyAria, { title }));
+  plot.setAttribute("aria-label", fmt(noBudget ? T.charts.monthlyAriaDay : T.charts.monthlyAria, { title }));
   hatch?.attach(plot);
   return plot;
 }
@@ -205,14 +210,18 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
 export function monthlyLegend(dark, series = null) {
   const c = chartColors(dark);
   return chartLegend([
-    { label: T.columns.budget, color: c.budget, shape: "line" },
+    ...(series && isDaySeries(series) ? [] : [{ label: T.columns.budget, color: c.budget, shape: "line" }]),
     { label: T.charts.costActual, color: c.cost },
     ...(series && hasOverBudget(series) ? [{ label: T.charts.legendOverBudget, color: c.danger }] : []),
     { label: T.charts.legendCostForecast, color: c.cost, shape: "rect-dashed" },
     ...(series && hasPrelimNow(series) ? [{ label: T.charts.legendCostPrelim, color: c.cost, shape: "rect-hatched" }] : []),
-    { label: T.charts.gpActual, color: c.gp, shape: "line" },
-    { label: T.charts.legendGpForecast, color: c.gp, shape: "line-dashed" },
-    ...(series && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
+    ...(series && isDaySeries(series)
+      ? []
+      : [
+          { label: T.charts.gpActual, color: c.gp, shape: "line" },
+          { label: T.charts.legendGpForecast, color: c.gp, shape: "line-dashed" },
+        ]),
+    ...(series && !isDaySeries(series) && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
   ]);
 }
 
@@ -233,16 +242,17 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly", labe
     actualCostPrelim: hasPrelimValue(d) ? d.cost : null,
     targetCap: d.targetCap ?? null,
   }));
+  const noBudget = isDaySeries(series);
   const columns = [
     label
       ? { key: "month", label: T.charts.colPeriod, type: "text", render: (r) => r.label, sortValue: (r) => r.from, exportValue: (r) => r.label }
       : { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
     { key: "status", label: T.columns.status, type: "text", render: (r) => (r.status ? STATUS_LABELS[r.status] : "—"), exportValue: (r) => (r.status ? STATUS_LABELS[r.status] : "") },
-    { key: "budget", label: T.columns.budget, type: "money" },
+    ...(noBudget ? [] : [{ key: "budget", label: T.columns.budget, type: "money" }]),
     { key: "cost", label: T.charts.costActual, type: "money", render: (r, u) => (r.cost === null ? (r.actualCostPrelim !== null && r.actualCostPrelim > 0 ? fmt(T.charts.prelimValue, { value: money(r.actualCostPrelim, u) }) : "—") : money(r.cost, u)), exportValue: (r) => r.cost ?? r.actualCostPrelim },
     { key: "forecastCost", label: T.charts.costForecast, type: "money", render: (r, u) => (r.forecastCost === null ? "—" : money(r.forecastCost, u)) },
-    { key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => (r.grossProfit === null ? (r.forecastGrossProfit === null ? "—" : fmt(T.charts.forecastValue, { value: money(r.forecastGrossProfit, u) })) : money(r.grossProfit, u)), exportValue: (r) => r.grossProfit ?? r.forecastGrossProfit },
-    ...(hasTarget(series) ? [{ key: "targetCap", label: T.charts.legendTarget, type: "money", render: (r, u) => (r.targetCap === null ? "—" : money(r.targetCap, u)) }] : []),
+    ...(noBudget ? [] : [{ key: "grossProfit", label: T.columns.grossProfit, type: "money", render: (r, u) => (r.grossProfit === null ? (r.forecastGrossProfit === null ? "—" : fmt(T.charts.forecastValue, { value: money(r.forecastGrossProfit, u) })) : money(r.grossProfit, u)), exportValue: (r) => r.grossProfit ?? r.forecastGrossProfit }]),
+    ...(!noBudget && hasTarget(series) ? [{ key: "targetCap", label: T.charts.legendTarget, type: "money", render: (r, u) => (r.targetCap === null ? "—" : money(r.targetCap, u)) }] : []),
     { key: "hours", label: T.columns.hours, type: "hours", hideOnPhone: true, hideNarrow: true },
   ];
   return dataTable({ columns, rows, unit, caption: T.charts.monthlyTitle, exportName, sort: { key: "month", dir: "asc" } });

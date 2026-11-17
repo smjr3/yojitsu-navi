@@ -144,3 +144,35 @@ test("月次推移: 予算は段の線、棒は実績だけ。予算を超えた
   expect(colors).toEqual({ budgetLine: true, budgetRect: false, overRect: true });
   await expect(figure(page).locator(".yn-legend")).toContainText("予算超過");
 });
+
+test("日: 予算は出さない（線・超過の赤・残予算・凡例・表）。週は予算を出す", async ({ page }) => {
+  // 予算を超えた月のある案件（週・月なら赤が出る）
+  const id = model.contracts.find((c) => c.months.some((m) => m.cost > m.budget && m.budget > 0 && m.month <= model.meta.asOfMonth))!.contract.contractId;
+  await gotoPage(page, `/contract?id=${id}`);
+  const marks = () =>
+    plot(page).evaluate((svg) => {
+      const color = (el: Element, attr: string) => el.getAttribute(attr) ?? el.closest(`[${attr}]`)?.getAttribute(attr) ?? "";
+      return {
+        budget: [...svg.querySelectorAll("path")].some((p) => /^#(2a78d6|3987e5)$/i.test(color(p, "stroke"))),
+        red: [...svg.querySelectorAll("rect")].some((r) => /^#d03b3b$/i.test(color(r, "fill"))),
+        gp: [...svg.querySelectorAll("path, circle")].some((p) => /^#(1baf7a|199e70)$/i.test(color(p, "stroke") || color(p, "fill"))),
+      };
+    });
+  await unitBtn(page, "日").click();
+  await expect(plot(page)).toHaveAttribute("aria-label", /日の単位では予算を出しません/);
+  expect(await marks()).toEqual({ budget: false, red: false, gp: false });
+  const legend = figure(page).locator(".yn-legend li");
+  await expect(legend.filter({ hasText: /^予算/ })).toHaveCount(0);
+  await expect(legend.filter({ hasText: /^残予算/ })).toHaveCount(0);
+  await unitBtn(page, "週").click();
+  await expect(plot(page)).toBeVisible();
+  expect((await marks()).budget).toBe(true);
+  // 表（案件詳細は表なし）: 全体サマリーの日
+  await gotoPage(page, "/");
+  await unitBtn(page, "日").click();
+  await figure(page).locator("summary", { hasText: "表で見る" }).click();
+  const heads = figure(page).locator("table thead th");
+  await expect(heads.filter({ hasText: /^予算/ })).toHaveCount(0);
+  await expect(heads.filter({ hasText: /^残予算/ })).toHaveCount(0);
+  await expect(heads.filter({ hasText: /^実績/ }).first()).toBeVisible();
+});
