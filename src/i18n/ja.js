@@ -807,7 +807,7 @@ export default {
     suffixForecast: "・見込み",
     forecastValue: "{value}（見込み）",
     noPlanDash: "—（計画なし）",
-    monthlyAria: "{title}。予算・実績の棒グラフと残予算の折れ線。値は下の表で確認できます。",
+    monthlyAria: "{title}。実績の棒グラフと予算の段の線（予算を超えた分は赤）、残予算の折れ線。値は下の表で確認できます。",
     memberHoursAria: "{title}。{unit}ごとの計画時間と実績時間の棒グラフ。値は下の表で確認できます。",
     // グラフの単位の切り替え（§130）
     unitLabels: { day: "日", week: "週", month: "月", quarter: "四半期", year: "年度" },
@@ -834,10 +834,11 @@ export default {
     axisTenThousandYen: "万円",
     axisHundredMillionYen: "億円",
     costActual: "実績",
-    legendCostForecast: "実績（見込み・破線枠）",
-    legendCostPrelim: "実績（速報・斜線）",
+    legendOverBudget: "予算超過",
+    legendCostForecast: "実績（見込み）",
+    legendCostPrelim: "実績（速報）",
     gpActual: "残予算",
-    legendGpForecast: "残予算（見込み・破線）",
+    legendGpForecast: "残予算（見込み）",
     legendTarget: "目標の上限",
     colMonth: "月",
     prelimValue: "{value}（速報）",
@@ -846,7 +847,7 @@ export default {
     hoursAxis: "時間（h）",
     legendPlanned: "計画時間（配分 × 1人月の時間）",
     legendActual: "実績時間（作業実績）",
-    legendActualPrelim: "実績時間（速報・斜線）",
+    legendActualPrelim: "実績時間（速報）",
     // グラフの拡大表示（全グラフ共通）
     zoom: "拡大",
     zoomTip: "グラフを大きく表示します",
@@ -936,7 +937,7 @@ export default {
   // ── 全体サマリー ──────────────────────────────────
   index: {
     lead: "保守契約の予算（契約額を営業日で月に按分）と実績（工数 × 単価）を突き合わせ、残予算と期間の終わりの着地見込みを見る画面です。数値をクリックすると計算根拠が開きます。",
-    monthlyHint: "{period} の予算・実績・残予算。{asOfMonth} 以降は着地見込み（{method}）で、{asOfMonth} に入っている実績は速報として見込みの破線枠の中に斜線で出します。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。グラフの上の「日・週・月・四半期・年度」で単位を切り替えられます（年度は{fyStart}月始まり。日は終わりの 3 か月だけ。日・週の予算・見込み・計画は、月の値をその月の営業日に均等に配った目安）。",
+    monthlyHint: "{period} の予算・実績・残予算。予算は段の線、実績は棒で、予算を超えた分を赤にしています。{asOfMonth} 以降は着地見込み（{method}）で、{asOfMonth} に入っている実績は速報として見込みの破線枠の中に斜線で出します。目標がある月は、予算 ×（1 − 目標の残予算率）を「目標の上限」として赤の破線で重ねます。グラフの上の「日・週・月・四半期・年度」で単位を切り替えられます（年度は{fyStart}月始まり。日は終わりの 3 か月だけ。日・週の予算・見込み・計画は、月の値をその月の営業日に均等に配った目安）。",
     deficitHint: "{period} の終わりの着地差がマイナスになる案件（{method}）。クリックで案件詳細へ。",
     noDeficitTitle: "超過見込みの案件はありません",
     noDeficitText: "{team} の案件はすべて予算内で着地する見込みです。",

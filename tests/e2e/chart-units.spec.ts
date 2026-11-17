@@ -130,3 +130,17 @@ for (const [w, dark] of [
     }
   });
 }
+
+test("月次推移: 予算は段の線、棒は実績だけ。予算を超えた分は赤で、凡例に「予算超過」", async ({ page }) => {
+  // 予算を超えた月のある案件
+  const id = model.contracts.find((c) => c.months.some((m) => m.cost > m.budget && m.budget > 0))!.contract.contractId;
+  await gotoPage(page, `/contract?id=${id}`);
+  await expect(plot(page)).toBeVisible();
+  const colors = await plot(page).evaluate((svg) => ({
+    budgetLine: [...svg.querySelectorAll("path")].some((p) => /^#(2a78d6|3987e5)$/i.test(p.closest("[stroke]")?.getAttribute("stroke") ?? "")),
+    budgetRect: [...svg.querySelectorAll("rect")].some((r) => /^#(2a78d6|3987e5)$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
+    overRect: [...svg.querySelectorAll("rect")].some((r) => /^#d03b3b$/i.test(r.getAttribute("fill") ?? r.closest("[fill]")?.getAttribute("fill") ?? "")),
+  }));
+  expect(colors).toEqual({ budgetLine: true, budgetRect: false, overRect: true });
+  await expect(figure(page).locator(".yn-legend")).toContainText("予算超過");
+});

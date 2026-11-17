@@ -36,6 +36,8 @@ export function withTargets(series, targetOf) {
 }
 
 const hasTarget = (series) => series.some((d) => d.targetCap != null);
+/** 予算を超えた実績・見込みがあるか（§130 の赤い部分の凡例を出すか） */
+const hasOverBudget = (series) => series.some((d) => (d.isActual ? d.cost : (d.forecastCost ?? 0)) > d.budget);
 
 /** 今月（月の途中）の速報の実績（§125）。基準月以降で実績が入っている月だけ */
 // 日・週・四半期・年度（§130）は、今日を含む・見込みの月を含む棒（partial）の今日までの実績も斜線
@@ -112,6 +114,14 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const barW = Math.max(minBar, Math.min(24, ((width - 90) / n) * 0.42));
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
   const gap = 0.03;
+  // 実績の棒の半幅: 以前の予算・実績 2 本ぶんの幅を 1 本で使う
+  const half = Math.min(0.36, bw + gap);
+  // 予算の段の線: 各期間の幅いっぱいの水平線をつなぐ。見込みの期間は別の線（薄く）にし、境目は縦につなぐ
+  // 日の単位で予算の無い日（休日）は線を切る（0 まで縦に落ちる線が並んで櫛のようにならないように）
+  const step = (d) => (d.unit === "day" && d.budget === 0 ? [{ x: d.i, y: NaN }] : [{ x: d.i - 0.5, y: d.budget }, { x: d.i + 0.5, y: d.budget }]);
+  const budgetPast = data.filter((d) => d.isActual).flatMap(step);
+  const budgetFuture = data.filter((d) => !d.isActual).flatMap(step);
+  if (budgetPast.length && budgetFuture.length) budgetFuture.unshift(budgetPast[budgetPast.length - 1]);
   const yMax = (d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0);
   // 棒が細かいとき（日・週。§130）は残予算の点を小さくする（月は今までどおり）
   const band = (width - 90) / n;
@@ -139,16 +149,21 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       hasForecast && lastActual
         ? Plot.rectX([{ x1: lastActual.i + 0.5, x2: n - 0.5 }], { x1: "x1", x2: "x2", fill: c.muted, fillOpacity: 0.06 })
         : null,
-      // 予算（左の棒）。見込み月は薄く
-      Plot.rectY(data, { x1: (d) => d.i - gap - bw, x2: (d) => d.i - gap, y: "budget", fill: c.budget, fillOpacity: (d) => (d.isActual ? 1 : 0.55), ry2: 4, title: null }),
-      // 原価（実績）
-      Plot.rectY(actual, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "cost", fill: c.cost, ry2: 4 }),
-      // 原価（見込み）: 薄い塗り ＋ 破線の枠
-      Plot.rectY(remaining, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "forecastCost", fill: c.cost, fillOpacity: 0.35, stroke: c.cost, strokeWidth: 1, strokeDasharray: "3 2", ry2: 4 }),
-      // 原価（今月の速報）: 斜線
-      hatch ? Plot.rectY(prelim, { x1: (d) => d.i + gap, x2: (d) => d.i + gap + bw, y: "cost", fill: hatch.fill, stroke: c.cost, strokeWidth: 1, ry2: 4 }) : null,
+      // 実績（§130: 予算は棒にせず段の線。棒は実績だけにして本数を半分にする）
+      Plot.rectY(actual, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "cost", fill: c.cost, ry2: 4 }),
+      // 実績のうち予算を超えた分は赤
+      Plot.rectY(actual.filter((d) => d.cost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "cost", fill: c.danger }),
+      // 実績（見込み）: 薄い塗り ＋ 破線の枠
+      Plot.rectY(remaining, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "forecastCost", fill: c.cost, fillOpacity: 0.35, stroke: c.cost, strokeWidth: 1, strokeDasharray: "3 2", ry2: 4 }),
+      // 実績（今月の速報）: 斜線
+      hatch ? Plot.rectY(prelim, { x1: (d) => d.i - half, x2: (d) => d.i + half, y: "cost", fill: hatch.fill, stroke: c.cost, strokeWidth: 1, ry2: 4 }) : null,
+      // 見込みのうち予算を超える分は薄い赤（速報の斜線の上に重ねても斜線が透けて見える）
+      Plot.rectY(remaining.filter((d) => d.forecastCost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "forecastCost", fill: c.danger, fillOpacity: 0.35, stroke: c.danger, strokeWidth: 1, strokeDasharray: "3 2" }),
+      // 予算の線は棒より前に出す（超えた分の境目が見えるように）
+      Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
+      budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
       // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ赤の破線。実績の棒が線を超えたら目標を外れている
-      targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - gap - bw - 0.06, x2: (d) => d.i + gap + bw + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
+      targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
       Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
       Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
@@ -190,8 +205,9 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
 export function monthlyLegend(dark, series = null) {
   const c = chartColors(dark);
   return chartLegend([
-    { label: T.columns.budget, color: c.budget },
+    { label: T.columns.budget, color: c.budget, shape: "line" },
     { label: T.charts.costActual, color: c.cost },
+    ...(series && hasOverBudget(series) ? [{ label: T.charts.legendOverBudget, color: c.danger }] : []),
     { label: T.charts.legendCostForecast, color: c.cost, shape: "rect-dashed" },
     ...(series && hasPrelimNow(series) ? [{ label: T.charts.legendCostPrelim, color: c.cost, shape: "rect-hatched" }] : []),
     { label: T.charts.gpActual, color: c.gp, shape: "line" },
