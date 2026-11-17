@@ -760,6 +760,11 @@ export interface Model {
    */
   memberMonths: MemberMonth[];
   /**
+   * 運用保守以外の作業の日ごとの時間（§130。outsideDays[社員番号][日付] = 時間）。data/member-days.json を作るのに使う。
+   * 画面用の model.json には入れない
+   */
+  outsideDays?: Record<string, Record<ISODate, number>>;
+  /**
    * 工数の明細（§30.2）。month → memberId → contractId → task の順。
    * 画面用の model.json では空にし、data/work-hours.json で別に配る
    */

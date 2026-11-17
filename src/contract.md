@@ -22,7 +22,9 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, withTargets, burnMeter } from "./components/charts.js";
+import { withTargets, burnMeter } from "./components/charts.js";
+import { monthlyFigure } from "./components/series-figure.js";
+import { lazyJson } from "./components/chart-units.js";
 import { dataTable, PREVIEW_ROWS } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
@@ -190,24 +192,21 @@ if (vm) {
 ```js
 if (vm) {
   const series = withTargets(vm.series, (m) => targetForMonth(model, "project", vm.contract.contractId, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(chartFigure({
-    title: T.charts.monthlyTitle,
-    subtitle: periodJa(vm.period),
-    legend: monthlyLegend(dark, series),
-    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-  }));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: [vm.contract.contractId], period: vm.period, exportName: `contract_${vm.contract.contractId}_monthly`, table: false }));
 }
 ```
 
 ```js
 // 今月の進捗（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
+// 日・週・四半期・年度の切り替え（§130）。日ごとの実績は日・週などを選んだときに初めて読む
+const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 ```
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}` }));
+  display(dailySection(dailyFor(model, daily, [vm.contract.contractId], vm.period, targetForMonth(model, "project", vm.contract.contractId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: `${vm.contract.customerName} / ${vm.contract.projectName}`, exportName: `contract_${vm.contract.contractId}_daily_${model.meta.asOfMonth}`, range: { model, history: dailyHistory, contractIds: [vm.contract.contractId], targetOf: (m) => targetForMonth(model, "project", vm.contract.contractId, m) } }));
 }
 ```
 

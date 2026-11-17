@@ -38,7 +38,9 @@ export function withTargets(series, targetOf) {
 const hasTarget = (series) => series.some((d) => d.targetCap != null);
 
 /** 今月（月の途中）の速報の実績（§125）。基準月以降で実績が入っている月だけ */
-const isPrelimNow = (d) => !d.isActual && d.status === "preliminary" && d.cost > 0;
+// 日・週・四半期・年度（§130）は、今日を含む・見込みの月を含む棒（partial）の今日までの実績も斜線
+const isPrelimNow = (d) => !d.isActual && (d.status === "preliminary" || d.partial === true) && d.cost > 0;
+const hasPrelimValue = (d) => !d.isActual && (d.status === "preliminary" || d.partial === true);
 const hasPrelimNow = (series) => series.some(isPrelimNow);
 
 /**
@@ -77,9 +79,10 @@ function hatchFill(color) {
 
 /**
  * 月次推移: 予算と原価の棒 ＋ 粗利の折れ線。
- * series は analysis.seriesWithForecast() の出力（isActual, forecastCost, forecastGrossProfit を持つ。withTargets を通すと targetCap も）
+ * series は analysis.seriesWithForecast() の出力（isActual, forecastCost, forecastGrossProfit を持つ。withTargets を通すと targetCap も）。
+ * 日・週・四半期・年度（§130）は core の bucketMonths / bucketDays の出力を渡し、tick（目盛り）・tipLabel（ツールチップの 1 行目）を渡す
  */
-export function monthlyChart({ series, unit = "yen", dark = false, width = 640, height = 300, asOfMonth, title = T.charts.monthlyTitle }) {
+export function monthlyChart({ series, unit = "yen", dark = false, width = 640, height = 300, asOfMonth, title = T.charts.monthlyTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, minBar = 6, fitDots = false }) {
   const c = chartColors(dark);
   const data = series.map((d, i) => ({ ...d, i }));
   const n = data.length;
@@ -97,7 +100,7 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   const ticks = data.filter((d) => d.i % every === 0).map((d) => d.i);
   const tickFormat = (i) => {
     const d = data[i];
-    return d ? monthShort(d.month, i === 0) : "";
+    return d ? (tick ? tick(d, i) : monthShort(d.month, i === 0)) : "";
   };
   const targets = data.filter((d) => d.targetCap != null);
   const peak = Math.max(0, ...data.map((d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0, d.targetCap ?? 0)));
@@ -106,10 +109,14 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
   // 左余白は最も長い目盛り（負の粗利を含む）に合わせる。固定だと桁が増えたとき符号が切れる
   const low = Math.min(0, ...data.map((d) => Math.min(d.grossProfit ?? 0, d.forecastGrossProfit ?? 0)));
   const marginLeft = scaledPx(Math.max(56, 12 + 7.5 * Math.max(axisFormat(peak).length, axisFormat(low).length + 1)));
-  const barW = Math.max(6, Math.min(24, ((width - 90) / n) * 0.42));
+  const barW = Math.max(minBar, Math.min(24, ((width - 90) / n) * 0.42));
   const bw = barW / ((width - 90) / n); // 棒の幅（バンドの割合）
   const gap = 0.03;
   const yMax = (d) => Math.max(d.budget, d.cost, d.forecastCost ?? 0);
+  // 棒が細かいとき（日・週。§130）は残予算の点を小さくする（月は今までどおり）
+  const band = (width - 90) / n;
+  const dotR = fitDots ? Math.max(1.5, Math.min(4, band * 0.25)) : 4;
+  const dotStroke = fitDots && dotR < 4 ? 1 : 2;
   // 今月の速報の実績（§125）: 見込みの破線枠の中に、入っている分を斜線で描く
   const prelim = data.filter(isPrelimNow);
   const hatch = prelim.length ? hatchFill(c.cost) : null;
@@ -144,10 +151,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - gap - bw - 0.06, x2: (d) => d.i + gap + bw + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
       Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
-      Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: 4, stroke: c.surface, strokeWidth: 2 }),
+      Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
       // 粗利（見込み）
       Plot.line(forecastLine, { x: "i", y: "forecastGrossProfit", stroke: c.gp, strokeWidth: 2, strokeDasharray: "5 4", curve: "linear" }),
-      Plot.dot(remaining, { x: "i", y: "forecastGrossProfit", fill: c.surface, r: 4, stroke: c.gp, strokeWidth: 2 }),
+      Plot.dot(remaining, { x: "i", y: "forecastGrossProfit", fill: c.surface, r: dotR, stroke: c.gp, strokeWidth: dotStroke }),
       // クロスヘア ＋ ツールチップ
       Plot.ruleX(data, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
@@ -161,10 +168,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
           stroke: c.axis,
           fontSize: scaledPx(12),
           channels: {
-            [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : T.charts.suffixForecast }),
+            [tipName]: (d) => (tipLabel ? tipLabel(d) : fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: d.isActual ? "" : T.charts.suffixForecast })),
             [T.charts.tipBudget]: (d) => money(d.budget, unit),
             [T.charts.tipCost]: (d) => (d.isActual ? money(d.cost, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastCost, unit) })),
-            [T.charts.tipPrelim]: (d) => (!d.isActual && d.status === "preliminary" ? money(d.cost, unit) : null),
+            [T.charts.tipPrelim]: (d) => (hasPrelimValue(d) && d.cost !== 0 ? money(d.cost, unit) : null),
             [T.charts.tipGrossProfit]: (d) => (d.isActual ? money(d.grossProfit, unit) : fmt(T.charts.forecastValue, { value: money(d.forecastGrossProfit, unit) })),
             [T.charts.tipTarget]: (d) => (d.targetCap == null ? null : fmt(T.charts.targetValue, { value: money(d.targetCap, unit), rate: formatPercent(d.targetRate, Math.abs(Math.round(d.targetRate * 100) - d.targetRate * 100) < 1e-9 ? 0 : 1) })),
             [T.charts.tipHours]: (d) => (d.hours > 0 ? formatHours(d.hours) : null),
@@ -193,11 +200,13 @@ export function monthlyLegend(dark, series = null) {
   ]);
 }
 
-/** グラフの双子の表。実績月は実績、基準月以降は見込み */
-export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {}) {
+/** グラフの双子の表。実績月は実績、基準月以降は見込み。日・週・四半期・年度（§130）は label（期間の表記）を渡す */
+export function seriesTable(series, { unit = "yen", exportName = "monthly", label = null } = {}) {
   const rows = series.map((d) => ({
-    key: d.month,
-    month: d.month,
+    key: d.key ?? d.month,
+    month: d.month ?? null,
+    from: d.from ?? null,
+    label: label ? label(d) : null,
     status: d.status,
     budget: d.budget,
     cost: d.isActual ? d.cost : null,
@@ -205,12 +214,14 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {
     grossProfit: d.isActual ? d.grossProfit : null,
     forecastGrossProfit: d.forecastGrossProfit,
     hours: d.hours,
-    actualCostPrelim: !d.isActual && d.status === "preliminary" ? d.cost : null,
+    actualCostPrelim: hasPrelimValue(d) ? d.cost : null,
     targetCap: d.targetCap ?? null,
   }));
   const columns = [
-    { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
-    { key: "status", label: T.columns.status, type: "text", render: (r) => STATUS_LABELS[r.status], exportValue: (r) => STATUS_LABELS[r.status] },
+    label
+      ? { key: "month", label: T.charts.colPeriod, type: "text", render: (r) => r.label, sortValue: (r) => r.from, exportValue: (r) => r.label }
+      : { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
+    { key: "status", label: T.columns.status, type: "text", render: (r) => (r.status ? STATUS_LABELS[r.status] : "—"), exportValue: (r) => (r.status ? STATUS_LABELS[r.status] : "") },
     { key: "budget", label: T.columns.budget, type: "money" },
     { key: "cost", label: T.charts.costActual, type: "money", render: (r, u) => (r.cost === null ? (r.actualCostPrelim !== null && r.actualCostPrelim > 0 ? fmt(T.charts.prelimValue, { value: money(r.actualCostPrelim, u) }) : "—") : money(r.cost, u)), exportValue: (r) => r.cost ?? r.actualCostPrelim },
     { key: "forecastCost", label: T.charts.costForecast, type: "money", render: (r, u) => (r.forecastCost === null ? "—" : money(r.forecastCost, u)) },
@@ -224,8 +235,9 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly" } = {
 /**
  * メンバーの月次推移: 計画時間（青＝予）と実績時間（橙＝実）の棒を並べる。
  * series は core の memberMonthlySeries() の出力。基準月以降の月は背景を薄く塗り、実績がまだ無いことを示す。
+ * 日・週・四半期・年度（§130）は core の bucketMemberHours の出力と、tick・tipLabel・isFuture（背景を塗る最初の棒）・isNow（斜線）を渡す
  */
-export function memberHoursChart({ series, dark = false, width = 640, height = 260, asOfMonth, title = T.charts.memberHoursTitle }) {
+export function memberHoursChart({ series, dark = false, width = 640, height = 260, asOfMonth, title = T.charts.memberHoursTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, isFuture = null, isNow: isNowOpt = null, minBar = 6, unitName = T.charts.unitLabels.month }) {
   const c = chartColors(dark);
   const data = series.map((d, i) => ({ ...d, i }));
   const n = data.length;
@@ -233,12 +245,12 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   // 目盛りの間引き: 1 目盛りあたり 44px 以上（390px 幅で月ラベルが重ならないように）
   const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 64) / 44))));
   const ticks = data.filter((d) => d.i % every === 0).map((d) => d.i);
-  const firstFuture = data.find((d) => d.month >= asOfMonth);
-  const barW = Math.max(6, Math.min(22, ((width - 80) / n) * 0.4));
+  const firstFuture = data.find((d) => (isFuture ? isFuture(d) : d.month >= asOfMonth));
+  const barW = Math.max(minBar, Math.min(22, ((width - 80) / n) * 0.4));
   const bw = barW / ((width - 80) / n);
   const gap = 0.03;
   // 今月（月の途中）の実績時間は速報なので斜線（§125）
-  const isNow = (d) => d.month === asOfMonth && d.actualHours > 0;
+  const isNow = (d) => (isNowOpt ? isNowOpt(d) : d.month === asOfMonth) && d.actualHours > 0;
   const hatch = data.some(isNow) ? hatchFill(c.cost) : null;
   const plot = Plot.plot({
     width,
@@ -248,7 +260,7 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
     marginTop: scaledPx(24),
     marginBottom: scaledPx(32),
     style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
-    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? monthShort(data[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (data[i] ? (tick ? tick(data[i], i) : monthShort(data[i].month, i === 0)) : ""), tickSize: 0, label: null, line: false },
     // すべて 0h（不在の期間など）だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
     y: { grid: true, label: T.charts.hoursAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.plannedHours > 0) && !(d.actualHours > 0)) ? { domain: [0, 10] } : {}) },
     marks: [
@@ -270,7 +282,7 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
           stroke: c.axis,
           fontSize: scaledPx(12),
           channels: {
-            [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" }),
+            [tipName]: (d) => (tipLabel ? tipLabel(d) : fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" })),
             [T.charts.tipPlan]: (d) => formatHours(d.plannedHours),
             [T.charts.tipActual]: (d) => formatHours(d.actualHours),
             [T.charts.tipUtilization]: (d) => (d.utilization === null ? T.charts.noPlanDash : `${(d.utilization * 100).toFixed(1)}%`),
@@ -281,17 +293,17 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
     ].filter(Boolean),
   });
   plot.setAttribute("role", "img");
-  plot.setAttribute("aria-label", fmt(T.charts.memberHoursAria, { title }));
+  plot.setAttribute("aria-label", fmt(T.charts.memberHoursAria, { title, unit: unitName }));
   hatch?.attach(plot);
   return plot;
 }
 
-export function memberHoursLegend(dark, series = null, asOfMonth = null) {
+export function memberHoursLegend(dark, series = null, asOfMonth = null, isNow = null) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.charts.legendPlanned, color: c.budget },
     { label: T.charts.legendActual, color: c.cost },
-    ...(series && series.some((d) => d.month === asOfMonth && d.actualHours > 0) ? [{ label: T.charts.legendActualPrelim, color: c.cost, shape: "rect-hatched" }] : []),
+    ...(series && series.some((d) => (isNow ? isNow(d) : d.month === asOfMonth) && d.actualHours > 0) ? [{ label: T.charts.legendActualPrelim, color: c.cost, shape: "rect-hatched" }] : []),
   ]);
 }
 

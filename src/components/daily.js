@@ -6,7 +6,9 @@
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
 import { scaledPx } from "./appearance.js";
-import { dailyMembers, dailyProgress, formatHours, formatPercent } from "../core/index.js";
+import { dailyMembers, dailyProgress, fiscalQuarterOf, formatHours, formatPercent, progressOverRange, progressRangeOf } from "../core/index.js";
+import { h } from "./dom.js";
+import { chartMessage, loadUnit, saveUnit, unitSwitch, weekText } from "./chart-units.js";
 import { maxFractionFormat } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
 import { chartColors, chartLegend } from "./charts.js";
@@ -15,7 +17,7 @@ import { memberInfoColumns } from "./analysis.js";
 import { statTile } from "./kpi.js";
 import { sectionTitle } from "./layout.js";
 import { dataTable } from "./table.js";
-import { money as moneyBase, monthJa, toCoreUnit } from "./format.js";
+import { dateJa, money as moneyBase, monthJa, toCoreUnit } from "./format.js";
 
 /** 1 か月分は金額が小さいので、百万円のときだけ小数 2 桁にする（0.0百万円ばかりにならないように） */
 const m2 = new Intl.NumberFormat("ja-JP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,6 +46,20 @@ export function dailyFor(model, daily, contractIds, period, target = null) {
   return p && { ...p, target, daily: file };
 }
 
+/** 範囲の言葉（今月の進捗なら「今月」「月末」。§130） */
+function spanOf(p) {
+  const u = p.unit ?? "month";
+  return { span: T.daily.spans[u], end: T.daily.ends[u] };
+}
+
+/** 範囲の表記（今月なら「2026年10月」、今週なら日付の範囲、今四半期なら「2026年度 第3四半期」、今年度なら「2026年度」） */
+function rangeText(p, startMonth = 4) {
+  if (!p.unit || p.unit === "month") return monthJa(p.month);
+  if (p.unit === "week") return weekText(p.from, p.to);
+  const q = fiscalQuarterOf(p.from.slice(0, 7), startMonth);
+  return p.unit === "year" ? fmt(T.charts.yearTick, { fy: q.fiscalYear }) : fmt(T.charts.quarterShort, { fy: q.fiscalYear, q: q.quarter });
+}
+
 /** 目標の残予算率（整数なら小数なし） */
 function ratePct(rate) {
   return formatPercent(rate, Math.abs(Math.round(rate * 100) - rate * 100) < 1e-9 ? 0 : 1);
@@ -51,38 +67,42 @@ function ratePct(rate) {
 
 /** 根拠（KPI の数字を押したとき） */
 function progressSpec(p, unit, subtitle, emphasisKey) {
+  const sp = spanOf(p);
   const rows = [
     ...(p.target
       ? [
-          { key: "budget", label: T.daily.budgetLabel, value: money(p.budget, unit) },
-          { key: "target", label: T.daily.targetLabel, value: ratePct(p.target.remainingRate) },
+          { key: "budget", label: fmt(T.daily.budgetLabel, sp), value: money(p.budget, unit) },
+          { key: "target", label: T.daily.targetLabel, value: p.target.mixed ? T.daily.targetMixed : ratePct(p.target.remainingRate) },
         ]
       : []),
-    { key: "cap", label: T.daily.capLabel, value: money(p.cap, unit) },
+    { key: "cap", label: fmt(T.daily.capLabel, sp), value: money(p.cap, unit) },
     { key: "days", label: T.daily.bizDaysLabel, value: fmt(T.daily.bizDaysValue, { elapsed: p.elapsedBusinessDays, total: p.businessDays }) },
     { key: "pace", label: T.daily.paceLabel, value: money(p.paceToDate, unit) },
     { key: "actual", label: T.daily.actualLabel, value: money(p.actual, unit) },
     { key: "remaining", label: T.daily.remainingLabel, value: money(p.remaining, unit) },
     { key: "perDay", label: T.daily.perDayLabel, value: p.perDayRemaining === null ? "—" : money(p.perDayRemaining, unit) },
     { key: "average", label: T.daily.averageLabel, value: p.averagePerDay === null ? "—" : money(p.averagePerDay, unit) },
-    { key: "projection", label: T.daily.projectionLabel, value: money(p.projection, unit) },
+    { key: "projection", label: fmt(T.daily.projectionLabel, sp), value: money(p.projection, unit) },
   ].map((r) => ({ ...r, emphasis: r.key === emphasisKey }));
+  const formulas = T.daily.formulas.map((f, i) => (i === 0 && p.unit && p.unit !== "month" ? T.daily.formulaRange : fmt(f, sp)));
   return {
-    title: fmt(T.breakdown.labelTitle, { label: T.daily.title }),
+    title: fmt(T.breakdown.labelTitle, { label: fmt(T.daily.title, sp) }),
     subtitle,
-    formula: p.target ? [T.daily.capFormulaTarget, ...T.daily.formulas] : T.daily.formulas,
+    formula: p.target ? [fmt(T.daily.capFormulaTarget, sp), ...formulas] : formulas,
     rows,
   };
 }
 
 /** KPI 4 枚 */
-export function dailyKpis(p, { unit, subtitle }) {
+export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
   const spec = (key) => () => progressSpec(p, unit, subtitle, key);
+  const sp = spanOf(p);
   const overPace = p.actual > p.paceToDate;
   const overCap = p.projection > p.cap;
   // 予実の KPI（.yn-kpi-grid）とは別の行。幅が足りれば 4 列、足りなければ 2×2
-  return html`<section class="yn-daily-kpis" aria-label=${T.daily.kpiLabel}>${[
-      statTile({ label: T.daily.capLabel, value: money(p.cap, unit), sub: p.target ? fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate), cap: ratePct(1 - p.target.remainingRate) }) : fmt(T.daily.capSub, { month: monthJa(p.month) }), breakdown: spec("cap"), id: "yn-daily-cap" }),
+  const capSub = p.target ? (p.target.mixed ? T.daily.capSubMixed : fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate), cap: ratePct(1 - p.target.remainingRate) })) : fmt(T.daily.capSub, { month: rangeText(p, startMonth) });
+  return html`<section class="yn-daily-kpis" aria-label=${fmt(T.daily.kpiLabel, sp)}>${[
+      statTile({ label: fmt(T.daily.capLabel, sp), value: money(p.cap, unit), sub: capSub, breakdown: spec("cap"), id: "yn-daily-cap" }),
       statTile({
         label: T.daily.actualLabel,
         value: money(p.actual, unit),
@@ -99,7 +119,7 @@ export function dailyKpis(p, { unit, subtitle }) {
         id: "yn-daily-left",
       }),
       statTile({
-        label: T.daily.projectionLabel,
+        label: fmt(T.daily.projectionLabel, sp),
         value: money(p.projection, unit),
         sub: fmt(T.daily.projectionSub, { diff: money(p.projection - p.cap, unit) }),
         status: overCap ? { kind: "danger", text: T.daily.overCap } : { kind: "ok", text: T.daily.withinCap },
@@ -110,11 +130,11 @@ export function dailyKpis(p, { unit, subtitle }) {
     ]}</section>`;
 }
 
-export function dailyLegend(dark, { target = false } = {}) {
+export function dailyLegend(dark, { target = false, end = T.daily.ends.month } = {}) {
   const c = chartColors(dark);
   return chartLegend([
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
-    { label: T.daily.legendProjection, color: c.cost, shape: "line-dotted" },
+    { label: fmt(T.daily.legendProjection, { end }), color: c.cost, shape: "line-dotted" },
     { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
     { label: target ? T.daily.legendCapTarget : T.daily.legendCap, color: c.danger, shape: "line-dashed" },
   ]);
@@ -127,14 +147,25 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
   const n = pts.length;
   const done = pts.filter((d) => d.cumulative !== null);
   const last = done[done.length - 1] ?? null;
-  const todayDay = p.today ? Number(p.today.slice(8, 10)) : null;
+  const isRange = !!p.unit && p.unit !== "month";
+  const todayDay = p.today ? (isRange ? (pts.find((d) => d.date === p.today)?.day ?? null) : Number(p.today.slice(8, 10))) : null;
   const projLine = last && last.day < n ? [{ day: last.day, v: last.cumulative }, { day: n, v: p.projection }] : [];
   const peak = Math.max(p.cap, p.projection, last?.cumulative ?? 0, 1);
   const axisUnit = peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
   const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
-  // 目盛り: 1 日・5 日おき（狭い画面は 10 日おき）
+  // 目盛り: 1 日・5 日おき（狭い画面は 10 日おき）。今週は毎日、今四半期・今年度は月の初日（今年度の狭い画面は 1 か月おき）
   const step = width < 520 ? 10 : 5;
-  const ticks = [1, ...Array.from({ length: Math.floor(n / step) }, (_, i) => (i + 1) * step).filter((d) => d <= n)];
+  const ticks = !isRange
+    ? [1, ...Array.from({ length: Math.floor(n / step) }, (_, i) => (i + 1) * step).filter((d) => d <= n)]
+    : p.unit === "week"
+      ? pts.filter((d, i) => width >= 520 || i % 2 === 0).map((d) => d.day)
+      : pts.filter((d) => d.date.endsWith("-01")).filter((_, i) => p.unit !== "year" || width >= 520 || i % 2 === 0).map((d) => d.day);
+  const tickText = (d) => {
+    if (!isRange) return fmt(T.daily.dayTick, { d });
+    const pt = pts[d - 1];
+    if (!pt) return "";
+    return p.unit === "week" ? fmt(T.charts.dayTick, { m: Number(pt.date.slice(5, 7)), d: Number(pt.date.slice(8, 10)) }) : fmt(T.format.monthOnly, { month: Number(pt.date.slice(5, 7)) });
+  };
   const off = pts.filter((d) => !d.businessDay);
   const plot = Plot.plot({
     width,
@@ -144,7 +175,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
     marginTop: scaledPx(28),
     marginBottom: scaledPx(32),
     style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
-    x: { domain: [0.5, n + 0.5], ticks, tickFormat: (d) => fmt(T.daily.dayTick, { d }), tickSize: 0, label: null, line: false },
+    x: { domain: [0.5, n + 0.5], ticks, tickFormat: tickText, tickSize: 0, label: null, line: false },
     y: { grid: true, label: axisUnit.label, labelAnchor: "top", labelArrow: "none", tickFormat: axisFormat, nice: true, zero: true, tickSize: 0, line: false, domain: [0, peak * 1.08] },
     marks: [
       // 土日・祝日
@@ -171,7 +202,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
           stroke: c.axis,
           fontSize: scaledPx(12),
           channels: {
-            [T.daily.tipDate]: (d) => fmt(T.daily.tipDateValue, { month: monthJa(p.month), d: d.day, off: d.businessDay ? "" : T.daily.offDay }),
+            [T.daily.tipDate]: (d) => (isRange ? `${dateJa(d.date)}${d.businessDay ? "" : T.daily.offDay}` : fmt(T.daily.tipDateValue, { month: monthJa(p.month), d: d.day, off: d.businessDay ? "" : T.daily.offDay })),
             [T.daily.tipDay]: (d) => (d.amount === null ? null : money(d.amount, unit)),
             [T.daily.tipCumulative]: (d) => (d.cumulative === null ? null : money(d.cumulative, unit)),
             [T.daily.tipPace]: (d) => money(d.pace, unit),
@@ -182,23 +213,24 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
     ].filter(Boolean),
   });
   plot.setAttribute("role", "img");
-  plot.setAttribute("aria-label", T.daily.aria);
+  plot.setAttribute("aria-label", fmt(T.daily.aria, spanOf(p)));
   return plot;
 }
 
 /** グラフの双子の表（経過した日だけ） */
 export function dailyTable(p, { unit, exportName }) {
+  const isRange = !!p.unit && p.unit !== "month";
   const rows = p.points
     .filter((d) => d.cumulative !== null)
     .map((d) => ({ key: d.date, date: d.date, day: d.day, off: !d.businessDay, amount: d.amount, hours: d.hours, cumulative: d.cumulative, pace: d.pace }));
   const columns = [
-    { key: "date", label: T.daily.colDate, type: "text", render: (r) => fmt(T.daily.colDateValue, { d: r.day, off: r.off ? T.daily.offDay : "" }), sortValue: (r) => r.date, exportValue: (r) => r.date },
+    { key: "date", label: T.daily.colDate, type: "text", render: (r) => (isRange ? `${dateJa(r.date)}${r.off ? T.daily.offDay : ""}` : fmt(T.daily.colDateValue, { d: r.day, off: r.off ? T.daily.offDay : "" })), sortValue: (r) => r.date, exportValue: (r) => r.date },
     { key: "amount", label: T.daily.colAmount, type: "money", render: (r, u) => money(r.amount, u) },
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "cumulative", label: T.daily.colCumulative, type: "money", render: (r, u) => money(r.cumulative, u) },
     { key: "pace", label: T.daily.colPace, type: "money", render: (r, u) => money(r.pace, u) },
   ];
-  return dataTable({ columns, rows, unit, caption: T.daily.title, exportName, sort: { key: "date", dir: "asc" } });
+  return dataTable({ columns, rows, unit, caption: fmt(T.daily.title, spanOf(p)), exportName, sort: { key: "date", dir: "asc" } });
 }
 
 const h1 = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
@@ -281,25 +313,101 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
   });
 }
 
+/** 進捗の範囲の単位（§130）。日は 1 日だけになるので出さない */
+const PROGRESS_UNITS = ["week", "month", "quarter", "year"];
+
+/** 見出し ＋ KPI ＋ グラフ（表つき） */
+function progressBody(p, { unit, dark, subtitle, exportName, controls = null, startMonth = 4 }) {
+  const sp = spanOf(p);
+  const title = fmt(T.daily.sectionTitle, { span: sp.span, month: rangeText(p, startMonth) });
+  const isRange = !!p.unit && p.unit !== "month";
+  return html`${sectionTitle(title, fmt(T.daily.hint, { date: p.lastDate ?? "—" }))}
+    ${dailyKpis(p, { unit, subtitle, startMonth })}
+    ${chartFigure({
+      title,
+      subtitle: [rangeText(p, startMonth), subtitle].filter(Boolean).join(" ・ "),
+      legend: dailyLegend(dark, { target: !!p.target, end: sp.end }),
+      controls,
+      draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
+      after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName: isRange && exportName ? `${exportName}_${p.unit}` : exportName })}</details>`,
+    })}`;
+}
+
+/**
+ * 範囲（今週・今四半期・今年度）の進捗（§130）。history は data/daily-history.json（lazyJson）、targetOf(month) は目標（core の targetForMonth を対象で包んだもの）
+ */
+export function rangeProgress(model, history, contractIds, unit, targetOf = null) {
+  const startMonth = model.config.fiscalYearStartMonth;
+  const { from, to } = progressRangeOf(unit, model.meta.asOf, startMonth);
+  const capRatioOf = (m) => {
+    const t = targetOf?.(m);
+    return t ? 1 - t.remainingRate : 1;
+  };
+  const p = progressOverRange(model, history, contractIds, { unit, from, to, capRatioOf, today: model.meta.asOf });
+  if (!p) return null;
+  // 目標: 予算のある月すべてに同じ率の目標があればその率、月ごとに違えば「月ごと」、どの月にも無ければ出さない
+  let target = null;
+  if (targetOf) {
+    const ids = new Set(contractIds);
+    const months = new Set();
+    for (const r of model.contracts) {
+      if (!ids.has(r.contract.contractId)) continue;
+      for (const cm of r.months) if (cm.budget !== 0 && cm.month >= from.slice(0, 7) && cm.month <= to.slice(0, 7)) months.add(cm.month);
+    }
+    const rates = [...months].map((m) => targetOf(m)?.remainingRate ?? null);
+    if (rates.some((r) => r !== null)) target = rates.every((r) => r === rates[0]) ? { remainingRate: rates[0] } : { mixed: true };
+  }
+  return { ...p, target };
+}
+
 /**
  * 見出し ＋ KPI ＋ グラフ（表つき）。p が null なら何も出さない。
- * members を渡すと（チーム詳細）、下にメンバー×日の表を足す。
+ * members を渡すと（チーム詳細）、下にメンバー×日の表を足す（今月のまま）。
+ * range を渡すと、グラフの上に 週・月・四半期・年度 の切り替えを出す（§130）: { model, history（lazyJson）, contractIds, targetOf }
  */
-export function dailySection(p, { unit, dark, subtitle, exportName, members = null }) {
+export function dailySection(p, { unit, dark, subtitle, exportName, members = null, range = null }) {
   // display(null) は「null」と表示されるので、出さないときは空の断片を返す
   if (!p) return document.createDocumentFragment();
   const memberRows = members ? dailyMembers(members.model, p.daily ?? members.daily, p, members.contractIds) : [];
-  const title = fmt(T.daily.sectionTitle, { month: monthJa(p.month) });
+  const startMonth = range?.model.config.fiscalYearStartMonth ?? 4;
+  const body = h("div", { class: "yn-daily-body" });
+  let cur = range ? loadUnit("progress", PROGRESS_UNITS) : "month";
+  let token = 0;
+  const show = () => {
+    const my = ++token;
+    const controls = range
+      ? unitSwitch({
+          units: PROGRESS_UNITS,
+          value: cur,
+          labels: T.daily.unitLabels,
+          groupLabel: T.daily.unitGroupLabel,
+          onChange: (u) => {
+            cur = u;
+            saveUnit("progress", u);
+            show();
+            body.querySelector(`.yn-chart-unit [data-unit="${u}"]`)?.focus();
+          },
+        })
+      : null;
+    const opts = { unit, dark, subtitle, exportName, controls, startMonth };
+    if (cur === "month") {
+      body.replaceChildren(progressBody(p, opts));
+      return;
+    }
+    const sp = { span: T.daily.spans[cur] };
+    const msg = (text) => html`${sectionTitle(fmt(T.daily.title, sp))}${chartFigure({ title: fmt(T.daily.title, sp), controls, draw: () => chartMessage(text) })}`;
+    body.replaceChildren(msg(T.daily.loading));
+    range.history().then((hist) => {
+      if (my !== token) return;
+      if (!hist) return body.replaceChildren(msg(T.daily.loadFailed));
+      const rp = rangeProgress(range.model, hist, range.contractIds, cur, range.targetOf);
+      // 範囲に予算が無い（今週に契約期間の案件が無いなど）。今月の進捗と同じく数字は出さない
+      body.replaceChildren(rp ? progressBody(rp, opts) : msg(T.daily.noBudget));
+    });
+  };
+  show();
   return html`<section class="yn-daily" id="yn-daily">
-    ${sectionTitle(title, fmt(T.daily.hint, { date: p.lastDate ?? "—" }))}
-    ${dailyKpis(p, { unit, subtitle })}
-    ${chartFigure({
-      title,
-      subtitle: [monthJa(p.month), subtitle].filter(Boolean).join(" ・ "),
-      legend: dailyLegend(dark, { target: !!p.target }),
-      draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
-      after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName })}</details>`,
-    })}
+    ${body}
     ${memberRows.length > 0
       ? html`${sectionTitle(T.daily.membersTitle, fmt(T.daily.membersHint, { date: p.lastDate ?? "—" }))}${dailyMemberTable(p, memberRows, { ...members, exportName: exportName ? `${exportName}_members` : null })}`
       : null}

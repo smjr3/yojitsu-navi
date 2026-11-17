@@ -6,7 +6,7 @@
  * Model の計算は 1 回だけ）、結果を Framework のキャッシュに置く。ローダを個別に動かしても、まとめて作っても同じ中身になる
  * （docs/DATA_LOADERS.md「6. 増分ビルド」、SPEC §102）。
  */
-import { buildMyHoursPayload, checkProjects, encodeDaily, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
+import { buildMyHoursPayload, checkProjects, encodeDaily, encodeDailyHistory, encodeMemberDays, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
 import type { ParsedDataset } from "../core/csv.js";
 import { buildMastersPayload } from "./_masters.js";
 import { loadDataset } from "../../scripts/lib/load.js";
@@ -38,6 +38,8 @@ function modelOutput(ctx: OutputContext) {
     contracts: model.contracts.map(stripWorklogs),
     // メンバー別（§18）は data/member-months.json で別に配る（メンバー別の画面だけが読む）
     memberMonths: [],
+    // 運用保守以外の日ごとの時間（§130）は data/member-days.json を作るのにだけ使う
+    outsideDays: undefined,
     // 工数の明細（§30）は data/work-hours.json で別に配る（工数・詳細画面の作業種別の内訳だけが読む）
     workRows: [],
     /** 作業ログ明細の取得先（契約IDごと）。画面側は相対パスで fetch する */
@@ -81,6 +83,17 @@ function myMonthOutput(ctx: OutputContext) {
 /** 今月の進捗（SPEC §61） */
 function dailyOutput(ctx: OutputContext) {
   return { ...encodeDaily(ctx.model()), _build: buildStamp() };
+}
+
+/** グラフの日・週（SPEC §130）: 案件・月・日ごとの実績。画面は日・週を選んだときだけ読む */
+function dailyHistoryOutput(ctx: OutputContext) {
+  return { ...encodeDailyHistory(ctx.model()), _build: buildStamp() };
+}
+
+/** メンバー詳細のグラフの日・週（SPEC §130）: メンバー・月・日ごとの実績の時間と計画の重み */
+function memberDaysOutput(ctx: OutputContext) {
+  const d = ctx.parsed().dataset;
+  return { ...encodeMemberDays(ctx.model(), { assignments: d.assignments, outsidePlans: d.outsidePlans ?? [] }), _build: buildStamp() };
 }
 
 /** 工数の明細（SPEC §30.2） */
@@ -136,6 +149,8 @@ export const AGGREGATE_OUTPUTS = {
   model: modelOutput,
   "member-months": memberMonthsOutput,
   daily: dailyOutput,
+  "daily-history": dailyHistoryOutput,
+  "member-days": memberDaysOutput,
   "my-month": myMonthOutput,
   "work-hours": workHoursOutput,
   "dataset-issues": datasetIssuesOutput,

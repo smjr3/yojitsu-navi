@@ -20,7 +20,9 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip, forecastStatus } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, burnMeter } from "./components/charts.js";
+import { burnMeter } from "./components/charts.js";
+import { monthlyFigure } from "./components/series-figure.js";
+import { lazyJson } from "./components/chart-units.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
@@ -144,30 +146,27 @@ if (vm) {
 
 ```js
 if (vm) {
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
 }
 ```
 
 ```js
 if (vm) {
-  display(chartFigure({
-    title: T.charts.monthlyTitle,
-    subtitle: periodJa(vm.scope.period),
-    legend: monthlyLegend(dark, vm.series),
-    draw: (width, height) => monthlyChart({ series: vm.series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(vm.series, { unit: vm.unit, exportName: `monthly_${vm.scope.period.from}_${vm.scope.period.to}` })}</details>`,
-  }));
+  display(monthlyFigure({ model, series: vm.series, unit: vm.unit, dark, history: dailyHistory, contractIds: vm.scope.contractIds, period: vm.scope.period, exportName: `monthly_${vm.scope.period.from}_${vm.scope.period.to}` }));
 }
 ```
 
 ```js
 // 今月の進捗（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
+// 日・週・四半期・年度の切り替え（§130）。日ごとの実績は日・週などを選んだときに初めて読む
+const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 ```
 
 ```js
 if (vm) {
-  display(dailySection(dailyFor(model, daily, vm.scope.contractIds ?? model.contracts.map((c) => c.contract.contractId), vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}` }));
+  const ids = vm.scope.contractIds ?? model.contracts.map((c) => c.contract.contractId);
+  display(dailySection(dailyFor(model, daily, ids, vm.scope.period), { unit: vm.unit, dark, subtitle: vm.scope.teamLabel, exportName: `daily_${model.meta.asOfMonth}`, range: { model, history: dailyHistory, contractIds: ids } }));
 }
 ```
 

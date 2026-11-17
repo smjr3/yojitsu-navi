@@ -166,6 +166,30 @@ export {
   type WorkTaskLine,
   type WorkTotals,
 } from "./workTypes.js";
-export { dailyMembers, dailyProgress, encodeDaily, progressFromDays, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress } from "./daily.js";
+export { dailyMembers, dailyProgress, encodeDaily, progressFromDays, progressOverRange, progressRangeOf, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress, type ProgressUnit } from "./daily.js";
+export {
+  CHART_UNITS,
+  DAY_UNIT_MONTHS,
+  addDays,
+  bucketDays,
+  bucketMemberHours,
+  bucketMonths,
+  contractDailyActuals,
+  datesBetween,
+  dayUnitRange,
+  encodeDailyHistory,
+  encodeMemberDays,
+  fiscalQuarterOf,
+  monthDayPool,
+  spreadMonth,
+  weekStartOf,
+  type ChartUnit,
+  type DailyHistoryFile,
+  type MemberDaysFile,
+  type MemberHoursBucket,
+  type MemberSeriesMonth,
+  type SeriesBucket,
+  type SeriesMonth,
+} from "./timeBuckets.js";
 export { loadLevelOf, orgChartAt, type OrgChange, type OrgChart, type OrgChartNode, type OrgLoadLevel, type OrgLoadLine, type OrgPerson } from "./orgChart.js";
 export { planChangeSummary, type PlanChange, type PlanChangeRun } from "./planChanges.js";

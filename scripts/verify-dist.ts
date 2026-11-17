@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { readManifest, type OutputManifest } from "./lib/prebuild.js";
 
 /** ページが必ず読むローダの出力（dist/_file/data/<name>.<hash>.json） */
-export const REQUIRED_OUTPUTS = ["model", "member-months", "masters", "dataset-issues", "daily"] as const;
+export const REQUIRED_OUTPUTS = ["model", "member-months", "masters", "dataset-issues", "daily", "daily-history", "member-days"] as const;
 
 interface Stamped {
   _build?: { inputHash?: unknown; asOf?: unknown };

@@ -20,7 +20,9 @@ import { mountFilterBar } from "./components/filters.js";
 import { statusChip } from "./components/kpi.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { dailyFor, dailySection, loadDaily } from "./components/daily.js";
-import { monthlyChart, monthlyLegend, seriesTable, withTargets } from "./components/charts.js";
+import { withTargets } from "./components/charts.js";
+import { monthlyFigure } from "./components/series-figure.js";
+import { lazyJson } from "./components/chart-units.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
@@ -159,25 +161,21 @@ if (vm?.exists && !vm.isUnassigned) {
 ```js
 if (vm?.exists) {
   const series = withTargets(vm.series, vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method] })));
-  display(chartFigure({
-    title: T.charts.monthlyTitle,
-    subtitle: periodJa(vm.period),
-    legend: monthlyLegend(dark, series),
-    draw: (width, height) => monthlyChart({ series, unit: vm.unit, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${seriesTable(series, { unit: vm.unit, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
-  }));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: vm.contractIds, period: vm.period, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` }));
 }
 ```
 
 ```js
 // 今月の進捗（日別の速報。§61）。読めなければ出さない
 const daily = await loadDaily(FileAttachment("./data/daily.json"));
+// 日・週・四半期・年度の切り替え（§130）。日ごとの実績は日・週などを選んだときに初めて読む
+const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 ```
 
 ```js
 if (vm?.exists) {
-  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period, vm.isUnassigned ? null : targetForMonth(model, "team", vm.teamId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
+  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period, vm.isUnassigned ? null : targetForMonth(model, "team", vm.teamId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, range: { model, history: dailyHistory, contractIds: vm.contractIds, targetOf: vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m) }, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
 }
 ```
 
