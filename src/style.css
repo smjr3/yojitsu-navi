@@ -5793,6 +5793,22 @@ a.yn-org-person:hover {
   line-height: 1.5;
   white-space: nowrap;
 }
+.yn-tl-outside {
+  position: sticky;
+  left: var(--yn-tl-label);
+  display: inline-block;
+  padding: 0 8px;
+  color: var(--yn-text-2);
+  font-size: calc(11px * var(--yn-fs));
+  line-height: calc(42px * var(--yn-fs));
+  white-space: nowrap;
+}
+.yn-tl-outside.is-after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: auto;
+}
 .yn-tl-row.is-ended .yn-tl-track > *,
 .yn-tl-row.is-ended .yn-tl-name {
   opacity: 0.5;

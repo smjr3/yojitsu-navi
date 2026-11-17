@@ -128,3 +128,25 @@ test("横にスクロールする長さのとき、最初から今日の線が�
     return t!.x > box!.x + 300 && t!.x < box!.x + box!.width;
   }).toBe(true);
 });
+
+test("期間に掛からない案件は帯を描かず端に期間を出す（横軸を延ばさない）", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openTimeline(page, `&from=${FY.from}&to=${FY.from}&f=outside`);
+  const box = page.locator(".yn-tl");
+  expect(await box.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  const outside = model.contracts.filter((r) => r.contract.endMonth < FY.from || r.contract.startMonth > FY.from).length;
+  await expect(page.locator(".yn-tl-outside")).toHaveCount(outside);
+});
+
+test("まとまりをキーボードで開け閉めするとフォーカスがボタンに残る", async ({ page }) => {
+  await openTimeline(page);
+  const btn = page.locator(".yn-tl-group-btn").first();
+  const key = await btn.getAttribute("data-group");
+  await btn.focus();
+  await page.keyboard.press("Enter");
+  const focused = page.locator(".yn-tl-group-btn:focus");
+  await expect(focused).toHaveAttribute("aria-expanded", "false");
+  await expect(focused).toHaveAttribute("data-group", key!);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".yn-tl-group-btn:focus")).toHaveAttribute("aria-expanded", "true");
+});

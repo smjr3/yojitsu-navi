@@ -1110,6 +1110,7 @@ export default {
       legendBand: "案件の期間（予算）",
       legendBar: "月の実績（予算に対する割合）",
       legendOver: "予算超過",
+      outsideTitle: "選んだ期間の外（{from}〜{to}）",
     },
   },
 

@@ -151,6 +151,20 @@ export function contractTimeline({ rows, period, asOf, unit, href }) {
   const rowEl = (r) => {
     const ended = isEnded(r, asOfMonth);
     const soon = isEndingSoon(r, asOfMonth);
+    const name = `${r.customerName} / ${r.projectName}`;
+    const label = h(
+      "div",
+      { class: "yn-tl-label" },
+      h("a", { class: "yn-tl-name", href: href(r), title: name }, name),
+      h("span", { class: "yn-tl-sub" }, `${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}`, ended ? h("span", { class: "yn-tl-ended" }, ` ・ ${L.ended}`) : null),
+    );
+    const rowClass = ended ? "yn-tl-row is-ended" : "yn-tl-row";
+    // 期間に 1 か月も掛からない案件（「期間外の案件も表示」）は帯を描かず、どちら側にあるかを端に出す（横軸を延ばさない）
+    if (r.endMonth < period.from || r.startMonth > period.to) {
+      const before = r.endMonth < period.from;
+      const text = before ? `◀ ${periodCompact(r.startMonth, r.endMonth)}` : `${periodCompact(r.startMonth, r.endMonth)} ▶`;
+      return h("div", { class: rowClass, "data-contract": r.contractId }, label, h("div", { class: "yn-tl-track" }, h("span", { class: before ? "yn-tl-outside" : "yn-tl-outside is-after", title: fmt(L.outsideTitle, { from: monthJa(r.startMonth), to: monthJa(r.endMonth) }) }, text)));
+    }
     const L0 = left(r.startMonth);
     const R0 = right(r.endMonth);
     const span = Math.max(R0 - L0, 0.001);
@@ -186,18 +200,7 @@ export function contractTimeline({ rows, period, asOf, unit, href }) {
       ),
     );
     const endChip = soon ? h("span", { class: "yn-tl-end", style: R0 > 0.8 ? `right:${pct(1 - R0)};transform:translate(-4px,-50%)` : `left:${pct(R0)}` }, fmt(L.endSoon, { month: Number(r.endMonth.slice(5, 7)) })) : null;
-    const name = `${r.customerName} / ${r.projectName}`;
-    return h(
-      "div",
-      { class: ended ? "yn-tl-row is-ended" : "yn-tl-row", "data-contract": r.contractId },
-      h(
-        "div",
-        { class: "yn-tl-label" },
-        h("a", { class: "yn-tl-name", href: href(r), title: name }, name),
-        h("span", { class: "yn-tl-sub" }, `${r.teamName} ・ ${periodCompact(r.startMonth, r.endMonth)}`, ended ? h("span", { class: "yn-tl-ended" }, ` ・ ${L.ended}`) : null),
-      ),
-      h("div", { class: "yn-tl-track" }, band, facts, endChip),
-    );
+    return h("div", { class: rowClass, "data-contract": r.contractId }, label, h("div", { class: "yn-tl-track" }, band, facts, endChip));
   };
 
   const collapsed = new Set();
@@ -208,11 +211,13 @@ export function contractTimeline({ rows, period, asOf, unit, href }) {
       if (prefs.group !== "none") {
         const open = !collapsed.has(g.key);
         const total = g.rows.reduce((s, r) => s + (r.totalAmount ?? 0), 0);
-        const btn = h("button", { type: "button", class: "yn-tl-group-btn", "aria-expanded": String(open) }, h("span", { class: "yn-tl-caret", "aria-hidden": "true" }, open ? "▾" : "▸"), " ", g.label || T.common.none);
+        const btn = h("button", { type: "button", class: "yn-tl-group-btn", "aria-expanded": String(open), "data-group": g.key }, h("span", { class: "yn-tl-caret", "aria-hidden": "true" }, open ? "▾" : "▸"), " ", g.label || T.common.none);
         btn.addEventListener("click", () => {
           if (collapsed.has(g.key)) collapsed.delete(g.key);
           else collapsed.add(g.key);
           draw();
+          // 描き直したボタンにフォーカスを戻す（キーボードで続けて開け閉めできるように）
+          for (const b of box.querySelectorAll(".yn-tl-group-btn")) if (b.dataset.group === g.key) b.focus();
         });
         body.push(h("div", { class: "yn-tl-row yn-tl-group" }, h("div", { class: "yn-tl-label" }, btn), h("div", { class: "yn-tl-track" }, h("span", { class: "yn-tl-group-sum" }, fmt(L.groupSum, { n: g.rows.length, amount: money(total, unit) })))));
         if (!open) continue;
