@@ -119,7 +119,7 @@ for (const [w, dark] of [
     if (dark) await useDarkTheme(page);
     await page.setViewportSize({ width: w, height: 900 });
     await gotoPage(page, "/");
-    for (const [label, progress] of [["週", "四半期"], ["年度", "年度"]]) {
+    for (const [label, progress] of [["週", "四半期"], ["年度", "年度"]] as const) {
       await unitBtn(page, label).click();
       await expect(plot(page)).toBeVisible();
       await page.locator("#yn-daily .yn-chart-unit button", { hasText: progress }).click();
