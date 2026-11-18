@@ -67,7 +67,7 @@ src/
 | `unit` | `m`（百万円）/ `k`（千円）/ `yen` | `config.currency.defaultUnit`（既定 `millionYen`） |
 | `method` | `assignment`（計画値）/ `recent3` / `all`（この順で表示） | `config.forecastMethodDefault`（既定 `assignment`） |
 
-優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
+優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。ただしブラウザの「戻る・進む」・再読み込みで開いたとき（bfcache を含む）は 期間・単位・着地方式・運用保守以外は localStorage を URL より優先し（チームは URL のまま）、別のタブでの変更（storage イベント）にも合わせる（前の画面の URL に古い単位・期間が残るため。SPEC §133）。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
 フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。
 案件詳細の `id`、案件一覧の `f`（`deficit|over|prelim|ending|outside`）・`q`（検索）・`view`（`timeline` で期間の表示）はストアの外（ページ固有）。`store.href("./contracts", {team}, {id})` で状態を引き継いだリンクを作る。
 

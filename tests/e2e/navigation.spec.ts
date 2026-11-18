@@ -2,8 +2,8 @@
  * 遷移・並べ替え・絞り込み・Excel 出力
  */
 import { createRequire } from "node:module";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, teamValue } from "./helpers/app.js";
-import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen, UNIT_LABEL } from "./helpers/core.js";
+import { test, expect, gotoPage, waitForPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, teamValue } from "./helpers/app.js";
+import { DEFAULT_UNIT, contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen, UNIT_LABEL } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
@@ -120,6 +120,73 @@ test("上部タブ・右上のリンク・「⋯」のメニューで全ペー�
   // 案件詳細では「案件」タブが選択状態
   await gotoPage(page, "/contract?id=C008");
   await expect(header.getByRole("link", { name: "案件", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
+test("ブラウザの「戻る」で前の画面に戻っても、選び直した単位・期間が元に戻らない（§133）", async ({ page }) => {
+  // 既定と違う単位を選ぶ
+  const other = DEFAULT_UNIT === "m" ? "k" : "m";
+  const pressed = (attr: string) => page.locator(`[${attr}][aria-pressed="true"]`).first();
+  await gotoPage(page, "/contracts");
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", DEFAULT_UNIT);
+  // 一覧 → 詳細（リンクには一覧の単位・期間が付く）→ 詳細で選び直す → 戻る
+  await page.locator('a[href*="contract?id="]').first().click();
+  await expect(page).toHaveURL(/\/contract\?/);
+  await waitForPage(page);
+  await page.locator(`[data-unit="${other}"]`).first().click();
+  await page.locator('[data-preset="lastMonth"]').first().click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/contracts\?/);
+  await waitForPage(page);
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", other);
+  await expect(pressed("data-preset")).toHaveAttribute("data-preset", "lastMonth");
+  // URL も選び直した値に合わせる（共有・再読み込みで同じ表示）
+  expect(query(page).get("unit")).toBe(other);
+  // ほかのタブへ移っても同じ
+  await page.locator(".yn-tabs a.yn-tab").first().click();
+  await waitForPage(page);
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", other);
+  await expect(pressed("data-preset")).toHaveAttribute("data-preset", "lastMonth");
+  // ブラウザが残しておいた画面をそのまま出したとき（bfcache）も、保存してある値に合わせる
+  await page.evaluate(() => {
+    const key = "yojitsu-navi:state:v2";
+    localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? "{}"), unit: "yen" }));
+    dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "yen");
+  expect(query(page).get("unit")).toBe("yen");
+
+  // 再読み込みでも、URL に残る前の値ではなく保存してある値（§133）
+  await page.evaluate(() => {
+    const key = "yojitsu-navi:state:v2";
+    localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? "{}"), unit: "k" }));
+  });
+  await page.reload();
+  await waitForPage(page);
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "k");
+  expect(query(page).get("unit")).toBe("k");
+});
+
+test("開いたままの別のタブも、選び直した期間・単位に合わせる（古い値のリンクで戻さない。§133）", async ({ page, context }) => {
+  await gotoPage(page, "/contracts");
+  const other = await context.newPage();
+  await gotoPage(other, "/");
+  await other.locator('[data-unit="m"]').first().click();
+  await other.locator('[data-preset="recent12"]').first().click();
+  // 元のタブの表示とリンクも新しい値になる
+  await expect(page.locator('[data-preset="recent12"][aria-pressed="true"]').first()).toBeVisible();
+  await expect(page.locator('[data-unit="m"][aria-pressed="true"]').first()).toBeVisible();
+  const href = await page.locator('a[href*="contract?id="]').first().getAttribute("href");
+  expect(new URLSearchParams(href!.split("?")[1]).get("unit")).toBe("m");
+  // 合わせた側は保存し直さない（チームの違うタブでも、操作したタブの保存が残る）
+  const key = "yojitsu-navi:state:v2";
+  const teamPage = await context.newPage();
+  await gotoPage(teamPage, "/contracts?team=T111");
+  await other.locator('[data-unit="k"]').first().click();
+  await expect(teamPage.locator('[data-unit="k"][aria-pressed="true"]').first()).toBeVisible();
+  await expect.poll(async () => JSON.parse((await other.evaluate((k) => localStorage.getItem(k), key)) ?? "{}").team).toBe("");
+  expect(JSON.parse((await other.evaluate((k) => localStorage.getItem(k), key)) ?? "{}").unit).toBe("k");
+  await teamPage.close();
+  await other.close();
 });
 
 test("フィルタはヘッダの固定バーにあり、スクロールしても画面上端に残る", async ({ page }) => {
