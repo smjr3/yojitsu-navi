@@ -21,6 +21,8 @@
  *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
  *   filter?: false（列ごとの絞り込みを付けない）,
  *   maxHeight?: px, toolbar?: Node, className?: string（table に足す class）,
+ *   subRows?(row) -> rows（行を開くと下に出す内訳の行。row.hasSub が真の行に開閉の印を付ける。並べ替え・絞り込み・先頭の数行は
+ *             元の行だけにかかり、内訳の行は開いた行のすぐ下に同じ列で出す。Excel は元の行だけ。§150）,
  *   previewRows?: 行数（先頭のこの行数だけ出し、表の下の「すべて表示」で残りを出す。木構造は対象外。
  *                 たたんでいる間は表の中でスクロールしないので、ページのスクロールが表に取られない。§127）
  * })
@@ -418,6 +420,7 @@ export function dataTable({
   filter = true,
   className = null,
   previewRows = null,
+  subRows = null,
 }) {
   const baseCols = columns.filter((c) => !c.hidden && !c.exportOnly);
   // 列の表示・並び順（§106）。先頭（名前）の列は固定。画面と表ごとにこのブラウザに覚える
@@ -454,6 +457,9 @@ export function dataTable({
   // 利用者が選んだ並べ替えの列を隠したら、既定の並びに戻す
   let sortState = tree ? null : (remembered && visibleCols.some((c) => c.key === remembered.key) ? remembered : null) ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
+  // 内訳を開いている行（subRows。§150）
+  const openedSub = new Set();
+  const subMode = !tree && typeof subRows === "function";
   let currentRows = rows;
 
   // 列ごとの絞り込み（SPEC §70）。並べ替えと同じくタブ単位で覚える。
@@ -667,12 +673,15 @@ export function dataTable({
     return text;
   }
 
-  function renderRow(row, i) {
+  // parentKey: 内訳の行（subRows）のとき、開いた元の行のキー
+  function renderRow(row, i, parentKey = null) {
     const href = rowHref ? rowHref(row) : null;
     const danger = row.isDanger || rowDeficit(row) || row.isOverBudget;
     const context = tree && matchedKeys !== null && !matchedKeys.has(row.key);
+    const isSub = parentKey !== null;
+    const key = isSub ? `${parentKey}\u0000${rowKey(row, i)}` : String(rowKey(row, i));
     // 行・セルは html`` でなく直接作る（1 マスごとの HTML 解析を避ける。§107）
-    const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`, "data-key": String(rowKey(row, i)) });
+    const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}${isSub ? " is-sub yn-depth-1" : ""}`, "data-key": key });
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
       const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
@@ -698,9 +707,26 @@ export function dataTable({
             });
             lead.append(toggle);
           } else lead.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
+        } else if (subMode) {
+          // 内訳を開く行（§150）。木の表と同じ字下げ・開閉の印
+          lead = h("div", { class: "yn-tree-cell" });
+          cell.append(lead);
+          lead.append(h("span", { class: "yn-tree-indent", style: `--depth:${isSub ? 1 : 0}` }));
+          if (!isSub && row.hasSub) {
+            const open = openedSub.has(key);
+            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.subClose : T.table.subOpen, { name: row.name ?? "" }) }, h("span", { class: "yn-disc", "aria-hidden": "true" }));
+            toggle.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              if (openedSub.has(key)) openedSub.delete(key);
+              else openedSub.add(key);
+              renderBody();
+              focusIn(tbody, `tr[data-key="${cssEscape(key)}"] .yn-tree-toggle`);
+            });
+            lead.append(toggle);
+          } else lead.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
         }
         if (href) content = h("a", { class: "yn-row-link", href }, content);
-        else if (tree) content = h("span", { class: "yn-tree-name" }, content);
+        else if (tree || subMode) content = h("span", { class: "yn-tree-name" }, content);
       }
       // 氏名の列は合わせると吹き出し（§148）。全文は吹き出しの見出しに出るので title は付けない（二重に出さない）
       const tipMember = col.memberTip ? col.memberTip(row) : null;
@@ -759,7 +785,16 @@ export function dataTable({
     if (currentRows.length === 0) {
       tbody.replaceChildren(html`<tr class="yn-table-empty"><td colspan=${visibleCols.length}>${filtered && rows.length ? T.table.filterEmpty : emptyText}</td></tr>`);
     } else {
-      tbody.replaceChildren(...(cut ? currentRows.slice(0, preview) : currentRows).map(renderRow));
+      const shown = cut ? currentRows.slice(0, preview) : currentRows;
+      if (!subMode) tbody.replaceChildren(...shown.map((r, i) => renderRow(r, i)));
+      else {
+        const trs = [];
+        shown.forEach((row, i) => {
+          trs.push(renderRow(row, i));
+          if (row.hasSub && openedSub.has(String(rowKey(row, i)))) for (const [j, child] of (subRows(row) ?? []).entries()) trs.push(renderRow(child, j, String(rowKey(row, i))));
+        });
+        tbody.replaceChildren(...trs);
+      }
     }
     if (preview > 0) updateMore(cut);
     renderSummary();

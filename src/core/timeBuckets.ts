@@ -588,3 +588,112 @@ export function encodeMemberDays(
   }
   return { asOf, members };
 }
+
+// ---------------------------------------------------------------------------
+// 稼働実績の月次推移（運用保守・運用保守以外の時間と運用保守の計画。§150）
+// ---------------------------------------------------------------------------
+
+/** 稼働実績の 1 か月分（core の workMonthlySeries ＋ 運用保守の計画） */
+export interface WorkSeriesMonth {
+  month: YearMonth;
+  status: MonthStatus;
+  contractHours: number;
+  outsideHours: number;
+  plannedHours: number;
+}
+
+export interface WorkBucket {
+  key: string;
+  unit: ChartUnit;
+  from: ISODate;
+  to: ISODate;
+  months: YearMonth[];
+  status: MonthStatus | null;
+  contractHours: number;
+  outsideHours: number;
+  plannedHours: number;
+  businessDay?: boolean;
+  /** 日・週: メンバーごとの [運用保守, 運用保守以外] の時間（棒を押したときの内訳） */
+  members?: Map<string, [number, number]>;
+}
+
+/**
+ * 稼働実績を まとめ直す（§150）。月・四半期・年度は月の値を足す。日・週は、メンバーごとの月の時間（monthHours）を
+ * 作業実績の日ごとの割合（data/member-days.json）で配り、計画は月の値をその月の営業日に均等に配る（メンバー詳細 §130 と同じ）
+ */
+export function bucketWork(
+  series: readonly WorkSeriesMonth[],
+  unit: ChartUnit,
+  {
+    startMonth,
+    range = null,
+    days = null,
+    monthHours = null,
+    holidays = [],
+    asOf = null,
+  }: {
+    startMonth: number;
+    range?: { from: YearMonth; to: YearMonth } | null;
+    days?: MemberDaysFile["members"] | null;
+    /** メンバー → 月 → [運用保守, 運用保守以外] の時間（日・週のときだけ使う） */
+    monthHours?: ReadonlyMap<string, ReadonlyMap<YearMonth, readonly [number, number]>> | null;
+    holidays?: HolidayLookup;
+    asOf?: ISODate | null;
+  },
+): WorkBucket[] {
+  const accs = new Map<string, { b: WorkBucket; statuses: Set<MonthStatus> }>();
+  const order: Array<{ b: WorkBucket; statuses: Set<MonthStatus> }> = [];
+  const touch = (key: string, date: ISODate, month: YearMonth, status: MonthStatus) => {
+    let a = accs.get(key);
+    if (!a) {
+      a = { b: { key, unit, from: date, to: date, months: [], status: null, contractHours: 0, outsideHours: 0, plannedHours: 0 }, statuses: new Set() };
+      accs.set(key, a);
+      order.push(a);
+    }
+    if (!a.b.months.includes(month)) a.b.months.push(month);
+    a.statuses.add(status);
+    if (date < a.b.from) a.b.from = date;
+    if (date > a.b.to) a.b.to = date;
+    return a.b;
+  };
+  if (unit === "day" || unit === "week") {
+    const set = holidaySetOf(holidays);
+    const inRange = range ? series.filter((d) => d.month >= range.from && d.month <= range.to) : series;
+    const bucketAt = (date: ISODate) => accs.get(bucketMeta(unit, date, startMonth))!.b;
+    for (const d of inRange) {
+      for (const date of datesBetween(firstDayOf(d.month), lastDayOf(d.month))) {
+        const b = touch(bucketMeta(unit, date, startMonth), date, d.month, d.status);
+        b.members ??= new Map();
+        if (unit === "day" && b.businessDay === undefined) b.businessDay = isBusinessDay(date, set);
+      }
+      const pool = monthDayPool(d.month, holidays);
+      spreadMonth(d.plannedHours, d.month, null, pool, (date, v) => (bucketAt(date).plannedHours += v));
+      const upTo = pool.filter((x) => asOf === null || x <= asOf);
+      const passed = upTo.length > 0 ? upTo : pool;
+      for (const [memberId, byMonth] of monthHours ?? []) {
+        const v = byMonth.get(d.month);
+        if (!v) continue;
+        const aw = days?.[memberId]?.[d.month]?.a ?? null;
+        const add = (i: 0 | 1) => (date: ISODate, h: number) => {
+          const b = bucketAt(date);
+          if (i === 0) b.contractHours += h;
+          else b.outsideHours += h;
+          const m = b.members!.get(memberId) ?? [0, 0];
+          m[i] += h;
+          b.members!.set(memberId, m);
+        };
+        spreadMonth(v[0], d.month, aw ? aw.map(([x, c]) => [x, c] as const) : null, passed, add(0));
+        spreadMonth(v[1], d.month, aw ? aw.map(([x, , o]) => [x, o] as const) : null, passed, add(1));
+      }
+    }
+  } else {
+    for (const d of series) {
+      const b = touch(bucketMeta(unit, firstDayOf(d.month), startMonth), firstDayOf(d.month), d.month, d.status);
+      b.to = lastDayOf(d.month) > b.to ? lastDayOf(d.month) : b.to;
+      b.contractHours += d.contractHours;
+      b.outsideHours += d.outsideHours;
+      b.plannedHours += d.plannedHours;
+    }
+  }
+  return order.map(({ b, statuses }) => ({ ...b, months: b.months.sort(), status: statuses.size === 1 ? [...statuses][0]! : null }));
+}

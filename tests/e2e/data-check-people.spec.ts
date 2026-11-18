@@ -3,7 +3,7 @@
  * 稼働実績の顧客別で、案件の無い顧客に「案件なし」を付ける
  */
 import type { Locator, Page } from "@playwright/test";
-import { test, expect, gotoPage, useDarkTheme, tableByCaption, dataRows, headerIndex, col, cellText } from "./helpers/app.js";
+import { test, expect, gotoPage, useDarkTheme, tableByCaption, dataRows, headerIndex, col, cellText, showAllRows } from "./helpers/app.js";
 
 /** 社員番号は「列」で選べる列（既定では出さない。SPEC §106.1）。チェックして出す */
 async function showColumn(page: Page, table: Locator, key: string) {
@@ -95,6 +95,7 @@ test("単価のないメンバーは人ごとに 1 行（月ごとは時間の�
 test("稼働実績の顧客別: 案件の無い顧客に「案件なし」、顧客名の無い作業は「顧客名なし」", async ({ page }) => {
   await gotoPage(page, "/workload?axis=customer");
   const table = page.locator("table").filter({ has: page.getByRole("columnheader", { name: /^顧客/ }) }).first();
+  await showAllRows(table); // 先頭 10 行だけ出す（§150）
   const noContract = table.locator("tbody tr", { hasText: "さくらんぼ交通" });
   await expect(noContract.locator(".yn-chip", { hasText: "案件なし" })).toBeVisible();
   // 案件のある顧客には付けない
