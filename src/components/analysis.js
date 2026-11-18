@@ -54,6 +54,34 @@ export function treeAt(model, month) {
   return { tree, rootTeamIds };
 }
 
+/**
+ * 作業ログの行に出す氏名（SPEC §139）。メンバーマスタの氏名（その月に有効な行。無ければ最も早い行）を優先し、
+ * マスタに無い人は作業実績の氏名、それも無ければ社員番号（データ確認のマスタ未登録者と同じ選び方）。
+ * 取得元の氏名の列が社員番号を返していても、マスタにある人は氏名で出る。行が多いので社員番号×月で覚えておく
+ * @returns {(w: {memberId: string, memberName?: string, date?: string}) => string}
+ */
+export function worklogMemberNamer(model) {
+  const byId = new Map();
+  for (const m of model?.members ?? []) {
+    const list = byId.get(m.memberId);
+    if (list) list.push(m);
+    else byId.set(m.memberId, [m]);
+  }
+  const memo = new Map();
+  return (w) => {
+    const month = (w.date ?? "").slice(0, 7);
+    const key = `${w.memberId}\u0000${month}`;
+    let name = memo.get(key);
+    if (name === undefined) {
+      const recs = byId.get(w.memberId);
+      name = recs ? memberNameAt({ members: recs }, w.memberId, month) : "";
+      if (name === w.memberId) name = "";
+      memo.set(key, name);
+    }
+    return name || (w.memberName ?? "").trim() || w.memberId || "";
+  };
+}
+
 /** 月 m 時点のメンバーの氏名（その月に有効な行。無ければ最も早い行、members に無ければ ID）。組織のリーダー表示（§22）用 */
 export function memberNameAt(model, memberId, month) {
   if (!memberId) return "";

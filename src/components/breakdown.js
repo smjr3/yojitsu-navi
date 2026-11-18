@@ -15,7 +15,7 @@ import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt } from "../i18n/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
-import { grossMarginOf, memberNameAt } from "./analysis.js";
+import { grossMarginOf, memberNameAt, worklogMemberNamer } from "./analysis.js";
 import { worklogKey } from "./worklog-key.js";
 
 /**
@@ -200,8 +200,9 @@ export function fetchWorklogs(contractId) {
 }
 
 /** 作業ログ明細の表 */
-export function worklogTable(entries, { unit = "yen", limit = 500 } = {}) {
-  const rows = entries.slice(0, limit).map((w) => [w.date, w.memberName, w.task, formatHours(w.hours), money(w.hourlyRate, "yen"), money(w.amount, unit)]);
+export function worklogTable(entries, { unit = "yen", limit = 500, model = null } = {}) {
+  const nameOf = worklogMemberNamer(model);
+  const rows = entries.slice(0, limit).map((w) => [w.date, nameOf(w), w.task, formatHours(w.hours), money(w.hourlyRate, "yen"), money(w.amount, unit)]);
   const total = entries.reduce((s, w) => s + w.amount, 0);
   const hours = entries.reduce((s, w) => s + w.hours, 0);
   const more = entries.length > limit ? html`<p class="yn-note">${fmt(T.breakdown.showingFirst, { limit: integer(limit), total: integer(entries.length) })}</p>` : null;
@@ -311,7 +312,7 @@ export function costMonthSpec({ contract, cm, unit, model }) {
           const month = data.months.find((m) => m.month === cm.month);
           const entries = month?.worklogs ?? [];
           if (entries.length === 0) return html`<p class="yn-note">${T.breakdown.noWorklogsMonth}</p>`;
-          return worklogTable(entries, { unit });
+          return worklogTable(entries, { unit, model });
         },
       },
     ],
@@ -488,7 +489,7 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
       { label: T.breakdown.targetBudget, value: money(totals.targetBudget, unit) },
       { label: T.breakdown.forecastCost, value: money(totals.forecastCost, unit) },
       { label: T.breakdown.forecastGpLong, value: money(totals.forecastGrossProfit, unit), emphasis: true },
-      { label: T.breakdown.deficitContracts, value: fmt(T.breakdown.count, { n: totals.deficitContractIds.length }), note: totals.deficitContractIds.join(", ") || null },
+      { label: T.breakdown.deficitContracts, value: fmt(T.breakdown.count, { n: totals.deficitContractIds.length }) },
     ],
     sections: [
       {
@@ -634,7 +635,7 @@ export function memberActualSpec({ model, member, months, contractIds = null, in
         }
         all.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         if (all.length === 0) return html`<p class="yn-note">${T.breakdown.noWorklogs}</p>`;
-        return html`<div><p class="yn-note">${T.breakdown.worklogRoundingNote}</p>${worklogTable(all, { unit })}</div>`;
+        return html`<div><p class="yn-note">${T.breakdown.worklogRoundingNote}</p>${worklogTable(all, { unit, model })}</div>`;
       },
     });
   }
