@@ -66,6 +66,8 @@ const state = Generators.observe((notify) => {
 ```js
 // 検索欄の初期値（URL の q。ストアの外＝ページ固有）
 const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
+// 不在の人も表示するか（URL の f=left。既定は隠す。案件一覧の「期間外の案件も表示」と同じ扱い。§138）
+const initialShowLeft = (new URLSearchParams(location.search).get("f") ?? "").split(",").includes("left");
 ```
 
 ```js
@@ -231,7 +233,7 @@ const searchForm = (() => {
   const input = html`<input type="search" class="yn-input" id="yn-m-text" placeholder=${T.members.searchPlaceholder} value=${initialQuery} aria-label=${T.members.searchAria}>`;
   // 打ち終わってから反映（1 文字ごと・日本語の変換中には表を作り直さない。§105）
   onTextInput(input, () => {
-    form.value = input.value;
+    form.value = { text: input.value, showLeft: form.value.showLeft };
     // URL の q に書き戻す（詳細から「戻る」で復元するため）
     const url = new URL(location.href);
     if (input.value) url.searchParams.set("q", input.value);
@@ -239,8 +241,22 @@ const searchForm = (() => {
     history.replaceState(history.state, "", url);
     form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
   });
-  form.append(html`<label class="yn-filter-label" for="yn-m-text">${T.members.searchHead}</label>`, input);
-  form.value = initialQuery;
+  // 不在の人（基準月に不在）は既定で隠し、チェックしたときだけ表に出す（§138。KPI・合計の母集団は従来どおり）
+  const left = html`<input type="checkbox" id="yn-m-left" checked=${initialShowLeft}>`;
+  left.addEventListener("change", () => {
+    const url = new URL(location.href);
+    if (left.checked) url.searchParams.set("f", "left");
+    else url.searchParams.delete("f");
+    history.replaceState(history.state, "", url);
+    form.value = { text: input.value, showLeft: left.checked };
+    form.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+  });
+  form.append(
+    html`<label class="yn-filter-label" for="yn-m-text">${T.members.searchHead}</label>`,
+    input,
+    html`<label class="yn-toggle-chip" for="yn-m-left" title=${T.members.chipShowLeftTitle}>${left}<span>${T.members.chipShowLeft}</span></label>`,
+  );
+  form.value = { text: initialQuery, showLeft: initialShowLeft };
   return form;
 })();
 ```
@@ -250,14 +266,17 @@ if (searchForm) display(searchForm);
 ```
 
 ```js
-const query = searchForm ? Generators.input(searchForm) : "";
+const listFilter = searchForm ? Generators.input(searchForm) : { text: "", showLeft: false };
 ```
 
 ```js
 if (vm) {
   const { unit, period } = vm;
-  const q = normalizeName(query ?? "");
-  const matched = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
+  const q = normalizeName(listFilter?.text ?? "");
+  const searched = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
+  // 不在の人は「不在の人も表示」を入れたときだけ（§138）
+  const leftN = listFilter?.showLeft ? 0 : searched.filter((r) => r.leftFrom).length;
+  const matched = leftN ? searched.filter((r) => !r.leftFrom) : searched;
   // 実績だけの応援・ヘルプ（チームの案件に計画が無い人）は、ボタンを押したときだけ出す（§134。体制図と同じ畳み方）
   const spotN = matched.filter((r) => r.spot).length;
   const spotBtn = spotN
@@ -268,6 +287,7 @@ if (vm) {
       T.members.sectionTitle,
       fmt(T.members.sectionHint, { period: periodJa(period), elapsed: period.to !== vm.fullPeriod.to ? T.members.elapsedSuffix : "", month: monthJa(vm.baseMonth) }),
       spotBtn,
+      leftN ? fmt(T.members.hiddenLeft, { n: leftN }) : null,
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);

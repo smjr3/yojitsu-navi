@@ -33,7 +33,8 @@ async function rowByKey(page: import("@playwright/test").Page, caption: string, 
 
 test.describe("メンバー一覧 /members", () => {
   test("KPI・全行・合計行が core の aggregateMembers（経過月）と一致し、期間全体の計画は KPI の補足に出る", async ({ page }) => {
-    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
+    // 不在の人も表に出す（f=left。§138）
+    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}&f=left`);
     const agg = aggregateMembers(model, { period: CMP });
     const full = aggregateMembers(model, { period: FY });
     await expect(kpiValue(page, 0)).toHaveText(yen(agg.total.plannedCost));
@@ -98,6 +99,42 @@ test.describe("メンバー一覧 /members", () => {
     await expect(table.locator("tbody")).toContainText("検索に一致するメンバーがいません");
   });
 
+  test("不在の人は既定で表に出さず、「不在の人も表示」で出る。KPI は常に含み、チェックは URL で戻る（§138）", { tag: "@smoke" }, async ({ page }) => {
+    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
+    const agg = aggregateMembers(model, { period: CMP });
+    const left = agg.members.filter((m) => m.leftFrom);
+    const active = agg.members.filter((m) => !m.leftFrom);
+    expect(left.length).toBeGreaterThan(0);
+    const table = tableByCaption(page, "メンバー別の計画と実績");
+    const h = await headerIndex(table);
+    const box = page.locator("#yn-m-left");
+    await expect(box).not.toBeChecked();
+    await expect(dataRows(table)).toHaveCount(active.length);
+    for (const m of left) await expect(table.locator(`tbody tr[data-key="${m.memberId}"]`)).toHaveCount(0);
+    await expect(page.locator(".yn-section-hint").filter({ hasText: `不在の人 ${left.length}人は非表示` })).toBeVisible();
+    // KPI は不在の人を含む。合計行は表示中の人だけ
+    await expect(kpiValue(page, 1)).toHaveText(yen(agg.total.actualCost));
+    const shown = aggregateMembers(model, { period: CMP, memberIds: active.map((m) => m.memberId) });
+    expect(await cellText(table.locator("tfoot tr"), col(h, "実績"))).toBe(yen(shown.total.actualCost));
+
+    await box.check();
+    await expect(dataRows(table)).toHaveCount(agg.members.length);
+    await expect(page.locator(".yn-section-hint").filter({ hasText: "不在の人" })).toHaveCount(0);
+    await expect(table.locator(`tbody tr[data-key="${left[0]!.memberId}"]`).locator(".yn-chip", { hasText: "不在" })).toBeVisible();
+    expect(await cellText(table.locator("tfoot tr"), col(h, "実績"))).toBe(yen(agg.total.actualCost));
+    expect(new URL(page.url()).searchParams.get("f")).toBe("left");
+    // 詳細へ移動して「戻る」でもチェックしたまま
+    await table.locator(`tbody tr[data-key="${left[0]!.memberId}"]`).locator(".yn-cell-main").click();
+    await page.waitForURL(/\/member\?/);
+    await page.goBack();
+    await expect(page.locator("#yn-m-left")).toBeChecked();
+    await expect(dataRows(tableByCaption(page, "メンバー別の計画と実績"))).toHaveCount(agg.members.length);
+    // 外すと隠れ、URL からも消える
+    await page.locator("#yn-m-left").uncheck();
+    await expect(dataRows(tableByCaption(page, "メンバー別の計画と実績"))).toHaveCount(active.length);
+    expect(new URL(page.url()).searchParams.get("f")).toBeNull();
+  });
+
   test("期間がすべて未来なら計画だけ（実績 0）で、注記が出る", async ({ page }) => {
     await gotoPage(page, `/members?from=2026-12&to=2027-03&${U}`);
     const agg = aggregateMembers(model, { period: { from: "2026-12", to: "2027-03" } });
@@ -107,7 +144,7 @@ test.describe("メンバー一覧 /members", () => {
   });
 
   test("内訳: 計画額は 配分 × 1人月の時間 × 単価 の明細、実績は実績行と作業ログ、稼働率・合計行も根拠を持つ", async ({ page }) => {
-    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
+    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}&f=left`);
     const agg = aggregateMembers(model, { period: CMP });
     const m = agg.members.find((x) => x.memberId === "M011")!;
     const table = tableByCaption(page, "メンバー別の計画と実績");
@@ -149,7 +186,7 @@ test.describe("メンバー一覧 /members", () => {
   });
 
   test("Excel 出力: 金額は円、見出しと値が core と一致", async ({ page }) => {
-    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
+    await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}&f=left`);
     const dl = page.waitForEvent("download");
     // メンバー一覧は先頭の表（「計画とのずれ」（§64）はその下。§68）
     await page.locator(".yn-export").first().click();

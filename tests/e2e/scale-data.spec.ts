@@ -48,10 +48,13 @@ test("育休の人の詳細: 理由に関係なく「不在」のチップと最
   await expect(page.locator(".yn-chip", { hasText: "育休" })).toHaveCount(0);
 });
 
-test("メンバー一覧: 不在の人に「不在」チップ（色だけに頼らず文字）", async ({ page }) => {
+test("メンバー一覧: 不在の人は既定で隠し、「不在の人も表示」で「不在」チップ（色だけに頼らず文字）付きで出る（§138）", async ({ page }) => {
   await gotoPage(page, "/members");
   const left = page.locator("tbody tr").filter({ has: page.locator(".yn-chip", { hasText: "不在" }) });
-  expect(await left.count()).toBeGreaterThan(0);
+  await expect(page.locator(".yn-section-hint").filter({ hasText: /不在の人 \d+人は非表示/ })).toBeVisible();
+  expect(await left.count()).toBe(0);
+  await page.locator("#yn-m-left").check();
+  await expect(left.first()).toBeVisible();
 });
 
 test("リソース計画: 不在中に残った計画は行に「不在中の計画」の警告チップ", async ({ page }) => {
