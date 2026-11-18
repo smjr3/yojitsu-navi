@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
     sessionStorage.removeItem("yojitsu-navi:masters-draft-session");
     sessionStorage.removeItem("yojitsu-navi:plan-cell-scope");
     if (!sessionStorage.getItem("yn-e2e-state")) {
-      localStorage.setItem("yojitsu-navi:state:v2", JSON.stringify({ unit: "yen" }));
+      localStorage.setItem("yojitsu-navi:state:v3", JSON.stringify({ unit: "yen" }));
       sessionStorage.setItem("yn-e2e-state", "1");
     }
   });
@@ -99,7 +99,7 @@ test("実績で確定した月だけの変更は「着地見込みは変わり�
 });
 
 test("期間・単位は表示条件を引き継ぐ（今月だけなら今月の着地）", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("yojitsu-navi:state:v2", JSON.stringify({ unit: "yen", from: "2026-10", to: "2026-10" })));
+  await page.addInitScript(() => localStorage.setItem("yojitsu-navi:state:v3", JSON.stringify({ unit: "yen", from: "2026-10", to: "2026-10" })));
   await gotoPage(page, "/plan?team=T111");
   // 12 月だけ変えても今月の着地は変わらない（案件終了時点だけ変わる）
   await setCell(page, "M010", "2026-12", "0.5");

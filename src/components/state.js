@@ -2,7 +2,7 @@
  * 画面状態（期間・チーム・単位・着地方式）⇄ URL クエリ ⇄ localStorage
  *
  * 優先順位: URL クエリ（共有された表示を再現） > localStorage（前回の表示） > 既定値。
- * ただしブラウザの「戻る・進む」で開いたときは localStorage（最後に選んだ表示）を優先する。
+ * ただしブラウザの「戻る・進む」・再読み込みで開いたときは localStorage（最後に選んだ表示）を優先する。
  * 前の画面の URL には離れたときの期間・単位が残っているので、URL を優先すると別の画面で選び直した値が戻ってしまう（SPEC §133）。
  * 変更すると URL（history.replaceState）と localStorage の両方に書き戻す。
  *
@@ -19,7 +19,8 @@ import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fisc
 
 export const STATE_KEYS = ["from", "to", "team", "unit", "method", "outside"];
 // v2: 既定の単位を百万円に変えたとき、以前の既定（円）が保存値として残らないように切り替えた
-export const STORAGE_KEY = "yojitsu-navi:state:v2";
+// v3: 既定の単位を円に戻したとき（SPEC §133）。開いただけで既定の百万円が保存されているため、キーを変えないと新しい既定が効かない
+export const STORAGE_KEY = "yojitsu-navi:state:v3";
 const METHODS = ["assignment", "recent3", "all"];
 const UNIT_IDS = UNITS.map((u) => u.id);
 
@@ -152,10 +153,11 @@ function writeQuery(state) {
  *   store.subscribe(fn)    変更通知。戻り値で解除
  *   store.href(path, patch) 状態を引き継いだリンク（別ページへの遷移用）
  */
-/** ブラウザの「戻る・進む」で開いた画面か */
+/** ブラウザの「戻る・進む」または再読み込みで開いた画面か（URL はその画面を前に開いたときのもの） */
 function isHistoryNavigation() {
   try {
-    return performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+    const type = performance.getEntriesByType("navigation")[0]?.type;
+    return type === "back_forward" || type === "reload";
   } catch {
     return false;
   }
@@ -164,7 +166,7 @@ function isHistoryNavigation() {
 export function createStore(model, options = {}) {
   const fromQuery = readQuery();
   const fromStorage = readStorage();
-  // 戻る・進むでは保存してある値を上に重ねる（URL だけにある値は残す）
+  // 戻る・進む・再読み込みでは保存してある値を上に重ねる（URL だけにある値は残す）
   const saved = isHistoryNavigation() ? [fromQuery, fromStorage] : [fromStorage, fromQuery];
   let state = sanitize(model, { ...(saved[0] ?? {}), ...(saved[1] ?? {}), ...(options.initial ?? {}) });
   const listeners = new Set();
@@ -207,6 +209,12 @@ export function createStore(model, options = {}) {
   if (typeof addEventListener === "function") {
     addEventListener("pageshow", (e) => {
       if (!e.persisted) return;
+      const s = readStorage();
+      if (s) store.set(s);
+    });
+    // 別のタブ・ウィンドウで選び直したら、開いたままのこの画面も合わせる（古い値のリンクから戻さない）
+    addEventListener("storage", (e) => {
+      if (e.key !== STORAGE_KEY || !e.newValue || (typeof document !== "undefined" && document.prerendering)) return;
       const s = readStorage();
       if (s) store.set(s);
     });

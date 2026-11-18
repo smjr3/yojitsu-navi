@@ -64,7 +64,7 @@ test.describe("全体サマリー", () => {
     await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, "m"));
     await expectKpis(page, FY, "", DEFAULT_METHOD, "m");
     // 保存された状態が無い（localStorage 空）ことが前提なので、保存もこの単位になる
-    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
+    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v3"));
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "m" });
   });
 
@@ -103,7 +103,7 @@ test.describe("全体サマリー", () => {
       await expectKpis(page, FY, "", DEFAULT_METHOD, unit);
       await expect(kpiValue(page, 0)).toContainText(UNIT_LABEL[unit]);
       expect(query(page).get("unit")).toBe(unit);
-      const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
+      const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v3"));
       expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit });
     }
   });
@@ -232,7 +232,7 @@ test.describe("全体サマリー", () => {
     await page.locator(".yn-seg-btn[data-preset=next3]").click();
     const period = presetPeriod("next3", model);
     await expectKpis(page, period, "", "all", "k");
-    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v2"));
+    const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v3"));
     expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "k", method: "all", from: period.from, to: period.to });
     // クエリ無しで別ページへ → 保存された状態が使われ、URL に正規化される
     await gotoPage(page, "/teams");
@@ -260,11 +260,12 @@ test.describe("全体サマリー", () => {
     expect(query(page).get("unit")).toBe(DEFAULT_UNIT);
   });
 
-  test("古い保存（v1 キーの円）は読まれず、既定の百万円で始まる", async ({ page }) => {
+  test("古い保存（v1・v2 キー）は読まれず、既定の単位で始まる（§133）", async ({ page }) => {
     await gotoPage(page, "/");
     await page.evaluate(() => {
       localStorage.clear();
-      localStorage.setItem("yojitsu-navi:state:v1", JSON.stringify({ unit: "yen" }));
+      localStorage.setItem("yojitsu-navi:state:v1", JSON.stringify({ unit: "k" }));
+      localStorage.setItem("yojitsu-navi:state:v2", JSON.stringify({ unit: "m" }));
     });
     await gotoPage(page, "/");
     expect(query(page).get("unit")).toBe(DEFAULT_UNIT);
