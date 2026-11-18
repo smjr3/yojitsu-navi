@@ -57,6 +57,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `mr-pending.spec.ts` | マージ待ちの一覧の開閉・対応が必要なものを先に・競合ありのマージで載せ直してマージ・幅ごとのはみ出し（§126） |
+| `plan-keyboard.spec.ts` | リソース計画のキーボード入力（数字で始める・F2/Delete・Enter で次の月へ・マウスでは残る・Home/End・名前との行き来・変換中の Enter・390px で名前の列に隠れない。SPEC §145） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
 | `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の開閉の印・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
 | `disclosure.spec.ts` | 開閉の印（枠付きの四角）を全画面でそろえる・文字の大きさに追随・組織ツリーの印の外側でも開閉・折り返しの位置（SPEC §143） |
