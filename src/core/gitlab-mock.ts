@@ -5,8 +5,8 @@
  * repository/files/:path(/raw)）だけを、localStorage 相当の保存先に持つ。fetch と同じ形（FetchLike）なので
  * 画面・テストからは本物の GitLab と同じ呼び方で使える。
  *
- * - 本体（targetBranch）の中身は画面のビルド時のファイル（baseFiles）。マージしても本体は変えない
- *   （画面のデータはビルドし直さないと変わらないため。画面にもそう明記する）
+ * - 本体（targetBranch）の中身は画面のビルド時のファイル（baseFiles）に、承認（マージ）した変更を重ねたもの（main）。
+ *   リソース計画・マスタ編集は本体の今の中身を土台にする（§149）。ほかの画面のデータはビルドし直さないと変わらない（画面にもそう出す）
  * - 「マージできる立場か」は canMerge() で切り替える（設定画面の「リーダーとして操作」）
  * - web_url は返さない（GitLab の画面は無いのでリンクを出さない）
  */
@@ -20,7 +20,8 @@ export const DEMO_BASE_SHA = "demo-base";
 
 export interface DemoStore {
   seq: number;
-  branches: Record<string, { files: Record<string, string>; head: string }>;
+  /** bases = 作ったときの本体の各ファイルの最終コミットと中身（承認の重なり＝競合の判定と、変更の内容の「前」に使う。§149） */
+  branches: Record<string, { files: Record<string, string>; head: string; bases?: Record<string, { lastCommitId: string | null; text: string | null }> }>;
   mrs: Array<{
     iid: number;
     title: string;
@@ -31,6 +32,8 @@ export interface DemoStore {
     author: { username: string; name: string };
     created_at: string;
   }>;
+  /** 承認（マージ）で本体に入った変更（パス → 中身・そのマージのコミット）と本体の先頭（§149）。無ければビルド時のまま */
+  main?: { head: string; files: Record<string, { text: string; lastCommitId: string }> };
 }
 
 export interface KeyValueStorage {
@@ -42,6 +45,8 @@ export interface DemoOptions {
   storage: KeyValueStorage;
   /** 本体のファイル（パス → 中身・最終コミット ID）。無いパスは 404 */
   baseFiles?: Record<string, { text: string; lastCommitId: string | null }>;
+  /** 本体の先頭のコミット（ビルドのコミット。§149）。無ければ DEMO_BASE_SHA */
+  baseHead?: string | null;
   /** マージできる立場か（既定 true） */
   canMerge?: () => boolean;
   now?: () => Date;
@@ -80,12 +85,22 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
   const load = () => readDemoStore(opts.storage);
   const save = (s: DemoStore) => opts.storage.set(DEMO_STORAGE_KEY, JSON.stringify(s));
   const sha = (s: DemoStore) => `demo${String(++s.seq).padStart(8, "0")}`;
+  /** 本体の今の中身（承認した変更を重ねる） */
+  const mainFile = (s: DemoStore, file: string): { text: string; lastCommitId: string | null } | undefined => s.main?.files[file] ?? base[file];
+  const mainHead = (s: DemoStore) => s.main?.head ?? opts.baseHead ?? DEMO_BASE_SHA;
 
+  /** 作ったあとに同じファイルの別の変更が承認されたか（本物の GitLab の「競合あり」に当たる。§149） */
+  const conflicted = (s: DemoStore, m: DemoStore["mrs"][number]) => {
+    const b = s.branches[m.source_branch];
+    if (m.state !== "opened" || !b?.bases) return false;
+    return Object.keys(b.files).some((f) => (b.bases![f]?.lastCommitId ?? null) !== (mainFile(s, f)?.lastCommitId ?? null));
+  };
+  const baseRef = (head: string) => `${head}-base`;
   const mrJson = (s: DemoStore, m: DemoStore["mrs"][number]) => ({
     ...m,
-    has_conflicts: false,
-    detailed_merge_status: m.state === "opened" ? "mergeable" : "not_open",
-    diff_refs: { base_sha: DEMO_BASE_SHA, head_sha: s.branches[m.source_branch]?.head ?? null },
+    has_conflicts: conflicted(s, m),
+    detailed_merge_status: m.state !== "opened" ? "not_open" : conflicted(s, m) ? "conflict" : "mergeable",
+    diff_refs: { base_sha: s.branches[m.source_branch]?.bases ? baseRef(s.branches[m.source_branch]!.head) : DEMO_BASE_SHA, head_sha: s.branches[m.source_branch]?.head ?? null },
     head_pipeline: { status: "success" },
     user: { can_merge: canMerge() },
   });
@@ -115,11 +130,17 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
       if (branch === target || s.branches[branch]) return reply(400, { message: "A branch called this already exists" });
       const actions = Array.isArray(body.actions) ? (body.actions as Array<Record<string, unknown>>) : [];
       for (const a of actions) {
-        const b = base[String(a.file_path)];
+        const b = mainFile(s, String(a.file_path));
         if (a.last_commit_id && b && b.lastCommitId && a.last_commit_id !== b.lastCommitId) return reply(400, { message: "You are attempting to update a file that has changed since you started editing it." });
       }
       const head = sha(s);
-      s.branches[branch] = { files: Object.fromEntries(actions.map((a) => [String(a.file_path), String(a.content ?? "")])), head };
+      const bases = Object.fromEntries(
+        actions.map((a) => {
+          const f = mainFile(s, String(a.file_path));
+          return [String(a.file_path), { lastCommitId: f?.lastCommitId ?? null, text: f?.text ?? null }];
+        }),
+      );
+      s.branches[branch] = { files: Object.fromEntries(actions.map((a) => [String(a.file_path), String(a.content ?? "")])), head, bases };
       save(s);
       return reply(201, { id: head, short_id: head.slice(0, 8) });
     }
@@ -163,7 +184,15 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
         if (m.state !== "opened") return reply(405, { message: "405 Method Not Allowed" });
         const head = s.branches[m.source_branch]?.head ?? null;
         if (body.sha && body.sha !== head) return reply(409, { message: "SHA does not match HEAD of source branch" });
+        // 同じファイルの別の変更が先に承認されていたら、そのまま入れると先の変更を消すので断る（本物の GitLab と同じ）
+        if (conflicted(s, m)) return reply(406, { message: "Branch cannot be merged" });
         m.state = "merged";
+        // 本体に重ねる（§149。リソース計画・マスタ編集の土台になる）
+        const files = s.branches[m.source_branch]?.files ?? {};
+        if (Object.keys(files).length) {
+          const commit = sha(s);
+          s.main = { head: commit, files: { ...(s.main?.files ?? {}), ...Object.fromEntries(Object.entries(files).map(([f, text]) => [f, { text, lastCommitId: commit }])) } };
+        }
         if (body.should_remove_source_branch) delete s.branches[m.source_branch];
         save(s);
         return reply(200, mrJson(s, m));
@@ -176,10 +205,23 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
       }
     }
 
-    // 本体の中身と最終コミット ID（JSON・base64。§120 の載せ直し）
+    // 本体の先頭（§149）
+    if (method === "GET" && rest === `/repository/branches/${target}`) {
+      const s = load();
+      return reply(200, { name: target, commit: { id: mainHead(s) } });
+    }
+
+    // そのファイルを最後に変えたコミット（§149。本体だけ）
+    if (method === "GET" && rest === "/repository/commits") {
+      const s = load();
+      const f = mainFile(s, u.searchParams.get("path") ?? "");
+      return reply(200, f?.lastCommitId ? [{ id: f.lastCommitId }] : []);
+    }
+
+    // 本体の中身と最終コミット ID（JSON・base64。§120 の載せ直し・§149）
     const metaMatch = /^\/repository\/files\/(.+)$/.exec(rest);
     if (method === "GET" && metaMatch && !metaMatch[1]!.endsWith("/raw")) {
-      const b = base[metaMatch[1] as string];
+      const b = mainFile(load(), metaMatch[1] as string);
       if (!b) return reply(404, { message: "404 File Not Found" });
       const bytes = new TextEncoder().encode(b.text);
       let bin = "";
@@ -193,7 +235,8 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
       const ref = u.searchParams.get("ref") ?? target;
       const s = load();
       const branch = Object.values(s.branches).find((b) => b.head === ref);
-      const text = branch && file in branch.files ? branch.files[file] : base[file]?.text;
+      const based = Object.values(s.branches).find((b) => b.bases && baseRef(b.head) === ref);
+      const text = branch && file in branch.files ? branch.files[file] : based?.bases?.[file] ? (based.bases[file]!.text ?? undefined) : mainFile(s, file)?.text;
       return text === undefined ? reply(404, { message: "404 File Not Found" }) : reply(200, text);
     }
 

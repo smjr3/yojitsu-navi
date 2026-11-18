@@ -543,28 +543,49 @@ export async function fetchFileRaw(fetchImpl: FetchLike, cfg: MasterEditConfig, 
 }
 
 /** base64 → UTF-8 の文字列（先頭の BOM は外す。raw の取得と同じ） */
-function decodeBase64Utf8(b64: string): string {
+function decodeBase64Utf8(b64: string, strict = false): string {
   const bin = atob(b64.replace(/\s+/g, ""));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
+  // strict: UTF-8 でない（Shift_JIS のままの CSV など）なら化けた文字にせず例外（§149 は差し替えない）
+  return new TextDecoder("utf-8", { fatal: strict }).decode(bytes);
 }
 
 /**
  * ファイルの中身と最終コミット ID（ref 時点。GET /repository/files/:path?ref=）。無ければ null。
  * 「最新に載せ直す」（§120）で、本体の今の中身に当て直して last_commit_id を付けて保存するために使う
  */
-export async function fetchFileForUpdate(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string): Promise<{ text: string; lastCommitId: string | null } | null> {
+export async function fetchFileForUpdate(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string, opts: { strictUtf8?: boolean } = {}): Promise<{ text: string; lastCommitId: string | null } | null> {
   ensureConfigured(cfg);
   try {
     const f = await request<{ content?: unknown; encoding?: unknown; last_commit_id?: unknown }>(fetchImpl, "file", `${projectPath(cfg)}/repository/files/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)}`, token0(token), "GET");
     const content = typeof f.content === "string" ? f.content : "";
-    const text = f.encoding === "base64" ? decodeBase64Utf8(content) : content;
+    const text = f.encoding === "base64" ? decodeBase64Utf8(content, opts.strictUtf8 === true) : content;
     return { text, lastCommitId: typeof f.last_commit_id === "string" ? f.last_commit_id : null };
   } catch (e) {
     if (e instanceof GitLabError && e.status === 404) return null;
     throw e;
   }
+}
+
+/** ブランチの先頭のコミット ID（GET /repository/branches/:branch。§149）。無ければ null */
+export async function fetchBranchHead(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, branch: string): Promise<string | null> {
+  ensureConfigured(cfg);
+  try {
+    const b = await request<{ commit?: { id?: unknown } }>(fetchImpl, "file", `${projectPath(cfg)}/repository/branches/${encodeURIComponent(branch)}`, token0(token), "GET");
+    return typeof b.commit?.id === "string" && b.commit.id !== "" ? b.commit.id : null;
+  } catch (e) {
+    if (e instanceof GitLabError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** ref 時点でそのファイルを最後に変えたコミット ID（GET /repository/commits?ref_name=&path=&per_page=1。§149）。無ければ null */
+export async function fetchLastCommitForPath(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string): Promise<string | null> {
+  ensureConfigured(cfg);
+  const list = await request<unknown>(fetchImpl, "file", `${projectPath(cfg)}/repository/commits?ref_name=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}&per_page=1`, token0(token), "GET");
+  const first = Array.isArray(list) ? (list[0] as { id?: unknown } | undefined) : undefined;
+  return typeof first?.id === "string" && first.id !== "" ? first.id : null;
 }
 
 export interface FileChange {

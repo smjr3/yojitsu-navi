@@ -31,7 +31,7 @@ async function patchMasters(page: Page, patch: (p: typeof PAYLOAD) => unknown): 
 }
 
 function gitlabMode(commitMode: "mr" | "direct" = "mr") {
-  return (p: typeof PAYLOAD) => ({ ...p, masterEdit: { mode: "gitlab", gitlab: { apiBaseUrl: GITLAB, projectId: "grp/yojitsu-navi", targetBranch: "main", commitMode } } });
+  return (p: typeof PAYLOAD) => ({ ...p, headCommit: null, masterEdit: { mode: "gitlab", gitlab: { apiBaseUrl: GITLAB, projectId: "grp/yojitsu-navi", targetBranch: "main", commitMode } } });
 }
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "content-type": "application/json" };

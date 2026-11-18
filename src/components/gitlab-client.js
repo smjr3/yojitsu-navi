@@ -89,14 +89,15 @@ export function resetDemo() {
 }
 
 /**
- * GitLab を呼ぶ fetch。demo なら模擬（baseFiles = 本体のファイル: パス → {text, lastCommitId}）
+ * GitLab を呼ぶ fetch。demo なら模擬（baseFiles = 本体のファイル: パス → {text, lastCommitId}、baseHead = ビルドのコミット。§149）
  * @param {import("../core/types.js").MasterEditConfig} cfg
  */
-export function gitlabFetch(cfg, baseFiles = {}) {
+export function gitlabFetch(cfg, baseFiles = {}, baseHead = null) {
   if (cfg.mode === "demo") {
     return createGitLabMock({
       storage: { get: (k) => get("local", k), set: (k, v) => set("local", k, v) },
       baseFiles,
+      baseHead,
       canMerge: demoCanMerge,
       targetBranch: cfg.gitlab.targetBranch,
     });

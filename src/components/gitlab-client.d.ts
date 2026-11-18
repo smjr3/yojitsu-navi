@@ -10,5 +10,5 @@ export function clearToken(): void;
 export function demoCanMerge(): boolean;
 export function setDemoCanMerge(on: boolean): void;
 export function resetDemo(): void;
-export function gitlabFetch(cfg: MasterEditConfig, baseFiles?: Record<string, { text: string; lastCommitId: string | null }>): FetchLike;
+export function gitlabFetch(cfg: MasterEditConfig, baseFiles?: Record<string, { text: string; lastCommitId: string | null }>, baseHead?: string | null): FetchLike;
 export function publishMrCount(n: number | null): void;

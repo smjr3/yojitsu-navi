@@ -192,6 +192,7 @@ npm run fetch:projects -- --id-from-note "案件ID:(\S+)" --link-exact      # �
 編集後のデータはブラウザ内で `npm run validate` と同じ検証にかけ、エラーがあれば保存できません。
 
 流れ: 画面で編集 → 保存すると GitLab に **ブランチと MR** ができる → リーダーが画面上部の「申請中の変更」で内容を見て **承認**（＝マージ）→ CI がビルドし直して反映。
+承認した変更は、リソース計画・マスタ編集にはすぐ出る（GitLab の既定ブランチの今の中身を土台にする。変わった対象に「承認済み」の印）。ほかの画面の数値は CI のビルドと公開のあとに変わる。検証の途中で承認すると、通ったら自動で承認する予約になる（SPEC §149）。
 開いている MR の件数はヘッダー右端の「⋯」（その他。開くとマスタ編集の横にも）にバッジで出ます。トークンの登録・表示モード・テーマカラー・文字の大きさは右上の歯車（設定画面 `/settings`）にまとめています。
 
 ```jsonc
@@ -223,6 +224,13 @@ GitLab の API は Personal Access Token 付きの CORS リクエストを許可
 **デモ（`mode: "demo"`）**: GitLab に接続せず、ブラウザ内の模擬で保存 → マージ待ち → マージの流れを試せる（試用版用。設定画面で「リーダーとして操作」を切り替えられる）。本番では使わない。
 
 メンバーの社員番号・氏名は人事から取り込むため、登録済みの人では読み取り専用（CSV で編集も無し。SPEC §81）。`memberSource.adapter` が `"none"` 以外のときは、`memberSource.columns` に書いた列（既定は区分・役職）も読み取り専用。所属（事業本部・部・課）は既定では取り込まないので画面で直す。
+
+### 反映までの時間の内訳を見る（SPEC §149）
+
+ほかの画面に反映されるまでが長いときは、直近の保存 1 件について GitLab の「ビルド > パイプライン」で次を見る（設定は変えなくてよい）。
+- 申請（MR）のパイプラインの `validate`、承認後の既定ブランチのパイプラインの `pages` と `pages:deploy` の所要時間と、始まるまでの待ち（Queued）
+- `validate`・`pages` のログの各区間: Preparing environment・Getting source・Restoring cache・`node scripts/ci/install.mjs`（「依存は前に入れたものを使います」なら取得を省けている）・`npm run validate`・`npm run build`・`node scripts/ci/pages.mjs`・Saving cache・Uploading artifacts
+- `.gitlab-ci.yml` に `pages` ジョブ（`npm run build` を含む。SPEC §128）と `GIT_CLEAN_FLAGS` があるか。`.gitlab-ci.local.yml` で `build:` に足したタグなどが `pages:` にもあるか
 
 ## テストを Windows で動かす（Runner・PC）
 
