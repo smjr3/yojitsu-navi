@@ -31,6 +31,11 @@ PR を出す前に確認すること:
 - 画面を変えたら、実際に操作して確かめる: 画面幅 390 / 768 / 1024 / 1280px、ライト / ダーク、極端な値（0・とても大きい金額・長い名前）、はみ出し
 - 操作の手数・待ち・迷いも見る（分かりにくい・手間が多いものは直すか、PR に書く）
 
+## コミット
+
+- 作者・コミッター・`Co-authored-by` のアドレスは Claude・GitHub の noreply だけ（一覧は `scripts/check-commit-authors.mjs` の `ALLOWED`）。仮の名前（`git -c user.name=x` など）や個人のアドレスで作らない（スカッシュマージで main に残り、GitHub の Contributors に知らない人として出る）。`npm run check` と PR の CI（`commit-authors.yml`）で止まる。止まったら設定を直してそのコミットを作り直す（SPEC §151）
+- テストで一時リポジトリにコミットするときは、そのリポジトリの中だけで設定する（`--global` で設定しない）
+
 ## そのほか
 
 - 表の行・マスなど数の多い部品は `h()`（`src/components/dom.js`）で作る（`` html`` `` は呼ぶたびに HTML を解析するので重い。SPEC §107）
