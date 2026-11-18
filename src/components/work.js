@@ -340,12 +340,12 @@ export function planLoadLegend(dark) {
 }
 
 /**
- * 顧客の色（dataviz の分類色を固定の順で）。青＝予算・橙＝実績・赤＝超過と目標の上限はアプリ全体で意味が決まっているので使わない（§131）。
+ * 顧客の色（dataviz の分類色を固定の順で）。青＝予算・橙＝実績・赤＝超過・紫＝目標の上限はアプリ全体で意味が決まっているので使わない（§131・§140）。
  * 6 社目以降は「その他」にまとめて灰色
  */
 const CUSTOMER_COLORS = {
-  light: ["#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
-  dark: ["#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9"],
+  light: ["#1baf7a", "#eda100", "#e87ba4", "#008300", "#8c6239"],
+  dark: ["#199e70", "#c98500", "#d55181", "#0ca30c", "#b58b5f"],
 };
 const MAX_CUSTOMER_SERIES = CUSTOMER_COLORS.light.length;
 
@@ -363,7 +363,7 @@ function amountSeries(data, dark) {
 }
 
 /**
- * リソース計画の月別の計画の額（§122）: 顧客ごとの積み上げ棒、予算の線（実線）、目標の上限（赤の破線）。
+ * リソース計画の月別の計画の額（§122）: 顧客ごとの積み上げ棒、予算の線（実線）、目標の上限（紫の破線。§140）。
  * 上限を超える月は棒の上に「上限超」（狭い画面は「超」）
  */
 export function planAmountChart({ data, dark = false, width = 640, height = 200, unit = "m" }) {
@@ -398,9 +398,9 @@ export function planAmountChart({ data, dark = false, width = 640, height = 200,
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),
       Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "v", z: "k", fill: (d) => series[d.k].color, order: (d) => d.k, stroke: c.surface, strokeWidth: 1 })),
-      // 予算（月ごとの段）と目標の上限（予算 ×（1 − 目標の残予算率）の合計。§63.3 と同じ赤の破線）
+      // 予算（月ごとの段）と目標の上限（予算 ×（1 − 目標の残予算率）の合計。§63.3 と同じ紫の破線。§140）
       Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.budget, strokeWidth: 2.5 }),
-      Plot.link(caps, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "cap", y2: "cap", stroke: c.danger, strokeWidth: 2, strokeDasharray: "5 3" }),
+      Plot.link(caps, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "cap", y2: "cap", stroke: c.target, strokeWidth: 2, strokeDasharray: "5 3" }),
       Plot.text(pts.filter((d) => d.over), { x: "i", y: (d) => Math.max(d.plan, d.budget, d.cap ?? 0), dy: scaledPx(-9), text: () => (slot < 72 ? T.plan.chartAmountOverShort : T.plan.chartAmountOver), fill: c.danger, fontWeight: 700, fontSize: scaledPx(11) }),
       Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
@@ -437,6 +437,6 @@ export function planAmountLegend(data, dark) {
     // 予算を先頭に（他のグラフと同じ並び。§131）
     { label: T.charts.tipBudget, color: c.budget, shape: "line" },
     ...amountSeries(data, dark).map((s) => ({ label: s.name, color: s.color })),
-    ...(data.months.some((m) => m.cap !== null) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
+    ...(data.months.some((m) => m.cap !== null) ? [{ label: T.charts.legendTarget, color: c.target, shape: "line-dashed" }] : []),
   ]);
 }

@@ -78,7 +78,7 @@
   --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 12%, var(--yn-card));
   --yn-under-text: #075e80; /* リソース計画の 1.0 未満（6.4:1） */
   --yn-under-bg: #e2f4fb;
-  --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標・紫＝運用保守以外のグラフと分ける赤紫） */
+  --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標の超過・紫＝運用保守以外のグラフと分ける赤紫） */
   --yn-empty-bg: #fbe6f2;
 }
 

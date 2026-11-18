@@ -85,7 +85,7 @@ test("グラフの目標: 月次推移に「目標の上限」（予算 ×（1 �
   await gotoPage(page, `/team?id=${withTarget}&unit=yen`);
   const monthly = page.locator(".yn-chart-card").filter({ hasText: "月次推移" }).first();
   await expect(monthly.locator(".yn-legend")).toContainText("目標の上限");
-  // 赤の破線が描かれている
+  // 目標の上限の破線が描かれている
   await expect(monthly.locator('svg[role="img"] line[stroke-dasharray="4 2"], svg[role="img"] g[stroke-dasharray="4 2"] line').first()).toBeAttached();
   await monthly.locator("summary", { hasText: "表で見る" }).click();
   const table = monthly.locator("table").first();
