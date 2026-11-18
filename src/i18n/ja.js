@@ -828,6 +828,9 @@ export default {
     monthlyAriaDay: "{title}。実績の棒グラフ（日・週では予算を棒に配らず、横軸の下に月ごとの予算の消化率を出します）。値は下の表で確認できます。",
     // 予算の消化率の帯（§130）。stripMonth は日・週で月ごとにまとめるときの見出し
     stripMonth: "{month}月",
+    // 帯の左に出す名前（§146）。数字だけに詰めたときは % を付ける
+    stripName: "消化率",
+    stripNameUnit: "消化率%",
     stripTip: "{name} 実績 {cost} ／ 予算 {budget}（{rate}）",
     memberHoursAria: "{title}。{unit}ごとの計画時間と実績時間の棒グラフ。値は下の表で確認できます。",
     // グラフの単位の切り替え（§130）
