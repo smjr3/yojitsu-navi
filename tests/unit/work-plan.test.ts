@@ -152,6 +152,9 @@ describe("workGuests / メンバーの状態", () => {
     // 計画だけの人も応援
     const p = workGuests(model, [], [plan("2026-10", "SUP", "C1", 10)], scope);
     expect(Object.fromEntries(p)).toEqual({ SUP: "support" });
+    // 異動前（チームにいた月）の計画では応援にしない。異動後の月の計画なら応援
+    expect(workGuests(model, [], [plan("2026-09", "MOVED", "C1", 10)], scope).size).toBe(0);
+    expect(Object.fromEntries(workGuests(model, [], [plan("2026-10", "MOVED", "C1", 10)], scope))).toEqual({ MOVED: "support" });
     expect(workGuests(model, rows, [], { ...scope, contractIds: new Set() }).size).toBe(0);
   });
   it("所属・マスタに無い人・不在", () => {

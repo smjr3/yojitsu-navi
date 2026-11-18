@@ -881,13 +881,14 @@ export function workGuests(
 ): Map<string, "support" | "help"> {
   const out = new Map<string, "support" | "help">();
   if (scope.contractIds.size === 0 || scope.ownScope.size === 0) return out;
-  const consider = (memberId: string, teamThen: string | null | undefined) => {
+  const consider = (memberId: string, teamThen: string | null) => {
     if (scope.ownIds.has(memberId) || out.get(memberId) === "help") return;
     const now = teamAtBase(model, memberId, scope.baseMonth);
     if (!now) out.set(memberId, "help");
-    else if (!scope.ownScope.has(now) && (teamThen === undefined || teamThen === now)) out.set(memberId, "support");
+    else if (!scope.ownScope.has(now) && teamThen === now) out.set(memberId, "support");
   };
   for (const r of rows) if (r.category !== "outside" && r.contractId !== null && scope.contractIds.has(r.contractId) && r.hours > 0) consider(r.memberId, r.teamId);
-  for (const p of plans) if (scope.contractIds.has(p.contractId)) consider(p.memberId, undefined);
+  // 計画もアサインした月の所属で判定する（異動前の計画で応援にしない。teamGuests と同じ）
+  for (const p of plans) if (scope.contractIds.has(p.contractId)) consider(p.memberId, teamAtBase(model, p.memberId, p.month) ?? null);
   return out;
 }

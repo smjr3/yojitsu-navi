@@ -560,7 +560,7 @@ if (vm) {
     ...(axis === "member" ? [{ key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true }] : [{ key: "people", label: T.work.colMembers, type: "int", get: (r) => r.totals.memberCount, hideOnPhone: true }]),
     ...(axis === "contract" ? [{ key: "teamName", label: T.work.colContractTeam, type: "text", exportOnly: true }] : []),
     ...(tableView === "months"
-      ? [...monthCols, pmCol("contract", T.work.contract, (r) => r.totals.contractHours, { sublabel: T.work.colSumSub }), ...planCols.slice(1), pmCol("outside", T.work.outside, (r) => r.totals.outsideHours, { hideOnPhone: true })]
+      ? [...monthCols, pmCol("contract", T.work.contract, (r) => r.totals.contractHours, { sublabel: T.work.colSumSub }), ...planCols.slice(0, 1).map((c) => ({ ...c, exportOnly: true })), ...planCols.slice(1), pmCol("outside", T.work.outside, (r) => r.totals.outsideHours, { hideOnPhone: true })]
       : [
           ...planCols.slice(0, 1),
           pmCol("contract", T.work.contract, (r) => r.totals.contractHours),
