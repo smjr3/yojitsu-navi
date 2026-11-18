@@ -38,6 +38,8 @@ export interface PlanGapScope {
   period: Period;
   memberIds?: readonly string[];
   includeOutside?: boolean;
+  /** チームの案件に入った応援・ヘルプ（§134）: この人たちは contractIds の案件の分だけ判定する（運用保守以外は含めない） */
+  guests?: { memberIds: readonly string[]; contractIds: readonly string[] };
   ratio?: number;
   minHours?: number;
 }
@@ -69,8 +71,13 @@ export function planGaps(model: Pick<Model, "meta" | "members" | "memberMonths">
   const judgedPeriod = confirmedPeriodOf(model.meta, scope.period);
   if (!judgedPeriod) return { judgedPeriod, rows: [] };
   const agg = aggregateMembers(model, { period: judgedPeriod, ...(scope.memberIds ? { memberIds: scope.memberIds } : {}), includeOutside: scope.includeOutside === true });
+  const members = [...agg.members];
+  if (scope.guests && scope.guests.memberIds.length > 0 && scope.guests.contractIds.length > 0) {
+    const seen = new Set(members.map((m) => m.memberId));
+    for (const m of aggregateMembers(model, { period: judgedPeriod, memberIds: scope.guests.memberIds, contractIds: scope.guests.contractIds }).members) if (!seen.has(m.memberId)) members.push(m);
+  }
   const rows: PlanGapRow[] = [];
-  for (const m of agg.members) {
+  for (const m of members) {
     for (const c of m.byContract) {
       const kind = planGapKindOf(c.plannedHours, c.actualHours, scope.ratio ?? PLAN_GAP_RATIO, scope.minHours ?? PLAN_GAP_MIN_HOURS);
       if (!kind) continue;

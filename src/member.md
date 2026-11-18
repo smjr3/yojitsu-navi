@@ -194,8 +194,8 @@ if (vm) {
   const { unit, member, series } = vm;
   const period = vm.fullPeriod;
   display(sectionTitle(T.charts.monthlyTitle, fmt(T.member.monthlyHint, { period: periodJa(period), asOfMonth: monthJa(model.meta.asOfMonth), fyStart: model.config.fiscalYearStartMonth })));
-  display(memberHoursFigure({ model, series, memberId, memberMonths: allMonths, includeOutside: vm.includeOutside, dark, days: memberDays, period }));
   const contractHref = (id) => store.href("./contract", {}, { id });
+  display(memberHoursFigure({ model, series, memberId, memberName: vm.name, memberMonths: allMonths, includeOutside: vm.includeOutside, dark, days: memberDays, period, contractHref }));
   const monthRows = (m) => vm.fullMonths.filter((mm) => mm.month === m);
   const rows = series.map((p) => ({ ...p, key: p.month, isFuture: p.month > model.meta.asOfMonth }));
   // 未来の月は実績が無い: 実績・稼働率・差額は「—」（根拠ボタンなし）
