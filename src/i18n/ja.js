@@ -960,10 +960,10 @@ export default {
     noDeficitTitle: "超過見込みの案件はありません",
     noDeficitText: "{team} の案件はすべて予算内で着地する見込みです。",
     byTeam: "チーム別",
-    childTeams: "{team} の配下チーム",
-    byDivision: "事業部ごとの集計",
-    // {scope} には childTeams か byDivision が入る
-    byTeamHint: "{scope}（{month} 時点の組織）。行をクリックするとそのチームの詳細に移動します。",
+    childTeams: "{team} と配下のチーム",
+    allTeams: "全ての組織",
+    // {scope} には childTeams か allTeams が入る
+    byTeamHint: "{scope}を木で表示（{month} 時点の組織。上位の行は配下の合計）。行をクリックするとそのチームの詳細に移動します。",
     toTeams: "チーム一覧へ",
     noChildTitle: "配下のチームはありません",
     noChildText: "このチームは末端のチームです。案件一覧で案件ごとの数値を確認できます。",

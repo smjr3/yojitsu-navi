@@ -14,7 +14,7 @@ import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, contractsForTeam } from "./core/index.js";
 import { createStore, periodFiscalYear } from "./components/state.js";
-import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, teamName } from "./components/analysis.js";
+import { scopeFor, summarize, seriesWithForecast, priorYearComparison, contractRow, teamRow, teamName, flattenTree } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip, forecastStatus } from "./components/kpi.js";
@@ -208,27 +208,25 @@ if (vm) {
 if (vm) {
   const { scope, unit, method } = vm;
   const { tree } = scope;
-  let targets = [];
+  // 全ての組織を木で出す（チーム一覧と同じ並び・開閉。上位の行は配下の合計。§140）。チームを選んでいればそのチームと配下
+  let rootIds = [];
   if (scope.teamId && scope.teamId !== UNASSIGNED_TEAM_ID && Object.hasOwn(tree, scope.teamId)) {
-    targets = tree[scope.teamId].children.map((id) => tree[id]);
+    if (tree[scope.teamId].children.length > 0) rootIds = [scope.teamId];
   } else if (!scope.teamId) {
-    const roots = Object.values(tree).filter((n) => n.parentTeamId === null);
-    targets = roots.length === 1 ? roots[0].children.map((id) => tree[id]) : roots;
-    if (roots.length === 1) targets = [roots[0], ...targets];
+    rootIds = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
   }
-  // 最上位 1 つ（合計）と直下の組織を並べるときは、直下を一段下げて親子が分かるようにする（チーム一覧と同じ木の表。§115）
-  const withRoot = !scope.teamId && targets.length > 1 && targets[0].parentTeamId === null && targets.slice(1).every((n) => n.parentTeamId === targets[0].teamId);
-  const rows = targets.map((n, i) => {
-    const r = { ...teamRow(model, n.teamId, n.name, n.depth, scope.period, method, tree), key: n.teamId };
-    if (!withRoot) return r;
-    return i === 0 ? { ...r, depth: 0, parentKey: null, hasChildren: true } : { ...r, depth: 1, parentKey: targets[0].teamId, hasChildren: false };
-  });
+  const rows = flattenTree(tree, rootIds).map(({ node, depth, parent, hasChildren }) => ({
+    ...teamRow(model, node.teamId, node.name, depth, scope.period, method, tree),
+    key: node.teamId,
+    parentKey: parent,
+    hasChildren,
+  }));
   if (!scope.teamId) {
     // 未設定（チーム無し）の行は、期間内に契約があるときだけ末尾に出す（チーム一覧と同じ規則）
     const un = teamRow(model, UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, 0, scope.period, method, tree);
-    if (un.contractCount > 0) rows.push({ ...un, key: UNASSIGNED_TEAM_ID, ...(withRoot ? { depth: 0, parentKey: null, hasChildren: false } : {}) });
+    if (un.contractCount > 0) rows.push({ ...un, key: UNASSIGNED_TEAM_ID, parentKey: null, hasChildren: false });
   }
-  display(sectionTitle(T.index.byTeam, fmt(T.index.byTeamHint, { scope: scope.teamId ? fmt(T.index.childTeams, { team: scope.teamLabel }) : T.index.byDivision, month: monthJa(scope.treeMonth), fy: fiscalYearLabel(model.meta.fiscalYear) }), html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>${T.index.toTeams}</a>`));
+  display(sectionTitle(T.index.byTeam, fmt(T.index.byTeamHint, { scope: scope.teamId ? fmt(T.index.childTeams, { team: scope.teamLabel }) : T.index.allTeams, month: monthJa(scope.treeMonth), fy: fiscalYearLabel(model.meta.fiscalYear) }), html`<a class="yn-btn yn-btn-sm" href=${store.href("./teams")}>${T.index.toTeams}</a>`));
   if (rows.length === 0) {
     display(emptyState({ title: T.index.noChildTitle, text: T.index.noChildText, actions: [{ label: T.index.openContracts, href: store.href("./contracts") }] }));
   } else {
@@ -248,7 +246,7 @@ if (vm) {
       }),
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
-    display(dataTable({ columns, rows, unit, tree: withRoot, caption: T.index.byTeamCaption, exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
+    display(dataTable({ columns, rows, unit, tree: true, caption: T.index.byTeamCaption, exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
   }
 }
 ```

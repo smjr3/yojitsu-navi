@@ -28,6 +28,18 @@ const FY = fiscalPeriod(model);
 /** 着地見込みの方式の既定（config.json。§51 で計画値に変更） */
 const DEFAULT_METHOD = model.config.forecastMethodDefault as ForecastMethod;
 
+/** 組織木の DFS 順（画面のチーム別・チーム一覧の行順） */
+function dfsTeamIds(tree: Record<string, { children: string[] }>, roots: string[]): string[] {
+  const out: string[] = [];
+  const visit = (id: string) => {
+    if (!tree[id]) return;
+    out.push(id);
+    for (const c of tree[id]!.children) visit(c);
+  };
+  for (const r of roots) visit(r);
+  return out;
+}
+
 function uniq<T>(xs: T[]): T[] {
   return [...new Set(xs)];
 }
@@ -170,6 +182,25 @@ test.describe("全体サマリー", () => {
     });
   }
 
+  test("チーム別: チームを選ばないと全ての組織を木で出し、上位の行は配下の合計（§140）", async ({ page }) => {
+    await gotoPage(page, "/?unit=yen&team=");
+    const tree = treeAt(FY.to, model);
+    const roots = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
+    const table = tableByCaption(page, "チーム別の集計");
+    const keys = (await dataRows(table).evaluateAll((rows) => rows.map((r) => r.getAttribute("data-key")))).filter((k) => k !== UNASSIGNED_TEAM_ID);
+    expect(keys).toEqual(dfsTeamIds(tree, roots));
+    // 末端まで出ている（中間の階層だけで止まらない）
+    const leaves = Object.values(tree).filter((n) => n.children.length === 0).map((n) => n.teamId);
+    for (const id of leaves) expect(keys).toContain(id);
+    // 親の行を畳むと配下が隠れ、開くと戻る
+    const parent = roots[0]!;
+    const toggle = table.locator(`tbody tr[data-key="${parent}"] .yn-tree-toggle`);
+    await toggle.click();
+    await expect(table.locator(`tbody tr[data-key="${tree[parent]!.children[0]}"]`)).toHaveCount(0);
+    await toggle.click();
+    await expect(table.locator(`tbody tr[data-key="${tree[parent]!.children[0]}"]`)).toHaveCount(1);
+  });
+
   for (const teamId of ["S11", "T111", "D2", UNASSIGNED_TEAM_ID]) {
     test(`チーム ${teamId} で絞ると core の contractsForTeam の集計になる`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
@@ -180,13 +211,13 @@ test.describe("全体サマリー", () => {
       expect(totals.contractCount).toBeLessThanOrEqual(ids.length);
       await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
       expect(query(page).get("team")).toBe(teamId);
-      // 「チーム別」セクションは選んだチームの配下だけになる
+      // 「チーム別」セクションは選んだチームとその配下の全組織を木で出す（§140）
       const tree = treeAt(FY.to, model);
       const node = tree[teamId];
       if (node && node.children.length) {
         const table = tableByCaption(page, "チーム別の集計");
         const keys = await dataRows(table).evaluateAll((rows) => rows.map((r) => r.getAttribute("data-key")));
-        expect(keys).toEqual(node.children);
+        expect(keys).toEqual(dfsTeamIds(tree, [teamId]));
       }
     });
   }
