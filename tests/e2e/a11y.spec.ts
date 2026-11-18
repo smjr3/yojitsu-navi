@@ -12,7 +12,7 @@ test("Tab でフィルタ・並べ替え見出し・行リンク・Excel 出力�
   const targets: Record<string, string> = {
     開始月: "#yn-filter-from",
     チーム: "#yn-filter-team",
-    着地方式: 'input[name="yn-method"]',
+    着地方式: "#yn-filter-method",
     単位: ".yn-seg-btn[data-unit]",
     検索: "#yn-f-text",
     並べ替え見出し: "th button.yn-sort",

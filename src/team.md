@@ -27,7 +27,7 @@ import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCel
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS, originChips, originOrgText } from "./components/team-detail.js";
-import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
+import { money, formatHours, formatPercent, monthJa, periodJa, methodLabel, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -124,7 +124,7 @@ if (model && vm) {
       includesPreliminary: vm.exists ? vm.totals.includesPreliminary : false,
       extra: vm.exists
         ? html`${!vm.isUnassigned && (vm.node.level || vm.node.leaderMemberId)
-            ? html`<p class="yn-team-org" id="yn-team-org">${vm.node.level ? html`<span class="yn-chip yn-chip-neutral">${vm.node.level}</span> ` : null}${T.team.leaderLabel}${vm.node.leaderMemberId ? html`<a href=${store.href("./member", {}, { id: vm.node.leaderMemberId })}>${memberNameAt(model, vm.node.leaderMemberId, vm.treeMonth)}</a>` : T.team.leaderUnset}</p>`
+            ? html`<p class="yn-team-org" id="yn-team-org">${vm.node.level ? html`<span class="yn-chip yn-chip-neutral">${vm.node.level}</span> ` : null}${T.team.leaderLabel}${vm.node.leaderMemberId ? html`<a href=${store.href("./member", {}, { id: vm.node.leaderMemberId })} data-member-tip=${vm.node.leaderMemberId}>${memberNameAt(model, vm.node.leaderMemberId, vm.treeMonth)}</a>` : T.team.leaderUnset}</p>`
             : null}<a class="yn-btn yn-btn-sm" id="yn-team-contracts-link" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.toContracts}</a>${!vm.isUnassigned ? html` <a class="yn-btn yn-btn-sm" id="yn-team-plan-link" href=${`./plan?team=${encodeURIComponent(vm.teamId)}`}>${T.team.toPlan}</a>` : null}`
         : null,
     }),
@@ -174,7 +174,7 @@ if (vm?.exists && !vm.isUnassigned) {
 ```js
 if (vm?.exists) {
   const series = withTargets(vm.series, vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: methodLabel(vm.method, model.config), fyStart: model.config.fiscalYearStartMonth })));
   display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: vm.contractIds, period: vm.period, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` }));
 }
 ```
@@ -230,7 +230,7 @@ if (vm?.exists) {
   display(
     sectionTitle(
       T.app.pages.contracts,
-      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: METHOD_LABELS[method], fy: model.meta.fiscalYear }),
+      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: methodLabel(method, model.config), fy: model.meta.fiscalYear }),
       html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.filterContracts}</a>`,
       outside > 0 ? fmt(T.team.hiddenOutside, { n: outside }) : null,
     ),
@@ -279,6 +279,7 @@ if (vm?.exists) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
+        memberTip: (r) => r.memberId,
         render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.team.supportTitle)}`,
         sortValue: (r) => r.memberName,
       },

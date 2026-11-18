@@ -8,26 +8,33 @@ import { test, expect, gotoPage } from "./helpers/app.js";
 const WIDTH_KEY = "yojitsu-navi:plan-name-width";
 
 test.describe("着地見込みの方式", () => {
-  test("計画値が左端で既定に選ばれ、直近実績・全期間平均の順に並ぶ", { tag: "@smoke" }, async ({ page }) => {
+  test("計画値が左端で既定に選ばれ、直近3か月平均・直近12か月平均・全期間平均の順に並ぶ（名前で期間が分かる §142）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/");
-    const labels = page.locator(".yn-filter-method .yn-radio span");
-    await expect(labels).toHaveText(["計画値", "直近実績", "全期間平均"]);
-    await expect(page.locator("#yn-method-assignment")).toBeChecked();
+    const labels = page.locator("#yn-filter-method option");
+    await expect(labels).toHaveText(["計画値", "直近3か月平均", "直近12か月平均", "全期間平均"]);
+    await expect(page.locator("#yn-filter-method")).toHaveValue("assignment");
     await expect(page.locator(".yn-filter-method")).not.toContainText("アサイン");
   });
 
   test("URL で選んだ方式は既定より優先される", async ({ page }) => {
     await gotoPage(page, "/contracts?method=recent3");
-    await expect(page.locator("#yn-method-recent3")).toBeChecked();
+    await expect(page.locator("#yn-filter-method")).toHaveValue("recent3");
+    await gotoPage(page, "/contracts?method=recent12");
+    await expect(page.locator("#yn-filter-method")).toHaveValue("recent12");
   });
 
-  test("案件詳細の 3 方式の比較も計画値から並ぶ", async ({ page }) => {
+  test("知らない方式の値（古い保存値・手打ちの URL）は既定の計画値になる", async ({ page }) => {
+    await gotoPage(page, "/contracts?method=recent6");
+    await expect(page.locator("#yn-filter-method")).toHaveValue("assignment");
+  });
+
+  test("案件詳細の方式の比較も計画値から並ぶ", async ({ page }) => {
     await gotoPage(page, "/contracts");
     // 行の中央は数値のボタン（計算根拠）に当たることがあるので、ボタンの無い状態の列を押す
     await page.locator("table tbody tr").first().locator("td").last().click();
     await expect(page).toHaveURL(/\/contract\?/);
     const cards = page.locator(".yn-forecast-card");
-    await expect(cards).toHaveCount(3);
+    await expect(cards).toHaveCount(4);
     await expect(cards.first()).toContainText("計画値");
   });
 });
@@ -176,10 +183,10 @@ test("設定画面は「表示」が一番上、リソース計画の人の行�
   await expect(page.locator(".yn-me-plan-row").filter({ hasText: "運用保守以外" }).locator('[data-fk^="plan:toggle:"]')).toHaveCount(0);
 });
 
-test("リソース計画の人の行の開閉は名前の ▸ と作業の数 n。n は案件と、表示中の期間に計画か実績がある運用保守以外の種別の数（§57・§50.3・§112）", async ({ page }) => {
+test("リソース計画の人の行の開閉は名前の開閉の印と作業の数 n。n は案件と、表示中の期間に計画か実績がある運用保守以外の種別の数（§57・§50.3・§112）", async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   const toggles = page.locator('[data-fk^="plan:toggle:"]');
-  await expect(toggles.first().locator(".yn-me-plan-caret")).toHaveText("▸");
+  await expect(toggles.first().locator(".yn-disc")).toHaveCount(1);
   await expect(toggles.first().locator(".yn-me-plan-count")).toHaveText(/^\d+$/);
   // M011 = 案件 1 ＋ 実績がある運用保守以外の種別 2（提案・会社業務。§50.3）
   await expect(page.locator('[data-fk="plan:toggle:M011"] .yn-me-plan-count')).toHaveText("3");

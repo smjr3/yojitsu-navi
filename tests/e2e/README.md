@@ -59,7 +59,8 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `mr-pending.spec.ts` | マージ待ちの一覧の開閉・対応が必要なものを先に・競合ありのマージで載せ直してマージ・幅ごとのはみ出し（§126） |
 | `plan-keyboard.spec.ts` | リソース計画のキーボード入力（数字で始める・F2/Delete・Enter で次の月へ・マウスでは残る・Home/End・名前との行き来・変換中の Enter・390px で名前の列に隠れない。SPEC §145） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
-| `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の ▸・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
+| `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の開閉の印・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
+| `disclosure.spec.ts` | 開閉の印（枠付きの四角）を全画面でそろえる・文字の大きさに追随・組織ツリーの印の外側でも開閉・折り返しの位置（SPEC §143） |
 | `plan-empty.spec.ts` | リソース計画で計画が何も入っていない人の印・「なし」のセル・「計画なし n人」の絞り込み、計画を入れると外れる、対象外（不在・所属なし）、390px・ダーク（SPEC §116） |
 | `plan-amount.spec.ts` | リソース計画のグラフの「金額」（顧客ごとの積み上げ・予算・目標の上限・上限超・覚える）とセルの編集欄の目標の上限までの余力（入力中の値で数え直す・作業を追加で選んだ案件。SPEC §122） |
 | `plan-target-alerts.spec.ts` | リソース計画の目標の警告（未達見込みの目標・月の見出しの「!」・組織の配下・編集後の計画で出し直し。SPEC §110） |
@@ -68,8 +69,9 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `chart-zoom.spec.ts` | グラフの拡大表示（ダイアログで描き直す・開く・閉じる・はみ出さない・吹き出し。各画面幅・ライト/ダーク）。SPEC §33 |
 | `fonts.spec.ts` | 画面フォント: 同梱の BIZ UDPゴシック（400・700）が各画面で読み込まれる・外部への通信がない・数字 0〜9 の幅がすべて同じ（ライト/ダーク）。SPEC §46 |
 | `ui-controls.spec.ts` | テーマ切替・期間指定・「?」の吹き出し（各画面幅・ライト/ダーク） |
+| `no-ids.spec.ts` | 閲覧画面（本文・ホバー・計算根拠のダイアログ・作業ログ）に社員番号・チーム ID・案件 ID を出さないこと（マスタ編集・データ確認・設定は対象外）。SPEC §139 |
 | `screen-text.spec.ts` | 画面の説明文の量（各画面の本文の文章は合計 120 文字・1 段落 70 文字まで。説明は「?」へ）と、GitLab のトークン入力が設定画面だけにあること。SPEC §37 |
-| `colors.spec.ts` | 色の意味（青＝予算・橙＝実績・赤＝超過と目標の上限・赤紫＝計画なし）が今月の進捗・金額のグラフ・消化率のメーター・体制図でそろう（ライト／ダーク）。SPEC §131 |
+| `colors.spec.ts` | 予算の線の太さ（§147）と色の意味（青＝予算・橙＝実績・赤＝超過・紫＝目標の上限・赤紫＝計画なし）が今月の進捗・金額のグラフ・消化率のメーター・体制図でそろう（ライト／ダーク）。SPEC §131 |
 | `daily.spec.ts` | 今月の進捗（今月を含む期間だけ全体・チーム・顧客・案件に出る・KPI と表が core と一致・根拠の式・チーム詳細のメンバー×日の表と「超過」・役職の列・並べ替え・「列」・Excel（§124）・今月外で「null」を出さない・各画面幅・ダーク）。SPEC §61 |
 | `monthly-prelim.spec.ts` | 月次推移の今月の速報（全体・チーム・メンバー詳細で斜線の棒・pattern の参照・凡例、ダーク、今月を含まない期間では出ない）。SPEC §125 |
 | `chart-units.spec.ts` | グラフの単位の切り替え（月次推移の四半期・年度・週・日、日ごとの実績は選んだときだけ読む・1 回だけ、ブラウザに覚える、今月の進捗の今四半期・今年度と言葉（週は無い）、日・週は予算を出さない、メンバーごとの今月の時間は今月のまま、メンバー詳細、各画面幅・ダークではみ出さない）。SPEC §130 |
@@ -81,6 +83,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `scale-data.spec.ts` | 実運用規模のデータ: 不在の人（退職・育休など）の表示、すべて 0 のグラフ、長い名前で 390px からはみ出さない |
 | `qa-regressions.spec.ts` | 実操作 QA で見つけた不具合の再発防止 |
 | `org-chart.spec.ts` | 体制図（表 ⇄ 体制図の切り替えと URL・表示だけ・組織とメンバーと色が core と一致・＋／−・月送りとフォーカス・吹き出し・応援／ヘルプ・ずれは確定月だけ・各幅ダークではみ出さない）。SPEC §76 |
+| `member-tip.spec.ts` | 氏名の吹き出し（合わせる・フォーカスで出て Esc で消える、吹き出しは 1 つだけ、ID・金額を出さない、不在、チーム詳細のリーダー・稼働実績、指で触れたときは出さない）。SPEC §148 |
 | `contract-timeline.spec.ts` | 案件一覧の「期間」（表 ⇄ 期間と URL・戻る、件数が表と同じ、期間外は既定で出さず終わった案件は薄く最後、まとめ方・並べ方を覚える・畳む、終了が近い、長い期間は中だけ横スクロールし今日が見える、各幅・ダークではみ出さず名前の列が残る）。SPEC §132 |
 | `journeys.spec.ts` | 利用の流れ（画面をまたいで確かめる）: 単位・期間をタブと詳細で保つ、チーム詳細から絞ったままタブ・リソース計画へ、並べ替え・検索して詳細から戻ると元どおり、今月分が無いときに緑を出さない、異動してきた人に応援を付けない、リソース計画の他の組織の確認要求を畳む。SPEC §136 |
 | `a11y.spec.ts` | Tab 到達、aria-sort、dialog の role、画像の代替、状態チップの文字、390px、ダーク、印刷 |
@@ -94,7 +97,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 
 ## 設計メモ
 
-- セレクタは `docs/UI_NOTES.md` のもの（`.yn-kpi .yn-kpi-value`、`.yn-seg-btn[data-preset|data-unit]`、`#yn-filter-from/to/team`、`input[name=yn-method]`、`dialog.yn-dialog[open]`、`table tbody tr[data-key]`、`.yn-row-link`、`.yn-tree-toggle`、`.yn-table-toolbar .yn-export`、`#yn-f-*`、`.yn-forecast-card.is-selected`）。表の列は**見出しの文字**（予算・実績・残予算…）で引くので列の追加・並び替えに強い
+- セレクタは `docs/UI_NOTES.md` のもの（`.yn-kpi .yn-kpi-value`、`.yn-seg-btn[data-preset|data-unit]`、`#yn-filter-from/to/team/method`、`dialog.yn-dialog[open]`、`table tbody tr[data-key]`、`.yn-row-link`、`.yn-tree-toggle`、`.yn-table-toolbar .yn-export`、`#yn-f-*`、`.yn-forecast-card.is-selected`）。表の列は**見出しの文字**（予算・実績・残予算…）で引くので列の追加・並び替えに強い
 - 単位: 画面の既定は百万円（`DEFAULT_UNIT` は config から導出）。厳密に突き合わせるテストは URL に `unit=yen` を付けて円で比べ、既定単位の画面は `yen(v, DEFAULT_UNIT)` で比べる。計算根拠 dialog と Excel の金額は常に円（`yen(v, "yen")`）
 - `helpers/app.ts` の `test` は auto フィクスチャで console.error / pageerror / 失敗リクエストを集め、テスト終了時に 0 件を要求する
 - `helpers/core.ts` が `src/core` と `scripts/lib/load.ts` を直接 import する（Playwright の TS ローダが `.js` 拡張子の import を `.ts` に解決する）

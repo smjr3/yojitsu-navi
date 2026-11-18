@@ -12,7 +12,7 @@ export type ISODate = string;
 /** 原価の種類ID（例: "labor"）。config.costTypes で定義する */
 export type CostTypeId = string;
 
-export type ForecastMethod = "recent3" | "all" | "assignment";
+export type ForecastMethod = "recent3" | "recent12" | "all" | "assignment";
 export type MoneyUnit = "yen" | "thousandYen" | "millionYen";
 export type MonthStatus = "final" | "preliminary" | "future" | "outside";
 
@@ -37,7 +37,7 @@ export interface Config {
   /** 翌月の第N営業日に前月分が確定する */
   closingBusinessDay: number;
   forecastMethodDefault: ForecastMethod;
-  /** 直近実績方式で平均する月数 */
+  /** 直近 N か月平均（recent3）方式で平均する月数 */
   forecastRecentMonths: number;
   currency: { code: string; defaultUnit: MoneyUnit };
   labels: { customer: string; project: string; contract: string; team: string; member: string };
@@ -518,7 +518,7 @@ export interface ForecastBreakdown {
   actualMonths: YearMonth[];
   remainingMonths: YearMonth[];
   actualCost: number;
-  /** 平均の計算に使った月と原価（recent3 / all） */
+  /** 平均の計算に使った月と原価（recent3 / recent12 / all） */
   averageBasisMonths: YearMonth[];
   averageMonthlyCost: number;
   /** assignment 方式での残り月の見積り明細 */

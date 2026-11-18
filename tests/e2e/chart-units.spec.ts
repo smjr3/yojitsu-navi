@@ -240,6 +240,38 @@ test("予算の消化率の帯: スマートフォンの幅でも月・週の消
   }
 });
 
+test("横棒に名前と基準: 帯の左に「消化率」、メーターの縦線の下に基準の %（§146）", async ({ page }) => {
+  for (const w of [1280, 360]) {
+    await page.setViewportSize({ width: w, height: 800 });
+    await gotoPage(page, "/");
+    for (const u of ["日", "週", "月"] as const) {
+      await unitBtn(page, u).click();
+      await expect(plot(page).locator(".yn-budget-strip")).toHaveCount(1);
+      const r = await plot(page).evaluate((svg) => {
+        const name = svg.querySelector(".yn-budget-strip-name")!;
+        const nb = name.getBoundingClientRect();
+        const bar = svg.querySelector(".yn-budget-strip-seg rect")!.getBoundingClientRect();
+        const sb = svg.getBoundingClientRect();
+        return { text: name.textContent, left: nb.left - sb.left, right: nb.right, barLeft: bar.left };
+      });
+      expect(r.text).toMatch(/^消化率%?$/);
+      // 縦軸の文字の列に収まり、帯に重ならない・グラフの外にはみ出さない
+      expect(r.left).toBeGreaterThanOrEqual(0);
+      expect(r.right).toBeLessThanOrEqual(r.barLeft + 1);
+    }
+    // KPI の消化率メーター: 縦線の真下に基準の %
+    const meter = page.locator(".yn-meter").first();
+    await expect(meter.locator(".yn-meter-scale")).toHaveText("100%");
+    const pos = await meter.evaluate((m) => {
+      const mark = m.querySelector(".yn-meter-mark")!.getBoundingClientRect();
+      const sc = m.querySelector(".yn-meter-scale")!.getBoundingClientRect();
+      return { markX: mark.left + mark.width / 2, scX: sc.left + sc.width / 2, scTop: sc.top, markBottom: mark.bottom };
+    });
+    expect(Math.abs(pos.markX - pos.scX)).toBeLessThan(2);
+    expect(pos.scTop).toBeGreaterThanOrEqual(pos.markBottom - 1);
+  }
+});
+
 test("メンバー詳細: 時間のグラフの棒を押すと、その期間の内訳が開く（日は作業ごと、月は案件ごと。§135）", async ({ page }) => {
   await gotoPage(page, "/member?id=M010");
   const dialog = page.locator("dialog.yn-bd-dialog[open]");

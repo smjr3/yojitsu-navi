@@ -10,10 +10,13 @@ import { T, fmt } from "../i18n/index.js";
 import { STATUS_LABELS, formatHours, formatPercent, maxFractionFormat, millions, money, monthJa, monthShort } from "./format.js";
 import { dataTable } from "./table.js";
 
+/** 予算の線の太さ（月次推移・今月の進捗・リソース計画の金額のグラフで同じ。§147） */
+export const BUDGET_LINE_WIDTH = 3.5;
+
 export function chartColors(dark) {
   return dark
-    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b" }
-    : { budget: "#2a78d6", cost: "#eb6834", gp: "#1baf7a", surface: "#fcfcfb", text: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7", danger: "#d03b3b" };
+    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b", target: "#b38cf6" }
+    : { budget: "#2a78d6", cost: "#eb6834", gp: "#1baf7a", surface: "#fcfcfb", text: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7", danger: "#d03b3b", target: "#7b3fd1" };
 }
 
 /** 凡例（HTML。グラフとは独立に読める） */
@@ -159,18 +162,17 @@ function budgetStripMark(segs, { c, unit }) {
     const level = LEVELS.find((lv) => segs.every((s) => textW(lv.text(s), scaledPx(lv.size)) <= room(s))) ?? null;
     const fontSize = scaledPx(level?.size ?? 11);
     const textY = barY + barH + fontSize + scaledPx(2);
-    if (level?.unit) {
-      const u = el("text", { x: dimensions.marginLeft - scaledPx(6), y: textY, "text-anchor": "end", "font-size": fontSize, fill: c.muted });
-      u.textContent = "%";
-      g.append(u);
-    }
+    // 帯の名前を左（縦軸の文字の列）に出し、何のバーかを読めるようにする（§146。2026-11-18 依頼者）。数字だけに詰めたときは「消化率%」
+    const name = el("text", { x: dimensions.marginLeft - scaledPx(6), y: textY, "text-anchor": "end", "font-size": fontSize, fill: c.muted, class: "yn-budget-strip-name" });
+    name.textContent = level?.unit ? T.charts.stripNameUnit : T.charts.stripName;
+    g.append(name);
     for (const s of segs) {
       const x1 = scales.x(s.i0 - 0.5);
       const x2 = scales.x(s.i1 + 0.5);
       const pad = Math.min(2, (x2 - x1) * 0.1);
       const w = Math.max(0, x2 - x1 - pad * 2);
       const seg = el("g", { class: s.over ? "yn-budget-strip-seg is-over" : "yn-budget-strip-seg" });
-      seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.grid }));
+      seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.budget, "fill-opacity": 0.18 }));
       if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.cost }));
       const pct = pctOf(s);
       const text = level ? level.text(s) : "";
@@ -268,10 +270,10 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       // 見込みのうち予算を超える分は薄い赤（速報の斜線の上に重ねても斜線が透けて見える）
       noBudget ? null : Plot.rectY(remaining.filter((d) => d.forecastCost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "forecastCost", fill: c.danger, fillOpacity: 0.35, stroke: c.danger, strokeWidth: 1, strokeDasharray: "3 2" }),
       // 予算の線は棒より前に出す（超えた分の境目が見えるように）
-      noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
-      !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
-      // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ赤の破線。実績の棒が線を超えたら目標を外れている
-      !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
+      noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH }),
+      !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH, strokeOpacity: 0.55 }) : null,
+      // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ紫の破線（§140）。実績の棒が線を超えたら目標を外れている
+      !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.target, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
       noBudget ? null : Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
       noBudget ? null : Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
@@ -328,7 +330,7 @@ export function monthlyLegend(dark, series = null) {
           { label: T.charts.gpActual, color: c.gp, shape: "line" },
           { label: T.charts.legendGpForecast, color: c.gp, shape: "line-dashed" },
         ]),
-    ...(series && !isDaySeries(series) && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
+    ...(series && !isDaySeries(series) && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.target, shape: "line-dashed" }] : []),
   ]);
 }
 
@@ -448,12 +450,16 @@ export function memberHoursLegend(dark, series = null, asOfMonth = null, isNow =
   ]);
 }
 
-/** 消化率メーター（0〜120% の目盛、100% に基準線） */
+/**
+ * 消化率メーター（0〜120% の目盛、基準（既定 100%）に縦線）。地＝予算（薄い青）、塗り＝実績（橙）、超過は赤（§131）。
+ * 縦線のすぐ下に基準の % を書き、縦線が何かを読めるようにする（§146。2026-11-18 依頼者）
+ */
 export function burnMeter(rate, threshold = 1) {
   const max = 1.2;
   const v = typeof rate === "number" && Number.isFinite(rate) ? Math.min(rate, max) : 0;
   const over = typeof rate === "number" && rate > threshold;
+  const markLeft = `left:${(Math.min(threshold, max) / max) * 100}%`;
   return html`<div class=${`yn-meter${over ? " is-danger" : ""}`} role="img" aria-label=${fmt(T.charts.meterAria, { rate: rate === null ? T.charts.notComputable : `${(rate * 100).toFixed(1)}%`, threshold: `${(threshold * 100).toFixed(0)}%` })}>
-    <div class="yn-meter-track"><div class="yn-meter-fill" style=${`width:${(v / max) * 100}%`}></div><div class="yn-meter-mark" style=${`left:${(threshold / max) * 100}%`}></div></div>
+    <div class="yn-meter-track"><div class="yn-meter-fill" style=${`width:${(v / max) * 100}%`}></div><div class="yn-meter-mark" style=${markLeft}></div><span class="yn-meter-scale" style=${markLeft} aria-hidden="true">${formatPercent(threshold, 0)}</span></div>
   </div>`;
 }
