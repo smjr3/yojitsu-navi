@@ -148,7 +148,7 @@ test("ブラウザの「戻る」で前の画面に戻っても、選び直し�
   await expect(pressed("data-preset")).toHaveAttribute("data-preset", "lastMonth");
   // ブラウザが残しておいた画面をそのまま出したとき（bfcache）も、保存してある値に合わせる
   await page.evaluate(() => {
-    const key = "yojitsu-navi:state:v3";
+    const key = "yojitsu-navi:state:v2";
     localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? "{}"), unit: "yen" }));
     dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
   });
@@ -157,7 +157,7 @@ test("ブラウザの「戻る」で前の画面に戻っても、選び直し�
 
   // 再読み込みでも、URL に残る前の値ではなく保存してある値（§133）
   await page.evaluate(() => {
-    const key = "yojitsu-navi:state:v3";
+    const key = "yojitsu-navi:state:v2";
     localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? "{}"), unit: "k" }));
   });
   await page.reload();

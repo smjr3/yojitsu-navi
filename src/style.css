@@ -4623,19 +4623,6 @@ html:has(dialog.yn-dialog[open]) {
     display: none !important;
   }
 }
-/* 円の表示（既定。§133）は 1024px の画面で残予算率の列も隠す（消化率は残す） */
-@container (max-width: 1100px) {
-  .yn-table.is-unit-yen .hide-narrow-yen {
-    display: none !important;
-  }
-}
-/* 円の表示（既定。§133）は桁が多いので、少し広い幅（1280px の画面）でも隠す */
-@container (max-width: 1400px) {
-  .yn-table.is-unit-yen .hide-mid,
-  .yn-table.is-unit-yen .hide-mid-yen {
-    display: none !important;
-  }
-}
 /* 「目標」列のある一覧は、ノート PC 幅で横スクロールにならないよう名前列を少し詰める（全文は title） */
 @container (max-width: 1300px) {
   .yn-table:has(th[data-key="target"]) .yn-primary-cell {

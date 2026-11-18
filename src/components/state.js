@@ -19,8 +19,7 @@ import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fisc
 
 export const STATE_KEYS = ["from", "to", "team", "unit", "method", "outside"];
 // v2: 既定の単位を百万円に変えたとき、以前の既定（円）が保存値として残らないように切り替えた
-// v3: 既定の単位を円に戻したとき（SPEC §133）。開いただけで既定の百万円が保存されているため、キーを変えないと新しい既定が効かない
-export const STORAGE_KEY = "yojitsu-navi:state:v3";
+export const STORAGE_KEY = "yojitsu-navi:state:v2";
 const METHODS = ["assignment", "recent3", "all"];
 const UNIT_IDS = UNITS.map((u) => u.id);
 

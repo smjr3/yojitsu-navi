@@ -148,7 +148,7 @@ if (vm && viewState.view === "table") {
   }
   const columns = [
     { key: "name", label: T.columns.team, type: "text" },
-    { key: "level", label: T.columns.level, type: "text", hideNarrow: true, hideMidYen: true },
+    { key: "level", label: T.columns.level, type: "text", hideNarrow: true },
     { key: "leader", label: T.columns.leader, type: "text", hideNarrow: true },
     ...teamCountColumns(),
     ...standardColumns({ costTypes: model.config.costTypes,
