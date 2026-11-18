@@ -58,7 +58,7 @@ const hasPrelimNow = (series) => series.some(isPrelimNow);
  * 色だけに頼らず、確定・速報済みの月の実線の棒と見分けられるようにする。
  * id は色で決める（描き直し・テーマの往復で同じ値になる。同じ id の pattern が複数あっても中身は同じ）
  */
-function hatchFill(color) {
+export function hatchFill(color) {
   const id = `yn-hatch-${color.replace(/[^0-9a-z]/gi, "")}`;
   const attach = (plot) => {
     const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
@@ -433,9 +433,15 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   if (onPick) {
     // 棒を押す（タップ）と、その期間の内訳（計算根拠）を開く。どの棒かは吹き出しと同じ pointer の値
     plot.classList.add("yn-chart-pickable");
-    plot.addEventListener("click", () => {
-      const d = plot.value;
-      if (d) onPick(series[d.i], plot);
+    plot.addEventListener("click", (ev) => {
+      let i = plot.value?.i;
+      // 計算根拠を閉じた直後など、吹き出しの値が消えたまま同じ棒を押したときは、押した位置から棒を決める（§150）
+      if (i === undefined) {
+        const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
+        const sx = plot.scale?.("x");
+        if (svg && sx?.invert) i = Math.round(sx.invert(ev.clientX - svg.getBoundingClientRect().left));
+      }
+      if (i !== undefined && series[i]) onPick(series[i], plot);
     });
   }
   return plot;

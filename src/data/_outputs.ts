@@ -6,7 +6,7 @@
  * Model の計算は 1 回だけ）、結果を Framework のキャッシュに置く。ローダを個別に動かしても、まとめて作っても同じ中身になる
  * （docs/DATA_LOADERS.md「6. 増分ビルド」、SPEC §102）。
  */
-import { buildMyHoursPayload, checkProjects, encodeDaily, encodeDailyHistory, encodeMemberDays, findUnsetItems, encodeWorkRows, memberRateHistory, type Model, type ValidationIssue } from "../core/index.js";
+import { buildMyHoursPayload, checkProjects, encodeDaily, encodeDailyHistory, encodeMemberDays, findUnsetItems, encodeWorkRows, memberRateHistory, workPlanRows, type Model, type ValidationIssue } from "../core/index.js";
 import type { ParsedDataset } from "../core/csv.js";
 import { buildMastersPayload } from "./_masters.js";
 import { loadDataset } from "../../scripts/lib/load.js";
@@ -96,10 +96,10 @@ function memberDaysOutput(ctx: OutputContext) {
   return { ...encodeMemberDays(ctx.model(), { assignments: d.assignments, outsidePlans: d.outsidePlans ?? [] }), _build: buildStamp() };
 }
 
-/** 工数の明細（SPEC §30.2） */
+/** 工数の明細（SPEC §30.2）と、稼働実績で比べる運用保守の計画（§150。member-months.json を読まずに済むように小さく詰める） */
 function workHoursOutput(ctx: OutputContext) {
   const model = ctx.model();
-  return { asOf: model.meta.asOf, ...encodeWorkRows(model.workRows), _build: buildStamp() };
+  return { asOf: model.meta.asOf, ...encodeWorkRows(model.workRows, workPlanRows(model.memberMonths)), _build: buildStamp() };
 }
 
 /** データ確認ページ用: CSV 読み込み時の問題 ＋ validateDataset の結果（scripts/validate-data.ts と同じ内容） */

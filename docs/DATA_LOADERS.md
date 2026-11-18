@@ -31,7 +31,7 @@
 
 - `index.html` があり、`_file/data/*.json` がすべて読めて、`_build` の指紋・基準日が今回のものと一致する
 - ローダの出力の記録（`src/.observablehq/cache/.yojitsu-outputs.json`）が今回の指紋のもので、`dist/` の各出力の中身（sha256）が記録と一致する
-- 必須の出力（`model`・`member-months`・`masters`・`dataset-issues`・`daily`・`daily-history`・`member-days`）がちょうど 1 つずつある（`daily-history`・`member-days` はグラフの日・週。画面は選んだときだけ読む。SPEC §130）
+- 必須の出力（`model`・`member-months`・`masters`・`dataset-issues`・`daily`・`daily-history`・`member-days`）がちょうど 1 つずつある（`daily-history`・`member-days` はグラフの日・週。画面は選んだときだけ読む。SPEC §130）。`work-hours` には運用保守の計画 `p` も入る（稼働実績の計画との差。SPEC §150）
 - `model` の契約数が `contracts.csv` と一致し、作業ログ（`dist/data/worklogs/<契約ID>.json`）が契約ごとに 1 つずつある
 - ヘッダー右上の「今月の残り」のデータ `dist/data/my-month.json`（`src/data/my-month.json.ts`。全ページの head のスクリプトがハッシュの無い固定のパスで読むので `dynamicPaths` に入れる。SPEC §113）があり、指紋・記録と一致する
 - ビルド中に入力が変わっていない（ビルド後に指紋を取り直して比べる）

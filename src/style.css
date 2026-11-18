@@ -5997,6 +5997,31 @@ summary:has(> .yn-disc)::-webkit-details-marker {
   }
 }
 
+/* 稼働実績（§150）: 計画との差の色は リソース計画・体制図と同じ（黄＝計画より多い、赤紫＝計画なし。§131） */
+.yn-table td.yn-gap-over {
+  background: var(--yn-warn-bg);
+  color: var(--yn-warn-text);
+  font-weight: 600;
+}
+.yn-table td.yn-gap-none {
+  background: var(--yn-empty-bg);
+  color: var(--yn-empty-text);
+}
+.yn-table td.yn-gap-over .yn-num,
+.yn-table td.yn-gap-none .yn-num {
+  color: inherit;
+}
+/* 速報の月（計画と比べない）は斜体で薄く */
+.yn-table td.yn-gap-prelim {
+  font-style: italic;
+  opacity: 0.8;
+}
+/* 行を開いた内訳の行（§150）は地を少し沈める */
+.yn-table tr.is-sub > th,
+.yn-table tr.is-sub > td {
+  background: var(--yn-surface-sunken, color-mix(in srgb, currentColor 3%, transparent));
+}
+
 /* 表示の切り替え（表／体制図・表／期間・まとめ方・色の基準）は見出しのすぐ下の左（SPEC §144）。
    リンク・「列」・Excel 出力は従来どおり右 */
 .yn-section-switch {
