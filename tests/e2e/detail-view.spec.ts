@@ -12,7 +12,8 @@
  * 既定単位（百万円）で開いて「単位に従わない」ことを確かめる。
  */
 import { createRequire } from "node:module";
-import { aggregateMembers, contractsForTeam, groupByCustomer } from "../../src/core/index.js";
+import { aggregateMembers, contractsForTeam, groupByCustomer, ownTeamScope } from "../../src/core/index.js";
+import { teamGuests } from "../../src/core/members.js";
 import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, rowKeys, parseNumber, query, pickTeam, teamValue } from "./helpers/app.js";
 import { aggregate, contractResult, fiscalPeriod, getModel, treeAt, yen } from "./helpers/core.js";
 
@@ -311,18 +312,23 @@ test.describe("L6 着地差は選んだ期間の終わりまで", () => {
 });
 
 test.describe("L4 / L9 メンバー一覧", () => {
-  test("チーム絞り込みでも『期間全体の計画』が対象メンバーの期間全体の計画と一致する", async ({ page }) => {
+  test("チーム絞り込みでも『期間全体の計画』が対象メンバー（所属＋チームの案件に入った応援・ヘルプ §134）の期間全体の計画と一致する", async ({ page }) => {
+    const ASOF_TREE = treeAt(ASOF, model);
+    const CMP = { from: FY.from, to: FY.to < ASOF ? FY.to : ASOF };
     for (const team of ["T111", "S21", "T211"]) {
       const full = aggregateMembers(model, { period: FY });
-      const ids = full.members.filter((m) => m.teamId && (tree[team]?.descendantIds ?? []).includes(m.teamId)).map((m) => m.memberId);
+      const ids = full.members.filter((m) => m.teamId && (ASOF_TREE[team]?.descendantIds ?? []).includes(m.teamId)).map((m) => m.memberId);
       if (ids.length === 0) continue;
-      const expected = aggregateMembers(model, { period: FY, memberIds: ids });
+      const contractIds = contractsForTeam(model, team, ASOF_TREE).map((c) => c.contractId);
+      const guests = teamGuests(model, { period: FY, contractIds, ownScope: ownTeamScope(ASOF_TREE, team) });
+      const gIds = guests.map((g) => g.memberId);
+      const plannedGuest = new Set(guests.filter((g) => g.planned).map((g) => g.memberId));
+      const expectedPlan = aggregateMembers(model, { period: FY, memberIds: ids }).total.plannedCost + aggregateMembers(model, { period: FY, memberIds: gIds, contractIds }).total.plannedCost;
       await gotoPage(page, `/members?team=${team}&unit=yen`);
-      await expect(dataRows(tableByCaption(page, "メンバー別の計画と実績"))).toHaveCount(
-        aggregateMembers(model, { period: { from: FY.from, to: FY.to < ASOF ? FY.to : ASOF }, memberIds: ids }).members.length,
-      );
+      const shownGuests = aggregateMembers(model, { period: CMP, memberIds: gIds, contractIds }).members.filter((m) => plannedGuest.has(m.memberId)).length;
+      await expect(dataRows(tableByCaption(page, "メンバー別の計画と実績"))).toHaveCount(aggregateMembers(model, { period: CMP, memberIds: ids }).members.length + shownGuests);
       const noteText = (await page.locator(".yn-kpi-sub", { hasText: "期間全体" }).first().textContent()) ?? "";
-      expect(noteText).toContain(yen(expected.total.plannedCost));
+      expect(noteText).toContain(yen(expectedPlan));
     }
   });
 
