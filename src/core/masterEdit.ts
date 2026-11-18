@@ -29,7 +29,7 @@ export interface MasterColumnDef {
   /** 画面の見出し */
   label: string;
   /** 入力の種類（画面のフォーム部品を決める） */
-  input: "text" | "customer" | "flag" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date";
+  input: "text" | "customer" | "flag" | "month" | "number" | "kind" | "status" | "team" | "member" | "memberKey" | "project" | "rateKey" | "title" | "level" | "org" | "allocation" | "outsideType" | "targetType" | "target" | "percent" | "date" | "officialProject";
   required: boolean;
   /** true: CSV に列があるときだけ扱う（無いファイルに見出しを足さない。§98 の project_id） */
   onlyIfPresent?: boolean;
@@ -140,7 +140,8 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "leader_member_id", label: T.masterFiles.colLeader, input: "member", required: false },
     ],
   },
-  // 案件（§80）。1 行 = 1 契約。顧客名・案件名などは他システムから取り込む予定なので、画面で変えられるのは期間・金額・担当チームだけ
+  // 案件（§80）。1 行 = 1 契約。顧客名・案件名は案件管理システムから取り込むので、画面で変えられるのは期間・金額・担当チームだけ。
+  // ただし正式な案件ID の無い行（取り込みで書き換わらない行）は、正式な案件を選んで結び付けるか、顧客名・案件名を直せる（§137）
   contracts: {
     id: "contracts",
     path: "data/contracts.csv",
@@ -153,10 +154,11 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     addable: true,
     columns: [
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
-      { name: "customer_name", label: T.masterFiles.colCustomer, input: "text", required: true },
+      { name: "customer_name", label: T.masterFiles.colCustomer, input: "customer", required: true },
       { name: "project_name", label: T.masterFiles.colProjectName, input: "text", required: true },
-      // 正式な案件ID（§98）。列があるときだけ一覧に出す。登録済みの行では変えない。列が無くても新しい案件の登録（§103.3）で入れたら見出しに足す
-      { name: "project_id", label: T.masterFiles.colProjectId, input: "text", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
+      // 正式な案件ID（§98）。列があるときだけ一覧に出す。入っている行では変えない。列が無くても新しい案件の登録（§103.3）・結び付け（§137）で入れたら見出しに足す。
+      // 正式な案件の一覧（projects.csv）があれば、案件名で選ぶ欄にする
+      { name: "project_id", label: T.masterFiles.colProjectId, input: "officialProject", required: false, onlyIfPresent: true, addOnInput: true, listHidden: true },
       { name: "start_month", label: T.masterFiles.colStartMonth, input: "month", required: true },
       { name: "end_month", label: T.masterFiles.colEndMonth, input: "month", required: true },
       { name: "total_amount", label: T.masterFiles.colTotalAmount, input: "number", required: true },

@@ -45,6 +45,58 @@ test("マスタ編集の案件: 正式な案件IDは修正のダイアログに�
   await expect(d.locator(".yn-me-fixed")).toContainText(/PJ-\d{4}/);
 });
 
+test("マスタ編集の案件: 正式な案件IDの無い案件は正式な案件を案件名で選んで結び付けられる。選ぶと顧客名・案件名は正式な値で変えられない（SPEC §137）", async ({ page }) => {
+  // データ確認の「正式な案件IDの無い案件」の「案件を開く」から
+  await gotoPage(page, "/data-check");
+  const un = tableByCaption(page, UNLINKED);
+  await dataRows(un).filter({ hasText: "電子カルテ連携保守" }).getByRole("link", { name: /マスタ編集で開く/ }).click();
+  await expect(page).toHaveURL(/masters\?view=contracts&q=C009/);
+  const row = page.locator("table.yn-me-table tbody tr.yn-me-group", { hasText: "電子カルテ連携保守" }).first();
+  await row.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await expect(d.locator("#yn-me-f-contract_id")).toHaveCount(0);
+  await expect(d.locator("#yn-me-f-customer_name")).toBeEnabled();
+  await expect(d.locator("#yn-me-f-project_name")).toBeEnabled();
+  const pick = d.locator("#yn-me-f-project_id");
+  await pick.fill("電子カルテ");
+  const opt = d.locator("#yn-me-f-project_id-listbox li.yn-combo-opt").first();
+  // 案件名で選ぶ。顧客名と ID は補足に出す
+  await expect(opt).toContainText("電子カルテ連携保守");
+  await expect(opt).toContainText(/しらかば医療 ・ PJ-\d{4}/);
+  await opt.click();
+  await expect(d.locator("#yn-me-f-customer_name")).toBeDisabled();
+  await expect(d.locator("#yn-me-f-customer_name")).toHaveValue("しらかば医療");
+  await expect(d.locator("#yn-me-f-project_name")).toHaveValue("電子カルテ連携保守");
+  await d.locator('[data-role="submit"]').click();
+  // 確認では ID だけでなく案件名も出す
+  await expect(d.locator(".yn-me-change-list")).toContainText(/正式な案件ID: .*→ 電子カルテ連携保守（PJ-\d{4}）/);
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(row).toContainText("変更");
+  // 結び付けた後は取り込みで書き換わる行なので、顧客名・案件名は変えられない
+  await row.getByRole("button", { name: "修正" }).click();
+  await expect(d.locator("#yn-me-f-customer_name")).toHaveCount(0);
+  await expect(d.locator(".yn-me-fixed")).toContainText(/PJ-\d{4}/);
+});
+
+test("マスタ編集の案件: 正式な案件IDの無い案件は顧客を候補から選んで直せる（新しい顧客名も書ける。SPEC §137）", async ({ page }) => {
+  await gotoPage(page, "/masters?view=contracts&q=C021");
+  const row = page.locator("table.yn-me-table tbody tr.yn-me-group", { hasText: "開発環境運用" }).first();
+  await row.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  const cust = d.locator("#yn-me-f-customer_name");
+  await expect(cust).toHaveValue("北斗建設");
+  // 候補は案件・顧客・正式な案件にある顧客名
+  const opts = await d.locator("#yn-me-f-customer_name-list option").evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
+  expect(opts).toContain("青葉物流");
+  await cust.fill("青葉物流");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d.locator(".yn-me-change-list")).toContainText("北斗建設 → 青葉物流");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(page.locator("table.yn-me-table tbody tr.yn-me-group", { hasText: "開発環境運用" }).first()).toContainText("青葉物流");
+});
+
 for (const [width, dark] of [[390, false], [768, true], [1024, false], [1280, true]] as const) {
   test(`正式な案件の一覧がはみ出さない（${width}px${dark ? "・ダーク" : ""}）`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
