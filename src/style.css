@@ -3348,6 +3348,23 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-warn-text);
 }
 
+/* 氏名の吹き出し（§148）。枠・文字は .yn-plan-tip と同じ */
+.yn-member-tip > div > p + p {
+  margin-top: 2px;
+}
+.yn-member-tip-chip {
+  margin-left: 6px;
+  font-size: calc(11px * var(--yn-fs));
+}
+.yn-member-tip-warn {
+  color: var(--yn-warn-text);
+  font-weight: 700;
+}
+.yn-member-tip .yn-member-tip-sub {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
 .yn-plan-pop {
   position: fixed;
   inset: auto;

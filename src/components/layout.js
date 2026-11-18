@@ -5,6 +5,7 @@ import { html } from "htl";
 import { dateIso, dateTimeJst, fiscalYearLabel } from "./format.js";
 import { isWorklogStale, rebaseModel, viewerAsOf } from "../core/index.js";
 import { T, fmt } from "../i18n/index.js";
+import { setMemberTipModel } from "./member-tip.js";
 
 /** 速報バッジ（期間に速報月を含むとき） */
 export function preliminaryBadge(includes) {
@@ -19,6 +20,8 @@ export function preliminaryBadge(includes) {
  */
 export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreliminary = false, extra = null }) {
   const meta = model?.meta;
+  // 氏名の吹き出し（§148）は全ページ共通。model.json だけで作る
+  if (model?.members && model?.contracts) setMemberTipModel(model);
   // 1 段だけのパンくずは上部タブと重複するので出さない
   const crumbs = breadcrumbs.length > 1
     ? html`<nav class="yn-crumbs" aria-label=${T.layout.breadcrumbsLabel}><ol>${breadcrumbs.map(
