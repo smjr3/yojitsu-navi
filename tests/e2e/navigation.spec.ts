@@ -177,6 +177,15 @@ test("開いたままの別のタブも、選び直した期間・単位に合�
   await expect(page.locator('[data-unit="m"][aria-pressed="true"]').first()).toBeVisible();
   const href = await page.locator('a[href*="contract?id="]').first().getAttribute("href");
   expect(new URLSearchParams(href!.split("?")[1]).get("unit")).toBe("m");
+  // 合わせた側は保存し直さない（チームの違うタブでも、操作したタブの保存が残る）
+  const key = "yojitsu-navi:state:v2";
+  const teamPage = await context.newPage();
+  await gotoPage(teamPage, "/contracts?team=T111");
+  await other.locator('[data-unit="k"]').first().click();
+  await expect(teamPage.locator('[data-unit="k"][aria-pressed="true"]').first()).toBeVisible();
+  await expect.poll(async () => JSON.parse((await other.evaluate((k) => localStorage.getItem(k), key)) ?? "{}").team).toBe("");
+  expect(JSON.parse((await other.evaluate((k) => localStorage.getItem(k), key)) ?? "{}").unit).toBe("k");
+  await teamPage.close();
   await other.close();
 });
 

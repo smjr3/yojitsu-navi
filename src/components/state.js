@@ -148,7 +148,7 @@ function writeQuery(state) {
 /**
  * ストアを作る。
  *   store.get()            現在の状態
- *   store.set({to: "..."}) 一部を更新（URL と localStorage に反映し購読者へ通知）
+ *   store.set({to: "..."}) 一部を更新（URL と localStorage に反映し購読者へ通知。{ save: false } なら localStorage に書かない）
  *   store.subscribe(fn)    変更通知。戻り値で解除
  *   store.href(path, patch) 状態を引き継いだリンク（別ページへの遷移用）
  */
@@ -194,12 +194,12 @@ export function createStore(model, options = {}) {
   const store = {
     model,
     get: () => state,
-    set(patch) {
+    set(patch, { save = true } = {}) {
       const next = sanitize(model, { ...state, ...patch });
       if (STATE_KEYS.every((k) => next[k] === state[k])) return;
       state = next;
       if (options.syncUrl !== false) writeQuery(state);
-      writeStorage(state);
+      if (save) writeStorage(state);
       notify();
     },
     setPeriod(period) {
@@ -224,7 +224,8 @@ export function createStore(model, options = {}) {
     addEventListener("storage", (e) => {
       if (e.key !== STORAGE_KEY || !e.newValue || (typeof document !== "undefined" && document.prerendering)) return;
       const s = readStorage();
-      if (s) store.set(latestOf(s));
+      // 保存し直さない（このタブのチームで、操作したタブの保存を上書きしない。Codex 指摘）
+      if (s) store.set(latestOf(s), { save: false });
     });
   }
   return store;
