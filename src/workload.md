@@ -556,7 +556,7 @@ if (vm) {
       }))
     : [];
   const columns = [
-    { key: "name", label, type: "text", render: axis === "team" ? undefined : nameCell, filterValue: axis === "customer" ? (r) => (noContract(r) ? [r.name, T.work.noContract] : [r.name]) : undefined, exportValue: (r) => r.name },
+    { key: "name", label, type: "text", render: axis === "team" ? undefined : nameCell, memberTip: (r) => (r.rowKind === "member" ? r.key : null), filterValue: axis === "customer" ? (r) => (noContract(r) ? [r.name, T.work.noContract] : [r.name]) : undefined, exportValue: (r) => r.name },
     ...(axis === "member" ? [{ key: "teamName", label: T.members.colTeam, type: "text", exportOnly: true }] : [{ key: "people", label: T.work.colMembers, type: "int", get: (r) => r.totals.memberCount, hideOnPhone: true }]),
     ...(axis === "contract" ? [{ key: "teamName", label: T.work.colContractTeam, type: "text", exportOnly: true }] : []),
     ...(tableView === "months"

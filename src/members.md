@@ -311,9 +311,10 @@ if (vm) {
       sublabel: T.members.colMemberSub,
       type: "text",
       // 2 行目に ID・所属チーム・役職（列を分けると 1280/1024px に収まらないため。Excel には別列で出す）
-      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
+      render: (r) => html`<span class="yn-cell-2line"><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
       sortValue: (r) => r.memberName,
       exportValue: (r) => r.memberName,
+      memberTip: (r) => r.memberId,
     },
     { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
     // 「列」で選べる列（§106.1）。所属チーム・役職・区分は従来どおり Excel には常に出す
@@ -404,7 +405,8 @@ if (vm) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
-        render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.memberTeamName}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.memberTeamName}</span></span>`,
+        render: (r) => html`<span class="yn-cell-2line"><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.memberTeamName}</span></span>`,
+        memberTip: (r) => r.memberId,
       },
       { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
       { key: "contractId", label: T.columns.contract, type: "text", render: (r) => (r.outside ? html`<span class="yn-cell-main">${r.outsideLabel}</span>` : contractNameCell(r)), sortValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`), exportValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`) },
