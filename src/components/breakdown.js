@@ -95,7 +95,16 @@ function renderSection(section) {
     ${section.text ? html`<p class="yn-bd-text">${section.text}</p>` : null}
     ${section.table ? renderTable(section.table) : null}
   </section>`;
-  if (section.lazy) {
+  if (section.lazy && section.auto) {
+    // 開いたらすぐ読む（日の内訳の作業など、押す手間を省く。読み込みはキャッシュされる）
+    const holder = h("div", { class: "yn-bd-lazy", "aria-busy": "true" }, h("p", { class: "yn-note" }, T.common.loading));
+    section
+      .lazy()
+      .then((content) => holder.replaceChildren(content))
+      .catch((error) => holder.replaceChildren(html`<p class="yn-note yn-note-danger" role="alert">${fmt(T.breakdown.loadFailed, { error: error?.message ?? String(error) })}</p>`))
+      .finally(() => holder.removeAttribute("aria-busy"));
+    node.append(holder);
+  } else if (section.lazy) {
     const btn = html`<button type="button" class="yn-btn yn-btn-sm">${section.lazyLabel ?? T.breakdown.loadDetails}</button>`;
     const holder = html`<div class="yn-bd-lazy"></div>`;
     btn.addEventListener("click", async () => {
@@ -707,4 +716,162 @@ export function memberTotalsSpec({ members, total, measure, unit, period }) {
       },
     ],
   };
+}
+
+// ---------------------------------------------------------------------------
+// 日ごとの時間の内訳（メンバー×日の表の日の数字・メンバー詳細の時間グラフの棒。§61・§130）
+// ---------------------------------------------------------------------------
+
+const hoursOrOver = (left) => (left < 0 ? fmt(T.breakdown.overBy, { hours: formatHours(-left) }) : formatHours(left));
+
+/**
+ * 作業ログ明細（案件ごとのファイル。キャッシュあり）から、その人の from〜to の作業を 案件 × 作業 で足した表。
+ * extra は作業ログに無い行（運用保守以外など）を [ラベル, 時間] で足す
+ */
+async function workByTaskNode({ model, memberId, contractIds, from, to, contractHref = null, extra = [] }) {
+  const acc = new Map();
+  for (const id of contractIds) {
+    const data = await fetchWorklogs(id);
+    for (const m of data.months) {
+      if (m.month < from.slice(0, 7) || m.month > to.slice(0, 7)) continue;
+      for (const w of m.worklogs) {
+        if (w.memberId !== memberId || w.date < from || w.date > to) continue;
+        const key = `${id}\u0000${w.task}`;
+        const a = acc.get(key) ?? { id, task: w.task, hours: 0 };
+        a.hours += w.hours;
+        acc.set(key, a);
+      }
+    }
+  }
+  // 案件の合計の多い順に案件ごとにまとめ、案件の中は時間の多い順
+  const byContract = new Map();
+  for (const l of acc.values()) byContract.set(l.id, (byContract.get(l.id) ?? 0) + l.hours);
+  const lines = [...acc.values()].sort((a, b) => byContract.get(b.id) - byContract.get(a.id) || a.id.localeCompare(b.id) || b.hours - a.hours);
+  const rows = lines.map((l) => [contractCell(model, l.id, contractHref), l.task || EMPTY_VALUE, formatHours(l.hours)]);
+  for (const [label, hours] of extra) if (hours > 0) rows.push([label, EMPTY_VALUE, formatHours(hours)]);
+  if (rows.length === 0) return html`<p class="yn-note">${T.breakdown.noWorklogsInRange}</p>`;
+  const total = lines.reduce((s, l) => s + l.hours, 0) + extra.reduce((s, [, x]) => s + (x > 0 ? x : 0), 0);
+  return renderTable({
+    columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colWork }, { label: T.breakdown.colHours, align: "num" }],
+    rows,
+    foot: [T.breakdown.total, "", formatHours(total)],
+  });
+}
+
+/**
+ * チーム詳細の「メンバーごとの今月の時間」の日の数字。lines は core の dayHoursLines（その人・その日の案件ごと）。
+ * 作業ごとの内訳は作業ログ明細を開いたときに読む
+ */
+export function memberDaySpec({ model, memberId, name, date, dateLabel, hours, total, plan, lines, contractHref = null }) {
+  const rows = [
+    { label: T.breakdown.dayHours, value: formatHours(hours), emphasis: true },
+    { label: T.breakdown.monthTotal, value: formatHours(total) },
+    { label: T.breakdown.monthPlan, value: plan > 0 ? formatHours(plan) : EMPTY_VALUE },
+  ];
+  if (plan > 0) rows.push({ label: T.breakdown.planLeft, value: hoursOrOver(plan - total) });
+  const ids = [...new Set(lines.map((l) => l.contractId))];
+  return {
+    title: fmt(T.breakdown.dayTitle, { name, date: dateLabel }),
+    rows,
+    sections: [
+      {
+        title: T.breakdown.byContract,
+        table: { columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.colHours, align: "num" }], rows: lines.map((l) => [contractCell(model, l.contractId, contractHref), formatHours(l.hours)]) },
+      },
+      ...(ids.length ? [{ title: T.breakdown.byTask, auto: true, lazy: () => workByTaskNode({ model, memberId, contractIds: ids, from: date, to: date, contractHref }) }] : []),
+    ],
+  };
+}
+
+/** メンバー×日の表の合計行の日の数字: 表示中の人の、その日の 人 × 案件 の時間（lines は dayHoursLines を表示中の人に絞ったもの） */
+export function teamDaySpec({ model, dateLabel, hours, lines, nameOf, memberHref = null, contractHref = null }) {
+  const byMember = new Map();
+  for (const l of lines) byMember.set(l.memberId, (byMember.get(l.memberId) ?? 0) + l.hours);
+  // 人の合計の多い順、同じ人の中は時間の多い順
+  const sorted = [...lines].sort((a, b) => byMember.get(b.memberId) - byMember.get(a.memberId) || a.memberId.localeCompare(b.memberId) || b.hours - a.hours);
+  return {
+    title: fmt(T.breakdown.dayTotalTitle, { date: dateLabel, n: byMember.size }),
+    rows: [{ label: T.breakdown.dayHours, value: formatHours(hours), emphasis: true }],
+    sections: [
+      {
+        title: T.breakdown.byMember,
+        table: {
+          columns: [{ label: T.breakdown.colMember }, { label: T.breakdown.colContract }, { label: T.breakdown.colHours, align: "num" }],
+          rows: sorted.map((l) => {
+            const name = nameOf(l.memberId);
+            return [memberHref ? html`<a href=${memberHref(l.memberId)}>${name}</a>` : name, contractCell(model, l.contractId, contractHref), formatHours(l.hours)];
+          }),
+        },
+      },
+    ],
+  };
+}
+
+const signedHours = (v) => (v > 0 ? `+${formatHours(v)}` : formatHours(v));
+
+/**
+ * メンバー詳細の時間グラフの棒（§130）。bucket はグラフの 1 本（日・週は from〜to、月・四半期・年度は months）。
+ * memberMonths はそのメンバーの MemberMonth、days は data/member-days.json のその人の分（日・週の運用保守以外の時間）。
+ * 日・週は作業ログ明細から 案件 × 作業 を開いたときに読む。月以上は案件ごとの計画・実績を出し、作業は押して読む
+ */
+export function memberHoursBucketSpec({ model, member, bucket, label, memberMonths, includeOutside = false, days = null, contractHref = null }) {
+  const months = new Set(bucket.months ?? [bucket.month]);
+  const daily = bucket.unit === "day" || bucket.unit === "week";
+  const from = bucket.from ?? `${bucket.month}-01`;
+  const to = bucket.to ?? `${bucket.month}-31`;
+  const mine = memberMonths.filter((mm) => mm.memberId === member.memberId && months.has(mm.month));
+  const lines = mine.flatMap((mm) => mm.byContract.filter((r) => includeOutside || typeof r.outsideType !== "string"));
+  const ids = [...new Set(lines.filter((r) => typeof r.outsideType !== "string" && r.actualHours > 0).map((r) => r.contractId))];
+  // 運用保守以外の実績（作業ログ明細には無い）。日・週は日ごとの値、月以上は月の値
+  let outside = 0;
+  if (includeOutside) {
+    if (daily) {
+      for (const [month, v] of Object.entries(days ?? {})) {
+        if (!months.has(month)) continue;
+        for (const [d, , o] of v.a ?? []) {
+          const date = `${month}-${String(d).padStart(2, "0")}`;
+          if (date >= from && date <= to) outside += o;
+        }
+      }
+    } else outside = lines.filter((r) => typeof r.outsideType === "string").reduce((s, r) => s + r.actualHours, 0);
+  }
+  const rows = [
+    { label: T.breakdown.plannedHours, value: formatHours(bucket.plannedHours) },
+    { label: T.breakdown.actualHours, value: formatHours(bucket.actualHours), emphasis: true },
+  ];
+  if (bucket.plannedHours > 0) rows.push({ label: T.breakdown.planDiff, value: signedHours(bucket.actualHours - bucket.plannedHours) });
+  if (outside > 0) rows.push({ label: T.breakdown.outsidePart, value: formatHours(outside) });
+  const sections = [];
+  if (!daily) {
+    // 案件（運用保守以外は種類）ごとに、期間の計画・実績を足す
+    const acc = new Map();
+    for (const r of lines) {
+      const key = typeof r.outsideType === "string" ? `o:${r.outsideType}` : `c:${r.contractId}`;
+      const a = acc.get(key) ?? { row: r, planned: 0, actual: 0 };
+      a.planned += r.plannedHours;
+      a.actual += r.actualHours;
+      acc.set(key, a);
+    }
+    const list = [...acc.values()].filter((a) => a.planned > 0 || a.actual > 0).sort((a, b) => b.actual - a.actual || b.planned - a.planned);
+    sections.push(
+      list.length
+        ? {
+            title: T.breakdown.byContract,
+            table: {
+              columns: [{ label: T.breakdown.colContract }, { label: T.breakdown.plannedHours, align: "num" }, { label: T.breakdown.actualHours, align: "num" }],
+              rows: list.map((a) => [contractCell(model, a.row.contractId, contractHref, a.row), formatHours(a.planned), formatHours(a.actual)]),
+            },
+          }
+        : { title: T.breakdown.byContract, text: T.breakdown.noWorklogsInRange },
+    );
+  }
+  if (ids.length || outside > 0) {
+    sections.push({
+      title: T.breakdown.byTask,
+      auto: daily,
+      lazyLabel: T.breakdown.loadDetails,
+      lazy: () => workByTaskNode({ model, memberId: member.memberId, contractIds: ids, from, to, contractHref, extra: daily && outside > 0 ? [[T.breakdown.outsideWork, outside]] : [] }),
+    });
+  }
+  return { title: fmt(T.breakdown.bucketTitle, { name: member.memberName, label }), rows, sections };
 }

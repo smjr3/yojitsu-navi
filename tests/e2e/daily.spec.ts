@@ -3,7 +3,7 @@
  * チーム詳細にはメンバー×日の表が出る。各画面幅・ダークで画面からはみ出さない
  */
 import type { Page } from "@playwright/test";
-import { contractsForTeam, dailyMembers, dailyProgress, encodeDaily, formatYen, targetForMonth, teamTreeForMonth, type Model } from "../../src/core/index.js";
+import { contractsForTeam, dailyMembers, dailyProgress, dayHoursLines, encodeDaily, formatYen, targetForMonth, teamTreeForMonth, type Model } from "../../src/core/index.js";
 import { test, expect, gotoPage, useDarkTheme, parseNumber } from "./helpers/app.js";
 import { getModel } from "./helpers/core.js";
 
@@ -216,3 +216,45 @@ for (const [w, dark] of [
     expect(nb.x).toBeGreaterThanOrEqual(wb.x - 1);
   });
 }
+
+test("メンバー×日の表: 日の数字を押すと、その日の案件ごと・作業ごとの時間が開く（合計行も。§135）", { tag: "@smoke" }, async ({ page }) => {
+  const p = dailyProgress(model, daily, teamIds)!;
+  const rows = dailyMembers(model, daily, p, teamIds);
+  const first = rows[0]!;
+  const i = first.hours.findIndex((v) => (v ?? 0) > 0);
+  const day = p.points[i]!.day;
+  const lines = dayHoursLines(daily, teamIds, day, first.memberId);
+  await gotoPage(page, `/team?id=${TEAM}`);
+  const table = section(page).locator("table.yn-dg-table");
+  const tr = table.locator("tbody tr").first();
+  // 日の列は名前・役職・累計・計画・残り/日の後ろ（表の左から数える）
+  const heads = await table.locator("thead th").allTextContents();
+  const col = heads.findIndex((t) => t.trim() === String(day));
+  await tr.locator("th, td").nth(col).locator("button.yn-num").click();
+  const dialog = page.locator("dialog.yn-bd-dialog[open]");
+  await expect(dialog.locator(".yn-dialog-title")).toContainText(`${day}日`);
+  await expect(dialog.locator(".yn-bd-rows .is-emphasis")).toContainText(`${Number(first.hours[i]!.toFixed(2))}h`);
+  const byContract = dialog.locator(".yn-bd-section").filter({ hasText: "案件ごとの内訳" });
+  await expect(byContract.locator("tbody tr")).toHaveCount(lines.length);
+  // 作業ごとの内訳は開いたらすぐ作業ログ明細を読む。合計はその日の時間
+  const byTask = dialog.locator(".yn-bd-section").filter({ hasText: "作業ごとの内訳" });
+  await expect(byTask.locator("tfoot")).toContainText(`${Number(first.hours[i]!.toFixed(2))}h`);
+  await page.keyboard.press("Escape");
+  // 合計行: 表示中の人のその日の 人 × 案件
+  await table.locator("tfoot td").nth(col).locator("button.yn-num").click();
+  await expect(dialog.locator(".yn-dialog-title")).toContainText(`${day}日の時間`);
+  await expect(dialog.locator(".yn-bd-section tbody tr")).toHaveCount(dayHoursLines(daily, teamIds, day).length);
+});
+
+test("メンバー×日の表: スマートフォンでも日の数字をタップすると内訳が開く（§135）", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await gotoPage(page, `/team?id=${TEAM}`);
+  const btn = section(page).locator("table.yn-dg-table tbody td.yn-dg-day button.yn-num").first();
+  await btn.scrollIntoViewIfNeeded();
+  await btn.tap();
+  await expect(page.locator("dialog.yn-bd-dialog[open] .yn-bd-section").filter({ hasText: "案件ごとの内訳" })).toBeVisible();
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(0);
+  await ctx.close();
+});

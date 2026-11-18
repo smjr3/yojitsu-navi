@@ -166,7 +166,7 @@ export {
   type WorkTaskLine,
   type WorkTotals,
 } from "./workTypes.js";
-export { dailyMembers, dailyProgress, encodeDaily, progressFromDays, progressOverRange, progressRangeOf, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress, type ProgressUnit } from "./daily.js";
+export { dailyMembers, dailyProgress, dayHoursLines, encodeDaily, progressFromDays, progressOverRange, progressRangeOf, type DailyFile, type DailyMemberRow, type DailyPoint, type DailyProgress, type DayHoursLine, type ProgressUnit } from "./daily.js";
 export {
   CHART_UNITS,
   DAY_UNIT_MONTHS,
