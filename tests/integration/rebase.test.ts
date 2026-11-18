@@ -55,7 +55,7 @@ describe("rebaseModel", () => {
     expect(comparable(rebased)).toEqual(comparable(fresh));
   });
 
-  it("取り込みが前月の確定日より前で止まっていれば、確定日を過ぎても前月は速報のまま（§8・§133）", () => {
+  it("取り込みが前月の確定日より前で止まっていれば、確定日を過ぎても前月は速報のまま（§8・§136）", () => {
     expect(dataset.worklogFetchedAt?.slice(0, 10)).toBe(BASE);
     const rebased = rebaseModel(base, plusDays(22)); // 11 月の確定日（第 3 営業日）の後
     expect(rebased.meta.lastFinalMonth).toBe("2026-09");

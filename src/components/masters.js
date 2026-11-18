@@ -3263,7 +3263,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 一覧に最初に出す件数（残りは「すべて表示」） */
   const ISSUE_PREVIEW = 8;
   let showAllIssues = false;
-  // リソース計画で組織を選んでいるとき、他の組織の人の確認要求も出すか（§133）
+  // リソース計画で組織を選んでいるとき、他の組織の人の確認要求も出すか（§136）
   let showOtherOrgIssues = false;
 
   /** 行の列の値（行が無ければ ""） */
@@ -3415,7 +3415,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         : html`<p class="yn-me-check is-ok" role="status"><span class="yn-chip yn-chip-ok"><span aria-hidden="true">✓</span> ${T.dataCheck.noErrors}</span>${v.warnings ? html` <span class="yn-chip yn-chip-warn"><span aria-hidden="true">i</span> ${T.dataCheck.severityWarning} ${integer(v.warnings)}${T.masters.countSuffix}</span> ${T.masters.warningsNotBlocking}` : null}</p>`;
     // エラーを先に。同じ重さの中はファイル（この画面のものを先）・行の順
     const order = (i) => (i.fileId && pageFiles.includes(i.fileId) ? 0 : 1);
-    // リソース計画で組織を選んでいるときは、その組織に出ている人以外の確認要求（保存は止めない）を畳む。エラーは常に出す（§133）
+    // リソース計画で組織を選んでいるときは、その組織に出ている人以外の確認要求（保存は止めない）を畳む。エラーは常に出す（§136）
     const scope = active === PLAN_VIEW_ID && plan.teamId ? new Set(planPeople.map((d) => d.r.memberId)) : null;
     // 人に結び付く確認要求の社員番号（行の member_id、ref.memberId、何人かをまとめたものは ref.memberIds）
     const issueMembers = (i) => {

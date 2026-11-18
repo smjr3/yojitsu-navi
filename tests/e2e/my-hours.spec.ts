@@ -17,7 +17,7 @@ const dataset = loadDataset(ROOT_DIR).dataset;
 const month = model.meta.asOfMonth;
 const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
 const rowsOf = (memberId: string) => myHoursRows(model.memberMonths.find((mm) => mm.memberId === memberId && mm.month === month), (id) => contracts.get(id));
-/** メンバー詳細の行: 運用保守以外は「運用保守以外を含む」を選んだときだけ（既定は含まない。§133） */
+/** メンバー詳細の行: 運用保守以外は「運用保守以外を含む」を選んだときだけ（既定は含まない。§136） */
 const pageRowsOf = (memberId: string, outside = false) => rowsOf(memberId).filter((r) => outside || r.contractId !== null);
 const demoMember = gitlabUsernameIndex(dataset.members, month).get("demo-user")!;
 const remainText = (r: number) => (r < 0 ? `超過 ${formatHours(-r)}` : `残り ${formatHours(r)}`);
@@ -52,7 +52,7 @@ test("メンバー詳細に今月の残りと案件ごとの行（GitLab の接�
   await expect(page.locator(".yn-my-hours-btn")).toHaveCount(0);
 });
 
-test("メンバー詳細の今月の残りは「運用保守以外を含む」に従い、下の表・グラフと時間が合う（§133）", async ({ page }) => {
+test("メンバー詳細の今月の残りは「運用保守以外を含む」に従い、下の表・グラフと時間が合う（§136）", async ({ page }) => {
   const id = [...new Set(model.memberMonths.filter((mm) => mm.month === month).map((mm) => mm.memberId))].find((m) => rowsOf(m).some((r) => r.contractId === null) && pageRowsOf(m).length > 0)!;
   expect(id).toBeTruthy();
   await gotoPage(page, `/member?id=${id}`);

@@ -159,7 +159,7 @@ if (store && exists) mountFilterBar(store, model, { show: ["period", "outside", 
 
 ```js
 // 今月の残り（§113）。期間の絞り込みに関係なく、今月（開いた人の今日の月）の計画と実績。
-// 運用保守以外は、下の表・グラフと数字が合うよう「運用保守以外を含む」に従う（§133）
+// 運用保守以外は、下の表・グラフと数字が合うよう「運用保守以外を含む」に従う（§136）
 if (vm) {
   const month = model.meta.asOfMonth;
   const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));

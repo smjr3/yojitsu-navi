@@ -48,7 +48,7 @@ const state = Generators.observe((notify) => {
 ```
 
 ```js
-// 上部のタブ（全体・顧客・案件・メンバー・稼働実績）とリソース計画へは、このチームで絞ったまま移る（§133）
+// 上部のタブ（全体・顧客・案件・メンバー・稼働実績）とリソース計画へは、このチームで絞ったまま移る（§136）
 if (vm && vm.exists !== false) {
   const tabs = ["./", "./customers", "./contracts", "./members", "./workload"];
   for (const a of document.querySelectorAll(".yn-topbar a.yn-tab, .yn-topbar a.yn-tool")) {
