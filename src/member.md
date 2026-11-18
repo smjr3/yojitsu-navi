@@ -173,7 +173,7 @@ if (vm) {
 if (vm) {
   const { totals, unit, period, months, member } = vm;
   const t = totals ?? { plannedCost: 0, actualCost: 0, plannedHours: 0, actualHours: 0, variance: 0, utilization: null, unplannedHours: 0, unplannedCost: 0 };
-  const subtitle = `${vm.name}（${memberId}） ・ ${periodJa(period)}`;
+  const subtitle = `${vm.name} ・ ${periodJa(period)}`;
   const contractHref = (id) => store.href("./contract", {}, { id });
   display(
     memberKpiRow([
