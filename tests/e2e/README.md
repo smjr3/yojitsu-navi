@@ -58,7 +58,8 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `mr-pending.spec.ts` | マージ待ちの一覧の開閉・対応が必要なものを先に・競合ありのマージで載せ直してマージ・幅ごとのはみ出し（§126） |
 | `plan.spec.ts` / `plan-cells.spec.ts` | リソース計画（組織の配下・リーダー・セル編集・案件で選ぶ・候補から選ぶ入力欄・1.0 超は黄／1.0 未満は青系。SPEC §41） |
-| `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の ▸・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
+| `plan-groups.spec.ts` | リソース計画の人の行と作業の行の見分け・開閉（名前の開閉の印・作業の数・すべて開く／閉じる・開いた状態をタブで覚える・枝の線と区切り線。SPEC §112） |
+| `disclosure.spec.ts` | 開閉の印（枠付きの四角）を全画面でそろえる・文字の大きさに追随・組織ツリーの印の外側でも開閉・折り返しの位置（SPEC §143） |
 | `plan-empty.spec.ts` | リソース計画で計画が何も入っていない人の印・「なし」のセル・「計画なし n人」の絞り込み、計画を入れると外れる、対象外（不在・所属なし）、390px・ダーク（SPEC §116） |
 | `plan-amount.spec.ts` | リソース計画のグラフの「金額」（顧客ごとの積み上げ・予算・目標の上限・上限超・覚える）とセルの編集欄の目標の上限までの余力（入力中の値で数え直す・作業を追加で選んだ案件。SPEC §122） |
 | `plan-target-alerts.spec.ts` | リソース計画の目標の警告（未達見込みの目標・月の見出しの「!」・組織の配下・編集後の計画で出し直し。SPEC §110） |
@@ -94,7 +95,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 
 ## 設計メモ
 
-- セレクタは `docs/UI_NOTES.md` のもの（`.yn-kpi .yn-kpi-value`、`.yn-seg-btn[data-preset|data-unit]`、`#yn-filter-from/to/team`、`input[name=yn-method]`、`dialog.yn-dialog[open]`、`table tbody tr[data-key]`、`.yn-row-link`、`.yn-tree-toggle`、`.yn-table-toolbar .yn-export`、`#yn-f-*`、`.yn-forecast-card.is-selected`）。表の列は**見出しの文字**（予算・実績・残予算…）で引くので列の追加・並び替えに強い
+- セレクタは `docs/UI_NOTES.md` のもの（`.yn-kpi .yn-kpi-value`、`.yn-seg-btn[data-preset|data-unit]`、`#yn-filter-from/to/team/method`、`dialog.yn-dialog[open]`、`table tbody tr[data-key]`、`.yn-row-link`、`.yn-tree-toggle`、`.yn-table-toolbar .yn-export`、`#yn-f-*`、`.yn-forecast-card.is-selected`）。表の列は**見出しの文字**（予算・実績・残予算…）で引くので列の追加・並び替えに強い
 - 単位: 画面の既定は百万円（`DEFAULT_UNIT` は config から導出）。厳密に突き合わせるテストは URL に `unit=yen` を付けて円で比べ、既定単位の画面は `yen(v, DEFAULT_UNIT)` で比べる。計算根拠 dialog と Excel の金額は常に円（`yen(v, "yen")`）
 - `helpers/app.ts` の `test` は auto フィクスチャで console.error / pageerror / 失敗リクエストを集め、テスト終了時に 0 件を要求する
 - `helpers/core.ts` が `src/core` と `scripts/lib/load.ts` を直接 import する（Playwright の TS ローダが `.js` 拡張子の import を `.ts` に解決する）

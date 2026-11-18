@@ -20,14 +20,14 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("名前の ▸ を押すと作業の行が開き ▾ になる。作業の数は名前の横、操作列に開閉のボタンは無い", { tag: "@smoke" }, async ({ page }) => {
+test("名前の開閉の印を押すと作業の行が開く（印は枠付きの四角。§143）。作業の数は名前の横、操作列に開閉のボタンは無い", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=T111");
   const t = toggle(page, "M010");
   // 開閉のボタンは名前の欄（行見出し）の中
   await expect(page.locator('tr.yn-me-plan-row[data-member="M010"] > th [data-fk="plan:toggle:M010"]')).toHaveCount(1);
   await expect(page.locator('tr.yn-me-plan-row[data-member="M010"] .yn-me-row-actions [data-fk^="plan:toggle:"]')).toHaveCount(0);
   await expect(t).toContainText("中村 拓也");
-  await expect(t.locator(".yn-me-plan-caret")).toHaveText("▸");
+  await expect(t.locator(".yn-disc")).toHaveCount(1);
   await expect(t.locator(".yn-me-plan-count")).toHaveText("3");
   await expect(t).toHaveAttribute("aria-expanded", "false");
   await expect(subs(page, "M010")).toHaveCount(0);
@@ -35,7 +35,7 @@ test("名前の ▸ を押すと作業の行が開き ▾ になる。作業の�
   // 名前の文字を押しても開く（押せる範囲 = 名前の欄）
   await t.locator(".yn-me-plan-name").click();
   await expect(toggle(page, "M010")).toHaveAttribute("aria-expanded", "true");
-  await expect(toggle(page, "M010").locator(".yn-me-plan-caret")).toHaveText("▾");
+  await expect(toggle(page, "M010").locator(".yn-disc")).toHaveCount(1);
   await expect(subs(page, "M010")).toHaveCount(3);
   await expect(toggle(page, "M010")).toBeFocused();
 

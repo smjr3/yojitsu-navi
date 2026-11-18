@@ -73,7 +73,7 @@ export const CONFIG_SCHEMA = obj({
   hoursPerBusinessDay: num({ required: true, min: 0, exclusiveMin: true }),
   burnRateDangerThreshold: num({ required: true, min: 0, exclusiveMin: true }),
   closingBusinessDay: int({ required: true, min: 1 }),
-  forecastMethodDefault: oneOf(["recent3", "all", "assignment"], { required: true }),
+  forecastMethodDefault: oneOf(["recent3", "recent12", "all", "assignment"], { required: true }),
   forecastRecentMonths: int({ required: true, min: 1 }),
   currency: obj({ code: str(), defaultUnit: oneOf(["yen", "thousandYen", "millionYen"]) }),
   labels: obj({ customer: str(), project: str(), contract: str(), team: str(), member: str() }),

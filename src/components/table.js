@@ -677,13 +677,17 @@ export function dataTable({
       const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
       const cell = ci === 0 ? h("th", { scope: "row", class: cls }) : h("td", { class: cls });
       let content = cellNode(col, row);
+      // 木の名前の欄は字下げ・開閉・名前を横に並べる（長い名前が折り返しても字下げの位置にそろう）
+      let lead = cell;
       if (ci === 0) {
         if (tree) {
+          lead = h("div", { class: "yn-tree-cell" });
+          cell.append(lead);
           const indent = h("span", { class: "yn-tree-indent", style: `--depth:${row.depth ?? 0}` });
-          cell.append(indent);
+          lead.append(indent);
           if (row.hasChildren && (parentsShown === null || parentsShown.has(row.key))) {
             const open = !collapsed.has(row.key);
-            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" }) }, h("span", { "aria-hidden": "true" }, open ? "▾" : "▸"));
+            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" }) }, h("span", { class: "yn-disc", "aria-hidden": "true" }));
             toggle.addEventListener("click", (ev) => {
               ev.stopPropagation();
               if (collapsed.has(row.key)) collapsed.delete(row.key);
@@ -691,17 +695,18 @@ export function dataTable({
               renderBody();
               focusIn(tbody, `tr[data-key="${cssEscape(String(row.key))}"] .yn-tree-toggle`);
             });
-            cell.append(toggle);
-          } else cell.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
+            lead.append(toggle);
+          } else lead.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
         }
         if (href) content = h("a", { class: "yn-row-link", href }, content);
+        else if (tree) content = h("span", { class: "yn-tree-name" }, content);
       }
       // 文字の列（案件名・作業名など）は長くても他の列を潰さないよう上限で「…」にし、全文は title（§106）
       if (ci > 0 && typeof content === "string" && content !== EMPTY_VALUE && !numeric && (col.type === undefined || col.type === "text")) {
         cell.classList.add("yn-cell-clip");
         cell.title = content;
       }
-      cell.append(content);
+      lead.append(content);
       if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });
