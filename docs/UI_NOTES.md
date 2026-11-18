@@ -225,6 +225,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §41 1.0 未満 | リソース計画の色 | 人の行の月合計が 0 より多く 1.0 未満のセルは青系（`--yn-under-*`）、1.0 超は黄。0 は色なし |
 | §58 月別の合計 | リソース計画のグラフ | 表の上に運用保守／運用保守以外の積み上げ棒（`planLoadChart`、`work.js`）＋人数 × 1.0 の破線＋1.0 超の人数「!n人」。表を描き直すたびに高さが 0 にならないよう `.yn-me-plan-chart .yn-chart-plot` に最小の高さ |
 | §99 並べ替え・絞り込み | リソース計画の見出し | マスタ編集の台帳と同じ見出しの部品（`sortFilterHead`、並べ替えのボタン＋漏斗。`createFilterPopover`）。月の列は狭いので `th.num.has-filter` の左右の余白を詰め、見出しは「n月」のまま（吹き出し・読み上げは「YYYY年n月」）。開いた明細・変更の履歴は人の行について動く |
+| §145 キーボード | リソース計画の表 | `.yn-me-table-wrap` の `keydown`（`gridKeys`）で矢印・Home/End・名前との行き来、数字・F2・Delete で編集欄を開く（`openCellEditor` の `{ viaKey, initial }`。開く関数はセルごとに `WeakMap` で持ち、表は描き直さない）。編集欄で Enter で反映したときだけ次の月へ（閉じたときの戻り先 `closeFk` も次の月に）。`isComposing`・keyCode 229 のキーは扱わない。`focusin`（`revealCell`）で左に固定した名前の列の下に隠れたセルを見える位置へ |
 | §66 内訳の見分け | リソース計画の開いた内訳 | `.yn-me-plan-sub` は左端の帯（inset box-shadow）・12px の控えめな数値・枠なしの文字ボタン。`renderPanel` は同じ表の描き直しで `.yn-me-table-wrap` のスクロール位置を引き継ぐ |
 | §65 変更の影響 | リソース計画の保存の前 | 差分の下・保存の上に「変更の影響」（`renderImpact`、計算は `core/planImpact.ts`）。アサイン・メンバー・単価に変更があるときだけ出す。前の値は muted、後の値は通常の色、マイナスの残予算・増えた着地は赤。表の中の読み上げ用「から」（`position: absolute`）が枠の外へ出て 390px で横スクロールになったので、`.yn-me-impact .yn-table-wrap` に `position: relative` |
 | §112 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（開閉の印 `.yn-disc`（§143）・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |

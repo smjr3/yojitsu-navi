@@ -113,6 +113,8 @@ for (const dark of [false, true]) {
 
     test("体制図: 計画なしはリソース計画と同じ赤紫", async ({ page }) => {
       await gotoPage(page, "/teams?view=chart");
+      // 体制図は表示の切り替え後に描くので、全件を並列で流すと描く前に読むことがある
+      await page.locator(".yn-org").first().waitFor();
       const [swatch, empty] = await page.evaluate(() => {
         const bg = (cls: string) => {
           const d = document.createElement("span");
