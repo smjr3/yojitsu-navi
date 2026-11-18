@@ -10,7 +10,7 @@
  *   from/to  YYYY-MM（meta.minMonth〜maxMonth に収める）
  *   team     チームID / "" = 全体 / "__unassigned__" = 未設定
  *   unit     m（百万円）| k（千円）| yen
- *   method   assignment | recent3 | all
+ *   method   assignment | recent3 | recent12 | all
  *   outside  1 = 契約外を含む（メンバー別の計画・実績。§50.4）。0（既定）は URL に書かない
  */
 import { UNITS, fromCoreUnit } from "./format.js";
@@ -20,7 +20,7 @@ import { UNASSIGNED_TEAM_ID, addMonths, isValidYearMonth, fiscalYearMonths, fisc
 export const STATE_KEYS = ["from", "to", "team", "unit", "method", "outside"];
 // v2: 既定の単位を百万円に変えたとき、以前の既定（円）が保存値として残らないように切り替えた
 export const STORAGE_KEY = "yojitsu-navi:state:v2";
-const METHODS = ["assignment", "recent3", "all"];
+const METHODS = ["assignment", "recent3", "recent12", "all"];
 const UNIT_IDS = UNITS.map((u) => u.id);
 
 function clampMonth(m, min, max) {

@@ -22,9 +22,9 @@ test("案件詳細: 年度をまたぐ案件は、期間の終わりの着地と
   const end = contractEndForecasts(model, crossing);
   await expect(kpiValue(page, 5)).toHaveText(yen(end[DEFAULT_METHOD].forecastGrossProfit, "yen"));
   await expect(page.locator(".yn-kpi").nth(5)).toContainText("案件終了時点の着地");
-  // 3 方式のカードにも案件終了時点の行
+  // 方式ごとのカードにも案件終了時点の行
   const rows = page.locator(".yn-forecast-card .yn-forecast-end");
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(4);
   await expect(rows.first().locator("button")).toHaveText(yen(end.assignment.forecastGrossProfit, "yen"));
   // 計算根拠: 対象の月は案件の全期間
   await kpiValue(page, 5).click();

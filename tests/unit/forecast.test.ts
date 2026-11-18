@@ -66,6 +66,35 @@ describe("着地見込み (SPEC §10)", () => {
     expect(f.forecastCost).toBe(420);
   });
 
+  it("recent12: 直近 12 か月の平均（年度をまたぐ・基準月の月は含めない）", () => {
+    const long = contract({ contractId: "L", startMonth: "2025-01", endMonth: "2027-03" });
+    const costs: Record<string, number> = {};
+    for (const [i, m] of monthRange("2025-01", "2026-09").entries()) costs[m] = (i + 1) * 10; // 2025-01=10 … 2026-09=210
+    const f = forecastContract(ctx(), long, months(long, { ...costs, "2026-10": 99_999 }), "recent12");
+    expect(f.breakdown.averageBasisMonths).toEqual(monthRange("2025-10", "2026-09"));
+    expect(f.breakdown.averageMonthlyCost).toBe(155); // 100…210 の平均
+    expect(f.breakdown.remainingCost).toBe(155 * 6);
+    // recent3 は同じデータで直近 3 か月、all は全月
+    expect(forecastContract(ctx(), long, months(long, costs), "recent3").breakdown.averageBasisMonths).toEqual(["2026-07", "2026-08", "2026-09"]);
+    expect(forecastContract(ctx(), long, months(long, costs), "all").breakdown.averageBasisMonths).toHaveLength(21);
+  });
+
+  it("recent12: 実績が 12 か月未満ならある分で平均、0 か月なら 0（recent3 と同じ扱い）", () => {
+    const costs = { "2026-04": 10, "2026-05": 20, "2026-06": 30, "2026-07": 40, "2026-08": 50, "2026-09": 60 };
+    const f = forecastContract(ctx(), C, months(C, costs), "recent12");
+    expect(f.breakdown.averageBasisMonths).toEqual(monthRange("2026-04", "2026-09"));
+    expect(f.breakdown.averageMonthlyCost).toBe(35);
+    const none = forecastContract(ctx({ asOfMonth: "2026-04" }), C, months(C, {}), "recent12");
+    expect(none.breakdown.noActuals).toBe(true);
+    expect(none.breakdown.remainingCost).toBe(0);
+  });
+
+  it("recent12 の月数は config の forecastRecentMonths に依らない", () => {
+    const long = contract({ contractId: "L", startMonth: "2025-01", endMonth: "2027-03" });
+    const f = forecastContract(ctx({ config: { ...baseConfig, forecastRecentMonths: 2 } }), long, months(long, {}), "recent12");
+    expect(f.breakdown.averageBasisMonths).toHaveLength(12);
+  });
+
   it("残り原価は円に丸める（平均が割り切れない場合）", () => {
     const costs = { "2026-07": 1, "2026-08": 1, "2026-09": 2 }; // 平均 4/3
     const f = forecastContract(ctx(), C, months(C, costs), "recent3");
@@ -139,7 +168,7 @@ describe("着地見込み (SPEC §10)", () => {
 
   it("年度に 1 か月も掛からない契約: すべて 0・赤字でない", () => {
     const past = contract({ contractId: "P", startMonth: "2025-04", endMonth: "2026-03", totalAmount: 1000 });
-    for (const method of ["recent3", "all", "assignment"] as const) {
+    for (const method of ["recent3", "recent12", "all", "assignment"] as const) {
       const f = forecastContract(ctx({ assignments: [assignment({ memberId: "M1", contractId: "P", startMonth: "2025-04", endMonth: "2026-03" })] }), past, months(past, { "2026-03": 500 }), method);
       expect(f.targetBudget).toBe(0);
       expect(f.forecastCost).toBe(0);
@@ -206,9 +235,10 @@ describe("着地見込み (SPEC §10)", () => {
     expect(f.breakdown.assignmentLines.every((l) => l.hourlyRate === 0 && l.amount === 0)).toBe(true);
   });
 
-  it("forecastAllMethods は 3 方式を返す", () => {
+  it("forecastAllMethods は全方式を返す", () => {
     const all = forecastAllMethods(ctx(), C, months(C, {}));
-    expect(Object.keys(all).sort()).toEqual(["all", "assignment", "recent3"]);
+    expect(Object.keys(all).sort()).toEqual(["all", "assignment", "recent12", "recent3"]);
+    expect(all.recent12.method).toBe("recent12");
     expect(all.recent3.method).toBe("recent3");
     expect(all.assignment.breakdown.noAssignments).toBe(true);
   });
@@ -274,7 +304,7 @@ describe("着地見込みの対象の月を指定する (SPEC §54)", () => {
     expect(f.isDeficit).toBe(false);
   });
 
-  it("forecastAllMethodsForMonths は 3 方式を返す", () => {
-    expect(Object.keys(forecastAllMethodsForMonths(basis, X, ms, plan, monthRange("2026-04", "2027-03")))).toEqual(["assignment", "recent3", "all"]);
+  it("forecastAllMethodsForMonths は全方式を返す（並びは FORECAST_METHODS と同じ）", () => {
+    expect(Object.keys(forecastAllMethodsForMonths(basis, X, ms, plan, monthRange("2026-04", "2027-03")))).toEqual(["assignment", "recent3", "recent12", "all"]);
   });
 });

@@ -25,7 +25,7 @@ import { monthlyFigure } from "./components/series-figure.js";
 import { lazyJson } from "./components/chart-units.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
+import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, methodLabel, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -132,7 +132,7 @@ if (vm) {
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth, subtitle }),
       }),
       statTile({
-        label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
+        label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: methodLabel(forecast.method, model.config) }),
         value: money(forecast.forecastGrossProfit, unit),
         sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
         status: forecastStatus(forecast),
@@ -146,7 +146,7 @@ if (vm) {
 
 ```js
 if (vm) {
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: methodLabel(vm.method, model.config), fyStart: model.config.fiscalYearStartMonth })));
 }
 ```
 
@@ -179,7 +179,7 @@ if (vm) {
     .filter((r) => r.forecasts[method].isDeficit)
     .map((r) => ({ ...contractRow(model, r, scope.period, method, scope.tree), key: r.contract.contractId }))
     .sort((a, b) => a.forecastGrossProfit - b.forecastGrossProfit);
-  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { period: periodJa(scope.period), method: METHOD_LABELS[method] })));
+  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { period: periodJa(scope.period), method: methodLabel(method, model.config) })));
   if (rows.length === 0) {
     display(emptyState({ title: T.index.noDeficitTitle, text: fmt(T.index.noDeficitText, { team: scope.teamLabel }), icon: "✓" }));
   } else {

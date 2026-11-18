@@ -169,15 +169,15 @@ test.describe("全体サマリー", () => {
     await expect(page.locator("#yn-filter-to")).toHaveValue("2026-05");
   });
 
-  for (const method of ["all", "assignment", "recent3"] as const) {
+  for (const method of ["all", "assignment", "recent3", "recent12"] as const) {
     test(`着地方式 ${method} で 着地見込みの差 が core の forecastTotals と一致`, async ({ page }) => {
       await gotoPage(page, "/?unit=yen");
-      await page.locator(`#yn-method-${method}`).check();
-      await expect(page.locator(`input[name=yn-method][value=${method}]`)).toBeChecked();
+      await page.locator("#yn-filter-method").selectOption(method);
+      await expect(page.locator("#yn-filter-method")).toHaveValue(method);
       await expectKpis(page, FY, "", method, "yen");
       expect(query(page).get("method")).toBe(method);
       await expect(page.locator(".yn-kpi").nth(4).locator(".yn-kpi-label")).toContainText(
-        { recent3: "直近実績", all: "全期間平均", assignment: "計画値" }[method],
+        { recent3: "直近3か月平均", recent12: "直近12か月平均", all: "全期間平均", assignment: "計画値" }[method],
       );
     });
   }
@@ -233,7 +233,7 @@ test.describe("全体サマリー", () => {
     const period = { from: "2026-06", to: "2026-09" };
     await expectKpis(page, period, "T111", "all", "k");
     await expect(teamValue(page)).toHaveValue("T111");
-    await expect(page.locator("#yn-method-all")).toBeChecked();
+    await expect(page.locator("#yn-filter-method")).toHaveValue("all");
     await expect(page.locator(".yn-seg-btn[data-unit=k]")).toHaveAttribute("aria-pressed", "true");
     await page.reload();
     await expect(page.locator(".yn-page-header").first()).toBeVisible();
@@ -259,7 +259,7 @@ test.describe("全体サマリー", () => {
   test("localStorage で状態が別ページにも引き継がれる", async ({ page }) => {
     await gotoPage(page, "/");
     await page.locator(".yn-seg-btn[data-unit=k]").click();
-    await page.locator("#yn-method-all").check();
+    await page.locator("#yn-filter-method").selectOption("all");
     await page.locator(".yn-seg-btn[data-preset=next3]").click();
     const period = presetPeriod("next3", model);
     await expectKpis(page, period, "", "all", "k");
@@ -458,13 +458,13 @@ test.describe("案件詳細", () => {
     expect(await cellText(foot, col(h, "予算"))).toBe(yen(t.budget, unit));
     expect(await cellText(foot, col(h, "実績"))).toBe(yen(sumCost, unit));
     expect(sumCost).toBe(t.cost);
-    // 3 方式の着地カード: 選択中が強調され、値が core と一致
-    for (const method of ["recent3", "all", "assignment"] as const) {
-      const card = page.locator(".yn-forecast-card").filter({ hasText: { recent3: "直近実績", all: "全期間平均", assignment: "計画値" }[method] });
+    // 方式の着地カード: 選択中が強調され、値が core と一致
+    for (const method of ["recent3", "recent12", "all", "assignment"] as const) {
+      const card = page.locator(".yn-forecast-card").filter({ hasText: { recent3: "直近3か月平均", recent12: "直近12か月平均", all: "全期間平均", assignment: "計画値" }[method] });
       await expect(card.locator(".yn-kpi-value")).toHaveText(yen(r.forecasts[method].forecastGrossProfit, unit));
     }
     await expect(page.locator(".yn-forecast-card.is-selected")).toHaveCount(1);
-    await expect(page.locator(".yn-forecast-card.is-selected")).toContainText("直近実績");
+    await expect(page.locator(".yn-forecast-card.is-selected")).toContainText("直近3か月平均");
     // カードのボタンで方式を切り替えると KPI が変わる
     await page.locator(".yn-forecast-card").filter({ hasText: "全期間平均" }).getByRole("button", { name: "この方式で表示" }).click();
     await expect(kpiValue(page, 4)).toHaveText(yen(r.forecasts.all.forecastGrossProfit, unit));
