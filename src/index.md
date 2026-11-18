@@ -208,7 +208,7 @@ if (vm) {
 if (vm) {
   const { scope, unit, method } = vm;
   const { tree } = scope;
-  // 全ての組織を木で出す（チーム一覧と同じ並び・開閉。上位の行は配下の合計。§140）。チームを選んでいればそのチームと配下
+  // 全ての組織を木で出す（チーム一覧と同じ並び・開閉。上位の行は配下の合計。§141）。チームを選んでいればそのチームと配下
   let rootIds = [];
   if (scope.teamId && scope.teamId !== UNASSIGNED_TEAM_ID && Object.hasOwn(tree, scope.teamId)) {
     if (tree[scope.teamId].children.length > 0) rootIds = [scope.teamId];

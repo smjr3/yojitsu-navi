@@ -182,7 +182,7 @@ test.describe("全体サマリー", () => {
     });
   }
 
-  test("チーム別: チームを選ばないと全ての組織を木で出し、上位の行は配下の合計（§140）", async ({ page }) => {
+  test("チーム別: チームを選ばないと全ての組織を木で出し、上位の行は配下の合計（§141）", async ({ page }) => {
     await gotoPage(page, "/?unit=yen&team=");
     const tree = treeAt(FY.to, model);
     const roots = Object.values(tree).filter((n) => n.parentTeamId === null).map((n) => n.teamId);
@@ -211,7 +211,7 @@ test.describe("全体サマリー", () => {
       expect(totals.contractCount).toBeLessThanOrEqual(ids.length);
       await expect(page.locator(".yn-kpi").nth(0)).toContainText(`${totals.contractCount}件の案件`);
       expect(query(page).get("team")).toBe(teamId);
-      // 「チーム別」セクションは選んだチームとその配下の全組織を木で出す（§140）
+      // 「チーム別」セクションは選んだチームとその配下の全組織を木で出す（§141）
       const tree = treeAt(FY.to, model);
       const node = tree[teamId];
       if (node && node.children.length) {
