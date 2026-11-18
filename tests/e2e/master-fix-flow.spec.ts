@@ -64,7 +64,9 @@ test("マスタに無い正式な案件の「案件に登録」: 正式な案件
   await expect(dialog.getByRole("heading", { name: /新しい案件/ })).toBeVisible();
   await expect(dialog.locator("#yn-me-f-customer_name")).toHaveValue(customer);
   await expect(dialog.locator("#yn-me-f-project_name")).toHaveValue(project);
-  await expect(dialog.locator("#yn-me-f-project_id")).toHaveValue(projectId);
+  // 正式な案件は案件名で出す（値は正式な案件ID。§137）
+  await expect(dialog.locator("#yn-me-f-project_id")).toHaveValue(project);
+  await expect(dialog.locator('input[type="hidden"][name="project_id"]')).toHaveValue(projectId);
   await expect(dialog.locator("#yn-me-f-contract_id")).toHaveValue(/^C\d{3}$/);
   // 期間・金額は人が入れる（入れないと追加できない）
   await dialog.locator("[data-role=submit]").click();
