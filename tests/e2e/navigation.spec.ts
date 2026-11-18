@@ -2,7 +2,7 @@
  * 遷移・並べ替え・絞り込み・Excel 出力
  */
 import { createRequire } from "node:module";
-import { test, expect, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, teamValue } from "./helpers/app.js";
+import { test, expect, gotoPage, waitForPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, parseNumber, query, rowKeys, teamValue } from "./helpers/app.js";
 import { contractResult, contractRowExpected, contractsInPeriod, fiscalPeriod, getModel, teamContractIds, treeAt, yen, UNIT_LABEL } from "./helpers/core.js";
 
 const require = createRequire(import.meta.url);
@@ -120,6 +120,38 @@ test("上部タブ・右上のリンク・「⋯」のメニューで全ペー�
   // 案件詳細では「案件」タブが選択状態
   await gotoPage(page, "/contract?id=C008");
   await expect(header.getByRole("link", { name: "案件", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
+test("ブラウザの「戻る」で前の画面に戻っても、選び直した単位・期間が元に戻らない（§133）", async ({ page }) => {
+  const pressed = (attr: string) => page.locator(`[${attr}][aria-pressed="true"]`).first();
+  await gotoPage(page, "/contracts");
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "m");
+  // 一覧 → 詳細（リンクには一覧の単位・期間が付く）→ 詳細で選び直す → 戻る
+  await page.locator('a[href*="contract?id="]').first().click();
+  await expect(page).toHaveURL(/\/contract\?/);
+  await waitForPage(page);
+  await page.locator('[data-unit="yen"]').first().click();
+  await page.locator('[data-preset="lastMonth"]').first().click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/contracts\?/);
+  await waitForPage(page);
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "yen");
+  await expect(pressed("data-preset")).toHaveAttribute("data-preset", "lastMonth");
+  // URL も選び直した値に合わせる（共有・再読み込みで同じ表示）
+  expect(query(page).get("unit")).toBe("yen");
+  // ほかのタブへ移っても同じ
+  await page.locator(".yn-tabs a.yn-tab").first().click();
+  await waitForPage(page);
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "yen");
+  await expect(pressed("data-preset")).toHaveAttribute("data-preset", "lastMonth");
+  // ブラウザが残しておいた画面をそのまま出したとき（bfcache）も、保存してある値に合わせる
+  await page.evaluate(() => {
+    const key = "yojitsu-navi:state:v2";
+    localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) ?? "{}"), unit: "k" }));
+    dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect(pressed("data-unit")).toHaveAttribute("data-unit", "k");
+  expect(query(page).get("unit")).toBe("k");
 });
 
 test("フィルタはヘッダの固定バーにあり、スクロールしても画面上端に残る", async ({ page }) => {

@@ -2,6 +2,8 @@
  * 画面状態（期間・チーム・単位・着地方式）⇄ URL クエリ ⇄ localStorage
  *
  * 優先順位: URL クエリ（共有された表示を再現） > localStorage（前回の表示） > 既定値。
+ * ただしブラウザの「戻る・進む」で開いたときは localStorage（最後に選んだ表示）を優先する。
+ * 前の画面の URL には離れたときの期間・単位が残っているので、URL を優先すると別の画面で選び直した値が戻ってしまう（SPEC §133）。
  * 変更すると URL（history.replaceState）と localStorage の両方に書き戻す。
  *
  * クエリ:  ?from=2026-04&to=2027-03&team=T111&unit=m&method=assignment
@@ -150,10 +152,21 @@ function writeQuery(state) {
  *   store.subscribe(fn)    変更通知。戻り値で解除
  *   store.href(path, patch) 状態を引き継いだリンク（別ページへの遷移用）
  */
+/** ブラウザの「戻る・進む」で開いた画面か */
+function isHistoryNavigation() {
+  try {
+    return performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+  } catch {
+    return false;
+  }
+}
+
 export function createStore(model, options = {}) {
   const fromQuery = readQuery();
   const fromStorage = readStorage();
-  let state = sanitize(model, { ...(fromStorage ?? {}), ...(fromQuery ?? {}), ...(options.initial ?? {}) });
+  // 戻る・進むでは保存してある値を上に重ねる（URL だけにある値は残す）
+  const saved = isHistoryNavigation() ? [fromQuery, fromStorage] : [fromStorage, fromQuery];
+  let state = sanitize(model, { ...(saved[0] ?? {}), ...(saved[1] ?? {}), ...(options.initial ?? {}) });
   const listeners = new Set();
   // 初回も URL を正規化しておく（共有しやすい）
   if (options.syncUrl !== false) writeQuery(state);
@@ -168,7 +181,7 @@ export function createStore(model, options = {}) {
     for (const fn of [...listeners]) fn(state);
   };
 
-  return {
+  const store = {
     model,
     get: () => state,
     set(patch) {
@@ -190,6 +203,15 @@ export function createStore(model, options = {}) {
       return buildHref(path, { ...state, ...patch }, extra);
     },
   };
+  // 戻る・進むで、ブラウザが残しておいた画面をそのまま出したとき（bfcache）も、離れていた間に選び直した値に合わせる
+  if (typeof addEventListener === "function") {
+    addEventListener("pageshow", (e) => {
+      if (!e.persisted) return;
+      const s = readStorage();
+      if (s) store.set(s);
+    });
+  }
+  return store;
 }
 
 /** 保存してある表示条件（URL・保存先は書き換えない。リソース計画の変更の影響 §65 で期間・単位を引き継ぐ） */
