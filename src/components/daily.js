@@ -373,7 +373,7 @@ function progressBody(p, { unit, dark, subtitle, exportName, controls = null, st
       legend: dailyLegend(dark, { target: !!p.target, end: sp.end }),
       controls,
       draw: (width, height) => dailyChart(p, { unit, dark, width, height }),
-      after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName: isRange && exportName ? `${exportName}_${p.unit}` : exportName })}</details>`,
+      after: html`<details class="yn-details"><summary><span class="yn-disc" aria-hidden="true"></span>${T.pages.showTable}</summary>${dailyTable(p, { unit, exportName: isRange && exportName ? `${exportName}_${p.unit}` : exportName })}</details>`,
     })}`;
 }
 
