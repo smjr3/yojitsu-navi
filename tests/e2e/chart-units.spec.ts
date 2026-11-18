@@ -239,3 +239,29 @@ test("予算の消化率の帯: スマートフォンの幅でも月・週の消
     expect(r.textBottom).toBeLessThanOrEqual(r.tickTop + 1);
   }
 });
+
+test("メンバー詳細: 時間のグラフの棒を押すと、その期間の内訳が開く（日は作業ごと、月は案件ごと。§135）", async ({ page }) => {
+  await gotoPage(page, "/member?id=M010");
+  const dialog = page.locator("dialog.yn-bd-dialog[open]");
+  const clickAt = async (rx: number) => {
+    await plot(page).scrollIntoViewIfNeeded();
+    const box = (await plot(page).boundingBox())!;
+    const x = box.x + box.width * rx;
+    const y = box.y + box.height * 0.5;
+    await page.mouse.move(x, y);
+    await page.mouse.click(x, y);
+  };
+  await unitBtn(page, "日").click();
+  await expect(plot(page)).toHaveAttribute("aria-label", /日ごと/);
+  // 右寄り（今月の前の、実績のある日）
+  await clickAt(0.75);
+  await expect(dialog.locator(".yn-dialog-title")).toContainText("の時間");
+  await expect(dialog.locator(".yn-bd-rows")).toContainText("実績時間");
+  await expect(dialog.locator(".yn-bd-section").filter({ hasText: "作業ごとの内訳" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await unitBtn(page, "月").click();
+  await clickAt(0.3);
+  await expect(dialog.locator(".yn-bd-section").filter({ hasText: "案件ごとの内訳" }).locator("tbody tr").first()).toBeVisible();
+  await expect(dialog.locator("button", { hasText: "明細を読み込む" })).toBeVisible();
+});

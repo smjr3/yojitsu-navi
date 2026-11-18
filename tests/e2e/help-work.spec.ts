@@ -3,7 +3,8 @@
  */
 import { test, expect, gotoPage, tableByCaption, headerIndex, col, cellText, parseNumber, rowKeys } from "./helpers/app.js";
 import { fiscalPeriod, getModel, teamContractIds, treeAt, yen } from "./helpers/core.js";
-import { contractOwnScopes, customerKey, originTotals, ownTeamScope, teamMemberCosts } from "../../src/core/index.js";
+import { aggregateMembers, contractOwnScopes, contractsForTeam, customerKey, originTotals, ownTeamScope, teamMemberCosts } from "../../src/core/index.js";
+import { teamGuests } from "../../src/core/members.js";
 
 const model = getModel();
 const FY = fiscalPeriod(model);
@@ -95,4 +96,44 @@ test("顧客詳細: 案件を横断したメンバー別の実績。合計・応
   const first = table.locator(`tbody tr[data-key="${rows[0]!.memberId}"]`);
   await first.locator("td").nth(col(h, "時間")).locator("button").click();
   await expect(page.locator("dialog[open]")).toBeVisible();
+});
+
+test("メンバー別でチームを選ぶと、チームの案件に入った他チームの人に「応援」。実績だけの人はボタンで出し、数値はチームの案件の分だけ（§134） @smoke", async ({ page }) => {
+  const team = "T411";
+  const asOf = model.meta.asOfMonth;
+  const t = treeAt(asOf);
+  const contractIds = contractsForTeam(model, team, t).map((c) => c.contractId);
+  const guests = teamGuests(model, { period: FY, contractIds, ownScope: ownTeamScope(t, team) });
+  const cmp = { from: FY.from, to: FY.to < asOf ? FY.to : asOf };
+  const gAgg = aggregateMembers(model, { period: cmp, memberIds: guests.map((g) => g.memberId), contractIds });
+  const spot = gAgg.members.filter((m) => !guests.find((g) => g.memberId === m.memberId)!.planned);
+  expect(spot.length, "ダミーデータに実績だけの応援がある").toBeGreaterThan(0);
+  await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&team=${team}&unit=yen`);
+  const table = tableByCaption(page, "メンバー別の計画と実績");
+  const s0 = spot[0]!;
+  await expect(table.locator(`tbody tr[data-key="${s0.memberId}"]`)).toHaveCount(0);
+  const btn = page.locator("#yn-m-spot");
+  await expect(btn).toHaveText(`実績だけの応援・ヘルプ ${spot.length}人`);
+  await expect(btn).toHaveAttribute("aria-pressed", "false");
+  await btn.click();
+  await expect(btn).toHaveAttribute("aria-pressed", "true");
+  const row = table.locator(`tbody tr[data-key="${s0.memberId}"]`);
+  await expect(row.locator('[data-origin="support"]')).toHaveText("応援");
+  const h = await headerIndex(table);
+  expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(s0.actualCost);
+  // 所属メンバーには付けない
+  const own = aggregateMembers(model, { period: cmp, teamIds: t[team]!.descendantIds });
+  if (own.members[0]) await expect(table.locator(`tbody tr[data-key="${own.members[0].memberId}"] [data-origin]`)).toHaveCount(0);
+  // 実績の KPI に「うち応援 ○」
+  const supportAmount = gAgg.members.filter((m) => guests.find((g) => g.memberId === m.memberId)!.origin === "support").reduce((a, m) => a + m.actualCost, 0);
+  await expect(page.locator(".yn-kpi-grid").first().locator(".yn-kpi").nth(1).locator("[data-origin]")).toContainText(`応援 ${yen(supportAmount)}`);
+  // もう一度押すと畳む
+  await btn.click();
+  await expect(row).toHaveCount(0);
+});
+
+test("メンバー別: チームを選ばないときは応援・ヘルプを付けない", async ({ page }) => {
+  await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&unit=yen`);
+  await expect(tableByCaption(page, "メンバー別の計画と実績").locator("tbody [data-origin]")).toHaveCount(0);
+  await expect(page.locator("#yn-m-spot")).toHaveCount(0);
 });

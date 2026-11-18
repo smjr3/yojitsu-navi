@@ -11,7 +11,8 @@ import { T } from "../i18n/index.js";
 import { chartFigure } from "./chart-zoom.js";
 import { memberHoursChart, memberHoursLegend, monthlyChart, monthlyLegend, seriesTable } from "./charts.js";
 import { bucketLabel, bucketTick, bucketTipValue, chartMessage, loadUnit, saveUnit, unitSwitch } from "./chart-units.js";
-import { periodJa } from "./format.js";
+import { monthJa, periodJa } from "./format.js";
+import { memberHoursBucketSpec, openBreakdown } from "./breakdown.js";
 import { CHART_UNITS, isOutsideRow, bucketDays, bucketMemberHours, bucketMonths, contractDailyActuals, dayUnitRange } from "../core/index.js";
 
 /** 単位ごとに描き直す入れ物。build(unit) は { figure } を返すか、Promise で返す（読み込み中は loading を出す） */
@@ -86,12 +87,28 @@ export function monthlyFigure({ model, series, unit, dark, history, contractIds 
  * メンバー詳細の計画と実績の時間。series は core の memberMonthlySeries の出力、months はそのメンバーの MemberMonth（運用保守以外の内訳に使う）。
  * days は lazyJson(FileAttachment("./data/member-days.json"))
  */
-export function memberHoursFigure({ model, series, memberId, memberMonths, includeOutside, dark, days, period, title = T.charts.memberHoursTitle }) {
+export function memberHoursFigure({ model, series, memberId, memberName = memberId, memberMonths, includeOutside, dark, days, period, contractHref = null, title = T.charts.memberHoursTitle }) {
   const startMonth = model.config.fiscalYearStartMonth;
   const asOf = model.meta.asOf;
   const asOfMonth = model.meta.asOfMonth;
-  const figure = (u, controls, data, sub) => {
+  const figure = (u, controls, data, sub, file = null) => {
     const isMonth = u === "month";
+    // 棒を押すとその期間の内訳（§130。日・週は作業ログ明細から案件 × 作業）
+    const onPick = (d, opener) =>
+      openBreakdown(
+        () =>
+          memberHoursBucketSpec({
+            model,
+            member: { memberId, memberName },
+            bucket: isMonth ? { ...d, unit: "month", months: [d.month] } : d,
+            label: isMonth ? monthJa(d.month) : bucketTipValue(d, startMonth),
+            memberMonths,
+            includeOutside,
+            days: file?.members?.[memberId] ?? null,
+            contractHref,
+          }),
+        opener,
+      );
     const isNow = (d) => d.months.includes(asOfMonth) && (u === "day" ? d.from <= asOf : true);
     const isFuture = (d) => (u === "day" || u === "week" ? d.to > asOf : d.months[d.months.length - 1] >= asOfMonth);
     const opts = isMonth
@@ -102,7 +119,7 @@ export function memberHoursFigure({ model, series, memberId, memberMonths, inclu
       subtitle: sub,
       legend: memberHoursLegend(dark, data, asOfMonth, isMonth ? null : isNow),
       controls,
-      draw: (width, height) => memberHoursChart({ series: data, dark, width, height, asOfMonth, title, ...opts }),
+      draw: (width, height) => memberHoursChart({ series: data, dark, width, height, asOfMonth, title, onPick, ...opts }),
     });
   };
   return switchable("memberHours", (u, controls) => {
@@ -126,7 +143,7 @@ export function memberHoursFigure({ model, series, memberId, memberMonths, inclu
         parts.set(mm.month, { plannedOutside, actualOutside });
       }
       const data = bucketMemberHours(series, u, { startMonth, range, days: file.members?.[memberId] ?? null, parts, includeOutside, holidays: model.holidays, asOf });
-      return figure(u, controls, data, periodJa(range));
+      return figure(u, controls, data, periodJa(range), file);
     });
     p.placeholder = loading;
     return p;
