@@ -5991,16 +5991,7 @@ summary:has(> .yn-disc)::-webkit-details-marker {
   }
 }
 
-/* 稼働実績（§150）: まとめ方・表示の切り替えを 1 行に。計画との差の色は リソース計画・体制図と同じ（黄＝計画より多い、赤紫＝計画なし。§131） */
-.yn-work-switches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  align-items: center;
-}
-.yn-work-switches > .yn-chip-filters {
-  margin: 0;
-}
+/* 稼働実績（§150）: 計画との差の色は リソース計画・体制図と同じ（黄＝計画より多い、赤紫＝計画なし。§131） */
 .yn-table td.yn-gap-over {
   background: var(--yn-warn-bg);
   color: var(--yn-warn-text);
@@ -6023,4 +6014,25 @@ summary:has(> .yn-disc)::-webkit-details-marker {
 .yn-table tr.is-sub > th,
 .yn-table tr.is-sub > td {
   background: var(--yn-surface-sunken, color-mix(in srgb, currentColor 3%, transparent));
+}
+
+/* 表示の切り替え（表／体制図・表／期間・まとめ方・色の基準）は見出しのすぐ下の左（SPEC §144）。
+   リンク・「列」・Excel 出力は従来どおり右 */
+.yn-section-switch {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.yn-switch-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+@media print {
+  .yn-section-switch {
+    display: none !important;
+  }
 }

@@ -95,7 +95,7 @@ const VIEWS = [
 // 区切りボタンの切り替え（まとめ方・表示）。押すと URL に書き戻して input を出す
 const segControl = ({ param, items, fallback, label, id, cls }) => {
   const initial = new URLSearchParams(location.search).get(param);
-  const form = html`<div class=${`yn-chip-filters ${cls}`}><span class="yn-filter-label" id=${id}>${label}</span></div>`;
+  const form = html`<div class=${`yn-switch-field ${cls}`}><span class="yn-filter-label" id=${id}>${label}</span></div>`;
   const group = html`<div class="yn-seg" role="group" aria-labelledby=${id}></div>`;
   form.value = items.some((a) => a.id === initial) ? initial : fallback;
   const btns = items.map((a) => {
@@ -103,6 +103,8 @@ const segControl = ({ param, items, fallback, label, id, cls }) => {
     b.dataset[param] = a.id;
     b.addEventListener("click", () => {
       if (form.value === a.id) return;
+      // 見出しと一緒に描き直すとき要素を移すのでフォーカスが外れる。キーボードで押したときは戻す（§144）
+      form.refocus = document.activeElement === b ? a.id : null;
       form.value = a.id;
       for (const x of btns) x.setAttribute("aria-pressed", x.dataset[param] === a.id ? "true" : "false");
       const url = new URL(location.href);
@@ -395,7 +397,6 @@ if (vm) {
 ```
 
 ```js
-if (model) display(html`<div class="yn-work-switches">${axisControl}${viewControl}</div>`);
 ```
 
 ```js
@@ -475,8 +476,13 @@ if (vm) {
   // データ確認への導線（マスタに無い人。§150）
   const toCheck = unknownN ? html`<a class="yn-btn yn-btn-sm" id="yn-w-check" href="./data-check#dc-unknown">${fmt(T.work.toDataCheck, { n: unknownN })}</a>` : null;
   const hint = fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : axis === "contract" ? T.work.tableHintContract : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) });
-  display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), hint, toCheck, leftN ? fmt(T.members.hiddenLeft, { n: leftN }) : null));
-  if (axis === "member") display(html`<div class="yn-chip-filters yn-work-left">${leftControl}</div>`);
+  display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), hint, toCheck, leftN ? fmt(T.members.hiddenLeft, { n: leftN }) : null, [axisControl, viewControl, ...(axis === "member" ? [leftControl] : [])]));
+  for (const [c, param] of [[axisControl, "axis"], [viewControl, "view"]]) {
+    if (!c.refocus) continue;
+    const id = c.refocus;
+    c.refocus = null;
+    requestAnimationFrame(() => c.querySelector(`[data-${param}="${id}"]`)?.focus());
+  }
   // 分布のグラフ（チームは末端の組織だけ。上位は配下の合計で二重になるため）
   const chartGroups = axis === "team" ? groups.filter((g) => !g.hasChildren) : axis === "member" && leftN ? rows : groups;
   // 画面内は上位 20 件。拡大表示では全件を出す（行が多ければダイアログ内で縦にスクロール）

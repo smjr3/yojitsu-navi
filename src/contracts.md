@@ -61,7 +61,10 @@ function writeListFilter(lf) {
 
 // 表示の切り替え（表 / 期間。§132）。URL の view に持つ（詳細から「戻る」で復元するため）
 const viewEvents = new EventTarget();
+// 切り替えのボタンは見出しと一緒に描き直すので、キーボードで押したときはフォーカスを戻す（§144）
+const viewRefocus = { view: null };
 function setView(view) {
+  viewRefocus.view = document.activeElement?.dataset?.view ? view : null;
   const url = new URL(location.href);
   if (view === "timeline") url.searchParams.set("view", "timeline");
   else url.searchParams.delete("view");
@@ -211,10 +214,16 @@ if (vm) {
       isTimeline
         ? fmt(T.contracts.timelineHint, { period: periodJa(scope.period), team: scope.teamLabel })
         : fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: methodLabel(vm.method, model.config), fy: model.meta.fiscalYear }),
-      viewToggle,
+      null,
       outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : null,
+      viewToggle,
     ),
   );
+  if (viewRefocus.view) {
+    const v = viewRefocus.view;
+    viewRefocus.view = null;
+    requestAnimationFrame(() => viewToggle.querySelector(`[data-view="${v}"]`)?.focus());
+  }
   const columns = [
     { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}`, exportLabel: T.breakdown.colCustomerProject },
     { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },

@@ -996,10 +996,10 @@ export default {
     noDeficitTitle: "超過見込みの案件はありません",
     noDeficitText: "{team} の案件はすべて予算内で着地する見込みです。",
     byTeam: "チーム別",
-    childTeams: "{team} の配下チーム",
-    byDivision: "事業部ごとの集計",
-    // {scope} には childTeams か byDivision が入る
-    byTeamHint: "{scope}（{month} 時点の組織）。行をクリックするとそのチームの詳細に移動します。",
+    childTeams: "{team} と配下のチーム",
+    allTeams: "全ての組織",
+    // {scope} には childTeams か allTeams が入る
+    byTeamHint: "{scope}を木で表示（{month} 時点の組織。上位の行は配下の合計）。行をクリックするとそのチームの詳細に移動します。",
     toTeams: "チーム一覧へ",
     noChildTitle: "配下のチームはありません",
     noChildText: "このチームは末端のチームです。案件一覧で案件ごとの数値を確認できます。",
@@ -2040,6 +2040,7 @@ export default {
     tabFile: "人 × 月の一覧",
     helpWhat: "<strong>内容:</strong> リーダーが、組織のメンバー一人ひとりを「どの案件に、月何人月」充てるか（アサイン assignments.csv）と、運用保守以外の見込み（運用保守以外の予定 outside-plans.csv）を入れる画面です。保存・下書き・検証はマスタ編集と共通です。",
     helpHowto: "<strong>入力のしかた:</strong> 人月（例 0.1）でも時間（例 16 時間）でも入力できます。時間は開始月の営業日 × {perDay} 時間 = 1 人月で人月に直して保存し、表示は人月に揃えます。1 人の月の合計は 1.0 人月までです。",
+    helpKeys: "<strong>キーボード:</strong> 矢印キーでセルを移り、数字を打つとそのまま入力（Enter・F2 で開く、Delete で空に）。Enter で反映すると次の月へ。Home・End で行の端、最初の月で ← を押すと名前へ。",
     unitLabel: "組織",
     allUnits: "すべての組織",
     notInYear: "（この期間の組織にありません）",
