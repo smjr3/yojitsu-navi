@@ -1735,7 +1735,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const btn = h(
         "button",
         { type: "button", class: "yn-btn yn-btn-sm yn-me-plan-expand-all", "data-fk": "plan:expand-all", "aria-label": allOpen ? T.planEdit.collapseAllAria : T.planEdit.expandAllAria },
-        h("span", { class: "yn-me-plan-caret", "aria-hidden": "true" }, allOpen ? "▾" : "▸"),
+        h("span", { class: `yn-disc${allOpen ? " is-open" : ""}`, "aria-hidden": "true" }),
         allOpen ? T.planEdit.collapseAll : T.planEdit.expandAll,
       );
       btn.addEventListener("click", () => {
@@ -2029,7 +2029,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const teamName = r.teamId ? (tNames.get(r.teamId) ?? "") : "";
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
-          <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-me-plan-caret" aria-hidden="true">${open ? "▾" : "▸"}</span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
+          <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-disc" aria-hidden="true"></span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
           ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
@@ -3561,7 +3561,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           return html`<div class="yn-me-diff-file">
             <h3 class="yn-me-subtitle">${def.label} <span class="yn-me-small">${T.masters.added} ${integer(d.added.length)} ${T.masters.diffChanged} ${integer(d.changed.length)} ${T.masters.diffRemoved} ${integer(d.removed.length)}</span></h3>
             ${summary ? planSummaryEl(d.fileId, summary) : null}
-            ${summary ? html`<details class="yn-me-diff-rows"><summary>${fmt(T.masters.diffRowsToggle, { n: integer(rows.length) })}</summary>${table}</details>` : table}
+            ${summary ? html`<details class="yn-me-diff-rows"><summary><span class="yn-disc" aria-hidden="true"></span>${fmt(T.masters.diffRowsToggle, { n: integer(rows.length) })}</summary>${table}</details>` : table}
           </div>`;
         })
       : html`<p class="yn-me-empty">${T.masters.noDiff}</p>`;

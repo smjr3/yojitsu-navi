@@ -135,7 +135,7 @@ if (vm) {
   </dl>`);
   if (records.length > 1) {
     display(html`<details class="yn-details yn-member-history">
-      <summary>${fmt(T.member.historySummary, { n: records.length })}</summary>
+      <summary><span class="yn-disc" aria-hidden="true"></span>${fmt(T.member.historySummary, { n: records.length })}</summary>
       ${dataTable({
         columns: [
           { key: "effectiveFrom", label: T.member.colEffective, type: "text", render: (r) => monthJa(r.effectiveFrom), exportValue: (r) => r.effectiveFrom },
@@ -173,7 +173,7 @@ if (vm) {
 if (vm) {
   const { totals, unit, period, months, member } = vm;
   const t = totals ?? { plannedCost: 0, actualCost: 0, plannedHours: 0, actualHours: 0, variance: 0, utilization: null, unplannedHours: 0, unplannedCost: 0 };
-  const subtitle = `${vm.name}（${memberId}） ・ ${periodJa(period)}`;
+  const subtitle = `${vm.name} ・ ${periodJa(period)}`;
   const contractHref = (id) => store.href("./contract", {}, { id });
   display(
     memberKpiRow([

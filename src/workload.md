@@ -168,7 +168,7 @@ if (vm) {
     subtitle: periodJa(vm.period),
     legend: workHoursLegend(dark),
     draw: (width, height) => workHoursChart({ series: vm.series, config: model.config, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
+    after: html`<details class="yn-details"><summary><span class="yn-disc" aria-hidden="true"></span>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
   }));
 }
 ```

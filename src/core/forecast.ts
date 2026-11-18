@@ -1,5 +1,5 @@
 /**
- * 着地見込み（SPEC §10・§54）— 契約ごと、3 方式すべて
+ * 着地見込み（SPEC §10・§54）— 契約ごと、全方式
  *
  * 対象の月（target）は既定で asOf の年度。画面では選択中の期間（§54）、案件詳細では契約の全期間（案件終了時点の着地）。
  * 見積りの材料（平均の基礎・リソース計画の明細）は対象の月に依らないので、Model に持たせて画面で対象を変えて計算し直す。
@@ -11,7 +11,10 @@ import { rateFor, type MasterIndex } from "./masters.js";
 import type { MonthHours } from "./monthHours.js";
 import type { Assignment, AssignmentForecastLine, AssignmentPlan, Config, Contract, ContractMonth, Forecast, ForecastBreakdown, ForecastMethod, YearMonth } from "./types.js";
 
-export const FORECAST_METHODS: readonly ForecastMethod[] = ["assignment", "recent3", "all"];
+export const FORECAST_METHODS: readonly ForecastMethod[] = ["assignment", "recent3", "recent12", "all"];
+
+/** recent12 方式で平均する月数（固定。recent3 の月数は config の forecastRecentMonths） */
+export const RECENT12_MONTHS = 12;
 
 export interface ForecastContext {
   asOfMonth: YearMonth;
@@ -115,7 +118,7 @@ export function forecastForMonths(
   };
 }
 
-/** 3 方式すべての着地見込み（対象の月を指定） */
+/** 全方式の着地見込み（対象の月を指定） */
 export function forecastAllMethodsForMonths(
   basis: ForecastBasis,
   contract: Contract,
@@ -126,6 +129,7 @@ export function forecastAllMethodsForMonths(
   return {
     assignment: forecastForMonths(basis, contract, months, plan, "assignment", targetMonths),
     recent3: forecastForMonths(basis, contract, months, plan, "recent3", targetMonths),
+    recent12: forecastForMonths(basis, contract, months, plan, "recent12", targetMonths),
     all: forecastForMonths(basis, contract, months, plan, "all", targetMonths),
   };
 }
@@ -138,18 +142,20 @@ export function forecastContract(ctx: ForecastContext, contract: Contract, month
 }
 
 /**
- * recent3 / all: 契約期間内で asOf 月より前の月（年度をまたいでよい）の原価平均 × 残り月数。
- * recent3 は直近 forecastRecentMonths か月、all は契約開始からの全月。基礎月 0 → 平均 0・noActuals。
+ * recent3 / recent12 / all: 契約期間内で asOf 月より前の月（年度をまたいでよい）の原価平均 × 残り月数。
+ * recent3 は直近 forecastRecentMonths か月、recent12 は直近 12 か月、all は契約開始からの全月。
+ * 月数に満たなければある分で平均、基礎月 0 → 平均 0・noActuals。
  */
 function applyAverageMethod(
   basis: ForecastBasis,
   months: readonly ContractMonth[],
   remainingMonths: readonly YearMonth[],
-  method: "recent3" | "all",
+  method: "recent3" | "recent12" | "all",
   breakdown: ForecastBreakdown,
 ): void {
   const past = months.filter((cm) => cm.month < basis.asOfMonth).sort((a, b) => (a.month < b.month ? -1 : 1));
-  const used = method === "recent3" ? past.slice(Math.max(0, past.length - basis.forecastRecentMonths)) : past;
+  const n = method === "recent3" ? basis.forecastRecentMonths : method === "recent12" ? RECENT12_MONTHS : past.length;
+  const used = past.slice(Math.max(0, past.length - n));
   breakdown.averageBasisMonths = used.map((cm) => cm.month);
   if (used.length === 0) {
     breakdown.noActuals = true;
@@ -173,11 +179,12 @@ function applyAssignmentMethod(plan: AssignmentPlan, remainingMonths: readonly Y
   breakdown.remainingCost = sum(breakdown.assignmentLines.map((l) => l.amount));
 }
 
-/** 3 方式すべての着地見込み（対象 = asOf の年度） */
+/** 全方式の着地見込み（対象 = asOf の年度） */
 export function forecastAllMethods(ctx: ForecastContext, contract: Contract, months: readonly ContractMonth[]): Record<ForecastMethod, Forecast> {
   return {
     assignment: forecastContract(ctx, contract, months, "assignment"),
     recent3: forecastContract(ctx, contract, months, "recent3"),
+    recent12: forecastContract(ctx, contract, months, "recent12"),
     all: forecastContract(ctx, contract, months, "all"),
   };
 }

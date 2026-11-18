@@ -21,7 +21,7 @@ src/
     table.js       一覧表（並べ替え・固定ヘッダ・右寄せ・状態チップ・行クリック・Excel 出力・木構造）
     charts.js      Observable Plot のグラフ（月次推移）、凡例、表の双子、消化率メーター
     chart-zoom.js  グラフの枠（凡例＋「拡大」ボタン＋幅に合わせた再描画）と拡大表示のダイアログ（全グラフ共通。SPEC §33）
-    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
+    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式（選択欄。§142）、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
     dom.js         h(tag, attrs, ...children): 表の行・マスなど数の多い部品を document.createElement で直接作る（html`` と同じ DOM。SPEC §107）
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
   style.css        デザイントークン（ライト／ダーク・テーマカラー・文字の大きさ）とスタイル
@@ -48,7 +48,7 @@ src/
 | `/teams` チーム一覧 | どの組織が悪いか・どんな体制か | 組織木（折りたたみ可、上位は配下の合計）＋ 未設定。行クリックでチーム詳細へ。「表 / 体制図」の切り替えで、月を選んで組織・メンバー・応援／ヘルプと負荷の色を見る（表示だけ。SPEC §76） |
 | `/team?id=` チーム詳細（タブには出さない。「チーム」タブが選択状態） | このチームはなぜ悪いか | パンくず → KPI 5 枚 → 月次推移 → 配下のチーム → 案件一覧 → メンバー別実績 → 組織の変遷 |
 | `/contracts` 案件一覧 | どの契約が悪いか・いつ終わるか | 並べ替え可能な一覧 ＋ 絞り込み（超過見込み／消化率超過／速報含む／終了が近い／期間外も表示／検索）＋ 合計行。「表｜期間」（`view=timeline`）で期間の帯の表示（`contract-timeline.js`、§132） |
-| `/contract?id=` 案件詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 3 方式の着地比較 → 作業ログ（遅延読み込み） |
+| `/contract?id=` 案件詳細 | この契約はなぜ悪いか | 基本情報 → KPI → 月次推移 → 月ごとの予実 → メンバー別実績 → 方式ごとの着地比較 → 作業ログ（遅延読み込み） |
 | `/rules` 計算ルール | 数値はどう計算されているか | SPEC を人向けに。config.json の値を `${...}` で差し込む |
 | `/guide` 使い方 | どう見て、どう操作するか | 利用者向けのマニュアル。本文は `src/i18n/guide.txt`、組み立ては計算ルールと共通の `src/prose-page.js`。外部の文書へ誘導しない（§47） |
 | `/data-check` データ確認 | 数値の精度を下げている要因は何か | 未紐付け・キーワードに合致しない作業・未登録の作業コード（この 3 つは「作業した人」の列と「案件ごと／人ごと」の切り替え。§100）・作業名が変わった作業コード（§92）・正式な案件IDの無い案件・マスタに無い正式な案件（§98。一覧を取り込んだときだけ。正式な案件IDの無い案件の候補なら「同じ案件名の案件」。§103.3）・単価なし（人ごと）・マスタに無いメンバー（KPI に人数）・除外・警告一覧・検証結果。上に件数付きの目次、項目は見出しで開閉、表は先頭 10 行＋「すべて表示」（§127。作業種別の内訳・作業ログ・計画とのずれも同じ） |
@@ -65,7 +65,7 @@ src/
 | `from`, `to` | `YYYY-MM`（`meta.minMonth`〜`maxMonth` に収める。逆転は入れ替え） | asOf の年度をデータ範囲に収めたもの |
 | `team` | チームID / `""`（全体）/ `__unassigned__`（未設定） | `""` |
 | `unit` | `m`（百万円）/ `k`（千円）/ `yen` | `config.currency.defaultUnit`（既定 `millionYen`） |
-| `method` | `assignment`（計画値）/ `recent3` / `all`（この順で表示） | `config.forecastMethodDefault`（既定 `assignment`） |
+| `method` | `assignment`（計画値）/ `recent3`（直近 N か月平均）/ `recent12`（直近12か月平均）/ `all`（全期間平均）（この順で表示。§142） | `config.forecastMethodDefault`（既定 `assignment`） |
 
 優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。ただしブラウザの「戻る・進む」・再読み込みで開いたとき（bfcache を含む）は 期間・単位・着地方式・運用保守以外は localStorage を URL より優先し（チームは URL のまま）、別のタブでの変更（storage イベント）にも合わせる（前の画面の URL に古い単位・期間が残るため。SPEC §133）。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
 フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。
@@ -118,7 +118,7 @@ Excel 出力は **今見えている行（並べ替え・絞り込み後）** �
 ## グラフ（charts.js）
 
 dataviz スキルの既定パレットで 3 系列: 予算 = 青 `#2a78d6`、実績 = 橙 `#eb6834`、残予算 = 青緑 `#1baf7a`（ダークは `#3987e5 / #d95926 / #199e70`）。`validate_palette.js` でライト／ダークとも全チェック通過（青緑はライトで 3:1 未満の WARN → 表の双子と凡例で補う）。
-**色の意味はアプリ全体で 1 つ（§131）**: 青＝予算・計画（予定の側）、橙＝実績、青緑＝残予算、赤＝予算の超過・目標の上限だけ、黄＝計画より多い（リソース計画の 1.0 超・体制図の「実績が多い」・今月の残りの超過）、青系の薄い地＝1.0 未満、赤紫＝計画なし。顧客など分類の色には青・橙・赤を使わない。凡例の並びは 予算 → 実績 → 見込み → 目標。
+**色の意味はアプリ全体で 1 つ（§131）**: 青＝予算・計画（予定の側）、橙＝実績、青緑＝残予算、赤＝予算の超過だけ、紫の破線＝目標の上限（§140）、黄＝計画より多い（リソース計画の 1.0 超・体制図の「実績が多い」・今月の残りの超過）、青系の薄い地＝1.0 未満、赤紫＝計画なし。顧客など分類の色には青・橙・赤を使わない。凡例の並びは 予算 → 実績 → 見込み → 目標。
 基準月以降は見込み（薄い塗り ＋ 破線枠、折れ線は破線、背景に薄い帯）。今月に入っている実績は速報として破線枠の中に斜線の棒（SVG の `pattern`、§125。凡例は今月の実績があるときだけ）。見込み額の月割りは `analysis.forecastMonthlyCost()`: 契約ごとに **コアの `remainingCost` を残り月で均等割り（端数は最終月）**、assignment は明細を月で合算。どちらも契約ごとの月割りの合計がコアの `remainingCost` と一致する（KPI の着地実績と表の合計が一致する）。ツールチップは `Plot.tip` + `pointerX`（1 本の縦線で全系列）。向きは `preferredAnchor` で上を優先し、端では枠に収まる向きを自動で選ぶ（右端の月で切れない）。軸の単位は最大値で 百万円／万円／円 を自動選択。
 
 グラフは `chartFigure({ title, subtitle, legend, draw })` で置く（`draw(width, height?)` を幅が変わるたびに呼ぶ。拡大時はダイアログの幅・高さで呼ぶ）。新しいグラフもこれを使えば拡大表示が付く。
@@ -227,10 +227,10 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 | §99 並べ替え・絞り込み | リソース計画の見出し | マスタ編集の台帳と同じ見出しの部品（`sortFilterHead`、並べ替えのボタン＋漏斗。`createFilterPopover`）。月の列は狭いので `th.num.has-filter` の左右の余白を詰め、見出しは「n月」のまま（吹き出し・読み上げは「YYYY年n月」）。開いた明細・変更の履歴は人の行について動く |
 | §66 内訳の見分け | リソース計画の開いた内訳 | `.yn-me-plan-sub` は左端の帯（inset box-shadow）・12px の控えめな数値・枠なしの文字ボタン。`renderPanel` は同じ表の描き直しで `.yn-me-table-wrap` のスクロール位置を引き継ぐ |
 | §65 変更の影響 | リソース計画の保存の前 | 差分の下・保存の上に「変更の影響」（`renderImpact`、計算は `core/planImpact.ts`）。アサイン・メンバー・単価に変更があるときだけ出す。前の値は muted、後の値は通常の色、マイナスの残予算・増えた着地は赤。表の中の読み上げ用「から」（`position: absolute`）が枠の外へ出て 390px で横スクロールになったので、`.yn-me-impact .yn-table-wrap` に `position: relative` |
-| §112 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（▸/▾ `.yn-me-plan-caret`・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
+| §112 人の行と作業の行 | リソース計画の表 | 開閉は名前の欄のボタン `.yn-me-plan-toggle`（開閉の印 `.yn-disc`（§143）・作業の数 `.yn-me-plan-count`、`data-fk="plan:toggle:<社員番号>"`）。作業の行は `th::before/::after` で枝の線（最後の作業の行に `is-last`、その後ろの履歴に `is-after-last`）。開いたまとまりの上下に 2px の区切り。「すべて開く」は `data-fk="plan:expand-all"`。開いている人は `plan-list`（sessionStorage）に `open` で覚える |
 | §116 計画なしの人 | リソース計画の表 | 判定は `emptyMonthIdx`（core の `planNeededMonths` × 今月以降 × 月の合計 0。人ごと）。名前の横に `.yn-chip-empty`、月のセルに `is-empty`（「なし」・点線）、絞り込みは `data-fk="plan:empty-only"`（`aria-pressed`。`plan-list` に `emptyOnly` で覚える。該当者が 0 人になると外す）。色は `--yn-empty-text/-bg`（赤紫。黄＝1.0 超・青＝1.0 未満・赤＝目標・紫＝運用保守以外のグラフと分ける） |
 | §110 目標の警告 | リソース計画の表・グラフの上 | `planAlertsEl`（計算は `core/planTargets.ts`）。未達見込みの目標を 1 件 1 行（`h()` で作る）、3 件まで＋「ほか n件」。月の見出しに `.yn-me-plan-target-mark`。描き直しが多いので `planTargetAlertsFor` で組織・組織の月・`validation` が同じなら前の結果を使う。390px では 1 件が折り返して 3 行になる |
-| §122 金額と目標の上限 | リソース計画のグラフ・セルの編集欄 | グラフの単位の切り替え `.yn-me-plan-chart-mode`（`data-fk="plan:chart:pm|amount"`、`chartFigure` の `controls` に渡すので拡大表示には出ない。localStorage `yojitsu-navi:plan-chart`、人月は消す）。金額は `planAmountChart`（`work.js`）: 顧客 5 社まで dataviz の分類色（青・橙・赤は予算・実績・超過と紛れるので使わない。§131）、6 社目以降は「その他」の灰色。予算は青の実線（凡例の先頭）、目標の上限は赤の破線、超える月は「上限超」（1 か月 72px 未満は「超」）。データは `planAmountFor` で組織・組織の月・表示する月・`validation` が同じなら前の結果。検索・列の絞り込みには連動しない（組織の担当案件の額）。セルの編集欄の余力は `.yn-plan-pop-room`（行の下に右寄せ、超えたら `is-over` で赤の太字）。作業を追加の行は選んだ案件に目標があるときだけ `is-new` を出す |
+| §122 金額と目標の上限 | リソース計画のグラフ・セルの編集欄 | グラフの単位の切り替え `.yn-me-plan-chart-mode`（`data-fk="plan:chart:pm|amount"`、`chartFigure` の `controls` に渡すので拡大表示には出ない。localStorage `yojitsu-navi:plan-chart`、人月は消す）。金額は `planAmountChart`（`work.js`）: 顧客 5 社まで dataviz の分類色（青・橙・赤・紫は予算・実績・超過・目標と紛れるので使わない。§131・§140。5 社目は茶）、6 社目以降は「その他」の灰色。予算は青の実線（凡例の先頭）、目標の上限は紫の破線（§140）、超える月は「上限超」（1 か月 72px 未満は「超」）。データは `planAmountFor` で組織・組織の月・表示する月・`validation` が同じなら前の結果。検索・列の絞り込みには連動しない（組織の担当案件の額）。セルの編集欄の余力は `.yn-plan-pop-room`（行の下に右寄せ、超えたら `is-over` で赤の太字）。作業を追加の行は選んだ案件に目標があるときだけ `is-new` を出す |
 | §113 今月の残り | ヘッダー右上・メンバー詳細 | カードは `myHoursCard`（`components/my-hours.js`。ヘッダーの head のスクリプトでも使うので素の DOM で書き、外の変数を参照しない）。ヘッダーのボタンは `.yn-tools` の先頭に足し、`.yn-topbar.has-my-hours` で「作業実績の取得」を隠す。吹き出しは 640px 以上はボタンの右端に合わせ、それ未満は `position: fixed` で画面の幅（左右 8px）、縦はボタンの下（開くときに `--yn-my-hours-top` を入れる）。案件名は折り返す |
 | 単価の表示 | 単位 | 金額の表示単位（円／千円／百万円）の切替に関係なく、CSV の値（円）をそのまま表示・入力する |
 
@@ -324,7 +324,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 - 月次推移（棒グラフ）を上に残す（2026-10-30 依頼者）。今月の進捗はその下。
 - 見出しは「今月の進捗」（2026-10-30 依頼者。「今月の進み」から改名）。
 - 目標（§63）があると上限が変わる（マイナスの目標なら予算より上）。KPI の補足は「目標の残予算率 n%（予算の m%）」の 1 行だけ（説明は「?」と根拠）。
-- グラフの目標（§63.3）: 月次推移に「目標の上限」を赤の破線（実績の棒をまたぐ横線。§130 で予算は段の線）。凡例・表の列は目標がある対象だけ（無い対象の凡例を増やさない）。今月の進捗の凡例は「上限（目標）」。
+- グラフの目標（§63.3）: 月次推移に「目標の上限」を紫の破線（§140。実績の棒をまたぐ横線。§130 で予算は段の線）。凡例・表の列は目標がある対象だけ（無い対象の凡例を増やさない）。今月の進捗の凡例は「上限（目標）」。
 - 範囲の切り替え（§130）: グラフの枠の左上に「月・四半期・年度」（週は予算管理が月次からなので出さない）（`dailySection` の `range`。既定は月）。見出し・KPI・凡例・根拠の「今月」「月末」は `T.daily.spans`・`ends` で差し替える。メンバーごとの今月の時間は切り替えても今月のまま。今四半期などは `data/daily-history.json` を選んだときに読む（`lazyJson`）。
 - 1 か月分の金額は小さく百万円の小数 1 桁では差が見えないので、この節だけ百万円は小数 2 桁（KPI・グラフ・表。Excel は他の表と同じく円）。
 - 赤は「このペースの月末」が上限を超えたときと、今日までの実績が目安を超えたとき（どちらも 100% 超）。黄色は使わない。
@@ -335,3 +335,5 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 列の表示・並び順（SPEC §106）: `src/components/column-prefs.js`（`columnsButton`・`arrangeColumns`）。`dataTable` はツールバー右の `.yn-table-actions` に「列」（`.yn-cols-btn`）と Excel 出力を並べ、`visibleCols` を設定から作り直して `renderHead()`/`renderBody()`。マスタ編集の台帳は `drawPanel()` の値の列を並べ替え、描き直しでも一覧を開いたまま（ボタンは `data-fk="cols:<ファイル>"` で付け直す）。設定は `localStorage` `yojitsu-navi:columns:<path>:<caption>`（台帳は `masters:<ファイル>`）。文字だけの列のセルは `.yn-cell-clip`（上限の幅で「…」、title に全文）。 列の `optional: true` は選べる列（既定で出さない。`prefs.shown`）、`exportAlways: true` は画面で隠していても Excel に出す。予実の行の選べる列は `totalsExtraColumns()`（`standardColumns` が足す）、案件の行は `contractInfoColumns()`（§106.1）。
 
 列の絞り込みの吹き出しは `createFilterPopover({ getRows, unit, getFilter, setFilter })`（table.js）に切り出し、一覧表とマスタ編集の表（§73.1、`listFilter[fileId].cols`・`.sort`）で共通。マスタ編集は表ごと描き直すので、描き直したあと `rebind(key, 新しいボタン)` で開いている吹き出しを付け直す。
+
+開閉の印（SPEC §143）: 開閉のボタン・summary の中に `<span class="yn-disc" aria-hidden="true"></span>` を置く（文字は書かない）。向きは親の `aria-expanded="true"`・`details[open]`・`.yn-disc.is-open` で変わる。新しい開閉もこれを使い、▸／▾ の文字を使わない。木の表の名前の欄は `.yn-tree-cell`（字下げ・開閉・名前の横並び）。

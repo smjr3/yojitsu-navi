@@ -38,7 +38,7 @@ export function countChip(count, tone = "warn") {
 export function foldSection({ id, title, hint = null, count = null, tone = "warn", defaultOpen = true }) {
   let open = loadOpen(id, defaultOpen);
   const bodyId = `${id}-body`;
-  const caret = html`<span class="yn-fold-caret" aria-hidden="true"></span>`;
+  const caret = html`<span class="yn-disc" aria-hidden="true"></span>`;
   const btn = html`<button type="button" class="yn-fold-toggle" aria-controls=${bodyId}>${caret}<span>${title}</span></button>`;
   const body = html`<div class="yn-fold-body" id=${bodyId}></div>`;
   const el = html`<section class="yn-fold" id=${id}>

@@ -16,7 +16,7 @@ import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } 
 import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCosts } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
-import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf, memberInfoColumns } from "./components/analysis.js";
+import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf, memberInfoColumns, worklogMemberNamer } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
@@ -29,7 +29,7 @@ import { dataTable, PREVIEW_ROWS } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
 import { originChips, originOrgText, withOrigin } from "./components/team-detail.js";
-import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, methodDescription, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
+import { EMPTY_VALUE, money, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, methodLabel, methodDescription, STATUS_LABELS, fiscalYearLabel, profitLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -159,7 +159,7 @@ if (vm) {
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle }),
       }),
       statTile({
-        label: fmt(T.kpi.forecast, { method: METHOD_LABELS[f.method] }),
+        label: fmt(T.kpi.forecast, { method: methodLabel(f.method, model.config) }),
         value: inTarget ? money(f.forecastGrossProfit, unit) : "—",
         sub: inTarget ? fmt(T.kpi.forecastSub, { budget: money(f.targetBudget, unit), cost: money(f.forecastCost, unit) }) : T.contract.notInTarget,
         status: !inTarget ? { kind: "neutral", text: T.contract.outOfScope } : f.isDeficit ? { kind: "danger", text: T.breakdown.deficitForecast } : { kind: "ok", text: T.breakdown.surplusForecast },
@@ -170,7 +170,7 @@ if (vm) {
       vm.isWhole
         ? null
         : statTile({
-            label: fmt(T.kpi.forecastEnd, { method: METHOD_LABELS[fEnd.method] }),
+            label: fmt(T.kpi.forecastEnd, { method: methodLabel(fEnd.method, model.config) }),
             value: money(fEnd.forecastGrossProfit, unit),
             sub: fmt(T.kpi.forecastEndSub, { end: monthJa(c.endMonth), budget: money(fEnd.targetBudget, unit), cost: money(fEnd.forecastCost, unit) }),
             status: fEnd.isDeficit ? { kind: "danger", text: T.breakdown.deficitForecast } : { kind: "ok", text: T.breakdown.surplusForecast },
@@ -192,7 +192,7 @@ if (vm) {
 ```js
 if (vm) {
   const series = withTargets(vm.series, (m) => targetForMonth(model, "project", vm.contract.contractId, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.contract.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: methodLabel(vm.method, model.config), fyStart: model.config.fiscalYearStartMonth })));
   display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: [vm.contract.contractId], period: vm.period, exportName: `contract_${vm.contract.contractId}_monthly`, table: false }));
 }
 ```
@@ -213,7 +213,7 @@ if (vm) {
 ```js
 if (vm) {
   const { contract: c, months, unit } = vm;
-  display(sectionTitle(T.contract.monthlyTableTitle, fmt(T.contract.monthlyTableHint, { method: METHOD_LABELS[vm.method] })));
+  display(sectionTitle(T.contract.monthlyTableTitle, fmt(T.contract.monthlyTableHint, { method: methodLabel(vm.method, model.config) })));
   const fc = forecastMonthlyCost(model, [c.contractId], vm.method);
   const forecast = result.forecasts[vm.method];
   const rows = months.map((m) => {
@@ -236,7 +236,7 @@ if (vm) {
       cm: m,
     };
   });
-  const fcCell = (r, text, chip = false) => (r.isForecast ? html`<span class="yn-cell-forecast" title=${fmt(T.contract.forecastTitle, { method: METHOD_LABELS[vm.method] })}>${text}${chip ? statusChip("neutral", T.contract.forecastChip) : null}</span>` : text);
+  const fcCell = (r, text, chip = false) => (r.isForecast ? html`<span class="yn-cell-forecast" title=${fmt(T.contract.forecastTitle, { method: methodLabel(vm.method, model.config) })}>${text}${chip ? statusChip("neutral", T.contract.forecastChip) : null}</span>` : text);
   const columns = [
     { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
     { key: "status", label: T.columns.status, type: "status", get: (r) => ({ kind: r.status === "final" ? "ok" : r.status === "preliminary" ? "prelim" : "neutral", text: STATUS_LABELS[r.status], title: null }), sortValue: (r) => r.status },
@@ -316,7 +316,7 @@ if (vm) {
   display(
     sectionTitle(
       T.contract.forecastCompareTitle,
-      html`${fmt(T.contract.forecastCompareHint, { period: periodJa(vm.period), method: METHOD_LABELS[vm.method] })}${FORECAST_METHODS.map((m) => html`<span class="yn-me-help"><strong>${METHOD_LABELS[m]}</strong> ${methodDescription(m, model.config.forecastRecentMonths)}</span>`)}`,
+      html`${fmt(T.contract.forecastCompareHint, { period: periodJa(vm.period), method: methodLabel(vm.method, model.config) })}${FORECAST_METHODS.map((m) => html`<span class="yn-me-help"><strong>${methodLabel(m, model.config)}</strong> ${methodDescription(m, model.config.forecastRecentMonths)}</span>`)}`,
     ),
   );
   const cards = FORECAST_METHODS.map((m) => {
@@ -329,8 +329,8 @@ if (vm) {
     const btn = html`<button type="button" class="yn-btn yn-btn-sm" aria-pressed=${selected ? "true" : "false"}>${selected ? T.contract.selected : T.contract.useMethod}</button>`;
     btn.addEventListener("click", () => store.set({ method: m }));
     return html`<article class=${`yn-card yn-forecast-card${selected ? " is-selected" : ""}${f.isDeficit && inTarget ? " is-danger" : ""}`} aria-current=${selected ? "true" : null}>
-      <h3 class="yn-forecast-title">${METHOD_LABELS[m]}</h3>
-      <div class="yn-forecast-value">${inTarget ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config, model }), { className: "yn-kpi-value", ariaLabel: fmt(T.contract.forecastAria, { method: METHOD_LABELS[m] }) }) : html`<span class="yn-kpi-value">—</span>`}
+      <h3 class="yn-forecast-title">${methodLabel(m, model.config)}</h3>
+      <div class="yn-forecast-value">${inTarget ? bd.numberButton(money(f.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: f, contract: c, unit, config: model.config, model }), { className: "yn-kpi-value", ariaLabel: fmt(T.contract.forecastAria, { method: methodLabel(m, model.config) }) }) : html`<span class="yn-kpi-value">—</span>`}
         ${inTarget ? statusChip(f.isDeficit ? "danger" : "ok", f.isDeficit ? T.breakdown.deficitForecast : T.breakdown.surplusForecast) : statusChip("neutral", T.contract.notInTargetChip)}</div>
       <dl class="yn-forecast-facts">
         <div><dt>${T.breakdown.targetBudget}</dt><dd class="num">${money(f.targetBudget, unit)}</dd></div>
@@ -339,7 +339,7 @@ if (vm) {
         <div><dt>${T.breakdown.forecastCost}</dt><dd class="num">${money(f.forecastCost, unit)}</dd></div>
         ${vm.isWhole
           ? null
-          : html`<div class="yn-forecast-end"><dt>${fmt(T.contract.endForecastFact, { end: monthJa(c.endMonth) })}</dt><dd class="num">${bd.numberButton(money(fEnd.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config, model }), { className: fEnd.isDeficit ? "yn-num-inline yn-danger-text" : "yn-num-inline", ariaLabel: fmt(T.contract.endForecastAria, { method: METHOD_LABELS[m] }) })}</dd></div>`}
+          : html`<div class="yn-forecast-end"><dt>${fmt(T.contract.endForecastFact, { end: monthJa(c.endMonth) })}</dt><dd class="num">${bd.numberButton(money(fEnd.forecastGrossProfit, unit), () => bd.forecastSpec({ forecast: fEnd, contract: c, unit, config: model.config, model }), { className: fEnd.isDeficit ? "yn-num-inline yn-danger-text" : "yn-num-inline", ariaLabel: fmt(T.contract.endForecastAria, { method: methodLabel(m, model.config) }) })}</dd></div>`}
       </dl>
       ${warn ? html`<p class="yn-note yn-note-warn">${warn}</p>` : null}
       ${btn}
@@ -363,7 +363,9 @@ const worklogSection = (() => {
       const data = await bd.fetchWorklogs(c.contractId);
       // 状態は明細のファイル（ビルドした日の状態）ではなく、今日に置き換えた Model の月から取る（SPEC §75）
       const statusOf = new Map(months.map((m) => [m.month, m.status]));
-      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: statusOf.get(m.month) })));
+      // 氏名はメンバーマスタから（取得元の氏名の列が社員番号でも氏名で出す。SPEC §139）
+      const nameOf = worklogMemberNamer(model);
+      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, memberName: nameOf(w), month: m.month, status: statusOf.get(m.month) })));
       status.hidden = false;
       status.textContent = fmt(T.contract.worklogStatus, { n: integer(entries.length), period: periodJa(vm.period), fetchedAt: data.worklogFetchedAt ?? "—" });
       loadBtn.remove();

@@ -78,7 +78,7 @@
   --yn-accent-bg: color-mix(in srgb, var(--yn-accent) 12%, var(--yn-card));
   --yn-under-text: #075e80; /* リソース計画の 1.0 未満（6.4:1） */
   --yn-under-bg: #e2f4fb;
-  --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標・紫＝運用保守以外のグラフと分ける赤紫） */
+  --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標の超過・紫＝運用保守以外のグラフと分ける赤紫） */
   --yn-empty-bg: #fbe6f2;
 }
 
@@ -504,7 +504,8 @@ body {
   flex: 0 1 220px;
   min-width: 0;
 }
-.yn-filterbar-slot .yn-filter-team label {
+.yn-filterbar-slot .yn-filter-team label,
+.yn-filterbar-slot .yn-filter-method label {
   flex: none;
   white-space: nowrap;
 }
@@ -515,7 +516,7 @@ body {
   max-width: 240px;
 }
 .yn-filterbar-slot .yn-select {
-  /* 期間プリセット・着地見込みのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
+  /* 期間プリセットのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
   min-height: 32px;
   padding-top: 2px;
   padding-bottom: 2px;
@@ -1309,6 +1310,10 @@ h3 {
   padding-top: 8px;
 }
 .yn-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
   cursor: pointer;
   font-size: calc(13px * var(--yn-fs));
   font-weight: 600;
@@ -1713,7 +1718,6 @@ h3 {
     width: calc(var(--depth, 0) * 10px);
   }
   .yn-tree-toggle {
-    width: 18px;
     margin-right: 2px;
   }
 }
@@ -1799,26 +1803,45 @@ th[aria-sort="descending"] .yn-sort-icon {
   font-variant-numeric: tabular-nums;
 }
 /* 木構造 */
+.yn-tree-cell {
+  display: flex;
+  align-items: center;
+}
+.yn-tree-cell > .yn-tree-indent,
+.yn-tree-cell > .yn-tree-toggle {
+  flex: none;
+}
+/* 狭い幅（折り返さない表）では名前を「…」で切る */
+.yn-tree-cell > :last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .yn-tree-indent {
   display: inline-block;
   width: calc(var(--depth, 0) * 16px);
 }
 .yn-tree-toggle {
   appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 0;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--yn-fs));
+  height: calc(24px * var(--yn-fs));
   margin-right: 4px;
   padding: 0;
-  color: var(--yn-text-2);
+  color: var(--yn-text-1);
   cursor: pointer;
-  border-radius: 4px;
-  font-size: calc(12px * var(--yn-fs));
   vertical-align: middle;
 }
-.yn-tree-toggle:hover {
-  background: var(--yn-wash-strong);
+/* 押せる範囲は見た目の四角より一回り広く（行の高さは変えない） */
+.yn-tree-toggle:not(.yn-tree-leaf)::after {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
 }
 .yn-tree-leaf {
   cursor: default;
@@ -4288,7 +4311,7 @@ html:has(dialog.yn-dialog[open]) {
   font-size: calc(13px * var(--yn-fs));
 }
 .yn-me-plan-sub > th {
-  padding-left: 44px !important;
+  padding-left: calc(32px + 20px * var(--yn-fs)) !important;
 }
 /* 開いた内訳は人の行の配下と分かるように: 左端の帯、控えめな数値、枠なしの小さな操作ボタン（押せる範囲は同じ。2026-10-31 試用版のコメント） */
 .yn-me-plan-row.is-open > th,
@@ -4330,12 +4353,12 @@ html:has(dialog.yn-dialog[open]) {
   flex-basis: 100%;
 }
 .yn-me-plan-sub.is-empty > td {
-  padding-left: 44px;
+  padding-left: calc(32px + 20px * var(--yn-fs));
   font-size: calc(12px * var(--yn-fs));
 }
 .yn-me-plan-hist > td {
   background: linear-gradient(var(--yn-wash), var(--yn-wash)), var(--yn-card);
-  padding: 6px 12px 10px 44px;
+  padding: 6px 12px 10px calc(32px + 20px * var(--yn-fs));
 }
 .yn-me-plan-histbox {
   white-space: normal;
@@ -5251,6 +5274,9 @@ a.yn-org-person:hover {
   color: var(--yn-text-2);
 }
 .yn-org-spot > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   padding: 2px 4px;
   width: fit-content;
@@ -5367,14 +5393,6 @@ a.yn-org-person:hover {
   outline: 2px solid var(--yn-focus);
   outline-offset: 1px;
 }
-.yn-me-plan-caret {
-  flex: none;
-  display: inline-block;
-  width: 1em;
-  color: var(--yn-text-2);
-  font-size: calc(13px * var(--yn-fs));
-  text-align: center;
-}
 .yn-me-plan-row .yn-me-plan-name {
   font-weight: 700;
   /* 名前を優先して見せ、所属から先に縮める */
@@ -5394,9 +5412,8 @@ a.yn-org-person:hover {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.yn-me-plan-expand-all .yn-me-plan-caret {
-  width: auto;
-  margin-right: 4px;
+.yn-me-plan-expand-all .yn-disc {
+  margin-right: 6px;
 }
 /* 開いたまとまりの区切り: 開いた人の行の上と、まとまりの次の人の行の上に太い線。
    開閉で押した行の位置が動かないよう、枠線でなく内側の影で描く（行の高さを変えない） */
@@ -5416,7 +5433,7 @@ a.yn-org-person:hover {
 .yn-me-plan-hist > td {
   border-bottom-color: var(--yn-grid, var(--yn-hairline));
 }
-/* 枝の線: 人の行の ▸ の下から作業の名前へ */
+/* 枝の線: 人の行の開閉の印（§143）の真下から作業の名前へ */
 .yn-me-plan-sub > th::before,
 .yn-me-plan-sub.is-empty > td:first-child::before,
 .yn-me-plan-hist:not(.is-after-last) > td::before {
@@ -5424,7 +5441,7 @@ a.yn-org-person:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 13px;
+  left: calc(10px + 10px * var(--yn-fs));
   border-left: 1px solid var(--yn-hairline-strong);
   pointer-events: none;
 }
@@ -5433,8 +5450,8 @@ a.yn-org-person:hover {
   content: "";
   position: absolute;
   top: 50%;
-  left: 13px;
-  width: 24px;
+  left: calc(10px + 10px * var(--yn-fs));
+  width: calc(22px + 10px * var(--yn-fs));
   border-top: 1px solid var(--yn-hairline-strong);
   pointer-events: none;
 }
@@ -5525,6 +5542,10 @@ a.yn-org-person:hover {
   gap: 2px 14px;
 }
 .yn-me-diff-rows > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
   cursor: pointer;
   color: var(--yn-text-2);
   font-size: calc(12px * var(--yn-fs));
@@ -5552,7 +5573,7 @@ a.yn-org-person:hover {
 .yn-fold-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: none;
@@ -5563,19 +5584,6 @@ a.yn-org-person:hover {
 }
 .yn-fold-toggle:hover span:last-child {
   text-decoration: underline;
-}
-.yn-fold-caret {
-  display: inline-block;
-  width: 0;
-  height: 0;
-  border-left: calc(5px * var(--yn-fs)) solid transparent;
-  border-right: calc(5px * var(--yn-fs)) solid transparent;
-  border-top: calc(7px * var(--yn-fs)) solid currentColor;
-  transition: transform 0.15s;
-  flex: none;
-}
-.yn-fold.is-closed .yn-fold-caret {
-  transform: rotate(-90deg);
 }
 .yn-fold.is-closed .yn-fold-head {
   margin-bottom: 0;
@@ -5746,6 +5754,10 @@ a.yn-org-person:hover {
   background-color: color-mix(in srgb, var(--yn-text-1) 5%, var(--yn-card));
 }
 .yn-tl-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
   overflow: hidden;
   padding: 0;
   border: 0;
@@ -5912,5 +5924,58 @@ a.yn-org-person:hover {
 @media (min-width: 720px) and (max-width: 1023px) {
   .yn-tl {
     --yn-tl-label: 220px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 開閉の印（SPEC §143）。組織ツリー・リソース計画の人の行・データ確認の節・
+ * 案件の期間の分類・「表で見る」などの開閉をすべてこの見た目にそろえる。
+ * 枠の付いた四角の中に向き（閉じている › ／開いている ⌄）。押せることが一目で分かるように
+ * 本文の文字色・枠付きにし、押せる面（ボタン・summary）に乗ると色が付く。
+ * 状態は親の aria-expanded・details[open]・.is-open から取る（文字は書かない）
+ * ------------------------------------------------------------------------- */
+.yn-disc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: calc(20px * var(--yn-fs));
+  height: calc(20px * var(--yn-fs));
+  border: 1px solid var(--yn-hairline-strong);
+  border-radius: calc(5px * var(--yn-fs));
+  background: var(--yn-card);
+  color: var(--yn-text-1);
+  vertical-align: middle;
+}
+.yn-disc::before {
+  content: "";
+  box-sizing: border-box;
+  width: calc(7px * var(--yn-fs));
+  height: calc(7px * var(--yn-fs));
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(-1px) rotate(-45deg);
+  transition: transform 0.15s;
+}
+.yn-disc.is-open::before,
+[aria-expanded="true"] > .yn-disc::before,
+details[open] > summary > .yn-disc::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+:is(button, summary):hover > .yn-disc {
+  border-color: var(--yn-link);
+  background: var(--yn-wash-strong);
+  color: var(--yn-link);
+}
+summary:has(> .yn-disc) {
+  list-style: none;
+}
+summary:has(> .yn-disc)::-webkit-details-marker {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .yn-disc::before {
+    transition: none;
   }
 }

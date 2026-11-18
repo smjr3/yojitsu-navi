@@ -27,7 +27,7 @@ import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCel
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn, targetSection } from "./components/targets.js";
 import { summaryKpis, memberCostSpec, orgChangeText, ORG_CHANGE_LABELS, originChips, originOrgText } from "./components/team-detail.js";
-import { money, formatHours, formatPercent, monthJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
+import { money, formatHours, formatPercent, monthJa, periodJa, methodLabel, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -174,7 +174,7 @@ if (vm?.exists && !vm.isUnassigned) {
 ```js
 if (vm?.exists) {
   const series = withTargets(vm.series, vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.period), asOfMonth: monthJa(model.meta.asOfMonth), method: methodLabel(vm.method, model.config), fyStart: model.config.fiscalYearStartMonth })));
   display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: vm.contractIds, period: vm.period, exportName: `team_${vm.teamId}_monthly_${vm.period.from}_${vm.period.to}` }));
 }
 ```
@@ -230,7 +230,7 @@ if (vm?.exists) {
   display(
     sectionTitle(
       T.app.pages.contracts,
-      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: METHOD_LABELS[method], fy: model.meta.fiscalYear }),
+      fmt(T.team.contractsHint, { team: vm.name, children: vm.isUnassigned ? "" : T.team.includingChildren, method: methodLabel(method, model.config), fy: model.meta.fiscalYear }),
       html`<a class="yn-btn yn-btn-sm" href=${store.href("./contracts", { team: vm.teamId })}>${T.team.filterContracts}</a>`,
       outside > 0 ? fmt(T.team.hiddenOutside, { n: outside }) : null,
     ),

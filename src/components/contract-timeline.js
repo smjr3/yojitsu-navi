@@ -211,7 +211,7 @@ export function contractTimeline({ rows, period, asOf, unit, href }) {
       if (prefs.group !== "none") {
         const open = !collapsed.has(g.key);
         const total = g.rows.reduce((s, r) => s + (r.totalAmount ?? 0), 0);
-        const btn = h("button", { type: "button", class: "yn-tl-group-btn", "aria-expanded": String(open), "data-group": g.key }, h("span", { class: "yn-tl-caret", "aria-hidden": "true" }, open ? "▾" : "▸"), " ", g.label || T.common.none);
+        const btn = h("button", { type: "button", class: "yn-tl-group-btn", "aria-expanded": String(open), "data-group": g.key }, h("span", { class: "yn-disc", "aria-hidden": "true" }), " ", g.label || T.common.none);
         btn.addEventListener("click", () => {
           if (collapsed.has(g.key)) collapsed.delete(g.key);
           else collapsed.add(g.key);
