@@ -2,7 +2,7 @@
  * 画面状態（期間・チーム・単位・着地方式）⇄ URL クエリ ⇄ localStorage
  *
  * 優先順位: URL クエリ（共有された表示を再現） > localStorage（前回の表示） > 既定値。
- * ただしブラウザの「戻る・進む」・再読み込みで開いたときは localStorage（最後に選んだ表示）を優先する。
+ * ただしブラウザの「戻る・進む」・再読み込みで開いたときは、期間・単位など（チーム以外）は localStorage（最後に選んだ表示）を優先する。
  * 前の画面の URL には離れたときの期間・単位が残っているので、URL を優先すると別の画面で選び直した値が戻ってしまう（SPEC §133）。
  * 変更すると URL（history.replaceState）と localStorage の両方に書き戻す。
  *
@@ -153,6 +153,14 @@ function writeQuery(state) {
  *   store.subscribe(fn)    変更通知。戻り値で解除
  *   store.href(path, patch) 状態を引き継いだリンク（別ページへの遷移用）
  */
+/** 最後に選んだ値を、戻る・再読み込み・別のタブでも使う項目（チームはリンクが行き先ごとに変えるので含めない。§133） */
+const LATEST_KEYS = ["from", "to", "unit", "method", "outside"];
+function latestOf(saved) {
+  const out = {};
+  if (saved) for (const k of LATEST_KEYS) if (saved[k] !== undefined) out[k] = saved[k];
+  return out;
+}
+
 /** ブラウザの「戻る・進む」または再読み込みで開いた画面か（URL はその画面を前に開いたときのもの） */
 function isHistoryNavigation() {
   try {
@@ -166,9 +174,10 @@ function isHistoryNavigation() {
 export function createStore(model, options = {}) {
   const fromQuery = readQuery();
   const fromStorage = readStorage();
-  // 戻る・進む・再読み込みでは保存してある値を上に重ねる（URL だけにある値は残す）
-  const saved = isHistoryNavigation() ? [fromQuery, fromStorage] : [fromStorage, fromQuery];
-  let state = sanitize(model, { ...(saved[0] ?? {}), ...(saved[1] ?? {}), ...(options.initial ?? {}) });
+  // 戻る・進む・再読み込みでは、期間・単位など（LATEST_KEYS）は保存してある値を URL より優先する。
+  // チームは URL のまま（「このチームの案件一覧へ」などのリンクが行き先だけで切り替えるので、戻ったら元のチームに戻す）
+  const latest = isHistoryNavigation() ? latestOf(fromStorage) : {};
+  let state = sanitize(model, { ...(fromStorage ?? {}), ...(fromQuery ?? {}), ...latest, ...(options.initial ?? {}) });
   const listeners = new Set();
   // 初回も URL を正規化しておく（共有しやすい）
   if (options.syncUrl !== false) writeQuery(state);
@@ -210,13 +219,13 @@ export function createStore(model, options = {}) {
     addEventListener("pageshow", (e) => {
       if (!e.persisted) return;
       const s = readStorage();
-      if (s) store.set(s);
+      if (s) store.set(latestOf(s));
     });
     // 別のタブ・ウィンドウで選び直したら、開いたままのこの画面も合わせる（古い値のリンクから戻さない）
     addEventListener("storage", (e) => {
       if (e.key !== STORAGE_KEY || !e.newValue || (typeof document !== "undefined" && document.prerendering)) return;
       const s = readStorage();
-      if (s) store.set(s);
+      if (s) store.set(latestOf(s));
     });
   }
   return store;

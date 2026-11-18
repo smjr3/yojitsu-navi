@@ -4,7 +4,7 @@
  * dataTable({
  *   columns: [{ key, label, type: "text"|"money"|"moneyYen"（明細: 常に円）|"percent"|"hours"|"int"|"status"|"custom",
  *               get(row), render?(row) -> Node|string, sortValue?(row), exportValue?(row), exportLabel?,
- *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す）,
+ *               breakdown?(row) -> spec, align?: "num"|"text", sortable?: boolean, width?, hideOnPhone?: boolean, hideMid?: boolean（ノート PC の狭い幅で隠す。円の表示では 1280px の画面でも隠す）, hideMidYen?: boolean（円の表示のときだけ 1280px の画面で隠す）,
  *               summaryDash?: 合計行に値が無い（null）とき空欄でなく「—」を出す（「該当なし」を明示したい列）,
  *               optional?: 選べる列（既定では出さず「列」でチェックしたときだけ出す。§106.1）, exportAlways?: 画面で隠していても Excel に出す,
  *               exportOnly?: Excel だけの列（ID など。画面の「列」にも出さない）,
@@ -569,7 +569,9 @@ export function dataTable({
     return handle;
   }
 
-  const table = html`<table class=${className ? `yn-table ${className}` : "yn-table"} id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
+  // 円は桁が多く列が広がるので、幅の狭い画面で隠す列を増やす（style.css の is-unit-yen。§133）
+  const tableClass = ["yn-table", className, unit === "yen" ? "is-unit-yen" : null].filter(Boolean).join(" ");
+  const table = html`<table class=${tableClass} id=${id}>${caption ? html`<caption class="visually-hidden">${caption}</caption>` : null}</table>`;
   const thead = html`<thead></thead>`;
   const tbody = html`<tbody></tbody>`;
   table.append(thead, tbody);
@@ -606,7 +608,7 @@ export function dataTable({
         const numeric = isNumeric(col);
         const sortable = !tree && col.sortable !== false;
         const active = sortState && sortState.key === col.key;
-        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.headClass ? ` ${col.headClass}` : ""}`} style=${col.width ? `width:${col.width}` : null} title=${col.headTitle ?? null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
+        const th = html`<th scope="col" class=${`${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.hideMidYen ? " hide-mid-yen" : ""}${col.headClass ? ` ${col.headClass}` : ""}`} style=${col.width ? `width:${col.width}` : null} title=${col.headTitle ?? null} data-key=${col.key} aria-sort=${active ? (sortState.dir === "asc" ? "ascending" : "descending") : sortable ? "none" : null}></th>`;
         if (sortable) {
           const btn = html`<button type="button" class="yn-sort" title=${fmt(T.table.sortBy, { label: col.label })}>${headLabel(col)}<span class="yn-sort-icon" aria-hidden="true">${active ? (sortState.dir === "asc" ? "▲" : "▼") : "⇅"}</span>${col.sublabel ? html`<span class="yn-th-sub">${col.sublabel}</span>` : null}</button>`;
           btn.addEventListener("click", () => {
@@ -674,7 +676,7 @@ export function dataTable({
     const tr = h("tr", { class: `${href ? "is-clickable" : ""}${danger ? " is-danger" : ""}${tree ? ` yn-depth-${row.depth ?? 0}` : ""}${context ? " is-filter-context" : ""}`, "data-key": String(rowKey(row, i)) });
     visibleCols.forEach((col, ci) => {
       const numeric = isNumeric(col);
-      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
+      const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.hideMidYen ? " hide-mid-yen" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
       const cell = ci === 0 ? h("th", { scope: "row", class: cls }) : h("td", { class: cls });
       let content = cellNode(col, row);
       if (ci === 0) {
@@ -731,7 +733,7 @@ export function dataTable({
       const numeric = isNumeric(col);
       const has = sm[col.key] !== undefined && sm[col.key] !== null;
       const content = ci === 0 ? (sm.name ?? T.table.total) : col.summary === false || (!numeric && !has) || (numeric && !has && !col.get) ? (col.summaryDash && numeric ? EMPTY_VALUE : "") : cellNode(col, sm, true);
-      return h("td", { class: `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.headClass ? ` ${col.headClass}` : ""}` }, content);
+      return h("td", { class: `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.hideMidYen ? " hide-mid-yen" : ""}${col.headClass ? ` ${col.headClass}` : ""}` }, content);
     })));
     if (!tfoot.isConnected) table.append(tfoot);
   }

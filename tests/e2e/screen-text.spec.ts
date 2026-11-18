@@ -28,7 +28,8 @@ async function proseItems(page: Page): Promise<string[]> {
       const clone = el.cloneNode(true) as HTMLElement;
       for (const c of clone.querySelectorAll("button, input, select, label, .yn-tip")) c.remove();
       const t = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (t) out.push(t);
+      // 金額・割合だけの値はデータ（単位の切り替えで長さが変わる。円が既定。§133）
+      if (t && !/^[-−▲△]?\s*[\d,.]+\s*(円|千円|百万円|%|件|h)?$/.test(t)) out.push(t);
     }
     return out;
   });

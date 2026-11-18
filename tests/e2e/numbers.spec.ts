@@ -49,8 +49,8 @@ async function expectKpis(page: import("@playwright/test").Page, period: Period,
 }
 
 test.describe("全体サマリー", () => {
-  test("既定の表示単位が config 由来（百万円）で、初回表示の URL・KPI・ボタンがそれになる", async ({ page }) => {
-    expect(DEFAULT_UNIT, "config.currency.defaultUnit = millionYen → 画面の unit は m").toBe("m");
+  test("既定の表示単位が config 由来（円）で、初回表示の URL・KPI・ボタンがそれになる（§133）", async ({ page }) => {
+    expect(DEFAULT_UNIT, "config.currency.defaultUnit = yen → 画面の unit は yen").toBe("yen");
     await gotoPage(page, "/");
     expect(query(page).get("unit")).toBe(DEFAULT_UNIT);
     for (const u of ["m", "k", "yen"] as const) {
@@ -58,14 +58,14 @@ test.describe("全体サマリー", () => {
     }
     await expect(page.locator(`.yn-seg-btn[data-unit=${DEFAULT_UNIT}]`)).toHaveText(UNIT_LABEL[DEFAULT_UNIT]);
     const totals = totalsFor(FY, undefined, model);
-    // 百万円表記（小数 1 桁 + 「百万円」）で core の値と一致
-    await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget, "m"));
-    await expect(kpiValue(page, 0)).toHaveText(/^-?[\d,]+\.\d百万円$/);
-    await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, "m"));
-    await expectKpis(page, FY, "", DEFAULT_METHOD, "m");
+    // 円表記（整数 + 「円」）で core の値と一致
+    await expect(kpiValue(page, 0)).toHaveText(yen(totals.budget, "yen"));
+    await expect(kpiValue(page, 0)).toHaveText(/^-?[\d,]+円$/);
+    await expect(kpiValue(page, 1)).toHaveText(yen(totals.cost, "yen"));
+    await expectKpis(page, FY, "", DEFAULT_METHOD, "yen");
     // 保存された状態が無い（localStorage 空）ことが前提なので、保存もこの単位になる
     const stored = await page.evaluate(() => localStorage.getItem("yojitsu-navi:state:v3"));
-    expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "m" });
+    expect(JSON.parse(stored ?? "{}")).toMatchObject({ unit: "yen" });
   });
 
   test("KPI が core の aggregate / forecastTotals と一致（FY2026・円で厳密）", { tag: "@smoke" }, async ({ page }) => {
@@ -92,10 +92,10 @@ test.describe("全体サマリー", () => {
     expect(q.get("method")).toBe(DEFAULT_METHOD);
   });
 
-  test("単位の切替: 百万円 → 千円 → 円 → 百万円 の往復で KPI・URL・aria-pressed・保存が変わる", { tag: "@smoke" }, async ({ page }) => {
+  test("単位の切替: 円 → 百万円 → 千円 → 円 の往復で KPI・URL・aria-pressed・保存が変わる", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/");
-    expect(query(page).get("unit")).toBe("m");
-    for (const unit of ["k", "yen", "m"] as const) {
+    expect(query(page).get("unit")).toBe("yen");
+    for (const unit of ["m", "k", "yen"] as const) {
       await page.locator(`.yn-seg-btn[data-unit=${unit}]`).click();
       for (const u of ["m", "k", "yen"] as const) {
         await expect(page.locator(`.yn-seg-btn[data-unit=${u}]`)).toHaveAttribute("aria-pressed", String(u === unit));
