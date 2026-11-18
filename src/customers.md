@@ -21,7 +21,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
-import { monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
+import { monthJa, periodJa, methodLabel } from "./components/format.js";
 ```
 
 ```js
@@ -147,7 +147,7 @@ if (vm) {
   display(
     sectionTitle(
       T.customers.sectionTitle,
-      fmt(T.customers.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
+      fmt(T.customers.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: methodLabel(vm.method, model.config), fy: model.meta.fiscalYear }),
       null,
       outsideCount > 0 && !f.showOutside ? fmt(T.customers.hiddenOutside, { n: outsideCount }) : null,
     ),

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 export const PLACEHOLDERS = [
   "contract", "customer", "project", "team", "member", "costTypes",
   "threshold", "fy", "fyStartMonth", "fyEndYear", "fyEndMonth", "fyFirstMonth", "fyLastMonth", "asOf", "asOfMonth", "asOfYm", "lastFinalMonth", "closingDay",
-  "standardHours", "dayHours", "recentMonths", "methodDefault", "methodRecent3", "methodAll", "methodAssignment",
+  "standardHours", "dayHours", "recentMonths", "methodDefault", "methodRecent3", "methodRecent12", "methodAll", "methodAssignment",
 ];
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -49,7 +49,7 @@ title: ${JSON.stringify(title)}
 \`\`\`js
 import { T, fmt } from "./i18n/index.js";
 import { pageHeader, loadModel } from "./components/layout.js";
-import { formatPercent, monthJa, METHOD_LABELS } from "./components/format.js";
+import { formatPercent, monthJa, methodLabel } from "./components/format.js";
 \`\`\`
 
 \`\`\`js
@@ -74,10 +74,11 @@ const asOfYm = meta.asOfMonth ?? "—";
 const fyFirstMonth = meta.fiscalYearMonths?.[0] ?? "—";
 const fyLastMonth = meta.fiscalYearMonths?.at(-1) ?? "—";
 const lastFinalMonth = monthJa(meta.lastFinalMonth ?? "—");
-const methodDefault = METHOD_LABELS[config.forecastMethodDefault ?? "assignment"];
-const methodRecent3 = METHOD_LABELS.recent3;
-const methodAll = METHOD_LABELS.all;
-const methodAssignment = METHOD_LABELS.assignment;
+const methodDefault = methodLabel(config.forecastMethodDefault ?? "assignment", config);
+const methodRecent3 = methodLabel("recent3", config);
+const methodRecent12 = methodLabel("recent12", config);
+const methodAll = methodLabel("all", config);
+const methodAssignment = methodLabel("assignment", config);
 \`\`\`
 
 \`\`\`js

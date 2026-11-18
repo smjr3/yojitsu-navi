@@ -8,7 +8,7 @@ import { T, fmt } from "../i18n/index.js";
 import { statTile, kpiRow, forecastStatus } from "./kpi.js";
 import { burnMeter } from "./charts.js";
 import * as bd from "./breakdown.js";
-import { money, moneySigned, pointsSigned, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./format.js";
+import { money, moneySigned, pointsSigned, formatPercent, formatHours, monthJa, monthSpanJa, periodJa, methodLabel, fiscalYearLabel, integer } from "./format.js";
 
 /**
  * 全体サマリーと同じ KPI 5 枚（年度予算・原価・粗利・消化率・着地見込み粗利）。
@@ -61,7 +61,7 @@ export function summaryKpis({ model, store, scope, totals, forecast, compare, fy
       breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth, subtitle }),
     }),
     statTile({
-      label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
+      label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: methodLabel(forecast.method, model.config) }),
       value: money(forecast.forecastGrossProfit, unit),
       sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
       status: forecastStatus(forecast),
