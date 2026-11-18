@@ -111,7 +111,7 @@ export default {
   methods: {
     labels: {
       assignment: "計画値",
-      // {n} は直近何か月で平均するか（config.json の forecastRecentMonths）。名前で期間が分かるようにする（§140）
+      // {n} は直近何か月で平均するか（config.json の forecastRecentMonths）。名前で期間が分かるようにする（§142）
       recent3: "直近{n}か月平均",
       recent12: "直近12か月平均",
       all: "全期間平均",

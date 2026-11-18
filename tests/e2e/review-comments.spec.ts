@@ -8,7 +8,7 @@ import { test, expect, gotoPage } from "./helpers/app.js";
 const WIDTH_KEY = "yojitsu-navi:plan-name-width";
 
 test.describe("着地見込みの方式", () => {
-  test("計画値が左端で既定に選ばれ、直近3か月平均・直近12か月平均・全期間平均の順に並ぶ（名前で期間が分かる §140）", { tag: "@smoke" }, async ({ page }) => {
+  test("計画値が左端で既定に選ばれ、直近3か月平均・直近12か月平均・全期間平均の順に並ぶ（名前で期間が分かる §142）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/");
     const labels = page.locator("#yn-filter-method option");
     await expect(labels).toHaveText(["計画値", "直近3か月平均", "直近12か月平均", "全期間平均"]);

@@ -21,7 +21,7 @@ src/
     table.js       一覧表（並べ替え・固定ヘッダ・右寄せ・状態チップ・行クリック・Excel 出力・木構造）
     charts.js      Observable Plot のグラフ（月次推移）、凡例、表の双子、消化率メーター
     chart-zoom.js  グラフの枠（凡例＋「拡大」ボタン＋幅に合わせた再描画）と拡大表示のダイアログ（全グラフ共通。SPEC §33）
-    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式（選択欄。§140）、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
+    filters.js     フィルタ行（期間＋プリセット、チーム、着地方式（選択欄。§142）、単位）。mountFilterBar() で上部ヘッダの固定バーに差し込む
     dom.js         h(tag, attrs, ...children): 表の行・マスなど数の多い部品を document.createElement で直接作る（html`` と同じ DOM。SPEC §107）
   index.md / teams.md / contracts.md / contract.md / rules.md / data-check.md
   style.css        デザイントークン（ライト／ダーク・テーマカラー・文字の大きさ）とスタイル
@@ -65,7 +65,7 @@ src/
 | `from`, `to` | `YYYY-MM`（`meta.minMonth`〜`maxMonth` に収める。逆転は入れ替え） | asOf の年度をデータ範囲に収めたもの |
 | `team` | チームID / `""`（全体）/ `__unassigned__`（未設定） | `""` |
 | `unit` | `m`（百万円）/ `k`（千円）/ `yen` | `config.currency.defaultUnit`（既定 `millionYen`） |
-| `method` | `assignment`（計画値）/ `recent3`（直近 N か月平均）/ `recent12`（直近12か月平均）/ `all`（全期間平均）（この順で表示。§140） | `config.forecastMethodDefault`（既定 `assignment`） |
+| `method` | `assignment`（計画値）/ `recent3`（直近 N か月平均）/ `recent12`（直近12か月平均）/ `all`（全期間平均）（この順で表示。§142） | `config.forecastMethodDefault`（既定 `assignment`） |
 
 優先順位は **URL クエリ > localStorage（`yojitsu-navi:state:v2`。既定単位を百万円に変えた際に v1 から切替） > 既定値**。ただしブラウザの「戻る・進む」・再読み込みで開いたとき（bfcache を含む）は 期間・単位・着地方式・運用保守以外は localStorage を URL より優先し（チームは URL のまま）、別のタブでの変更（storage イベント）にも合わせる（前の画面の URL に古い単位・期間が残るため。SPEC §133）。変更は `history.replaceState` で URL に、同時に localStorage に書く。初回表示でも URL を正規化するので、そのまま共有できる。
 フィルタ変更は履歴に積まない（`replaceState`）設計なので、ブラウザの「戻る」は直前の条件ではなく前のページに戻る（条件を残したいときは URL をそのまま共有・ブックマークする）。

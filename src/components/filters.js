@@ -116,7 +116,7 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("method")) {
-    // 方式は 4 つで名前に期間が入る（§140）。ボタンの組では 1280px で 1 行に収まらないので選択欄にする
+    // 方式は 4 つで名前に期間が入る（§142）。ボタンの組では 1280px で 1 行に収まらないので選択欄にする
     const n = model.config.forecastRecentMonths;
     const sel = html`<select class="yn-select" id="yn-filter-method" name="yn-method" aria-describedby="yn-method-help">${FORECAST_METHODS.map((m) => html`<option value=${m} title=${methodDescription(m, n)}>${methodLabel(m, model.config)}</option>`)}</select>`;
     sel.addEventListener("change", () => store.set({ method: sel.value }));

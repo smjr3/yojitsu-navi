@@ -145,7 +145,7 @@ export function fiscalYearLabel(fy) {
 }
 
 /**
- * 着地見込みの方式名。直近 N か月平均（recent3）は N を名前に入れる（§140）。
+ * 着地見込みの方式名。直近 N か月平均（recent3）は N を名前に入れる（§142）。
  * config は Model の config（forecastRecentMonths を読む。無ければ 3）
  */
 export function methodLabel(method, config) {
