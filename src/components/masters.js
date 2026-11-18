@@ -395,7 +395,18 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
   /** 顧客名の候補（案件の顧客名。§103） */
   function customerOptions() {
-    return [...new Set(cIndex().list.map((c) => c.customer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+    // 案件・顧客（既定の担当チーム）・正式な案件の一覧にある顧客名（§137）
+    const names = [...cIndex().list.map((c) => c.customer), ...docs.customerTeams.rows.map((r) => cellOf(docs.customerTeams, r, "customer_name")), ...officialProjects().map((p) => p.customerName)];
+    return [...new Set(names.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+  }
+
+  /** 正式な案件の一覧（§98。data/projects.csv）。案件の結び付け（§137）の候補 */
+  let officialCache = null;
+  function officialProjects() {
+    officialCache ??= parseCsvTable(data.context.projects ?? "")
+      .rows.map((r) => ({ projectId: r.get("project_id"), customerName: r.get("customer_name"), projectName: r.get("project_name") }))
+      .filter((p) => p.projectId !== "");
+    return officialCache;
   }
 
   // ---- 状態 ---------------------------------------------------------------
@@ -593,6 +604,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if ((column === "member_id" && fileId !== "members") || column === "leader_member_id") return memberNames().get(value) || fmt(T.masters.unknownMemberValue, { id: value });
     if (fileId === "rates" && column === "key") return memberNames().get(value) || value;
     if (column === "contract_id" && fileId !== "contracts") return contractText(value);
+    // 正式な案件ID（§137）は案件名と並べる
+    if (fileId === "contracts" && column === "project_id") {
+      const p = officialProjects().find((x) => x.projectId === value);
+      return p ? `${p.projectName}（${value}）` : value;
+    }
     // 金額は CSV の読み込みと同じ読み方（「48,000,000」「４８００００００」「48000000円」も数値。§80）
     if (column === "total_amount") return Number.isFinite(parseNumberCell(value)) ? money(parseNumberCell(value), "yen") : value;
     if (column === "remaining_rate") return `${value}%`;
@@ -1290,7 +1306,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           // 案件の担当チームが空で顧客の既定があれば、そのチームを薄く出す（§103）
           const inherited = fileId === "contracts" && c.name === "team_id" && raw.trim() === "" ? inheritedTeam(g.shown.record) : "";
           if (inherited) return html`<td class="is-val"><span class="yn-me-val is-same">${displayValue(fileId, "team_id", inherited)}</span><span class="yn-me-hint">${T.masters.customerDefaultHint}</span></td>`;
-          return h("td", { class: c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val" }, valueEl(c.name, raw), hint ? h("span", { class: "yn-me-hint" }, hint) : null, nextEl(c.name));
+          return h("td", { class: c.input === "number" || c.input === "percent" ? "num" : c.input === "text" || c.input === "customer" ? "is-text" : "is-val" }, valueEl(c.name, raw), hint ? h("span", { class: "yn-me-hint" }, hint) : null, nextEl(c.name));
         }),
       ];
       if (isList) {
@@ -1350,7 +1366,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           ...columns.map((c) => {
             // 在籍・不在の開始日（§119）は在籍の列に添える
             const dayHint = fileId === "members" && c.name === "status" ? cellHint(fileId, c.name, e.record[c.name] ?? "", e.record) : null;
-            return html`<td class=${`${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" ? "is-text" : "is-val"}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}${dayHint ? html`<span class="yn-me-hint">${dayHint}</span>` : null}</td>`;
+            return html`<td class=${`${c.input === "number" || c.input === "percent" ? "num" : c.input === "text" || c.input === "customer" ? "is-text" : "is-val"}${edited(c.name) ? " is-edited" : ""}`}>${valueOrDiff(c.name)}${dayHint ? html`<span class="yn-me-hint">${dayHint}</span>` : null}</td>`;
           }),
         ];
         const tr = html`<tr data-key=${r.id} class=${`yn-me-row yn-me-hist is-${st}${invalid ? " is-invalid" : ""}`} aria-describedby=${list.length ? issueId : null}>
@@ -2709,7 +2725,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
 
   // ---- 行の追加・修正ダイアログ --------------------------------------------
   /** withOutside: 案件の欄に運用保守以外の種別も候補に出す（リソース計画の「計画を追加」。§50.6） */
-  function fieldFor(fileId, col, value, disabled, { withOutside = false } = {}) {
+  function fieldFor(fileId, col, value, disabled, { withOutside = false, projectName = "" } = {}) {
     const id = `yn-me-f-${col.name}`;
     const req = col.required;
     if (col.input === "kind") {
@@ -2824,6 +2840,15 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         <option value=${on ? value : "1"} selected=${on}>${T.masterFiles.provisionalYes}</option>
       </select>`;
     }
+    if (col.input === "officialProject" && officialProjects().length > 0) {
+      // 正式な案件（§137）: 案件名で選ぶ。選ぶと顧客名・案件名は正式な値にする（読み取りで上書き）
+      // 案件名が同じ正式な案件（§98 の候補）を先に
+      const form = (k) => normalizeName(k ?? "");
+      const here = form(projectName);
+      const all = officialProjects().map((p) => ({ value: p.projectId, label: p.projectName, sub: `${p.customerName} ・ ${p.projectId}`, search: p.projectId }));
+      const options = here === "" ? all : [...all.filter((o) => form(o.label) === here), ...all.filter((o) => form(o.label) !== here)];
+      return combobox({ id, name: col.name, options, value, disabled, placeholder: T.masters.noneOption, emptyLabel: "", describedBy: `${id}-hint`, unknownLabel: (x) => `${x}${T.masters.invalidValue}` });
+    }
     if (col.input === "customer") {
       // 顧客名（§103）: 案件の顧客名から選ぶ（案件の無い顧客も書ける。検証で警告）
       const listId = `${id}-list`;
@@ -2852,6 +2877,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const eff = describeImpactEffects(fileId, impact.columns);
     return html`<p class="yn-me-impact" role="alert" data-cost-changes=${eff.costChanges ? "true" : "false"}><span aria-hidden="true">!</span> <strong>${T.masters.impact1} ${integer(impact.months.length)} ${T.masters.impact2}</strong><br>${describeImpactMonths(impact.months)} ${T.masters.particleNo}${eff.effects.join("、")}${T.masters.impact3}${eff.note ? html`<strong class="yn-me-impact-safe">${eff.note}</strong>` : null}${tail}</p>`;
   }
+
+  /** 正式な案件ID の無い案件で変えられる列（§137） */
+  const CONTRACT_LINK_COLUMNS = ["customer_name", "project_name", "project_id"];
 
   /** 案件（§80）の入力欄の補足（アサインの案件欄と同じ列名でも中身が違うもの） */
   const CONTRACT_HINTS = {
@@ -2935,13 +2963,20 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const isOriginal = !!(row && doc.originals[row.id]);
     // 画面で足す行（§103 の案件）は、保存するまで取り込みの列も入れられる
     const newRow = !!def.addable && ((mode === "add" && !template) || (mode === "edit" && !isOriginal));
-    const importedCol = (name) => !!def.editableColumns && !def.editableColumns.includes(name) && !newRow;
+    // 正式な案件ID の無い案件（取り込みで書き換わらない行。§137）は、登録済みでも正式な案件を選んで結び付けるか、顧客名・案件名を直せる
+    const linkable = fileId === "contracts" && !!row && cellOf(doc, row, "project_id") === "";
+    const importedCol = (name) => !!def.editableColumns && !def.editableColumns.includes(name) && !newRow && !(linkable && CONTRACT_LINK_COLUMNS.includes(name));
     // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
     // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す
     const pairs = DATE_PAIRS[fileId] ?? {};
     const pairedDateCols = new Set(Object.values(pairs).map((p) => p.dateCol));
     // 日付の列は月の列の日付の欄でまとめて入れる（§123）
     const shownColumns = columns.filter((c) => c.input !== "targetType" && !importedCol(c.name) && !pairedDateCols.has(c.name));
+    // 正式な案件（§137）は顧客名・案件名より先に（選ぶと顧客名・案件名が決まるため）
+    if (fileId === "contracts" && officialProjects().length > 0) {
+      const at = shownColumns.findIndex((c) => c.name === "project_id");
+      if (at > 0) shownColumns.splice(Math.max(0, shownColumns.findIndex((c) => c.name === "customer_name")), 0, ...shownColumns.splice(at, 1));
+    }
     const fixedColumns = columns.filter((c) => importedCol(c.name));
     let initial = row ? rowRecord(doc, row) : template ? rowRecord(doc, template) : Object.fromEntries(columns.map((c) => [c.name, ""]));
     if (mode === "add") {
@@ -3018,7 +3053,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           const value = pair ? pairedDateValue(initial, c.name, pair) : c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
           return html`<div class="yn-me-field">
             <label for=${`yn-me-f-${c.name}`}>${pair ? pair.label : withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
-            ${fieldFor(fileId, pair ? { ...c, input: "date" } : c, value, disabled, { withOutside })}
+            ${fieldFor(fileId, pair ? { ...c, input: "date" } : c, value, disabled, { withOutside, projectName: (initial.project_name ?? "").trim() })}
             <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : pair ? pair.hint : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "targets" && c.name === "end_month" ? T.masters.hintEndMonth : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;
         })}
@@ -3037,6 +3072,21 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           if (el) el.value = cellOf(docs.members, latest.row, name);
         }
       });
+    }
+    // 正式な案件を選んだら、顧客名・案件名は正式な値にして変えさせない（取り込みでも同じ値になる。§137）
+    const officialEl = fileId === "contracts" ? form.querySelector('input[type="hidden"][name="project_id"]') : null;
+    if (officialEl) {
+      const syncOfficial = () => {
+        const p = officialProjects().find((x) => x.projectId === officialEl.value.trim());
+        for (const [name, v] of [["customer_name", p?.customerName], ["project_name", p?.projectName]]) {
+          const el = form.querySelector(`#yn-me-f-${name}`);
+          if (!el) continue;
+          if (p) el.value = v;
+          el.disabled = !!p;
+        }
+      };
+      officialEl.addEventListener("change", syncOfficial);
+      syncOfficial();
     }
     const msg = form.querySelector(".yn-me-form-msg");
     const confirmBox = form.querySelector(".yn-me-confirm");
@@ -3068,6 +3118,10 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           values[monthCol] = sp.month;
           values[p.dateCol] = sp.date;
         } else values[p.dateCol] = "";
+      }
+      if (officialEl) {
+        const p = officialProjects().find((x) => x.projectId === (values.project_id ?? ""));
+        if (p) Object.assign(values, { customer_name: p.customerName, project_name: p.projectName });
       }
       const unitSel = form.querySelector('[name="__allocation_unit"]');
       if (unitSel && "allocation" in values) values.allocation = allocationFromInput(values.allocation, unitSel.value, hoursOfMonth(/^\d{4}-\d{2}$/.test(values.start_month ?? "") ? values.start_month : plan.months[0]));

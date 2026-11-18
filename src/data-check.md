@@ -323,6 +323,15 @@ if (model && projectCheck?.enabled && projectCheck.unlinked.length > 0) {
         { key: "contractId", label: T.dataCheck.colContractId, type: "text", optional: true, exportAlways: true },
         { key: "period", label: T.dataCheck.colPeriod, type: "text", hideOnPhone: true, dateValue: (r) => [r.startMonth, r.endMonth] },
         { key: "candidateText", label: T.dataCheck.colCandidates, type: "text", empty: T.dataCheck.noCandidate },
+        // マスタ編集の案件で正式な案件を選んで結び付ける（§137）
+        {
+          key: "action",
+          label: T.dataCheck.colAction,
+          type: "custom",
+          get: () => T.dataCheck.openContract,
+          render: (r) => linkButton(mastersHref("contracts", { q: r.contractId }), T.dataCheck.openContract, fmt(T.dataCheck.openContractAria, { name: [r.customerName, r.projectName].filter(Boolean).join(" / ") })),
+          exportValue: () => "",
+        },
       ],
       rows: projectCheck.unlinked.map((c, i) => ({ key: i, ...c, period: `${c.startMonth}〜${c.endMonth}`, candidateText: c.candidates.map(officialLabel).join("、") })),
       caption: T.dataCheck.unlinkedContractsTitle,
