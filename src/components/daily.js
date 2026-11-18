@@ -136,11 +136,12 @@ export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
 export function dailyLegend(dark, { target = false, end = T.daily.ends.month } = {}) {
   const c = chartColors(dark);
   return chartLegend([
-    // 並びは他のグラフと同じ 予算 → 実績 → 見込み。予算は青の実線、目標の上限は赤の破線（§63.3・§131）
-    target ? { label: T.daily.legendCapTarget, color: c.danger, shape: "line-dashed" } : { label: T.daily.legendCap, color: c.budget, shape: "line" },
+    // 並びは他のグラフと同じ 予算 → 実績 → 見込み → 目標。予算は青の実線（目標があっても出す）、目標の上限は紫の破線（§63.3・§140）
+    { label: T.daily.legendCap, color: c.budget, shape: "line" },
     { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
     { label: fmt(T.daily.legendProjection, { end }), color: c.cost, shape: "line-dotted" },
+    ...(target ? [{ label: T.daily.legendCapTarget, color: c.target, shape: "line-dashed" }] : []),
   ]);
 }
 
@@ -154,7 +155,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
   const isRange = !!p.unit && p.unit !== "month";
   const todayDay = p.today ? (isRange ? (pts.find((d) => d.date === p.today)?.day ?? null) : Number(p.today.slice(8, 10))) : null;
   const projLine = last && last.day < n ? [{ day: last.day, v: last.cumulative }, { day: n, v: p.projection }] : [];
-  const peak = Math.max(p.cap, p.projection, last?.cumulative ?? 0, 1);
+  const peak = Math.max(p.cap, p.target ? p.budget : 0, p.projection, last?.cumulative ?? 0, 1);
   const axisUnit = peak >= 5e6 ? { label: T.format.units.m, div: 1e6 } : peak >= 5e4 ? { label: T.charts.axisTenThousandYen, div: 1e4 } : { label: T.format.units.yen, div: 1 };
   const axisFormat = (v) => maxFractionFormat(1).format(v / axisUnit.div);
   // 目盛り: 1 日・5 日おき（狭い画面は 10 日おき）。今週は毎日、今四半期・今年度は月の初日（今年度の狭い画面は 1 か月おき）
@@ -186,7 +187,9 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       Plot.rectX(off, { x1: (d) => d.day - 0.5, x2: (d) => d.day + 0.5, fill: c.muted, fillOpacity: 0.08 }),
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),
-      p.target ? Plot.ruleY([p.cap], { stroke: c.danger, strokeDasharray: "6 4", strokeWidth: 1.5 }) : Plot.ruleY([p.cap], { stroke: c.budget, strokeWidth: 2 }),
+      // 上限（予算）は目標があっても出す（§140）。目標があれば上限（目標）を紫の破線で重ねる
+      Plot.ruleY([p.target ? p.budget : p.cap], { stroke: c.budget, strokeWidth: 2 }),
+      p.target ? Plot.ruleY([p.cap], { stroke: c.target, strokeDasharray: "6 4", strokeWidth: 1.5 }) : null,
       Plot.line(pts, { x: "day", y: "pace", stroke: c.budget, strokeWidth: 2, strokeDasharray: "4 3", curve: "linear" }),
       Plot.line(projLine, { x: "day", y: "v", stroke: c.cost, strokeWidth: 2, strokeDasharray: "2 3" }),
       Plot.line(done, { x: "day", y: "cumulative", stroke: c.cost, strokeWidth: 2.5, curve: "linear" }),

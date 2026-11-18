@@ -12,8 +12,8 @@ import { dataTable } from "./table.js";
 
 export function chartColors(dark) {
   return dark
-    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b" }
-    : { budget: "#2a78d6", cost: "#eb6834", gp: "#1baf7a", surface: "#fcfcfb", text: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7", danger: "#d03b3b" };
+    ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b", target: "#b38cf6" }
+    : { budget: "#2a78d6", cost: "#eb6834", gp: "#1baf7a", surface: "#fcfcfb", text: "#52514e", muted: "#898781", grid: "#e1e0d9", axis: "#c3c2b7", danger: "#d03b3b", target: "#7b3fd1" };
 }
 
 /** 凡例（HTML。グラフとは独立に読める） */
@@ -270,8 +270,8 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       // 予算の線は棒より前に出す（超えた分の境目が見えるように）
       noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
       !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
-      // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ赤の破線。実績の棒が線を超えたら目標を外れている
-      !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.danger, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
+      // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ紫の破線（§140）。実績の棒が線を超えたら目標を外れている
+      !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.target, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
       noBudget ? null : Plot.line(actual, { x: "i", y: "grossProfit", stroke: c.gp, strokeWidth: 2, curve: "linear" }),
       noBudget ? null : Plot.dot(actual, { x: "i", y: "grossProfit", fill: c.gp, r: dotR, stroke: c.surface, strokeWidth: dotStroke }),
@@ -328,7 +328,7 @@ export function monthlyLegend(dark, series = null) {
           { label: T.charts.gpActual, color: c.gp, shape: "line" },
           { label: T.charts.legendGpForecast, color: c.gp, shape: "line-dashed" },
         ]),
-    ...(series && !isDaySeries(series) && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.danger, shape: "line-dashed" }] : []),
+    ...(series && !isDaySeries(series) && hasTarget(series) ? [{ label: T.charts.legendTarget, color: c.target, shape: "line-dashed" }] : []),
   ]);
 }
 
