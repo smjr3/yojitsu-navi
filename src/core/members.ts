@@ -483,3 +483,57 @@ export function memberRateHistory(source: Pick<Dataset, "members" | "rates" | "t
   }
   return segments;
 }
+
+/** チームの外からチームの案件に入った人の区別（§133）。応援 = 管理対象の他チーム、ヘルプ = 所属チームの無い人・マスタに無い人 */
+export type TeamGuestOrigin = "support" | "help";
+
+export interface TeamGuest {
+  memberId: string;
+  origin: TeamGuestOrigin;
+  /** チームの案件に計画（アサイン）がある。false = 実績だけ（スポットの作業） */
+  planned: boolean;
+}
+
+/**
+ * チームの案件（contractIds）に期間内の計画か実績がある、チームの外の人（§133）。
+ * ownScope は担当組織（ownTeamScope: 自分・配下・上位）。所属（基準月）がその中の人は対象外（課長・部長は応援にしない）。
+ * ownScope が空（チームが木に無い）なら空。
+ */
+export function teamGuests(model: Pick<Model, "meta" | "members" | "memberMonths">, scope: { period: Period; contractIds: readonly string[]; ownScope: ReadonlySet<string> }): TeamGuest[] {
+  if (scope.contractIds.length === 0 || scope.ownScope.size === 0) return [];
+  return teamGuestsOf(aggregateMembers(model, { period: scope.period, contractIds: scope.contractIds }).members, scope.ownScope);
+}
+
+/** teamGuests の判定だけ（チームの案件に絞った aggregateMembers の結果を渡す。画面で集計を使い回すため） */
+export function teamGuestsOf(onTeamContracts: readonly MemberTotals[], ownScope: ReadonlySet<string>): TeamGuest[] {
+  if (ownScope.size === 0) return [];
+  const out: TeamGuest[] = [];
+  for (const m of onTeamContracts) {
+    if (!(m.plannedHours > 0) && !(m.actualHours > 0)) continue;
+    const planned = m.plannedHours > 0;
+    if (m.memberUnknown || !m.teamId) out.push({ memberId: m.memberId, origin: "help", planned });
+    else if (!ownScope.has(m.teamId)) out.push({ memberId: m.memberId, origin: "support", planned });
+  }
+  return out;
+}
+
+/** 2 つの集計を合わせる（チームのメンバー＋チームの案件に入った応援・ヘルプ。§133）。b のうち a にいる人は足さない */
+export function mergeMemberAggregates(a: MemberAggregate, b: MemberAggregate): MemberAggregate {
+  const seen = new Set(a.members.map((m) => m.memberId));
+  const extra = b.members.filter((m) => !seen.has(m.memberId));
+  if (extra.length === 0) return a;
+  const members = [...a.members, ...extra];
+  const total = { ...a.total };
+  for (const t of extra) {
+    total.plannedHours += t.plannedHours;
+    total.plannedCost += t.plannedCost;
+    total.actualHours += t.actualHours;
+    total.actualCost += t.actualCost;
+    total.unplannedHours += t.unplannedHours;
+    total.unplannedCost += t.unplannedCost;
+  }
+  total.memberCount = members.length;
+  total.variance = total.plannedCost - total.actualCost;
+  total.utilization = utilizationOf(total.actualHours, total.plannedHours);
+  return { period: a.period, baseMonth: a.baseMonth, members, total };
+}

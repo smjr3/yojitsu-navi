@@ -7,7 +7,8 @@
  * 金額は既定単位に依存しないよう URL に unit=yen を付ける。
  */
 import { createRequire } from "node:module";
-import { aggregateMembers, memberMonthlySeries, type Period } from "../../src/core/index.js";
+import { aggregateMembers, contractsForTeam, memberMonthlySeries, ownTeamScope, type Period } from "../../src/core/index.js";
+import { teamGuests } from "../../src/core/members.js";
 import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cell, cellText, kpiValue, dialog, dialogRow, query } from "./helpers/app.js";
 import { fiscalPeriod, getModel, treeAt, yen, formatPercent } from "./helpers/core.js";
 
@@ -64,20 +65,27 @@ test.describe("メンバー一覧 /members", () => {
     expect(agg.total.actualCost).toBe(cost);
   });
 
-  test("チームで絞り込むと所属チーム（基準月、配下含む）のメンバーだけ。検索で絞ると合計行も表示中のメンバーで計算し直す", async ({ page }) => {
+  test("チームで絞り込むと所属チーム（基準月、配下含む）のメンバー＋チームの案件に計画のある応援・ヘルプ（§133）。検索で絞ると合計行も表示中のメンバーで計算し直す", async ({ page }) => {
     const team = "S11";
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&team=${team}&${U}`);
     const tree = treeAt(ASOF);
     const ids = new Set(tree[team]!.descendantIds);
     const all = aggregateMembers(model, { period: CMP });
-    const expected = all.members.filter((m) => m.teamId && ids.has(m.teamId)).map((m) => m.memberId);
+    const allFull = aggregateMembers(model, { period: FY });
+    const expected = allFull.members.filter((m) => m.teamId && ids.has(m.teamId)).map((m) => m.memberId);
     expect(expected.length).toBeGreaterThan(2);
+    const contractIds = contractsForTeam(model, team, tree).map((c) => c.contractId);
+    const guests = teamGuests(model, { period: FY, contractIds, ownScope: ownTeamScope(tree, team) });
+    const ownAgg = aggregateMembers(model, { period: CMP, memberIds: expected });
+    const guestAgg = aggregateMembers(model, { period: CMP, memberIds: guests.map((g) => g.memberId), contractIds });
+    const planned = guestAgg.members.filter((m) => guests.find((g) => g.memberId === m.memberId)!.planned).map((m) => m.memberId);
     const table = tableByCaption(page, "メンバー別の計画と実績");
-    await expect(dataRows(table)).toHaveCount(expected.length);
+    const shownOwn = ownAgg.members.map((m) => m.memberId);
+    await expect(dataRows(table)).toHaveCount(shownOwn.length + planned.length);
     const keys = await dataRows(table).evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-key")));
-    expect([...keys].sort()).toEqual([...expected].sort());
-    const teamAgg = aggregateMembers(model, { period: CMP, memberIds: expected });
-    await expect(kpiValue(page, 1)).toHaveText(yen(teamAgg.total.actualCost));
+    expect([...keys].sort()).toEqual([...shownOwn, ...planned].sort());
+    // KPI は所属メンバー＋応援・ヘルプ（チームの案件の分）。表に出していない実績だけの人も含む
+    await expect(kpiValue(page, 1)).toHaveText(yen(ownAgg.total.actualCost + guestAgg.total.actualCost));
 
     // 検索（全角・大文字小文字を区別しない）
     const target = all.members.find((m) => m.memberId === "M011")!;

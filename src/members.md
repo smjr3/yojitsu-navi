@@ -12,13 +12,15 @@ title: メンバー別
 ```js
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
-import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName, planGaps } from "./core/index.js";
+import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName, ownTeamScope, planGaps } from "./core/index.js";
+import { mergeMemberAggregates, teamGuestsOf } from "./core/members.js";
 import { createStore } from "./components/state.js";
 import { onTextInput } from "./components/text-input.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
 import { pageHeader, sectionTitle, loadJson, note, withToday } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
+import { withOrigin } from "./components/team-detail.js";
 // KPI 4 枚（計画原価・実績原価・差額・稼働率）。1024px でも 4 枚が 1 行（狭いと 2×2）に並ぶようにクラスを足す
 const memberKpiRow = (tiles) => {
   const row = kpiRow(tiles, { columns: 4 });
@@ -71,7 +73,7 @@ const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
 const aggregateMembersCached = (() => {
   const cache = new Map();
   return (model, scope) => {
-    const key = JSON.stringify([scope.period.from, scope.period.to, scope.includeOutside ?? false, scope.memberIds ?? null]);
+    const key = JSON.stringify([scope.period.from, scope.period.to, scope.includeOutside ?? false, scope.memberIds ?? null, scope.contractIds ?? null]);
     let v = cache.get(key);
     if (!v) {
       v = aggregateMembers(model, scope);
@@ -99,15 +101,34 @@ const vm = (() => {
   // 対象の人は「期間全体」で決める（経過月だけで決めると、未来月にだけアサインのある人が期間全体の計画から抜ける）
   const allFull = period.to === fullPeriod.to ? all : aggregateMembersCached(model, { period: fullPeriod, includeOutside });
   const memberIds = memberIdsInTeam(allFull.members, state.team, scope.tree);
-  const agg = memberIds ? aggregateMembersCached(model, { period, memberIds, includeOutside }) : all;
+  // チームを選んだときは、チームの案件に入った他チームの人（応援）・所属チームの無い人（ヘルプ）も出す（§133）。
+  // この人たちはチームの案件の分だけを数える（運用保守以外は含めない）。課長・部長など上位の組織の人は応援にしない
+  const guests =
+    state.team && state.team !== UNASSIGNED_TEAM_ID && !scope.teamMissing && scope.contractIds.length
+      ? teamGuestsOf(aggregateMembersCached(model, { period: fullPeriod, contractIds: scope.contractIds }).members, ownTeamScope(scope.tree, state.team))
+      : [];
+  const guestOrigin = new Map(guests.map((g) => [g.memberId, g.origin]));
+  // 計画のある応援・ヘルプ（実績だけの人は表の上のボタンで出す。体制図の「実績だけの応援・ヘルプ」と同じ）
+  const plannedGuestIds = guests.filter((g) => g.planned).map((g) => g.memberId);
+  const spotIds = new Set(guests.filter((g) => !g.planned).map((g) => g.memberId));
+  const guestIds = guests.map((g) => g.memberId);
+  // 所属メンバー（ownIds）と応援・ヘルプ（gIds）を合わせた集計
+  const teamAgg = (p, ownIds, gIds) => {
+    const a = aggregateMembersCached(model, { period: p, memberIds: ownIds ?? undefined, includeOutside });
+    return gIds.length ? mergeMemberAggregates(a, aggregateMembersCached(model, { period: p, memberIds: gIds, contractIds: scope.contractIds })) : a;
+  };
+  const aggOf = (ids) => teamAgg(period, ids.filter((id) => !guestOrigin.has(id)), ids.filter((id) => guestOrigin.has(id)));
+  const agg = memberIds ? teamAgg(period, memberIds, guestIds) : all;
   // 期間全体の計画（未来月を含む）。KPI の補足に出す
-  const fullAgg = period.to === fullPeriod.to ? agg : aggregateMembersCached(model, { period: fullPeriod, memberIds: memberIds ?? undefined, includeOutside });
+  const fullAgg = period.to === fullPeriod.to ? agg : teamAgg(fullPeriod, memberIds, guestIds);
   // 所属（事業本部・部・課）は基準月のマスタの値（「列」で選べる列。§106.1）
   const orgOf = new Map();
   for (const r of model.members) if (r.effectiveFrom <= all.baseMonth && (orgOf.get(r.memberId)?.effectiveFrom ?? "") <= r.effectiveFrom) orgOf.set(r.memberId, r);
   const rows = agg.members.map((m) => ({
     ...m,
     key: m.memberId,
+    origin: guestOrigin.get(m.memberId) ?? null,
+    spot: spotIds.has(m.memberId),
     division: orgOf.get(m.memberId)?.division ?? "",
     department: orgOf.get(m.memberId)?.department ?? "",
     section: orgOf.get(m.memberId)?.section ?? "",
@@ -115,7 +136,14 @@ const vm = (() => {
     teamName: m.teamId ? teamName(model, m.teamId, scope.tree) : "",
     searchText: normalizeName(`${m.memberId} ${m.memberName} ${m.title ?? ""}`),
   }));
-  return { scope, period, fullPeriod, allFuture, fullAgg, agg, rows, memberIds, includeOutside, unit: state.unit, baseMonth: all.baseMonth, includesPreliminary: agg.members.some((m) => m.includesPreliminary) };
+  // 実績の KPI の下の「うち応援 ○・ヘルプ ○」（チーム詳細と同じ。§72）
+  const origin = { supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0 };
+  for (const m of agg.members) {
+    const o = guestOrigin.get(m.memberId);
+    if (o === "support") (origin.supportHours += m.actualHours), (origin.supportAmount += m.actualCost);
+    else if (o === "help") (origin.helpHours += m.actualHours), (origin.helpAmount += m.actualCost);
+  }
+  return { scope, period, fullPeriod, allFuture, fullAgg, agg, aggOf, rows, memberIds, plannedGuestIds, spotCount: rows.filter((r) => r.spot).length, origin, includeOutside, unit: state.unit, baseMonth: all.baseMonth, includesPreliminary: agg.members.some((m) => m.includesPreliminary) };
 })();
 ```
 
@@ -153,7 +181,7 @@ if (vm) {
   display(
     memberKpiRow([
         statTile({ label: fmt(T.members.plannedCostPeriod, { period: periodJa(period) }), value: money(t.plannedCost, unit), sub: fmt(T.members.plannedSub, { hours: formatHours(t.plannedHours), n: t.memberCount, whole: period.to !== fullPeriod.to ? fmt(T.members.wholePeriodSuffix, { value: money(fullAgg.total.plannedCost, unit) }) : "" }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "plannedCost", unit, period }) }),
-        statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: fmt(T.members.actualSub, { hours: formatHours(t.actualHours), unplanned: formatHours(t.unplannedHours) }), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
+        statTile({ label: T.breakdown.actualCost, value: money(t.actualCost, unit), sub: withOrigin(fmt(T.members.actualSub, { hours: formatHours(t.actualHours), unplanned: formatHours(t.unplannedHours) }), vm.origin, unit), breakdown: () => bd.memberTotalsSpec({ members: agg.members, total: t, measure: "actualCost", unit, period }) }),
         statTile({ label: T.members.varianceTile, value: moneySigned(t.variance, unit), sub: t.plannedCost === 0 && t.actualCost === 0 ? "" : varianceNote(t.variance, unit), breakdown: () => bd.memberVarianceSpec({ plannedCost: t.plannedCost, actualCost: t.actualCost, unit, subtitle }) }),
         statTile({ label: T.members.utilizationTile, value: formatPercent(t.utilization), sub: t.utilization === null ? T.breakdown.utilZero : `${formatHours(t.actualHours)} ÷ ${formatHours(t.plannedHours)}`, breakdown: () => bd.memberUtilizationSpec({ plannedHours: t.plannedHours, actualHours: t.actualHours, utilization: t.utilization, unplannedHours: t.unplannedHours, subtitle }) }),
     ]),
@@ -161,6 +189,21 @@ if (vm) {
 }
 ```
 
+
+```js
+// 実績だけの応援・ヘルプを表に出すか（ページ内で保持。期間・単位を変えても戻さない）
+const spotView = { on: false };
+```
+
+```js
+// 応援・ヘルプのチップ（§133）。所属の行（2 行目）の先頭に付ける（名前が長くても隠れないように）
+const originChip = (r) =>
+  r.origin === "support"
+    ? html`<span class="yn-chip yn-chip-neutral" data-origin="support" title=${T.members.supportTitle}>${T.team.support}</span> `
+    : r.origin === "help"
+      ? html`<span class="yn-chip yn-chip-neutral yn-chip-help" data-origin="help" title=${r.memberUnknown ? T.team.helpUnknownTitle : T.members.helpTitle}>${T.team.help}</span> `
+      : null;
+```
 
 ```js
 // 検索フォームは model だけに依存し 1 回だけ描く（期間・単位を変えても作り直さない）
@@ -197,16 +240,22 @@ const query = searchForm ? Generators.input(searchForm) : "";
 if (vm) {
   const { unit, period } = vm;
   const q = normalizeName(query ?? "");
-  const rows = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
-  // 合計行は表示中のメンバーを母集団にコアで集計し直す（検索で絞ったときも一致させる）
-  const shown = q ? aggregateMembersCached(model, { period, memberIds: rows.map((r) => r.memberId), includeOutside: vm.includeOutside }) : vm.agg;
+  const matched = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
+  // 実績だけの応援・ヘルプ（チームの案件に計画が無い人）は、ボタンを押したときだけ出す（§133。体制図と同じ畳み方）
+  const spotN = matched.filter((r) => r.spot).length;
+  const spotBtn = spotN
+    ? html`<button type="button" class="yn-btn yn-btn-sm" id="yn-m-spot" aria-pressed=${spotView.on ? "true" : "false"}>${fmt(T.members.spotToggle, { n: spotN })}</button>`
+    : null;
   display(
     sectionTitle(
       T.members.sectionTitle,
       fmt(T.members.sectionHint, { period: periodJa(period), elapsed: period.to !== vm.fullPeriod.to ? T.members.elapsedSuffix : "", month: monthJa(vm.baseMonth) }),
+      spotBtn,
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);
+  // 応援・ヘルプの人はチームの案件の分だけ（§133）
+  const within = (r) => (r.origin ? { contractIds: vm.scope.contractIds, includeOutside: false } : { includeOutside: vm.includeOutside });
   const sub = (r) => r.memberName;
   const contractHref = (id) => store.href("./contract", {}, { id });
   const chips = (r) => {
@@ -225,7 +274,7 @@ if (vm) {
       sublabel: T.members.colMemberSub,
       type: "text",
       // 2 行目に ID・所属チーム・役職（列を分けると 1280/1024px に収まらないため。Excel には別列で出す）
-      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
+      render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.teamName || T.members.noTeam}${r.title ? `・${r.title}` : ""}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.teamName || T.members.noTeam}${r.title ? ` ・ ${r.title}` : ""}</span></span>`,
       sortValue: (r) => r.memberName,
       exportValue: (r) => r.memberName,
     },
@@ -241,18 +290,20 @@ if (vm) {
     { key: "contractCount", label: T.columns.contractCount, type: "int", optional: true },
     { key: "unplannedHours", label: T.members.colUnplannedHours, type: "hours", optional: true },
     { key: "unplannedCost", label: T.members.colUnplannedCost, type: "money", optional: true },
-    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
-    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "plannedHours", label: T.breakdown.plannedHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), ...within(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
+    { key: "actualHours", label: T.breakdown.actualHours, type: "hours", hideOnPhone: true, breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), ...within(r), unit, measure: "hours", subtitle: periodJa(period), contractHref }) },
     { key: "utilization", label: T.breakdown.utilization, type: "percent", breakdown: (r) => bd.memberUtilizationSpec({ plannedHours: r.plannedHours, actualHours: r.actualHours, utilization: r.utilization, unplannedHours: r.unplannedHours, subtitle: sub(r) }) },
-    { key: "plannedCost", label: T.breakdown.plannedCost, type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) },
-    { key: "actualCost", label: T.breakdown.actualCost, type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), includeOutside: vm.includeOutside, unit, subtitle: periodJa(period), contractHref }) },
+    { key: "plannedCost", label: T.breakdown.plannedCost, type: "money", breakdown: (r) => bd.memberPlanSpec({ model, member: r, months: monthsOf(r), ...within(r), unit, subtitle: periodJa(period), contractHref }) },
+    { key: "actualCost", label: T.breakdown.actualCost, type: "money", breakdown: (r) => bd.memberActualSpec({ model, member: r, months: monthsOf(r), ...within(r), unit, subtitle: periodJa(period), contractHref }) },
     { key: "variance", label: T.breakdown.variance, sublabel: T.members.varianceSub, type: "money", exportLabel: T.members.varianceExport, render: (r, u) => moneySigned(r.variance, u), breakdown: (r) => bd.memberVarianceSpec({ plannedCost: r.plannedCost, actualCost: r.actualCost, unit, subtitle: sub(r) }) },
     { key: "status", label: T.columns.status, type: "status", get: chips, hideNarrow: true, sortable: false },
   ];
-  // 合計行は表示中のメンバーで集計し直す（列の絞り込み後の行が来る）
-  const totalsFor = (shownRows) => (shownRows.length === rows.length ? shown : aggregateMembersCached(model, { period, memberIds: shownRows.map((r) => r.memberId), includeOutside: vm.includeOutside }));
-  display(
-    dataTable({
+  // 合計行は表示中のメンバーを母集団にコアで集計し直す（検索・列の絞り込み・実績だけの人の表示に合わせる）
+  const totalsFor = (shownRows) => (shownRows.length === vm.rows.length ? vm.agg : vm.aggOf(shownRows.map((r) => r.memberId)));
+  const holder = html`<div id="yn-members-table"></div>`;
+  const draw = () => {
+    const rows = spotView.on ? matched : matched.filter((r) => !r.spot);
+    holder.replaceChildren(dataTable({
       columns,
       rows,
       unit,
@@ -267,8 +318,15 @@ if (vm) {
         return { memberName: null, name: fmt(T.members.totalRow, { n: shownRows.length }), plannedHours: st.plannedHours, actualHours: st.actualHours, utilization: st.utilization, plannedCost: st.plannedCost, actualCost: st.actualCost, variance: st.variance, unplannedHours: st.unplannedHours, unplannedCost: st.unplannedCost, teamName: null, title: null, status: null, agg };
       },
       summaryBreakdown: (col, { agg }) => (["plannedHours", "actualHours", "utilization", "plannedCost", "actualCost", "variance"].includes(col.key) ? () => bd.memberTotalsSpec({ members: agg.members, total: agg.total, measure: col.key, unit, period }) : null),
-    }),
-  );
+    }));
+  };
+  draw();
+  spotBtn?.addEventListener("click", () => {
+    spotView.on = !spotView.on;
+    spotBtn.setAttribute("aria-pressed", spotView.on ? "true" : "false");
+    draw();
+  });
+  display(holder);
   if (vm.rows.length === 0) display(note(T.members.emptyText));
 }
 ```
@@ -276,12 +334,13 @@ if (vm) {
 ```js
 // 計画とのずれ（§64）: メンバーごとの計画と実績の表の下に置く（§68）。確定した月だけで、メンバー × 案件の計画時間と実績時間を比べる。検索欄には連動しない
 if (vm) {
-  const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside });
+  const gaps = planGaps(model, { period: vm.fullPeriod, memberIds: vm.memberIds ?? undefined, includeOutside: vm.includeOutside, guests: { memberIds: vm.plannedGuestIds, contractIds: vm.scope.contractIds } });
   const jp = gaps.judgedPeriod;
   const status = !jp ? T.members.gapNoConfirmed : gaps.rows.length ? fmt(T.members.gapStatus, { period: periodJa(jp), n: gaps.rows.length }) : fmt(T.members.gapNone, { period: periodJa(jp) });
   const toPlan = html`<a class="yn-btn yn-btn-sm" id="yn-gap-plan-link" href=${state.team ? `./plan?team=${encodeURIComponent(state.team)}` : "./plan"}>${T.members.gapToPlan}</a>`;
   display(html`<div id="yn-plan-gaps">${sectionTitle(T.members.gapTitle, fmt(T.members.gapHint, { ratio: formatPercent(PLAN_GAP_RATIO), hours: formatHours(PLAN_GAP_MIN_HOURS) }), gaps.rows.length ? toPlan : null, status)}</div>`);
   if (gaps.rows.length) {
+    const guestOrigin = new Map(vm.rows.filter((r) => r.origin).map((r) => [r.memberId, r.origin]));
     const byId = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
     const kindText = { unplanned: T.members.gapUnplanned, noActual: T.members.gapNoActual, over: T.members.gapOver, under: T.members.gapUnder };
     const rows = gaps.rows.map((g) => {
@@ -290,6 +349,7 @@ if (vm) {
       return {
         ...g,
         key: `${g.memberId}\u0000${g.contractId}`,
+        origin: guestOrigin.get(g.memberId) ?? null,
         outside,
         outsideLabel: outside ? bd.outsideRowLabel(g.outsideType) : "",
         memberTeamName: g.teamId ? teamName(model, g.teamId, vm.scope.tree) : T.members.noTeam,
@@ -307,7 +367,7 @@ if (vm) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
-        render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.memberTeamName}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${r.memberTeamName}</span></span>`,
+        render: (r) => html`<span class="yn-cell-2line" title=${`${r.memberName}・${r.memberTeamName}`}><span class="yn-cell-main">${r.memberName}</span><span class="yn-cell-sub">${originChip(r)}${r.memberTeamName}</span></span>`,
       },
       { key: "memberId", label: T.members.colMemberId, type: "text", exportOnly: true },
       { key: "contractId", label: T.columns.contract, type: "text", render: (r) => (r.outside ? html`<span class="yn-cell-main">${r.outsideLabel}</span>` : contractNameCell(r)), sortValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`), exportValue: (r) => (r.outside ? r.outsideLabel : `${r.customerName} / ${r.projectName}`) },
