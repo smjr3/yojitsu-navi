@@ -5990,3 +5990,24 @@ summary:has(> .yn-disc)::-webkit-details-marker {
     transition: none;
   }
 }
+
+/* 表示の切り替え（表／体制図・表／期間・まとめ方・色の基準）は見出しのすぐ下の左（SPEC §144）。
+   リンク・「列」・Excel 出力は従来どおり右 */
+.yn-section-switch {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.yn-switch-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+@media print {
+  .yn-section-switch {
+    display: none !important;
+  }
+}
