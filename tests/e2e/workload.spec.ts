@@ -4,9 +4,9 @@
  *   - 契約外は案件の実績に入らない（案件詳細の内訳の合計 = 案件の実績）
  *   - 軸の切替が URL に残る、内訳パネル、チーム絞り込み、Excel、ダーク・390px で横スクロールなし
  */
-import { aggregateWork, elapsedMonthCount, filterWorkRows, memberTeamsAt, personMonths, workByTask, workTotals, type WorkRow } from "../../src/core/index.js";
+import { aggregateWork, compareWorkPlan, confirmedPeriodOf, elapsedMonthCount, filterWorkRows, memberLeftAt, memberTeamsAt, ownTeamScope, personMonths, workByTask, workGuests, workPlanRows, workTeamOf, workTotals, type WorkRow } from "../../src/core/index.js";
 import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, kpiValue, dialog, dialogRow, query, showAllRows } from "./helpers/app.js";
-import { fiscalPeriod, getModel, treeAt, aggregate } from "./helpers/core.js";
+import { fiscalPeriod, getModel, treeAt, aggregate, teamContractIds } from "./helpers/core.js";
 
 const model = getModel();
 const FY = fiscalPeriod(model);
@@ -17,6 +17,13 @@ const rows: WorkRow[] = model.workRows;
 const axisBtn = (page: import("@playwright/test").Page, axis: string) => page.locator(`.yn-work-axis button[data-axis="${axis}"]`);
 const inFy = filterWorkRows(rows, { period: FY });
 const totals = workTotals(inFy, elapsedMonthCount(FY, model.meta.asOfMonth));
+// 運用保守の計画（§149）と、確定した月
+const plansFy = workPlanRows(model.memberMonths).filter((p) => p.month >= FY.from && p.month <= FY.to);
+const judged = confirmedPeriodOf(model.meta, FY);
+const BASE = FY.to < model.meta.asOfMonth ? FY.to : model.meta.asOfMonth;
+const pmSignedText = (h: number) => (Math.abs(personMonths(h, STD)) < 0.005 ? pmText(0) : `${h > 0 ? "+" : "−"}${pmText(Math.abs(h))}`);
+// メンバー別で既定で出す人（基準月に不在の人は隠す。§138・§149）
+const shownMembers = (list: ReturnType<typeof aggregateWork>) => list.filter((g) => memberLeftAt(model, g.key, BASE) === null);
 
 test.describe("工数 /workload", () => {
   test("ダミーデータに契約外の工数がある（前提）", () => {
@@ -28,10 +35,11 @@ test.describe("工数 /workload", () => {
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}`);
     await expect(page.getByRole("link", { name: "稼働実績", exact: true }).first()).toHaveAttribute("aria-current", "page");
     await expect(kpiValue(page, 0)).toHaveText(pmText(totals.contractHours));
-    await expect(kpiValue(page, 1)).toHaveText(pmText(totals.outsideHours));
-    await expect(kpiValue(page, 2)).toHaveText(`${totals.memberCount}人`);
+    await expect(kpiValue(page, 1)).toHaveText(pmSignedText(compareWorkPlan(plansFy, inFy, judged).diffHours));
+    await expect(kpiValue(page, 2)).toHaveText(pmText(totals.outsideHours));
+    await expect(kpiValue(page, 3)).toHaveText(`${totals.memberCount}人`);
     // 内訳: 契約外の行に作業種別ごとの時間が出る
-    await kpiValue(page, 1).click();
+    await kpiValue(page, 2).click();
     const d = dialog(page);
     await expect(d).toBeVisible();
     expect(await dialogRow(page, "運用保守以外")).toContain(hoursText(totals.outsideHours));
@@ -78,6 +86,9 @@ test.describe("工数 /workload", () => {
     expect(query(page).get("axis")).toBe("customer");
     const byCustomer = aggregateWork(model, inFy, { period: FY, axis: "customer", unassignedLabel: "-" });
     const table = tableByCaption(page, "顧客ごとの稼働実績");
+    // 先頭 10 行だけ出している（§127・§149）
+    await expect(dataRows(table)).toHaveCount(Math.min(byCustomer.length, 10));
+    await showAllRows(table);
     await expect(dataRows(table)).toHaveCount(byCustomer.length);
     // 案件の無い顧客（契約外だけ）は詳細へのリンクにしない
     const onlyOutside = byCustomer.find((g) => g.totals.contractHours === 0);
@@ -88,9 +99,10 @@ test.describe("工数 /workload", () => {
     expect(query(page).get("axis")).toBe("member");
     const byMember = aggregateWork(model, inFy, { period: FY, axis: "member", unassignedLabel: "-" });
     const mt = tableByCaption(page, "メンバーごとの稼働実績");
-    await expect(dataRows(mt)).toHaveCount(byMember.length);
+    await showAllRows(mt);
+    await expect(dataRows(mt)).toHaveCount(shownMembers(byMember).length);
     const h = await headerIndex(mt);
-    const top = byMember.find((g) => g.totals.outsideHours > 0)!;
+    const top = shownMembers(byMember).find((g) => g.totals.outsideHours > 0)!;
     expect(await cellText(mt.locator(`tbody tr[data-key="${top.key}"]`), col(h, "運用保守以外"))).toBe(pmText(top.totals.outsideHours));
     // 行クリックでメンバー詳細 → 戻ると軸が復元
     await mt.locator(`tbody tr[data-key="${top.key}"] th`).click();
@@ -99,16 +111,35 @@ test.describe("工数 /workload", () => {
     await expect(axisBtn(page, "member")).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("チームで絞ると、その所属の人だけになる", async ({ page }) => {
+  test("チームで絞ると、その所属の人＋チームの案件に入った応援・ヘルプ（案件の分だけ）になる", async ({ page }) => {
     const teamId = "T111";
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}&team=${teamId}`);
-    const base = FY.to < model.meta.asOfMonth ? FY.to : model.meta.asOfMonth;
+    const base = BASE;
     const tree = treeAt(base);
     const teams = memberTeamsAt(model, inFy, base);
-    const ids = new Set([...teams.entries()].filter(([, t]) => t !== null && tree[teamId]!.descendantIds.includes(t)).map(([id]) => id));
-    const t = workTotals(inFy.filter((r) => ids.has(r.memberId)), elapsedMonthCount(FY, model.meta.asOfMonth));
+    const teamOf = (id: string) => (teams.has(id) ? teams.get(id)! : workTeamOf(model, id, base));
+    const people = new Set([...inFy.map((r) => r.memberId), ...plansFy.map((p) => p.memberId)]);
+    const ids = new Set([...people].filter((id) => {
+      const t = teamOf(id);
+      return t !== null && tree[teamId]!.descendantIds.includes(t);
+    }));
+    const contractIds = new Set(teamContractIds(teamId, FY) ?? []);
+    const guests = workGuests(model, inFy, plansFy, { ownIds: ids, contractIds, ownScope: ownTeamScope(tree, teamId), baseMonth: base });
+    expect(guests.size, "前提: T111 の案件に他チームの人が入っている").toBeGreaterThan(0);
+    const mine = inFy.filter((r) => ids.has(r.memberId) || (guests.has(r.memberId) && r.category !== "outside" && r.contractId !== null && contractIds.has(r.contractId)));
+    const t = workTotals(mine, elapsedMonthCount(FY, model.meta.asOfMonth));
     await expect(kpiValue(page, 0)).toHaveText(pmText(t.contractHours));
-    await expect(kpiValue(page, 1)).toHaveText(pmText(t.outsideHours));
+    await expect(kpiValue(page, 2)).toHaveText(pmText(t.outsideHours));
+    await expect(page.locator(".yn-kpi").nth(3)).toContainText(`うち応援・ヘルプ ${guests.size}人`);
+    // メンバー別: 応援・ヘルプの人に印
+    await axisBtn(page, "member").click();
+    const mt = tableByCaption(page, "メンバーごとの稼働実績");
+    await showAllRows(mt);
+    for (const [id, origin] of guests) {
+      const r = mt.locator(`tbody tr[data-key="${id}"]`);
+      if ((await r.count()) === 0) continue; // 計画だけ（実績なし）の人は表に出ない
+      await expect(r.locator(`[data-origin="${origin}"]`)).toBeVisible();
+    }
   });
 
   test("作業種別の表: 契約内の実績の合計 = 全案件の実績、契約外は「対象外」", async ({ page }) => {
@@ -130,7 +161,7 @@ test.describe("工数 /workload", () => {
   test("ダーク・390px でも横スクロールしない", async ({ page }) => {
     await useDarkTheme(page);
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const axis of ["team", "customer", "member"]) {
+    for (const axis of ["team", "customer", "contract", "member"]) {
       await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}&axis=${axis}`);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(over, axis).toBeLessThanOrEqual(0);

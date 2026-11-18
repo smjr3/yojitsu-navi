@@ -140,6 +140,10 @@
 
 `myHoursRows(memberMonth, projectName)` は `MemberMonth.byContract` を 1 行ずつ写すだけ（計画・実績の計算は §18.1 と共有）。運用保守以外の行も入れる（「運用保守以外を含む」のチェックに関係なく）。`gitlabUsernameIndex(members, month)` は各メンバーの月の有効な行（無ければいちばん早い行）の `gitlabUsername` を `normalizeGitlabUsername` で比べ、2 人以上に付いた名前は返さない。`buildMyHoursPayload` はユーザー名のある人だけ、基準月と翌月の行と、月ごとのユーザー名 → 社員番号（`users[月]`）を `data/my-month.json` にする。
 
+## 稼働実績の計画との差（SPEC §149）— `src/core/workTypes.ts`
+
+`workPlanRows(memberMonths)` は運用保守のアサイン（運用保守以外の予定を除く）を `{month, memberId, contractId, hours}` にし、`encodeWorkRows(rows, plans)` が `work-hours.json` の `p` に入れる（`decodeWorkPlans` で戻す）。`compareWorkPlan(plans, rows, judged)` は確定した月（`confirmedPeriodOf`）だけで計画・実績・差と `planGapKindOf`（§64）の判定を返す（月ごとの `byMonth` は速報の月も持ち `judged` で区別）。`groupWorkPlans(plans, keysOf)` はまとめ方ごとの束、チームは `teamAncestry` で上位にも足す。`workGuests` は §134 と同じ応援・ヘルプの判定。`bucketWork`（`timeBuckets.ts`）は稼働の月を日・週・四半期・年度にする（日・週は member-days の重み）。
+
 ## グラフの単位（SPEC §130）— `src/core/timeBuckets.ts`
 
 `bucketMonths(series, "quarter"|"year", startMonth)` は月次推移の月を足す。`bucketDays(series, actuals, { unit, range, asOf, holidays })` は月の予算・見込み・目標の上限を `monthDayPool`（営業日。無い月は暦日）に配り、実績は `contractDailyActuals(model, history, contractIds, months)`（案件・月の実績を `data/daily-history.json` の日ごとの割合で配る。`spreadMonth` は足すと元の値）。`bucketMemberHours` はメンバーの時間（計画は `data/member-days.json` の重み `p`、無い月は営業日に均等）。どれも「足すと月の値」を `tests/unit/time-buckets.test.ts` で確かめる。祝日は配列ごとに 1 回だけ `HolidaySet`（行の無い年を国民の祝日で補う。Model と同じ数え方）にする。範囲の進捗は `progressOverRange`（`src/core/daily.ts`。今月の進捗の `progressFromDays` は変えていない）、範囲は `progressRangeOf`。

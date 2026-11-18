@@ -8,13 +8,14 @@
  */
 import { isValidISODate, monthOfDate, monthRange } from "./calendar.js";
 import { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey } from "./customers.js";
-import { createEffectiveIndex, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, leftMonthOf, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
+import { planGapKindOf, type PlanGapKind } from "./planGaps.js";
 import { createKeywordRouter } from "./mapping.js";
 import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import type { ProjectMatcher } from "./projectFromTask.js";
 import type { TaskNameExtractor } from "./taskFromName.js";
 import { monthStatusFromMeta } from "./status.js";
-import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
+import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberMonth, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 import { addMemberHours, memberHoursList, type MemberHoursAcc } from "./worklogMembers.js";
 
@@ -368,7 +369,8 @@ function compareWorkRows(a: WorkRow, b: WorkRow): number {
 // 集計（画面側。WorkRow[] に対して実行する）
 // ---------------------------------------------------------------------------
 
-export type WorkAxis = "team" | "customer" | "member";
+/** 稼働実績の まとめ方（contract = 案件。§149） */
+export type WorkAxis = "team" | "customer" | "contract" | "member";
 
 /** 工数の合計（時間）。人月は personMonths で換算する */
 export interface WorkTotals {
@@ -560,12 +562,15 @@ export interface AggregateWorkOptions {
   rootTeamIds?: readonly string[];
   /** 「未設定」の表示名 */
   unassignedLabel: string;
+  /** 案件の軸: 契約の表示名（「顧客 / 案件名」）。無ければ契約 ID */
+  contractLabel?: (contractId: string) => string;
 }
 
 /**
  * 軸ごとの工数一覧。
  * - team: 基準月の所属チームで束ね、上位は配下の合計（木の順）。チームに属さない・木に無い人は末尾の「未設定」
  * - customer: 顧客キーごと（時間の多い順）
+ * - contract: 案件（契約）ごと（時間の多い順）。運用保守以外は関連契約（§30.2）の行に数え、関連契約の無いものは末尾の「未設定」（§149）
  * - member: メンバーごと（時間の多い順）
  * 期間内に工数の無いグループは出さない（チーム軸の上位は配下にあれば出す）。
  */
@@ -594,6 +599,21 @@ export function aggregateWork(model: Pick<Model, "meta" | "members">, rows: read
       g.list.push(r);
     }
     return [...groups.entries()].map(([key, g]) => make(key, g.label, g.list)).sort(byTotal);
+  }
+
+  if (options.axis === "contract") {
+    const groups = new Map<string, WorkRow[]>();
+    for (const r of inPeriod) {
+      const key = r.contractId ?? UNASSIGNED_WORK_KEY;
+      const list = groups.get(key);
+      if (list) list.push(r);
+      else groups.set(key, [r]);
+    }
+    const label = options.contractLabel ?? ((id: string) => id);
+    const out = [...groups.entries()].filter(([k]) => k !== UNASSIGNED_WORK_KEY).map(([key, list]) => make(key, label(key), list)).sort(byTotal);
+    const un = groups.get(UNASSIGNED_WORK_KEY);
+    if (un) out.push(make(UNASSIGNED_WORK_KEY, options.unassignedLabel, un));
+    return out;
   }
 
   const baseMonth = period.to < model.meta.asOfMonth ? period.to : model.meta.asOfMonth;
@@ -667,9 +687,11 @@ export function outsideInputs(mappings: ReadonlyArray<{ kind: string; worklog: W
 export interface EncodedWorkRows {
   dict: string[];
   r: Array<[number, number, number, number, number, number, number, number, 0 | 1, 0 | 1, number, number | null]>;
+  /** 運用保守の計画（§149）。各行 = [月, 社員番号, 契約, 計画の時間]（文字列は dict の添字） */
+  p?: Array<[number, number, number, number]>;
 }
 
-export function encodeWorkRows(rows: readonly WorkRow[]): EncodedWorkRows {
+export function encodeWorkRows(rows: readonly WorkRow[], plans: readonly WorkPlanRow[] = []): EncodedWorkRows {
   const dict: string[] = [];
   const index = new Map<string, number>();
   const id = (s: string | null): number => {
@@ -696,7 +718,15 @@ export function encodeWorkRows(rows: readonly WorkRow[]): EncodedWorkRows {
     w.hours,
     w.amount,
   ]);
-  return { dict, r };
+  if (plans.length === 0) return { dict, r };
+  const p: NonNullable<EncodedWorkRows["p"]> = plans.map((x) => [id(x.month), id(x.memberId), id(x.contractId), Math.round(x.hours * 100) / 100]);
+  return { dict, r, p };
+}
+
+/** data/work-hours.json の運用保守の計画（§149。無ければ空） */
+export function decodeWorkPlans(data: EncodedWorkRows): WorkPlanRow[] {
+  const { dict } = data;
+  return (data.p ?? []).map((t) => ({ month: dict[t[0]] ?? "", memberId: dict[t[1]] ?? "", contractId: dict[t[2]] ?? "", hours: t[3] }));
 }
 
 export function decodeWorkRows(data: EncodedWorkRows): WorkRow[] {
@@ -717,4 +747,147 @@ export function decodeWorkRows(data: EncodedWorkRows): WorkRow[] {
     hours: t[10],
     amount: t[11],
   }));
+}
+
+// ---------------------------------------------------------------------------
+// 稼働実績の計画との比較・応援／ヘルプ（SPEC §149）
+// ---------------------------------------------------------------------------
+
+/** 運用保守の計画の 1 行（メンバー × 案件 × 月。リソース計画の時間） */
+export interface WorkPlanRow {
+  month: YearMonth;
+  memberId: string;
+  contractId: string;
+  hours: number;
+}
+
+/** MemberMonth の運用保守の計画（運用保守以外の予定は除く）。計画 0 の行は出さない */
+export function workPlanRows(memberMonths: ReadonlyArray<Pick<MemberMonth, "month" | "memberId" | "byContract">>): WorkPlanRow[] {
+  const out: WorkPlanRow[] = [];
+  for (const mm of memberMonths) {
+    for (const c of mm.byContract) {
+      if (typeof c.outsideType === "string" || !(c.plannedHours > 0)) continue;
+      out.push({ month: mm.month, memberId: mm.memberId, contractId: c.contractId, hours: c.plannedHours });
+    }
+  }
+  return out;
+}
+
+/** 基準月のメンバーの所属チーム（マスタに無い人は null。計画だけの人にも使う） */
+function teamAtBase(model: Pick<Model, "members">, memberId: string, baseMonth: YearMonth): string | null {
+  const rec = memberIndexOf(model.members).at(memberId, baseMonth);
+  return rec?.teamId ? rec.teamId : null;
+}
+
+/** 基準月のメンバーの所属チーム（作業実績の行が無い・計画だけの人にも使う。§149） */
+export function workTeamOf(model: Pick<Model, "members">, memberId: string, baseMonth: YearMonth): string | null {
+  return teamAtBase(model, memberId, baseMonth);
+}
+
+/** メンバーのマスタに無い人（作業実績だけの人。§72 のヘルプ・データ確認の「マスタに無いメンバー」） */
+export function isUnknownMember(model: Pick<Model, "members">, memberId: string): boolean {
+  return !memberIndexOf(model.members).has(memberId);
+}
+
+/** 基準月に不在の人の不在になった月（§138 と同じ。不在でなければ null） */
+export function memberLeftAt(model: Pick<Model, "members">, memberId: string, baseMonth: YearMonth): YearMonth | null {
+  const rec = memberIndexOf(model.members).at(memberId, baseMonth);
+  if (!isLeftRecord(rec)) return null;
+  return leftMonthOf(model.members.filter((r) => r.memberId === memberId && r.effectiveFrom <= baseMonth));
+}
+
+/** 計画を まとめ方のキーごとに分ける。チームは所属（基準月）の組織とその上位すべてに数える。keyOf が null の計画は数えない */
+export function groupWorkPlans(plans: readonly WorkPlanRow[], keysOf: (p: WorkPlanRow) => string | readonly string[] | null): Map<string, WorkPlanRow[]> {
+  const out = new Map<string, WorkPlanRow[]>();
+  for (const p of plans) {
+    const k = keysOf(p);
+    if (k === null) continue;
+    for (const key of typeof k === "string" ? [k] : k) {
+      const list = out.get(key);
+      if (list) list.push(p);
+      else out.set(key, [p]);
+    }
+  }
+  return out;
+}
+
+/** チームとその上位の組織の ID（木に無ければ空） */
+export function teamAncestry(tree: Record<string, TeamNode>, teamId: string | null): string[] {
+  const out: string[] = [];
+  let id = teamId;
+  while (id && tree[id] && !out.includes(id)) {
+    out.push(id);
+    id = tree[id]!.parentTeamId;
+  }
+  return out;
+}
+
+export interface WorkPlanMonth {
+  month: YearMonth;
+  plannedHours: number;
+  /** 運用保守の実績の時間 */
+  actualHours: number;
+  /** 確定した月だけ判定（速報の月は null） */
+  kind: PlanGapKind | null;
+  judged: boolean;
+}
+
+export interface WorkPlanCompare {
+  /** 確定した月の計画・運用保守の実績・差（実績 − 計画） */
+  plannedHours: number;
+  actualHours: number;
+  diffHours: number;
+  /** 確定した月の合計の判定（計画より多い・計画なし など。§64 と同じ基準） */
+  kind: PlanGapKind | null;
+  /** 期間の月ごと（実績のある月・計画のある月） */
+  byMonth: Map<YearMonth, WorkPlanMonth>;
+}
+
+/**
+ * 計画と運用保守の実績を比べる（§149）。判定・差は確定した月（judged）だけ（速報の月は実績が途中なので入れない。§64 と同じ）。
+ * rows は運用保守以外を含んでよい（数えない）
+ */
+export function compareWorkPlan(plans: readonly WorkPlanRow[], rows: readonly WorkRow[], judged: Period | null): WorkPlanCompare {
+  const byMonth = new Map<YearMonth, WorkPlanMonth>();
+  const at = (month: YearMonth): WorkPlanMonth => {
+    let m = byMonth.get(month);
+    if (!m) byMonth.set(month, (m = { month, plannedHours: 0, actualHours: 0, kind: null, judged: judged !== null && month >= judged.from && month <= judged.to }));
+    return m;
+  };
+  for (const p of plans) at(p.month).plannedHours += p.hours;
+  for (const r of rows) if (r.category !== "outside") at(r.month).actualHours += r.hours;
+  let plannedHours = 0;
+  let actualHours = 0;
+  for (const m of byMonth.values()) {
+    if (!m.judged) continue;
+    m.kind = planGapKindOf(m.plannedHours, m.actualHours);
+    plannedHours += m.plannedHours;
+    actualHours += m.actualHours;
+  }
+  return { plannedHours, actualHours, diffHours: actualHours - plannedHours, kind: judged ? planGapKindOf(plannedHours, actualHours) : null, byMonth };
+}
+
+
+/**
+ * チームで絞ったときの応援・ヘルプ（§134 と同じ考え方を作業実績から）。チームの案件（contractIds）に、チームの人（ownIds）以外で
+ * 運用保守の実績か計画がある人。所属（基準月）が無い・マスタに無い人はヘルプ、担当組織（ownScope: 自分・配下・上位）の外の所属の人は応援。
+ * 応援は今の所属のまま作業した人だけ（異動前の作業では付けない）。上位の組織（課長・部長）の人は応援にしない
+ */
+export function workGuests(
+  model: Pick<Model, "members">,
+  rows: readonly WorkRow[],
+  plans: readonly WorkPlanRow[],
+  scope: { ownIds: ReadonlySet<string>; contractIds: ReadonlySet<string>; ownScope: ReadonlySet<string>; baseMonth: YearMonth },
+): Map<string, "support" | "help"> {
+  const out = new Map<string, "support" | "help">();
+  if (scope.contractIds.size === 0 || scope.ownScope.size === 0) return out;
+  const consider = (memberId: string, teamThen: string | null | undefined) => {
+    if (scope.ownIds.has(memberId) || out.get(memberId) === "help") return;
+    const now = teamAtBase(model, memberId, scope.baseMonth);
+    if (!now) out.set(memberId, "help");
+    else if (!scope.ownScope.has(now) && (teamThen === undefined || teamThen === now)) out.set(memberId, "support");
+  };
+  for (const r of rows) if (r.category !== "outside" && r.contractId !== null && scope.contractIds.has(r.contractId) && r.hours > 0) consider(r.memberId, r.teamId);
+  for (const p of plans) if (scope.contractIds.has(p.contractId)) consider(p.memberId, undefined);
+  return out;
 }
