@@ -15,6 +15,7 @@
  *               cellClass?(row) -> string（セルに足す class。日ごとの濃さなど）, headClass?: string（見出しと合計行のセルに足す class）, headTitle?: string（見出しの title）,
  *               menu?: false（「列」に出さず、常に末尾に出す列。日ごとの列など §124） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
+ *   （列の memberTip?(row) → 社員番号: そのセルに氏名の吹き出し §148）
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
  *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
  *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
@@ -677,13 +678,17 @@ export function dataTable({
       const cls = `${numeric ? "num" : ""}${col.hideOnPhone ? " hide-phone" : ""}${col.hideNarrow ? " hide-narrow" : ""}${col.hideMid ? " hide-mid" : ""}${col.key === "name" || ci === 0 ? " yn-primary-cell" : ""}${col.cellClass ? ` ${col.cellClass(row)}` : ""}`;
       const cell = ci === 0 ? h("th", { scope: "row", class: cls }) : h("td", { class: cls });
       let content = cellNode(col, row);
+      // 木の名前の欄は字下げ・開閉・名前を横に並べる（長い名前が折り返しても字下げの位置にそろう）
+      let lead = cell;
       if (ci === 0) {
         if (tree) {
+          lead = h("div", { class: "yn-tree-cell" });
+          cell.append(lead);
           const indent = h("span", { class: "yn-tree-indent", style: `--depth:${row.depth ?? 0}` });
-          cell.append(indent);
+          lead.append(indent);
           if (row.hasChildren && (parentsShown === null || parentsShown.has(row.key))) {
             const open = !collapsed.has(row.key);
-            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" }) }, h("span", { "aria-hidden": "true" }, open ? "▾" : "▸"));
+            const toggle = h("button", { type: "button", class: "yn-tree-toggle", "aria-expanded": open ? "true" : "false", "aria-label": fmt(open ? T.table.treeClose : T.table.treeOpen, { name: row.name ?? "" }) }, h("span", { class: "yn-disc", "aria-hidden": "true" }));
             toggle.addEventListener("click", (ev) => {
               ev.stopPropagation();
               if (collapsed.has(row.key)) collapsed.delete(row.key);
@@ -691,18 +696,26 @@ export function dataTable({
               renderBody();
               focusIn(tbody, `tr[data-key="${cssEscape(String(row.key))}"] .yn-tree-toggle`);
             });
-            cell.append(toggle);
-          } else cell.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
+            lead.append(toggle);
+          } else lead.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
         }
         if (href) content = h("a", { class: "yn-row-link", href }, content);
+        else if (tree) content = h("span", { class: "yn-tree-name" }, content);
       }
+      // 氏名の列は合わせると吹き出し（§148）。全文は吹き出しの見出しに出るので title は付けない（二重に出さない）
+      const tipMember = col.memberTip ? col.memberTip(row) : null;
       // 文字の列（案件名・作業名など）は長くても他の列を潰さないよう上限で「…」にし、全文は title（§106）
       if (ci > 0 && typeof content === "string" && content !== EMPTY_VALUE && !numeric && (col.type === undefined || col.type === "text")) {
         cell.classList.add("yn-cell-clip");
-        cell.title = content;
+        if (!tipMember) cell.title = content;
       }
-      cell.append(content);
-      if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
+      lead.append(content);
+      if (tipMember) {
+        cell.setAttribute("data-member-tip", tipMember);
+        // リンクの無いセル（作業ログなど）もキーボードで吹き出しを出せるように
+        if (!cell.querySelector("a, button")) cell.tabIndex = 0;
+      }
+      else if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });
     if (href) {

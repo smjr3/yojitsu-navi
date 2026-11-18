@@ -161,7 +161,7 @@ test("消化率の内訳: 累計実績 ÷ 累計予算 が KPI と一致する",
   expect(await dialogRow(page, "赤の基準")).toBe(`${formatPercent(model.config.burnRateDangerThreshold)} 超`);
 });
 
-test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残り月 の算術が通る（C008・直近実績）", async ({ page }) => {
+test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残り月 の算術が通る（C008・直近3か月平均）", async ({ page }) => {
   await gotoPage(page, "/contract?id=C008&method=recent3");
   const r = contractResult("C008", model);
   const f = r.forecasts.recent3;
@@ -173,7 +173,7 @@ test("着地見込みの内訳: 方式・実績月・残り月・平均 × 残�
   await expect(d).toBeVisible();
   await expect(d.locator("#yn-dialog-title")).toContainText("着地見込みの計算根拠");
   await expect(d.locator(".yn-bd-formula")).toContainText("着地差 = 期間の予算 − 着地実績");
-  expect(await dialogRow(page, "方式")).toBe("直近実績");
+  expect(await dialogRow(page, "方式")).toBe("直近3か月平均");
   // 対象は選んだ期間（既定は今年度）を案件の期間に収めたもの（§54）
   const ja = (m: string) => `${Number(m.slice(0, 4))}年${Number(m.slice(5))}月`;
   const inTarget = b.contractMonthsInTarget;

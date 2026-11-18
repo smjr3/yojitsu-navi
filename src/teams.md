@@ -19,7 +19,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
-import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
+import { money, monthJa, periodJa, methodLabel } from "./components/format.js";
 import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO } from "./core/index.js";
 import { orgChartView, orgColorSwitch, clampOrgMonth } from "./components/org-chart.js";
 ```
@@ -142,7 +142,7 @@ if (refocus.sel) {
 }
 if (vm && viewState.view === "table") {
   const { scope, rows, unit } = vm;
-  display(sectionTitle(T.teams.sectionTitle, fmt(T.teams.sectionHint, { period: periodJa(scope.period), month: monthJa(scope.treeMonth), method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }), null, null, viewToggle("table")));
+  display(sectionTitle(T.teams.sectionTitle, fmt(T.teams.sectionHint, { period: periodJa(scope.period), month: monthJa(scope.treeMonth), method: methodLabel(vm.method, model.config), fy: model.meta.fiscalYear }), null, null, viewToggle("table")));
   if (scope.period.to < model.meta.asOfMonth) {
     display(note(fmt(T.teams.orgNote, { month: monthJa(scope.period.to), asOfMonth: monthJa(model.meta.asOfMonth) })));
   }

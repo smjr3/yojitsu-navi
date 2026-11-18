@@ -235,7 +235,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
       </a>
       ${people.length || spot.length
         ? html`<div class="yn-org-people">${people.map(personChip)}${spot.length
-            ? html`<details class="yn-org-spot"><summary>${fmt(T.orgChart.spotSummary, { n: spot.length })}</summary><div class="yn-org-people">${spot.map(personChip)}</div></details>`
+            ? html`<details class="yn-org-spot"><summary><span class="yn-disc" aria-hidden="true"></span>${fmt(T.orgChart.spotSummary, { n: spot.length })}</summary><div class="yn-org-people">${spot.map(personChip)}</div></details>`
             : null}</div>`
         : null}
       ${node.children.length ? html`<div class="yn-org-children">${node.children.map(renderNode)}</div>` : null}

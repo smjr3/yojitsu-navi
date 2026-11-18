@@ -135,7 +135,7 @@ if (vm) {
   </dl>`);
   if (records.length > 1) {
     display(html`<details class="yn-details yn-member-history">
-      <summary>${fmt(T.member.historySummary, { n: records.length })}</summary>
+      <summary><span class="yn-disc" aria-hidden="true"></span>${fmt(T.member.historySummary, { n: records.length })}</summary>
       ${dataTable({
         columns: [
           { key: "effectiveFrom", label: T.member.colEffective, type: "text", render: (r) => monthJa(r.effectiveFrom), exportValue: (r) => r.effectiveFrom },

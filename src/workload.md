@@ -170,7 +170,7 @@ if (vm) {
     subtitle: periodJa(vm.period),
     legend: workHoursLegend(dark),
     draw: (width, height) => workHoursChart({ series: vm.series, config: model.config, dark, width, height, asOfMonth: model.meta.asOfMonth }),
-    after: html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
+    after: html`<details class="yn-details"><summary><span class="yn-disc" aria-hidden="true"></span>${T.pages.showTable}</summary>${workSeriesTable({ series: vm.series, config: model.config, exportName: `workload_monthly_${vm.period.from}_${vm.period.to}` })}</details>`,
   }));
 }
 ```
@@ -232,6 +232,7 @@ if (vm) {
           : axis === "customer"
             ? (r) => (noContract(r) ? html`<span>${r.name} <span class="yn-chip yn-chip-neutral" title=${T.work.noContractTitle}>${T.work.noContract}</span></span>` : r.name)
             : undefined,
+      memberTip: axis === "member" ? (r) => r.key : undefined,
       // 列の絞り込みで「案件なし」の顧客だけを選べるようにする
       filterValue: axis === "customer" ? (r) => (noContract(r) ? [r.name, T.work.noContract] : [r.name]) : undefined,
       exportValue: (r) => r.name,

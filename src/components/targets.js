@@ -8,7 +8,7 @@ import { evaluateTarget, headlineTarget, targetsOf } from "../core/index.js";
 import { sectionTitle } from "./layout.js";
 import { chipIcon, statusChip } from "./kpi.js";
 import * as bd from "./breakdown.js";
-import { formatPercent, money, monthJa, pointsSigned, METHOD_LABELS } from "./format.js";
+import { formatPercent, money, monthJa, pointsSigned, methodLabel } from "./format.js";
 
 /** 目標の率（入れた値どおり。20 → "20%"、12.5 → "12.5%"） */
 export function targetPct(rate) {
@@ -26,7 +26,7 @@ export function targetSpec({ model, ev, name, unit, detailHref = null }) {
   const contractNames = new Map(model.contracts.map((r) => [r.contract.contractId, `${r.contract.customerName} / ${r.contract.projectName}`]));
   return {
     title: fmt(T.targets.breakdownTitle, { due: monthJa(ev.period.to), name }),
-    subtitle: fmt(T.targets.breakdownSubtitle, { from: monthJa(ev.period.from), to: monthJa(ev.period.to), method: METHOD_LABELS[ev.method] }),
+    subtitle: fmt(T.targets.breakdownSubtitle, { from: monthJa(ev.period.from), to: monthJa(ev.period.to), method: methodLabel(ev.method, model.config) }),
     formula: [T.targets.formulaRate, T.targets.formulaLanding],
     rows: [
       { label: T.targets.rowBudget, value: money(ev.budget, unit) },
@@ -72,7 +72,7 @@ export function targetSection({ model, kind, id, name, method, unit, detailHref 
     </tr>`;
   });
   return html`<section class="yn-targets" aria-label=${T.targets.title}>
-    ${sectionTitle(T.targets.title, fmt(T.targets.tip, { method: METHOD_LABELS[method] }))}
+    ${sectionTitle(T.targets.title, fmt(T.targets.tip, { method: methodLabel(method, model.config) }))}
     <div class="yn-table-wrap"><table class="yn-table yn-table-compact yn-targets-table">
       <thead><tr>
         <th scope="col">${T.targets.colEnd}</th>

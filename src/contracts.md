@@ -22,7 +22,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCell, contractInfoColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
-import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
+import { money, monthJa, periodJa, methodLabel } from "./components/format.js";
 import { contractTimeline, isEndingSoon, END_SOON_MONTHS } from "./components/contract-timeline.js";
 ```
 
@@ -213,7 +213,7 @@ if (vm) {
       T.contracts.sectionTitle,
       isTimeline
         ? fmt(T.contracts.timelineHint, { period: periodJa(scope.period), team: scope.teamLabel })
-        : fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
+        : fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: methodLabel(vm.method, model.config), fy: model.meta.fiscalYear }),
       null,
       outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : null,
       viewToggle,

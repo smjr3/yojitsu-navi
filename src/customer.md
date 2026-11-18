@@ -28,7 +28,7 @@ import { lazyJson } from "./components/chart-units.js";
 import { dataTable, standardColumns, rowStatus, statusSortValue, teamCountColumns } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
 import { targetSection } from "./components/targets.js";
-import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, METHOD_LABELS, fiscalYearLabel, integer } from "./components/format.js";
+import { money, moneySigned, pointsSigned, formatPercent, monthJa, monthSpanJa, periodJa, methodLabel, fiscalYearLabel, integer } from "./components/format.js";
 ```
 
 ```js
@@ -178,7 +178,7 @@ if (vm) {
         breakdown: () => bd.burnRateSpec({ totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth, subtitle }),
       }),
       statTile({
-        label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: METHOD_LABELS[forecast.method] }),
+        label: fmt(T.kpi.forecast, { fy: fiscalYearLabel(forecast.fiscalYear), method: methodLabel(forecast.method, model.config) }),
         value: money(forecast.forecastGrossProfit, unit),
         sub: fmt(T.kpi.forecastSub, { budget: money(forecast.targetBudget, unit), cost: money(forecast.forecastCost, unit) }),
         status: forecastStatus(forecast),
@@ -201,7 +201,7 @@ if (vm) {
 ```js
 if (vm) {
   const series = withTargets(vm.series, (m) => targetForMonth(model, "customer", group.label, m));
-  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: METHOD_LABELS[vm.method], fyStart: model.config.fiscalYearStartMonth })));
+  display(sectionTitle(T.charts.monthlyTitle, fmt(T.index.monthlyHint, { period: periodJa(vm.scope.period), asOfMonth: monthJa(model.meta.asOfMonth), method: methodLabel(vm.method, model.config), fyStart: model.config.fiscalYearStartMonth })));
   display(monthlyFigure({ model, series, unit: vm.unit, dark, history: dailyHistory, contractIds: vm.scope.contractIds, period: vm.scope.period, exportName: `customer_monthly_${vm.scope.period.from}_${vm.scope.period.to}` }));
 }
 ```
@@ -253,7 +253,7 @@ if (vm) {
   display(
     sectionTitle(
       T.customer.contractsTitle,
-      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: METHOD_LABELS[vm.method], fy: fiscalYearLabel(model.meta.fiscalYear) }),
+      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: methodLabel(vm.method, model.config), fy: fiscalYearLabel(model.meta.fiscalYear) }),
       null,
       hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : null,
     ),
@@ -333,6 +333,7 @@ if (vm) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
+        memberTip: (r) => r.memberId,
         render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`,
         sortValue: (r) => r.memberName,
       },
