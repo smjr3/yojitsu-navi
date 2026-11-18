@@ -12,7 +12,7 @@ import { scaledPx } from "./appearance.js";
 import { T, fmt } from "../i18n/index.js";
 import { personMonths, workByTask } from "../core/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, maxFractionFormat, money, moneySigned, monthJa, monthShort } from "./format.js";
-import { BUDGET_LINE_WIDTH, chartColors, chartLegend } from "./charts.js";
+import { BUDGET_LINE_WIDTH, chartColors, chartLegend, hatchFill } from "./charts.js";
 import { dataTable, PREVIEW_ROWS } from "./table.js";
 import { sectionTitle, note } from "./layout.js";
 
@@ -111,34 +111,54 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
   return section;
 }
 
-export function workColors(dark) {
+/**
+ * 稼働実績・リソース計画のグラフの色（§131・§150）。kind = "actual"（稼働実績＝実績の側: 運用保守は橙、運用保守以外は茶）、
+ * "plan"（リソース計画＝予定の側: 運用保守は青、運用保守以外は薄い青）。紫は目標の上限（§140）なので使わない
+ */
+export function workColors(dark, kind = "actual") {
   const c = chartColors(dark);
-  return { ...c, contract: c.budget, outside: dark ? "#a184e0" : "#7a5bc7" };
+  return kind === "plan"
+    ? { ...c, contract: c.budget, outside: dark ? "#8ab8ee" : "#93b9e6" }
+    : { ...c, contract: c.cost, outside: dark ? "#b8936f" : "#8a6446", plan: c.budget };
 }
 
-export function workHoursLegend(dark) {
+/** 稼働実績の凡例。plan = 計画の線を出すか、prelim = 速報（斜線）の棒があるか */
+export function workHoursLegend(dark, { plan = false, prelim = false } = {}) {
   const c = workColors(dark);
   return chartLegend([
+    ...(plan ? [{ label: T.work.legendPlan, color: c.plan, shape: "line" }] : []),
     { label: T.work.contract, color: c.contract },
     { label: T.work.outside, color: c.outside },
+    ...(prelim ? [{ label: T.work.legendPrelim, color: c.contract, shape: "rect-hatched" }] : []),
   ]);
 }
 
-/** 月次推移（契約内・契約外の人月を積み上げ）。series は core の workMonthlySeries() */
-export function workHoursChart({ series, config, dark = false, width = 640, height = 260, asOfMonth }) {
+/**
+ * 月次推移（運用保守・運用保守以外の人月を積み上げ、運用保守の計画を青の段の線で重ねる。§150）。
+ * series は月（core の workMonthlySeries ＋ plannedHours）か、まとめた期間（core の bucketWork）。
+ * 今日を含む期間（isNow）は速報なので斜線（§125）。onPick(d, plot) を渡すと棒を押したときに呼ぶ
+ */
+export function workHoursChart({ series, config, dark = false, width = 640, height = 260, asOfMonth, tick = null, tipLabel = null, tipName = T.charts.tipMonth, isFuture = null, isNow = null, unitName = T.charts.unitLabels.month, onPick = null }) {
   const c = workColors(dark);
   const n = series.length;
   if (n === 0) return html`<div class="yn-chart-empty">${T.charts.noMonths}</div>`;
   const std = config.standardHoursPerMonth;
+  const now = (p) => (isNow ? isNow(p) : p.month === asOfMonth) && p.contractHours + p.outsideHours > 0;
+  const hatch = series.some(now) ? { contract: hatchFill(c.contract), outside: hatchFill(c.outside) } : null;
   const data = [];
   series.forEach((p, i) => {
-    data.push({ i, month: p.month, kind: "contract", pm: personMonths(p.contractHours, std), p });
-    data.push({ i, month: p.month, kind: "outside", pm: personMonths(p.outsideHours, std), p });
+    const h = hatch && now(p);
+    data.push({ i, kind: "contract", pm: personMonths(p.contractHours, std), fill: h ? hatch.contract.fill : c.contract, stroke: h ? c.contract : "none", p });
+    data.push({ i, kind: "outside", pm: personMonths(p.outsideHours, std), fill: h ? hatch.outside.fill : c.outside, stroke: h ? c.outside : "none", p });
   });
   const every = Math.max(n > 14 ? 2 : 1, Math.ceil(n / Math.max(1, Math.floor((width - 64) / 44))));
   const ticks = series.map((_, i) => i).filter((i) => i % every === 0);
-  const firstFuture = series.findIndex((p) => p.month > asOfMonth);
+  const firstFuture = series.findIndex((p) => (isFuture ? isFuture(p) : p.month > asOfMonth));
   const half = Math.min(0.35, Math.max(0.12, 12 / Math.max(1, (width - 80) / n)));
+  const hasPlan = series.some((p) => p.plannedHours > 0);
+  const planPm = (p) => personMonths(p.plannedHours ?? 0, std);
+  // 吹き出し・押したときの値（plot.value）は { ...期間, i }
+  const points = series.map((p, i) => ({ ...p, i }));
   const plot = Plot.plot({
     width,
     height,
@@ -147,31 +167,35 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
     marginTop: scaledPx(24),
     marginBottom: scaledPx(32),
     style: { background: "transparent", color: c.text, fontSize: `${scaledPx(12)}px`, fontFamily: "inherit", overflow: "visible" },
-    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (series[i] ? monthShort(series[i].month, i === 0) : ""), tickSize: 0, label: null, line: false },
+    x: { domain: [-0.5, n - 0.5], ticks, tickFormat: (i) => (series[i] ? (tick ? tick(series[i], i) : monthShort(series[i].month, i === 0)) : ""), tickSize: 0, label: null, line: false },
     // すべて 0 人月だと domain が [0,0] になり棒が全高で描かれるので、範囲を与える
-    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) ? { domain: [0, 1] } : {}) },
-    color: { domain: ["contract", "outside"], range: [c.contract, c.outside] },
+    y: { grid: true, label: T.work.pmAxis, labelAnchor: "top", labelArrow: "none", nice: true, zero: true, tickSize: 0, line: false, ...(data.every((d) => !(d.pm > 0)) && !hasPlan ? { domain: [0, 1] } : {}) },
+    // 塗りは色をそのまま（速報の斜線は url(#…)）
+    color: { type: "identity" },
     marks: [
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),
       firstFuture >= 0 ? Plot.rectX([{ x1: firstFuture - 0.5, x2: n - 0.5 }], { x1: "x1", x2: "x2", fill: c.muted, fillOpacity: 0.06 }) : null,
-      Plot.rectY(data, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "pm", fill: "kind", order: ["contract", "outside"] })),
-      Plot.ruleX(series.map((_, i) => i), Plot.pointerX({ x: (i) => i, stroke: c.muted, strokeOpacity: 0.6 })),
+      Plot.rectY(data, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "pm", fill: (d) => d.fill, stroke: (d) => d.stroke, order: ["contract", "outside"], z: "kind" })),
+      // 運用保守の計画（予定の側なので青。月ごとの段）
+      hasPlan ? Plot.link(series.map((p, i) => ({ i, v: planPm(p) })).filter((d) => d.v > 0), { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "v", y2: "v", stroke: c.plan, strokeWidth: BUDGET_LINE_WIDTH }) : null,
+      Plot.ruleX(points, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
       Plot.tip(
-        series.map((p, i) => ({ ...p, i })),
+        points,
         Plot.pointerX({
           x: "i",
-          y: (d) => personMonths(d.contractHours + d.outsideHours, std),
+          y: (d) => Math.max(personMonths(d.contractHours + d.outsideHours, std), planPm(d)),
           preferredAnchor: "bottom",
           dy: scaledPx(-6),
           fill: c.surface,
           stroke: c.axis,
           fontSize: scaledPx(12),
           channels: {
-            [T.charts.tipMonth]: (d) => fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" }),
+            [tipName]: (d) => (tipLabel ? tipLabel(d) : fmt(T.charts.tipMonthValue, { month: monthJa(d.month), status: STATUS_LABELS[d.status], suffix: "" })),
+            ...(hasPlan ? { [T.work.legendPlan]: (d) => pm(d.plannedHours ?? 0, config) } : {}),
             [T.work.contract]: (d) => pm(d.contractHours, config),
             [T.work.outside]: (d) => pm(d.outsideHours, config),
-            [T.work.colMembers]: (d) => fmt(T.work.peopleValue, { n: d.memberCount }),
+            ...(series.some((p) => typeof p.memberCount === "number") ? { [T.work.colMembers]: (d) => (typeof d.memberCount === "number" ? fmt(T.work.peopleValue, { n: d.memberCount }) : EMPTY_VALUE) } : {}),
           },
           format: { x: false, y: false },
         }),
@@ -179,20 +203,42 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
     ].filter(Boolean),
   });
   plot.setAttribute("role", "img");
-  plot.setAttribute("aria-label", T.work.chartAria);
+  plot.setAttribute("aria-label", fmt(T.work.chartAriaUnit, { unit: unitName }));
+  if (hatch) {
+    hatch.contract.attach(plot);
+    hatch.outside.attach(plot);
+  }
+  if (onPick) {
+    // 棒を押す（タップ）と、その期間の内訳（計算根拠）を開く（メンバー詳細 §135 と同じ）
+    plot.classList.add("yn-chart-pickable");
+    plot.addEventListener("click", (ev) => {
+      let i = plot.value?.i;
+      // 計算根拠を閉じた直後など、吹き出しの値が消えたまま同じ棒を押したときは、押した位置から棒を決める
+      if (i === undefined) {
+        const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
+        const sx = plot.scale?.("x");
+        if (svg && sx?.invert) i = Math.round(sx.invert(ev.clientX - svg.getBoundingClientRect().left));
+      }
+      if (i !== undefined && series[i]) onPick(series[i], plot);
+    });
+  }
   return plot;
 }
 
-/** 月次推移の表（グラフと同じ値） */
-export function workSeriesTable({ series, config, exportName }) {
+/** 月次推移の表（グラフと同じ値）。label(r) を渡すと期間の名前（日・週・四半期・年度。§150） */
+export function workSeriesTable({ series, config, exportName, label = null, colLabel = T.charts.colMonth }) {
+  const std = config.standardHoursPerMonth;
+  const hasPlan = series.some((p) => p.plannedHours > 0);
   const columns = [
-    { key: "month", label: T.charts.colMonth, type: "text", render: (r) => monthJa(r.month), sortValue: (r) => r.month, exportValue: (r) => r.month },
-    { key: "contract", label: T.work.contract, type: "custom", align: "num", get: (r) => personMonths(r.contractHours, config.standardHoursPerMonth), render: (r) => pm(r.contractHours, config) },
-    { key: "outside", label: T.work.outside, type: "custom", align: "num", get: (r) => personMonths(r.outsideHours, config.standardHoursPerMonth), render: (r) => pm(r.outsideHours, config) },
-    { key: "total", label: T.work.total, type: "custom", align: "num", get: (r) => personMonths(r.contractHours + r.outsideHours, config.standardHoursPerMonth), render: (r) => pm(r.contractHours + r.outsideHours, config) },
-    { key: "memberCount", label: T.work.colMembers, type: "int" },
+    { key: "label", label: colLabel, type: "text", sortValue: (r) => r.order, exportValue: (r) => r.label },
+    ...(hasPlan ? [{ key: "plan", label: T.work.legendPlan, type: "custom", align: "num", get: (r) => personMonths(r.plannedHours ?? 0, std), render: (r) => pm(r.plannedHours ?? 0, config) }] : []),
+    { key: "contract", label: T.work.contract, type: "custom", align: "num", get: (r) => personMonths(r.contractHours, std), render: (r) => pm(r.contractHours, config) },
+    { key: "outside", label: T.work.outside, type: "custom", align: "num", get: (r) => personMonths(r.outsideHours, std), render: (r) => pm(r.outsideHours, config) },
+    { key: "total", label: T.work.total, type: "custom", align: "num", get: (r) => personMonths(r.contractHours + r.outsideHours, std), render: (r) => pm(r.contractHours + r.outsideHours, config) },
+    ...(series.some((p) => typeof p.memberCount === "number") ? [{ key: "memberCount", label: T.work.colMembers, type: "int" }] : []),
   ];
-  return dataTable({ columns, rows: series.map((p) => ({ ...p, key: p.month })), unit: "yen", caption: T.work.seriesCaption, exportName, sort: { key: "month", dir: "asc" } });
+  const rows = series.map((p, i) => ({ ...p, key: p.key ?? p.month, order: i, label: label ? label(p) : monthJa(p.month) }));
+  return dataTable({ columns, rows, unit: "yen", caption: T.work.seriesCaption, exportName, sort: { key: "label", dir: "asc" }, previewRows: series.length > 31 ? PREVIEW_ROWS : null });
 }
 
 /**
@@ -267,7 +313,7 @@ export function workGroupChart({ groups, config, dark = false, width = 640, heig
  * 1.0 人月を超える人がいる月の人数（「!n人」）を重ねる。data は [{ month, main, outside, capacity, over }]（人月）。
  */
 export function planLoadChart({ data, dark = false, width = 640, height = 200 }) {
-  const c = workColors(dark);
+  const c = workColors(dark, "plan");
   const warn = dark ? "#fab219" : "#7a4a00";
   const n = data.length;
   if (n === 0) return html`<div class="yn-chart-empty">${T.charts.noMonths}</div>`;
@@ -331,7 +377,7 @@ export function planLoadChart({ data, dark = false, width = 640, height = 200 })
 }
 
 export function planLoadLegend(dark) {
-  const c = workColors(dark);
+  const c = workColors(dark, "plan");
   return chartLegend([
     { label: T.work.contract, color: c.contract },
     { label: T.work.outside, color: c.outside },
