@@ -70,6 +70,30 @@ for (const dark of [false, true]) {
       expect(await targetStrokes(page, "figure.yn-me-plan-chart", c.target)).toBeGreaterThan(0);
     });
 
+    test("予算の実線の太さは 3 つのグラフで同じ 3.5px（§147）", async ({ page }) => {
+      /** scope の中のグラフで、予算の色の実線（破線を除く）の太さ */
+      const widths = (scope: string) =>
+        page.locator(`${scope} svg`).evaluateAll(
+          (svgs, color) =>
+            svgs.flatMap((svg) =>
+              [...svg.querySelectorAll("[stroke]")]
+                .filter((e) => e.getAttribute("stroke")!.toLowerCase() === color && !e.closest("[stroke-dasharray]"))
+                .map((e) => Number(e.closest("[stroke-width]")?.getAttribute("stroke-width"))),
+            ),
+          c.budget,
+        );
+      await gotoPage(page, "/team?id=T212");
+      const monthly = await widths(".yn-chart-card:has-text('月次推移')");
+      const daily = await widths("#yn-daily");
+      await gotoPage(page, "/plan?team=D1");
+      await page.locator('[data-fk="plan:chart:amount"]').click();
+      const amount = await widths("figure.yn-me-plan-chart");
+      for (const w of [monthly, daily, amount]) {
+        expect(w.length).toBeGreaterThan(0);
+        for (const x of w) expect(x).toBe(3.5);
+      }
+    });
+
     test("消化率のメーターの塗りは実績の橙（超過は赤）", async ({ page }) => {
       await gotoPage(page, "/");
       const fills = await page.locator(".yn-meter").evaluateAll((els) =>
