@@ -4,11 +4,11 @@ npm パッケージ `yojitsu-navi` の版ごとの変更と、導入先（`yojit
 `yojitsu-navi update` は、今の版から新しい版までの「更新後に行うこと」「テスト・CI の前提」「新しい設定と推奨値」を表示します（「新しい設定と推奨値」には導入先の `config.json` の今の値を添えます）。
 書き方と、版を上げるときの手順は [docs/RELEASE.md](docs/RELEASE.md)。
 
-## 次の版
+## 0.6.0
 
 ### 更新後に行うこと
 
-- 何もしなくてよい（画面だけの変更。データ・設定は変わらない）
+- 何もしなくてよい（`config.json`・CI の設定は変わらない。稼働実績の計画の数値は `data/work-hours.json` にビルドで足される）。着地見込みの既定 `forecastMethodDefault` に `recent12`（直近12か月平均）も選べるようになった（任意）
 
 ### 変更
 
