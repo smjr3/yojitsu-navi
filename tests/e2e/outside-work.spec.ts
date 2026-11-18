@@ -35,7 +35,7 @@ test("メンバー別: 既定は契約外を含まない。「運用保守以外
   await expect(kpiValue(page, 1)).toHaveText(yen(off.total.actualCost));
   expect(new URL(page.url()).searchParams.has("outside")).toBe(false);
 
-  await page.getByText("運用保守以外を含む").click();
+  await page.getByText("運用保守以外を含む", { exact: true }).click();
   await expect(chip).toBeChecked();
   const on = aggregateMembers(model, { period: CMP, includeOutside: true });
   expect(on.total.plannedCost).toBeGreaterThan(off.total.plannedCost);
@@ -50,7 +50,7 @@ test("メンバー別: 既定は契約外を含まない。「運用保守以外
   // 別の画面へ移っても引き継ぎ、戻すと URL から消える
   await gotoPage(page, `/members?${U}`);
   await expect(page.locator("#yn-filter-outside")).toBeChecked();
-  await page.getByText("運用保守以外を含む").click();
+  await page.getByText("運用保守以外を含む", { exact: true }).click();
   await expect(page.locator("#yn-filter-outside")).not.toBeChecked();
   await expect.poll(() => new URL(page.url()).searchParams.has("outside")).toBe(false);
 });
@@ -60,7 +60,7 @@ test("メンバー詳細: 含むと案件別に「契約外: 種別」の行（�
   await gotoPage(page, `/member?id=${id}&from=${FY.from}&to=${FY.to}&${U}`);
   const table = tableByCaption(page, "案件別の計画と実績");
   await expect(table.locator("tbody tr", { hasText: "運用保守以外:" })).toHaveCount(0);
-  await page.getByText("運用保守以外を含む").click();
+  await page.getByText("運用保守以外を含む", { exact: true }).click();
   const t = aggregateMembers(model, { period: CMP, memberIds: [id], includeOutside: true }).members[0]!;
   await expect(kpiValue(page, 0)).toHaveText(yen(t.plannedCost));
   await expect(kpiValue(page, 1)).toHaveText(yen(t.actualCost));
