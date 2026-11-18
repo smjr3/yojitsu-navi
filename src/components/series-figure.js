@@ -44,7 +44,7 @@ function switchable(kind, render) {
   return host;
 }
 
-const tableDetails = (table) => html`<details class="yn-details"><summary>${T.pages.showTable}</summary>${table}</details>`;
+const tableDetails = (table) => html`<details class="yn-details"><summary><span class="yn-disc" aria-hidden="true"></span>${T.pages.showTable}</summary>${table}</details>`;
 
 /**
  * 月次推移。series は analysis.seriesWithForecast（＋ withTargets）の出力、contractIds は対象の案件（null = すべて）。
