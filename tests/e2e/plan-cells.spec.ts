@@ -65,8 +65,8 @@ test("クリックで修正: この月だけ変えると行を月で分け、元
   await expect(cell(page, "M010", "2026-12")).toHaveText("0.70");
   await expect(cell(page, "M010", "2026-11")).toHaveText("1.10");
   await expect(cell(page, "M010", "2027-01")).toHaveText("1.10");
-  // フォーカスは修正したセルへ戻る
-  await expect(cell(page, "M010", "2026-12")).toBeFocused();
+  // Enter で反映したので次の月のセルへ進む（§145）
+  await expect(cell(page, "M010", "2027-01")).toBeFocused();
   // 案件の行は 1 行のまま。変更の履歴が 3 件（4月〜 0.9・12月 0.5 に変更・1月〜 0.9 に変更）
   await page.locator('[data-fk="plan:toggle:M010"]').click();
   const subs = page.locator('tr.yn-me-plan-sub.is-project[data-member="M010"]');

@@ -80,6 +80,12 @@ function nodeMoney(model, chart, month, method, restorePeriod) {
 
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "±0");
 
+/** 色の基準の切り替え（計画／計画とのずれ）。見出しの下の左に「表／体制図」と並べる（SPEC §144） */
+export function orgColorSwitch({ color, onChange }) {
+  const colorBtn = (id, label) => html`<button type="button" class="yn-seg-btn" aria-pressed=${String(color === id)} data-color=${id} onclick=${() => onChange({ color: id })}>${label}</button>`;
+  return html`<div class="yn-switch-field yn-org-color"><span class="yn-filter-label" id="yn-org-color-label">${T.orgChart.colorLabel}</span><div class="yn-seg" role="group" aria-labelledby="yn-org-color-label">${colorBtn("plan", T.orgChart.colorPlan)}${colorBtn("gap", T.orgChart.colorGap)}</div></div>`;
+}
+
 export function orgChartView({ model, store, state, month, color, onChange, restorePeriod }) {
   // 1人月の時間 = その月の営業日 × 1 日の時間（§114）
   const std = createMonthHours(model.holidays, model.config.hoursPerBusinessDay)(month);
@@ -96,7 +102,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
   const tip = planCellTooltip();
   const tipContent = new Map();
 
-  // ── 操作（◀ 月 ▶、スライダー、色の基準） ─────────────────
+  // ── 操作（◀ 月 ▶、スライダー。色の基準は見出しの下の orgColorSwitch） ─────────────────
   const idx = months.indexOf(month);
   const select = html`<select class="yn-select" id="yn-org-month" aria-label=${T.orgChart.monthLabel}>${months.map((m) => html`<option value=${m} selected=${m === month}>${monthJa(m)}</option>`)}</select>`;
   select.addEventListener("change", () => onChange({ month: select.value }));
@@ -108,7 +114,6 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     const next = months[idx + n];
     if (next) onChange({ month: next });
   };
-  const colorBtn = (id, label) => html`<button type="button" class="yn-seg-btn" aria-pressed=${String(color === id)} data-color=${id} onclick=${() => onChange({ color: id })}>${label}</button>`;
   const bar = html`<div class="yn-org-bar">
     <div class="yn-org-month">
       <button type="button" class="yn-btn yn-btn-sm" data-org="prev" aria-label=${T.orgChart.prevMonth} disabled=${idx <= 0} onclick=${() => step(-1)}>◀</button>
@@ -116,7 +121,6 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
       <button type="button" class="yn-btn yn-btn-sm" data-org="next" aria-label=${T.orgChart.nextMonth} disabled=${idx >= months.length - 1} onclick=${() => step(1)}>▶</button>
     </div>
     ${slider}
-    <div class="yn-org-color"><span class="yn-filter-label" id="yn-org-color-label">${T.orgChart.colorLabel}</span><div class="yn-seg" role="group" aria-labelledby="yn-org-color-label">${colorBtn("plan", T.orgChart.colorPlan)}${colorBtn("gap", T.orgChart.colorGap)}</div></div>
   </div>`;
 
   const sw = (cls, label) => html`<span class="yn-org-legend-item"><span class=${`yn-org-swatch ${cls}`} aria-hidden="true"></span>${label}</span>`;
