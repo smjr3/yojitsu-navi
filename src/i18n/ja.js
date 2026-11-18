@@ -1358,7 +1358,7 @@ export default {
     toMember: "メンバー詳細へ ›",
     noPlan: "今月の計画も実績もありません",
     sectionTitle: "今月の残り（{month}）",
-    sectionHint: "リソース計画の今月の時間（運用保守以外の予定を含む）から、今月の作業実績（速報）を引いた時間です。GitLab のトークンを登録し、メンバーマスタに GitLab ユーザー名がある人は、右上にも自分の残りが出ます。",
+    sectionHint: "リソース計画の今月の時間から、今月の作業実績（速報）を引いた時間です。運用保守以外の予定は、上の「運用保守以外を含む」を選んだときだけ入ります（右上の自分の残りには常に入ります）。GitLab のトークンを登録し、メンバーマスタに GitLab ユーザー名がある人は、右上にも自分の残りが出ます。",
   },
 
   // ── メンバー詳細 ──────────────────────────────────
@@ -1904,6 +1904,8 @@ export default {
     issueOnPage: "{file}（{page}）",
     issueShowAll: "すべて表示（{n}件）",
     issueShowLess: "先頭の {n}件だけ表示",
+    issueShowOtherOrg: "他の組織の確認要求も表示（{n}件）",
+    issueHideOtherOrg: "選んだ組織の分だけ表示",
     worklogWarningsNote: "作業実績に関する警告（未紐付け・単価なし）はここでは調べません。承認後、自動で画面に反映されると「データ確認」に出ます。",
     diffChanged: "・ 変更",
     diffRemoved: "・ 削除",

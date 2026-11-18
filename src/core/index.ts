@@ -76,7 +76,7 @@ export {
   type MonthCost,
   type WorklogIndex,
 } from "./cost.js";
-export { lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } from "./status.js";
+export { dataThroughOf, lastFinalMonth, monthStatus, monthStatusFromMeta, type StatusContext } from "./status.js";
 export { FORECAST_METHODS, RECENT12_MONTHS, assignmentPlanOf, forecastAllMethods, forecastAllMethodsForMonths, forecastContract, forecastForMonths, type ForecastBasis, type ForecastContext } from "./forecast.js";
 export { buildModel, type BuildModelOptions } from "./model.js";
 export { isWorklogStale, rebaseModel, viewerAsOf } from "./rebase.js";

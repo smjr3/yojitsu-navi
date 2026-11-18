@@ -17,7 +17,7 @@ import { findTaskCodeIssues, taskCodeWarnings } from "./taskCodes.js";
 import { createMasterIndex, memberAt, teamTreeAt, workedMonthKeys, type MasterIndex } from "./masters.js";
 import { buildMemberMonths } from "./members.js";
 import { createMonthHours } from "./monthHours.js";
-import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
+import { dataThroughOf, lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import { buildWorkRows, createTaskClassifier, isOutsideWorklog, keywordUnmatchedGroups, outsideInputs, planOutsideTypes, unclassifiedTaskWarnings } from "./workTypes.js";
 import type { Contract, ContractMonth, ContractResult, Dataset, ISODate, Model, UnknownMemberWork, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
@@ -41,7 +41,7 @@ export function buildModel(dataset: Dataset, options: BuildModelOptions): Model 
   const config = dataset.config;
   // holidays.csv に行の無い年は国民の祝日で補う（§49）
   const holidays = new HolidaySet(dataset.holidays);
-  const statusCtx: StatusContext = { asOf, config, holidays };
+  const statusCtx: StatusContext = { asOf, config, holidays, dataThrough: dataThroughOf(dataset.worklogFetchedAt) };
   const masters = createMasterIndex(dataset);
   const warnings: Warning[] = [];
 
