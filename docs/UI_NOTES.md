@@ -326,7 +326,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 - 範囲の切り替え（§130）: グラフの枠の左上に「月・四半期・年度」（週は予算管理が月次からなので出さない）（`dailySection` の `range`。既定は月）。見出し・KPI・凡例・根拠の「今月」「月末」は `T.daily.spans`・`ends` で差し替える。メンバーごとの今月の時間は切り替えても今月のまま。今四半期などは `data/daily-history.json` を選んだときに読む（`lazyJson`）。
 - 1 か月分の金額は小さく百万円の小数 1 桁では差が見えないので、この節だけ百万円は小数 2 桁（KPI・グラフ・表。Excel は他の表と同じく円）。
 - 赤は「このペースの月末」が上限を超えたときと、今日までの実績が目安を超えたとき（どちらも 100% 超）。黄色は使わない。
-- メンバーごとの今月の時間（チーム詳細）は `dataTable`（`className: "yn-dg-table"`、§124）。日の列は `menu: false`・`sortable: false`・`filter: false` で「列」に出さず末尾に固定し、濃さ・休日・経過前は `cellClass` が `yn-dg-day yn-dg-l0〜4`・`is-off`・`is-future` を付ける（見出しと合計行は `headClass`）。役職などの列は `memberInfoColumns()`（analysis.js。チーム・顧客・案件の詳細の「メンバー別の実績」と共通）。日の数字（と合計行の日の数字）は `breakdown` / `summaryBreakdown` で計算根拠のボタンにし（`memberDaySpec`・`teamDaySpec`。§133）、狭いマスでも押しやすいようボタンをマス全体に広げる。
+- メンバーごとの今月の時間（チーム詳細）は `dataTable`（`className: "yn-dg-table"`、§124）。日の列は `menu: false`・`sortable: false`・`filter: false` で「列」に出さず末尾に固定し、濃さ・休日・経過前は `cellClass` が `yn-dg-day yn-dg-l0〜4`・`is-off`・`is-future` を付ける（見出しと合計行は `headClass`）。役職などの列は `memberInfoColumns()`（analysis.js。チーム・顧客・案件の詳細の「メンバー別の実績」と共通）。日の数字（と合計行の日の数字）は `breakdown` / `summaryBreakdown` で計算根拠のボタンにし（`memberDaySpec`・`teamDaySpec`。§135）、狭いマスでも押しやすいようボタンをマス全体に広げる。
 
 列幅（SPEC §77）: `dataTable` の各見出しに `.yn-col-resizer`（`bindColResizer` は `src/components/col-resize.js` でマスタ編集と共通）。境目は右隣の見出しにまたがるので、見出しの `z-index` を左ほど大きくしている（先頭の列は最前面）。幅は `localStorage` `yojitsu-navi:col-width:<path>:<caption>`。描き直しのたびに `applyColWidths()` で全行のセルに幅を当てる。
 

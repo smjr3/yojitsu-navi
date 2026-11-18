@@ -240,7 +240,7 @@ test("予算の消化率の帯: スマートフォンの幅でも月・週の消
   }
 });
 
-test("メンバー詳細: 時間のグラフの棒を押すと、その期間の内訳が開く（日は作業ごと、月は案件ごと。§133）", async ({ page }) => {
+test("メンバー詳細: 時間のグラフの棒を押すと、その期間の内訳が開く（日は作業ごと、月は案件ごと。§135）", async ({ page }) => {
   await gotoPage(page, "/member?id=M010");
   const dialog = page.locator("dialog.yn-bd-dialog[open]");
   const clickAt = async (rx: number) => {

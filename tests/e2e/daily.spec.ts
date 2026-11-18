@@ -217,7 +217,7 @@ for (const [w, dark] of [
   });
 }
 
-test("メンバー×日の表: 日の数字を押すと、その日の案件ごと・作業ごとの時間が開く（合計行も。§133）", { tag: "@smoke" }, async ({ page }) => {
+test("メンバー×日の表: 日の数字を押すと、その日の案件ごと・作業ごとの時間が開く（合計行も。§135）", { tag: "@smoke" }, async ({ page }) => {
   const p = dailyProgress(model, daily, teamIds)!;
   const rows = dailyMembers(model, daily, p, teamIds);
   const first = rows[0]!;
@@ -246,7 +246,7 @@ test("メンバー×日の表: 日の数字を押すと、その日の案件ご�
   await expect(dialog.locator(".yn-bd-section tbody tr")).toHaveCount(dayHoursLines(daily, teamIds, day).length);
 });
 
-test("メンバー×日の表: スマートフォンでも日の数字をタップすると内訳が開く（§133）", async ({ browser }) => {
+test("メンバー×日の表: スマートフォンでも日の数字をタップすると内訳が開く（§135）", async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   await gotoPage(page, `/team?id=${TEAM}`);
