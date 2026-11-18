@@ -23,6 +23,7 @@ import { dataTable, standardColumns, rowStatus, statusSortValue, contractNameCel
 import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
+import { contractTimeline, isEndingSoon, END_SOON_MONTHS } from "./components/contract-timeline.js";
 ```
 
 ```js
@@ -42,15 +43,15 @@ const state = Generators.observe((notify) => {
 ```
 
 ```js
-// 一覧専用の絞り込み。URL の f（deficit,over,prelim,outside のカンマ区切り）と q に書き戻す（詳細から「戻る」で復元するため）
+// 一覧専用の絞り込み。URL の f（deficit,over,prelim,ending,outside のカンマ区切り）と q に書き戻す（詳細から「戻る」で復元するため）
 const listFilter = (() => {
   const q = new URLSearchParams(location.search);
   const f = (q.get("f") ?? "").split(",");
-  return { deficit: f.includes("deficit"), over: f.includes("over"), prelim: f.includes("prelim"), text: q.get("q") ?? "", showOutside: f.includes("outside") };
+  return { deficit: f.includes("deficit"), over: f.includes("over"), prelim: f.includes("prelim"), ending: f.includes("ending"), text: q.get("q") ?? "", showOutside: f.includes("outside") };
 })();
 function writeListFilter(lf) {
   const url = new URL(location.href);
-  const f = [lf.deficit && "deficit", lf.over && "over", lf.prelim && "prelim", lf.showOutside && "outside"].filter(Boolean).join(",");
+  const f = [lf.deficit && "deficit", lf.over && "over", lf.prelim && "prelim", lf.ending && "ending", lf.showOutside && "outside"].filter(Boolean).join(",");
   if (f) url.searchParams.set("f", f);
   else url.searchParams.delete("f");
   if (lf.text) url.searchParams.set("q", lf.text);
@@ -58,12 +59,32 @@ function writeListFilter(lf) {
   history.replaceState(history.state, "", url);
 }
 
+// 表示の切り替え（表 / 期間。§132）。URL の view に持つ（詳細から「戻る」で復元するため）
+const viewEvents = new EventTarget();
+function setView(view) {
+  const url = new URL(location.href);
+  if (view === "timeline") url.searchParams.set("view", "timeline");
+  else url.searchParams.delete("view");
+  history.replaceState(history.state, "", url);
+  viewEvents.dispatchEvent(new Event("change"));
+}
+const readView = () => (new URLSearchParams(location.search).get("view") === "timeline" ? "timeline" : "table");
+
 // 顧客キーでの厳密絞り込み（?customer=<key>）。顧客詳細の担当チーム行から来る。
 // direct=1 のときは主担当チームがちょうど team の契約だけ（配下のチームは含めない）。検索語（部分一致）とは別物
 const customerParam = (() => {
   const q = new URLSearchParams(location.search);
   return { key: q.get("customer") ?? "", direct: q.get("direct") === "1" };
 })();
+```
+
+```js
+const listView = Generators.observe((notify) => {
+  const on = () => notify(readView());
+  notify(readView());
+  viewEvents.addEventListener("change", on);
+  return () => viewEvents.removeEventListener("change", on);
+});
 ```
 
 ```js
@@ -78,7 +99,7 @@ const vm = (() => {
     .filter((r) => !ids || ids.has(r.contract.contractId))
     .filter((r) => !customerParam.key || (customerIds && customerIds.has(r.contract.contractId)))
     .filter((r) => !direct || (state.team === UNASSIGNED_TEAM_ID ? !r.contract.teamId : r.contract.teamId === state.team))
-    .map((r) => ({ ...contractRow(model, r, scope.period, state.method, scope.tree), key: r.contract.contractId, searchText: normalizeName(`${r.contract.contractId} ${r.contract.customerName} ${r.contract.projectName}`) }));
+    .map((r) => ({ ...contractRow(model, r, scope.period, state.method, scope.tree), months: r.months, key: r.contract.contractId, searchText: normalizeName(`${r.contract.contractId} ${r.contract.customerName} ${r.contract.projectName}`) }));
   return { scope, all, customerGroup, unit: state.unit, method: state.method, includesPreliminary: all.some((r) => r.includesPreliminary) };
 })();
 ```
@@ -144,6 +165,7 @@ const chips = (() => {
     mk("deficit", T.contracts.chipDeficit, T.contracts.chipDeficitTitle),
     mk("over", T.contracts.chipOver, fmt(T.contracts.chipOverTitle, { percent: Math.round(model.config.burnRateDangerThreshold * 100) })),
     mk("prelim", T.contracts.chipPrelim, T.contracts.chipPrelimTitle),
+    mk("ending", T.contracts.chipEnding, fmt(T.contracts.chipEndingTitle, { months: END_SOON_MONTHS })),
     mk("showOutside", T.contracts.chipOutside, T.contracts.chipOutsideTitle),
     text,
   );
@@ -175,15 +197,21 @@ if (vm) {
     if (f.deficit && !r.isDeficit) return false;
     if (f.over && !r.isOverBudget) return false;
     if (f.prelim && !r.includesPreliminary) return false;
+    if (f.ending && !isEndingSoon(r, model.meta.asOfMonth)) return false;
     if (q && !r.searchText.includes(q) && !normalizeName(r.teamName).includes(q)) return false;
     return true;
   });
   const outside = all.filter((r) => !r.inPeriod).length;
+  const isTimeline = listView === "timeline";
+  const viewBtn = (id, label) => html`<button type="button" class="yn-seg-btn" data-view=${id} aria-pressed=${String(listView === id)} onclick=${() => setView(id)}>${label}</button>`;
+  const viewToggle = html`<div class="yn-seg yn-view-toggle" role="group" aria-label=${T.contracts.viewLabel}>${viewBtn("table", T.contracts.viewTable)}${viewBtn("timeline", T.contracts.viewTimeline)}</div>`;
   display(
     sectionTitle(
       T.contracts.sectionTitle,
-      fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
-      null,
+      isTimeline
+        ? fmt(T.contracts.timelineHint, { period: periodJa(scope.period), team: scope.teamLabel })
+        : fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
+      viewToggle,
       outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : null,
     ),
   );
@@ -257,6 +285,8 @@ if (vm) {
   };
   if (rows.length === 0) {
     display(emptyState({ title: T.contracts.emptyTitle, text: T.contracts.emptyText, icon: "○" }));
+  } else if (isTimeline) {
+    display(contractTimeline({ rows, period: scope.period, asOf: model.meta.asOf, unit, href: (r) => store.href("./contract", {}, { id: r.contractId }) }));
   } else {
     display(
       dataTable({
