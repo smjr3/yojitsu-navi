@@ -12,7 +12,7 @@ import { T, fmt } from "../i18n/index.js";
 import { h } from "./dom.js";
 import { placeNear } from "./plan-cell.js";
 import { dateJa, decimal, formatHours, monthJa } from "./format.js";
-import { personMonths } from "../core/index.js";
+import { createMonthHours } from "../core/index.js";
 import { treeAt } from "./analysis.js";
 
 const ATTR = "data-member-tip";
@@ -83,7 +83,7 @@ function content(id) {
   if (!recs.length) return null;
   const cur = recs.filter((r) => r.effectiveFrom <= month).at(-1) ?? recs[0];
   const prev = recs.filter((r) => r.effectiveFrom < cur.effectiveFrom).at(-1);
-  const next = recs.find((r) => r.effectiveFrom > month);
+
   const teamName = (tid) => tree[tid]?.name ?? model.teams.find((t) => t.teamId === tid)?.name ?? "";
   const isLeft = cur.status === "left";
   const kids = [h("p", { class: "yn-plan-tip-head" }, cur.title ? fmt(T.memberTip.head, { name: cur.name, title: cur.title }) : cur.name)];
@@ -99,6 +99,15 @@ function content(id) {
   for (let i = recs.indexOf(cur) - 1; isLeft && i >= 0 && recs[i].status === "left"; i--) leftRec = recs[i];
   if (isLeft) kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(leftRec) })));
   else if (prev && cur.effectiveFrom === month && prev.teamId !== cur.teamId) kids.push(h("p", null, fmt(T.memberTip.movedIn, { team: prev.teamId ? teamName(prev.teamId) : T.memberTip.noTeam })));
+  // 来月以降の予定: 役職だけの変更は飛ばし、最初の異動・不在を出す
+  let next = null;
+  for (let i = recs.indexOf(cur) + 1, last = cur; i < recs.length; last = recs[i], i++) {
+    if (recs[i].effectiveFrom <= month) continue;
+    if (recs[i].status === "left" || recs[i].teamId !== last.teamId) {
+      next = recs[i];
+      break;
+    }
+  }
   if (!isLeft && next) {
     if (next.status === "left") kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(next) })));
     else if (next.teamId !== cur.teamId) kids.push(h("p", null, fmt(T.memberTip.moveTo, { month: monthJa(next.effectiveFrom), team: next.teamId ? teamName(next.teamId) : T.memberTip.noTeam })));
@@ -112,7 +121,7 @@ function content(id) {
       h(
         "ul",
         { class: "yn-plan-tip-list" },
-        h("li", null, h("span", null, T.memberTip.plan), h("span", { class: "num" }, fmt(T.memberTip.planValue, { pm: fmt(T.numbers.personMonths, { value: decimal(personMonths(m.plan, cfg.standardHoursPerMonth), 2) }), hours: formatHours(m.plan) }))),
+        h("li", null, h("span", null, T.memberTip.plan), h("span", { class: "num" }, fmt(T.memberTip.planValue, { pm: fmt(T.numbers.personMonths, { value: decimal(m.plan / createMonthHours(model.holidays, cfg.hoursPerBusinessDay)(month), 2) }), hours: formatHours(m.plan) }))),
         h("li", null, h("span", null, T.memberTip.actual), h("span", { class: "num" }, formatHours(m.actual))),
       ),
     );

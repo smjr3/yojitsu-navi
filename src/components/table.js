@@ -710,7 +710,11 @@ export function dataTable({
         if (!tipMember) cell.title = content;
       }
       lead.append(content);
-      if (tipMember) cell.setAttribute("data-member-tip", tipMember);
+      if (tipMember) {
+        cell.setAttribute("data-member-tip", tipMember);
+        // リンクの無いセル（作業ログなど）もキーボードで吹き出しを出せるように
+        if (!cell.querySelector("a, button")) cell.tabIndex = 0;
+      }
       else if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });

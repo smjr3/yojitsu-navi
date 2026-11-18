@@ -996,14 +996,14 @@ export default {
     leftFrom: "{when}から不在",
     movedIn: "今月異動（前は {team}）",
     moveTo: "{month}から {team}",
-    plan: "今月の計画",
+    plan: "今月の案件の計画",
     planValue: "{pm}（{hours}）",
-    actual: "今月の実績",
+    actual: "今月の案件の実績",
     projects: "主な案件（実績 / 計画）",
     projectValue: "{actual} / {plan}",
     support: "応援（{team}）",
     more: "ほか {n} 件",
-    none: "今月の計画・実績はありません",
+    none: "今月の案件の計画・実績はありません",
   },
 
   orgChart: {

@@ -22,7 +22,7 @@ test("メンバー別: 氏名に合わせると吹き出し。氏名・チーム
   await cell.hover();
   await expect(tip(page)).toBeVisible();
   await expect(tip(page).locator(".yn-plan-tip-head")).toContainText(rec.name);
-  await expect(tip(page)).toContainText("今月の計画");
+  await expect(tip(page)).toContainText("今月の案件の計画");
   const text = (await tip(page).textContent()) ?? "";
   expect(text).not.toContain(id);
   expect(text).not.toContain("円");
