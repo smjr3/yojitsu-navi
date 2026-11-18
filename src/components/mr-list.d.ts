@@ -12,4 +12,4 @@ export interface MrNamer {
 }
 export function namerFor(describe: MrDescribe | null, files: MrFileChange[]): MrNamer;
 export function mrTitleText(title: string): string;
-export function mergeRequestsPanel(opts: { cfg: unknown; fetchImpl: unknown; now?: () => Date; describe?: MrDescribe | null }): { el: HTMLElement; refresh(opts?: { notice?: unknown }): Promise<void> };
+export function mergeRequestsPanel(opts: { cfg: unknown; fetchImpl: unknown; now?: () => Date; describe?: MrDescribe | null; paths?: Record<string, string>; onPending?: ((p: unknown) => void) | null; onMerged?: (() => void) | null }): { el: HTMLElement; refresh(opts?: { notice?: unknown }): Promise<void> };
