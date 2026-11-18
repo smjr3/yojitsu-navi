@@ -247,10 +247,11 @@ test.describe("本物の GitLab API の形（モック）", () => {
     expect(calls.some((c) => c.url.includes("/repository/files/data%2Fmasters%2Frates.csv/raw?ref=b0"))).toBe(true);
     await item.getByRole("button", { name: "単価改定（番号 7）を承認" }).click();
     await page.locator("dialog[open]").getByRole("button", { name: "承認する" }).click();
-    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("CI が画面を作り直したあと");
+    // 検証の途中（実行中）なので、通ったら自動で承認する予約になる（§149）
+    await expect(page.locator(".yn-mr .yn-me-outcome.is-ok")).toContainText("通ったら自動で承認されるように予約しました");
     const merge = calls.find((c) => c.method === "PUT")!;
     expect(merge.url).toBe(`${GITLAB}/projects/grp%2Fyn/merge_requests/7/merge`);
-    expect(merge.body).toEqual({ should_remove_source_branch: true, sha: "h1" });
+    expect(merge.body).toEqual({ should_remove_source_branch: true, sha: "h1", merge_when_pipeline_succeeds: true, auto_merge: true });
   });
 
   test("承認できない人（can_merge = false）: 承認・取り下げのボタンを出さない", async ({ page }) => {

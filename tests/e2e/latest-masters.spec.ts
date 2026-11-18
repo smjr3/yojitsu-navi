@@ -109,12 +109,13 @@ test.describe("デモ: 承認した変更をその画面にすぐ出す（§149�
 });
 
 test.describe("本物の API 形式（§149）", () => {
-  function route(page: Page, { head, rates }: { head: string | null; rates?: string }) {
+  function route(page: Page, { head, rates, gate }: { head: string | null; rates?: string; gate?: Promise<void> }) {
     const calls: string[] = [];
     void page.route(`${GITLAB}/**`, async (r: Route) => {
       const req = r.request();
       if (req.method() === "OPTIONS") return r.fulfill({ status: 204, headers: CORS });
       const url = req.url();
+      if (gate && url.includes("/repository/branches/")) await gate;
       calls.push(`${req.method()} ${url.replace(GITLAB, "")}`);
       const json = (status: number, b: unknown) => r.fulfill({ status, headers: CORS, body: JSON.stringify(b) });
       if (url.endsWith("/user")) return json(200, { username: "sato", name: "佐藤" });
@@ -149,6 +150,24 @@ test.describe("本物の API 形式（§149）", () => {
     await page.getByRole("button", { name: "CSV で編集" }).click();
     await expect(page.getByRole("textbox", { name: "単価 の CSV" })).toHaveValue(/部長,15500,2026-11/);
     await expect(page.getByRole("button", { name: "変更を申請する" })).toHaveCount(0);
+  });
+
+  test("ダイアログを開いているあいだは差し替えず、閉じてから差し替える（開いた行・値のまま別の行を書かない）", async ({ page }) => {
+    await patchMasters(page, CFG, { pinCommits: true });
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    route(page, { head: "f".repeat(40), rates: PAYLOAD.files.rates.text + "部長,15500,2026-11\n", gate });
+    await page.addInitScript(() => sessionStorage.setItem("yojitsu-navi:gitlab-token", "glpat-x"));
+    await gotoPage(page, "/masters?view=rates");
+    await page.locator('[data-fk="add:rates"]').click();
+    const d = page.locator("dialog.yn-me-dialog[open]");
+    await expect(d).toBeVisible();
+    release();
+    await page.waitForTimeout(800);
+    await expect(d).toBeVisible();
+    await expect(page.locator(".yn-chip-approved")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".yn-chip-approved").first()).toBeVisible();
   });
 
   test("読めないときはビルドの中身のまま（画面にエラーも出さない）", async ({ page, errors }) => {

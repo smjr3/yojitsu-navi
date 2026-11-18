@@ -2,7 +2,7 @@
  * 承認済みでまだ公開されていないマスタ・計画を編集画面で先に出す（SPEC §149）
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { resolveMasterEdit, saveToGitLab, getMergeRequest, mergeMergeRequest } from "../../src/core/gitlab.js";
+import { resolveMasterEdit, saveToGitLab, getMergeRequest, mergeMergeRequest, mergeRequestFileChanges } from "../../src/core/gitlab.js";
 import type { FetchLike } from "../../src/core/gitlab.js";
 import { createGitLabMock } from "../../src/core/gitlab-mock.js";
 import { fetchLatestMasters } from "../../src/core/latestMasters.js";
@@ -75,6 +75,33 @@ describe("fetchLatestMasters（§149）", () => {
       { id: "teams", path: TEAMS, text: teamsText, lastCommitId: "c2", exists: false },
     ]);
     expect(r).toEqual({ head: "demo1", files: {} });
+  });
+
+  it("同じファイルを変えた申請が 2 本あれば、片方を承認するともう片方は「競合あり」で承認できない（先の変更を消さない）", async () => {
+    const save = (line: string, at: string) => saveToGitLab(mock(), { config: demo, token: "demo", message: line, files: [{ path: RATES, content: `${ratesText}${line}\n`, lastCommitId: "c1" }], now: new Date(at) });
+    await save("部長,13000,2026-04", "2026-10-28T00:00:00Z");
+    await save("課長,9000,2026-04", "2026-10-28T00:01:00Z");
+    const d1 = await getMergeRequest(mock(), demo, "demo", 1);
+    expect(d1.hasConflicts).toBe(false);
+    await mergeMergeRequest(mock(), demo, "demo", 1, d1.headSha);
+    const d2 = await getMergeRequest(mock(), demo, "demo", 2);
+    expect(d2.hasConflicts).toBe(true);
+    await expect(mergeMergeRequest(mock(), demo, "demo", 2, d2.headSha)).rejects.toMatchObject({ kind: "conflict" });
+    // 変更の内容の「前」は作ったときの本体（先に承認した行は 2 本目の変更に数えない）
+    const ch = await mergeRequestFileChanges(mock(), demo, "demo", d2, [RATES]);
+    expect(ch[0]!.before).toBe(ratesText);
+    const r = await fetchLatestMasters(mock(), demo, "demo", BUILT_HEAD, inputs);
+    expect(r!.files.rates!.text).toContain("部長,13000,2026-04");
+    expect(r!.files.rates!.text).not.toContain("課長,9000");
+  });
+
+  it("UTF-8 でないファイル（Shift_JIS のままなど）は差し替えない", async () => {
+    const sjis = btoa(String.fromCharCode(0x6b, 0x65, 0x79, 0x0a, 0x95, 0x94, 0x92, 0xb7, 0x0a));
+    const f: FetchLike = async (url) => {
+      const body = url.includes("/repository/branches/") ? { commit: { id: "h2" } } : url.includes("/repository/commits?") ? [{ id: url.includes("rates") ? "new" : "c2" }] : { encoding: "base64", content: sjis, last_commit_id: "new" };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    };
+    expect(await fetchLatestMasters(f, demo, "demo", BUILT_HEAD, inputs)).toEqual({ head: "h2", files: {} });
   });
 
   it("通信に失敗したら例外（呼び出し側はビルドの中身のまま）", async () => {

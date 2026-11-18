@@ -3594,7 +3594,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** 今の計画（編集中は編集後）で未達見込みになる目標。目標が無ければ空 */
   function planTargetAlertsFor(teamId, tree, treeMonth) {
     if (!model || !(model.targets ?? []).length) return [];
-    const edited = IMPACT_FILES.some((id) => diffMasterDoc(docs[id]).count > 0) ? validation : null;
+    // 承認済みの中身を土台にしたとき（§149）も、ビルドの計画とは違うので今の内容で数え直す
+    const edited = IMPACT_FILES.some((id) => bases[id].text !== built[id].text || diffMasterDoc(docs[id]).count > 0) ? validation : null;
     const key = `${teamId ?? ""}|${treeMonth}`;
     if (alertMemo && alertMemo.key === key && alertMemo.edited === edited) return alertMemo.value;
     const value = planTargetAlerts(model, edited ? planInputsOf(edited.dataset) : null, { teamId, tree });
@@ -3884,13 +3885,31 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     adoptLatest(latest.files);
   }
 
+  /** 入力中・ダイアログを開いているあいだは差し替えを待たせる（その中身。少しずつ確かめて、閉じたら差し替える） */
+  let heldLatest = null;
+  let heldTimer = 0;
+  function holdLatest(files) {
+    heldLatest = files;
+    if (heldTimer) return;
+    heldTimer = setTimeout(() => {
+      heldTimer = 0;
+      const f = heldLatest;
+      heldLatest = null;
+      if (f) adoptLatest(f);
+    }, 1500);
+  }
+
   function adoptLatest(files) {
     const ids = MASTER_FILE_IDS.filter((id) => files[id] && (files[id].text !== bases[id].text || files[id].lastCommitId !== bases[id].lastCommitId));
-    if (ids.length === 0 || saving) return;
+    if (ids.length === 0) return;
     const panelSlot = parts.panel;
     const focused = panelSlot.contains(document.activeElement) ? document.activeElement : null;
-    // 入力中は描き直さない（入れている途中の値が消えるため）。次の確認（画面に戻ったとき・承認したとき）で反映する
-    if (focused && focused.matches("input, textarea, select")) return;
+    // 保存中・入力中・ダイアログ（行の修正・セルの編集・確認）を開いているあいだは描き直さない。
+    // 開いたときの行の位置・値のまま反映されると別の行や古い値を書いてしまうため。閉じてから差し替える
+    if (saving || (focused && focused.matches("input, textarea, select")) || dialog.open || cellEditor.el.open || document.querySelector("dialog[open]")) {
+      holdLatest(files);
+      return;
+    }
     const focusKeyNow = focused?.closest?.("[data-fk]")?.dataset.fk;
     const next = { ...bases };
     if (locked) {

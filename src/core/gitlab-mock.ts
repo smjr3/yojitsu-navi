@@ -20,7 +20,8 @@ export const DEMO_BASE_SHA = "demo-base";
 
 export interface DemoStore {
   seq: number;
-  branches: Record<string, { files: Record<string, string>; head: string }>;
+  /** bases = 作ったときの本体の各ファイルの最終コミットと中身（承認の重なり＝競合の判定と、変更の内容の「前」に使う。§149） */
+  branches: Record<string, { files: Record<string, string>; head: string; bases?: Record<string, { lastCommitId: string | null; text: string | null }> }>;
   mrs: Array<{
     iid: number;
     title: string;
@@ -88,11 +89,18 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
   const mainFile = (s: DemoStore, file: string): { text: string; lastCommitId: string | null } | undefined => s.main?.files[file] ?? base[file];
   const mainHead = (s: DemoStore) => s.main?.head ?? opts.baseHead ?? DEMO_BASE_SHA;
 
+  /** 作ったあとに同じファイルの別の変更が承認されたか（本物の GitLab の「競合あり」に当たる。§149） */
+  const conflicted = (s: DemoStore, m: DemoStore["mrs"][number]) => {
+    const b = s.branches[m.source_branch];
+    if (m.state !== "opened" || !b?.bases) return false;
+    return Object.keys(b.files).some((f) => (b.bases![f]?.lastCommitId ?? null) !== (mainFile(s, f)?.lastCommitId ?? null));
+  };
+  const baseRef = (head: string) => `${head}-base`;
   const mrJson = (s: DemoStore, m: DemoStore["mrs"][number]) => ({
     ...m,
-    has_conflicts: false,
-    detailed_merge_status: m.state === "opened" ? "mergeable" : "not_open",
-    diff_refs: { base_sha: DEMO_BASE_SHA, head_sha: s.branches[m.source_branch]?.head ?? null },
+    has_conflicts: conflicted(s, m),
+    detailed_merge_status: m.state !== "opened" ? "not_open" : conflicted(s, m) ? "conflict" : "mergeable",
+    diff_refs: { base_sha: s.branches[m.source_branch]?.bases ? baseRef(s.branches[m.source_branch]!.head) : DEMO_BASE_SHA, head_sha: s.branches[m.source_branch]?.head ?? null },
     head_pipeline: { status: "success" },
     user: { can_merge: canMerge() },
   });
@@ -126,7 +134,13 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
         if (a.last_commit_id && b && b.lastCommitId && a.last_commit_id !== b.lastCommitId) return reply(400, { message: "You are attempting to update a file that has changed since you started editing it." });
       }
       const head = sha(s);
-      s.branches[branch] = { files: Object.fromEntries(actions.map((a) => [String(a.file_path), String(a.content ?? "")])), head };
+      const bases = Object.fromEntries(
+        actions.map((a) => {
+          const f = mainFile(s, String(a.file_path));
+          return [String(a.file_path), { lastCommitId: f?.lastCommitId ?? null, text: f?.text ?? null }];
+        }),
+      );
+      s.branches[branch] = { files: Object.fromEntries(actions.map((a) => [String(a.file_path), String(a.content ?? "")])), head, bases };
       save(s);
       return reply(201, { id: head, short_id: head.slice(0, 8) });
     }
@@ -170,6 +184,8 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
         if (m.state !== "opened") return reply(405, { message: "405 Method Not Allowed" });
         const head = s.branches[m.source_branch]?.head ?? null;
         if (body.sha && body.sha !== head) return reply(409, { message: "SHA does not match HEAD of source branch" });
+        // 同じファイルの別の変更が先に承認されていたら、そのまま入れると先の変更を消すので断る（本物の GitLab と同じ）
+        if (conflicted(s, m)) return reply(406, { message: "Branch cannot be merged" });
         m.state = "merged";
         // 本体に重ねる（§149。リソース計画・マスタ編集の土台になる）
         const files = s.branches[m.source_branch]?.files ?? {};
@@ -219,7 +235,8 @@ export function createGitLabMock(opts: DemoOptions): FetchLike {
       const ref = u.searchParams.get("ref") ?? target;
       const s = load();
       const branch = Object.values(s.branches).find((b) => b.head === ref);
-      const text = branch && file in branch.files ? branch.files[file] : mainFile(s, file)?.text;
+      const based = Object.values(s.branches).find((b) => b.bases && baseRef(b.head) === ref);
+      const text = branch && file in branch.files ? branch.files[file] : based?.bases?.[file] ? (based.bases[file]!.text ?? undefined) : mainFile(s, file)?.text;
       return text === undefined ? reply(404, { message: "404 File Not Found" }) : reply(200, text);
     }
 

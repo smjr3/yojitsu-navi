@@ -54,7 +54,14 @@ export async function fetchLatestMasters(
       // 調べているあいだに次の承認が入っても、先頭（head）時点の中身で比べてそろえる
       const last = await fetchLastCommitForPath(fetchImpl, cfg, token, f.path, head);
       if (!last || last === f.lastCommitId) return null;
-      const latest = await fetchFileForUpdate(fetchImpl, cfg, token, f.path, head);
+      // UTF-8 でないファイル（Shift_JIS のままの CSV。ビルドは自動で判別して読む）は差し替えない（文字化けを土台にしない）
+      let latest: { text: string; lastCommitId: string | null } | null = null;
+      try {
+        latest = await fetchFileForUpdate(fetchImpl, cfg, token, f.path, head, { strictUtf8: true });
+      } catch (e) {
+        if (e instanceof TypeError) return null;
+        throw e;
+      }
       return latest ? ([f.id, { text: latest.text, lastCommitId: latest.lastCommitId ?? last }] as const) : null;
     }),
   );
