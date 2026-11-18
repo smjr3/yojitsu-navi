@@ -291,7 +291,7 @@ export function dailyMemberTable(p, rows, { model, daily = null, contractIds = [
     },
   }));
   const columns = [
-    { key: "memberName", label: T.daily.colMember, type: "text" },
+    { key: "memberName", label: T.daily.colMember, type: "text", memberTip: (r) => r.memberId },
     ...memberInfoColumns(model, month, { shown: ["title"], team: true }),
     { key: "total", label: T.daily.colTotal, type: "hours" },
     { key: "plan", label: T.daily.colPlan, type: "hours", get: plan, summaryDash: true },

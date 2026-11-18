@@ -15,6 +15,7 @@
  *               cellClass?(row) -> string（セルに足す class。日ごとの濃さなど）, headClass?: string（見出しと合計行のセルに足す class）, headTitle?: string（見出しの title）,
  *               menu?: false（「列」に出さず、常に末尾に出す列。日ごとの列など §124） }],
  *   rows, rowKey(row), unit, sort: {key, dir}, rowHref?(row), caption, exportName, emptyText,
+ *   （列の memberTip?(row) → 社員番号: そのセルに氏名の吹き出し §144）
  *   tree?: boolean（rows に key/parentKey/depth/hasChildren を持たせる。並べ替えは無効。絞り込みは一致行＋その親を残す）,
  *   summary?: row | (shownRows) => row（tfoot の合計行。関数なら列の絞り込み後の行で作り直す。
  *             固定の row は絞り込み中は出さない）, summaryBreakdown?(col, summaryRow) -> spec（合計行の根拠。無ければ合計行はプレーン表示）,
@@ -696,13 +697,16 @@ export function dataTable({
         }
         if (href) content = h("a", { class: "yn-row-link", href }, content);
       }
+      // 氏名の列は合わせると吹き出し（§144）。全文は吹き出しの見出しに出るので title は付けない（二重に出さない）
+      const tipMember = col.memberTip ? col.memberTip(row) : null;
       // 文字の列（案件名・作業名など）は長くても他の列を潰さないよう上限で「…」にし、全文は title（§106）
       if (ci > 0 && typeof content === "string" && content !== EMPTY_VALUE && !numeric && (col.type === undefined || col.type === "text")) {
         cell.classList.add("yn-cell-clip");
-        cell.title = content;
+        if (!tipMember) cell.title = content;
       }
       cell.append(content);
-      if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
+      if (tipMember) cell.setAttribute("data-member-tip", tipMember);
+      else if (ci === 0 && !cell.title) cell.title = cell.textContent.trim();
       tr.append(cell);
     });
     if (href) {

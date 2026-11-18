@@ -333,6 +333,7 @@ if (vm) {
         key: "memberName",
         label: T.breakdown.colMember,
         type: "text",
+        memberTip: (r) => r.memberId,
         render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`,
         sortValue: (r) => r.memberName,
       },

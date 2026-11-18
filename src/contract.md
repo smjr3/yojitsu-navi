@@ -271,7 +271,7 @@ if (vm) {
   const rows = vm.memberCosts.map((r) => ({ ...r, key: r.memberId, teams: originOrgText(r, teamName), rateText: r.rates.map((x) => money(x, "yen")).join(" / "), months: r.monthCount }));
   display(sectionTitle(T.team.membersTitle, fmt(T.contract.membersHint, { period: periodJa(vm.period) })));
   const columns = [
-    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`, sortValue: (r) => r.memberName },
+    { key: "memberName", label: T.breakdown.colMember, type: "text", memberTip: (r) => r.memberId, render: (r) => html`${r.memberName}${r.rateMissing ? html` ${statusChip("neutral", T.breakdown.rateMissing, T.team.rateMissingTitle)}` : ""}${originChips(r, T.contract.supportTitle)}`, sortValue: (r) => r.memberName },
     { key: "teams", label: T.team.colTeamAtTime, type: "text", hideOnPhone: true },
     // 役職・区分・所属組織（「列」で選べる。§124）
     ...memberInfoColumns(model, treeMonthFor(model, vm.period)),
@@ -384,7 +384,7 @@ function worklogExplorer(entries, unit, id) {
   // 月・メンバー・作業内容などの絞り込みは表の見出しから（SPEC §70。日付は以降〜以前・年のボタン。§109）
   const columns = [
     { key: "date", label: T.breakdown.colDate, type: "text" },
-    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => r.memberName },
+    { key: "memberName", label: T.breakdown.colMember, type: "text", render: (r) => r.memberName, memberTip: (r) => r.memberId },
     { key: "task", label: T.breakdown.colTask, type: "text" },
     { key: "hours", label: T.columns.hours, type: "hours" },
     { key: "hourlyRate", label: T.breakdown.colRate, type: "moneyYen" },
