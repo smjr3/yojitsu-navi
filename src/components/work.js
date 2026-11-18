@@ -12,7 +12,7 @@ import { scaledPx } from "./appearance.js";
 import { T, fmt } from "../i18n/index.js";
 import { personMonths, workByTask } from "../core/index.js";
 import { EMPTY_VALUE, STATUS_LABELS, decimal, formatHours, formatPercent, maxFractionFormat, money, moneySigned, monthJa, monthShort } from "./format.js";
-import { chartColors, chartLegend } from "./charts.js";
+import { BUDGET_LINE_WIDTH, chartColors, chartLegend } from "./charts.js";
 import { dataTable, PREVIEW_ROWS } from "./table.js";
 import { sectionTitle, note } from "./layout.js";
 
@@ -399,7 +399,7 @@ export function planAmountChart({ data, dark = false, width = 640, height = 200,
       Plot.ruleY([0], { stroke: c.axis }),
       Plot.rectY(rows, Plot.stackY({ x1: (d) => d.i - half, x2: (d) => d.i + half, y: "v", z: "k", fill: (d) => series[d.k].color, order: (d) => d.k, stroke: c.surface, strokeWidth: 1 })),
       // 予算（月ごとの段）と目標の上限（予算 ×（1 − 目標の残予算率）の合計。§63.3 と同じ紫の破線。§140）
-      Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.budget, strokeWidth: 2.5 }),
+      Plot.link(budgets, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "budget", y2: "budget", stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH }),
       Plot.link(caps, { x1: (d) => d.i - 0.5, x2: (d) => d.i + 0.5, y1: "cap", y2: "cap", stroke: c.target, strokeWidth: 2, strokeDasharray: "5 3" }),
       Plot.text(pts.filter((d) => d.over), { x: "i", y: (d) => Math.max(d.plan, d.budget, d.cap ?? 0), dy: scaledPx(-9), text: () => (slot < 72 ? T.plan.chartAmountOverShort : T.plan.chartAmountOver), fill: c.danger, fontWeight: 700, fontSize: scaledPx(11) }),
       Plot.ruleX(pts, Plot.pointerX({ x: "i", stroke: c.muted, strokeOpacity: 0.6 })),
