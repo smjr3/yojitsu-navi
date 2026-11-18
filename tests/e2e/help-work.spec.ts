@@ -24,7 +24,7 @@ test("案件詳細: 他部署の人に「ヘルプ」、所属は部・課。実
   for (const r of rows) {
     const row = table.locator(`tbody tr[data-key="${r.memberId}"]`);
     await expect(row.locator('[data-origin="help"]')).toHaveCount(r.helpHours > 0 ? 1 : 0);
-    await expect(row.locator('[data-origin="support"]')).toHaveCount(r.supportHours > 0 ? 1 : 0);
+    await expect(row.locator('[data-origin="support"]')).toHaveCount(r.supportHours > 0 && r.supportAtLast ? 1 : 0);
     expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
   }
   const m301 = table.locator('tbody tr[data-key="M301"]');
@@ -87,7 +87,7 @@ test("顧客詳細: 案件を横断したメンバー別の実績。合計・応
     expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
     expect(parseNumber(await cellText(row, col(h, "案件数")))).toBe(r.contractIds.length);
     await expect(row.locator('[data-origin="help"]')).toHaveCount(r.helpHours > 0 ? 1 : 0);
-    await expect(row.locator('[data-origin="support"]')).toHaveCount(r.supportHours > 0 ? 1 : 0);
+    await expect(row.locator('[data-origin="support"]')).toHaveCount(r.supportHours > 0 && r.supportAtLast ? 1 : 0);
   }
   await expect(table.locator('tbody tr[data-key="M301"] [data-origin="help"]')).toHaveText("ヘルプ");
   const o = originTotals(rows);

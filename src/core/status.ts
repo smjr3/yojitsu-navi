@@ -1,13 +1,25 @@
 /**
  * 月の状態（確定・速報・未来）（SPEC §8）
  */
-import { addMonths, closingDateOf, monthOfDate, type HolidayLookup } from "./calendar.js";
+import { addMonths, closingDateOf, monthOfDate, todayJst, type HolidayLookup } from "./calendar.js";
 import type { Config, ISODate, MonthStatus, YearMonth } from "./types.js";
 
 export interface StatusContext {
   asOf: ISODate;
   config: Pick<Config, "closingBusinessDay">;
   holidays: HolidayLookup;
+  /**
+   * 作業実績を最後に取り込んだ日（日本時間）。確定日より前に取り込んだきりの月は、今日が確定日を過ぎても速報のまま（§8）。
+   * 省略・null なら今日（asOf）だけで決める
+   */
+  dataThrough?: ISODate | null;
+}
+
+/** 作業実績の取得日時（ISO 8601）→ 日本時間の日付。読めなければ null */
+export function dataThroughOf(worklogFetchedAt: string | null | undefined): ISODate | null {
+  if (!worklogFetchedAt) return null;
+  const at = new Date(worklogFetchedAt);
+  return Number.isNaN(at.getTime()) ? null : todayJst(at);
 }
 
 /**
@@ -15,6 +27,7 @@ export interface StatusContext {
  * - m > asOf月 → future
  * - m == asOf月 → preliminary
  * - m < asOf月 かつ asOf < 確定日(m) → preliminary
+ * - m < asOf月 かつ 取り込んだ日 < 確定日(m) → preliminary（取り込みが止まって月の分を取りきれていない）
  * - それ以外 → final
  */
 export function monthStatus(month: YearMonth, ctx: StatusContext): MonthStatus {
@@ -22,7 +35,8 @@ export function monthStatus(month: YearMonth, ctx: StatusContext): MonthStatus {
   if (month > asOfMonth) return "future";
   if (month === asOfMonth) return "preliminary";
   const closing = closingDateOf(month, ctx.config, ctx.holidays);
-  return ctx.asOf < closing ? "preliminary" : "final";
+  const through = ctx.dataThrough && ctx.dataThrough < ctx.asOf ? ctx.dataThrough : ctx.asOf;
+  return through < closing ? "preliminary" : "final";
 }
 
 /**
