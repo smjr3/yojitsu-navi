@@ -65,7 +65,7 @@ test.describe("メンバー一覧 /members", () => {
     expect(agg.total.actualCost).toBe(cost);
   });
 
-  test("チームで絞り込むと所属チーム（基準月、配下含む）のメンバー＋チームの案件に計画のある応援・ヘルプ（§133）。検索で絞ると合計行も表示中のメンバーで計算し直す", async ({ page }) => {
+  test("チームで絞り込むと所属チーム（基準月、配下含む）のメンバー＋チームの案件に計画のある応援・ヘルプ（§134）。検索で絞ると合計行も表示中のメンバーで計算し直す", async ({ page }) => {
     const team = "S11";
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&team=${team}&${U}`);
     const tree = treeAt(ASOF);

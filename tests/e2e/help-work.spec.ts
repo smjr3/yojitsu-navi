@@ -98,7 +98,7 @@ test("顧客詳細: 案件を横断したメンバー別の実績。合計・応
   await expect(page.locator("dialog[open]")).toBeVisible();
 });
 
-test("メンバー別でチームを選ぶと、チームの案件に入った他チームの人に「応援」。実績だけの人はボタンで出し、数値はチームの案件の分だけ（§133） @smoke", async ({ page }) => {
+test("メンバー別でチームを選ぶと、チームの案件に入った他チームの人に「応援」。実績だけの人はボタンで出し、数値はチームの案件の分だけ（§134） @smoke", async ({ page }) => {
   const team = "T411";
   const asOf = model.meta.asOfMonth;
   const t = treeAt(asOf);

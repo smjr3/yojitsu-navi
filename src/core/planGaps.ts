@@ -38,7 +38,7 @@ export interface PlanGapScope {
   period: Period;
   memberIds?: readonly string[];
   includeOutside?: boolean;
-  /** チームの案件に入った応援・ヘルプ（§133）: この人たちは contractIds の案件の分だけ判定する（運用保守以外は含めない） */
+  /** チームの案件に入った応援・ヘルプ（§134）: この人たちは contractIds の案件の分だけ判定する（運用保守以外は含めない） */
   guests?: { memberIds: readonly string[]; contractIds: readonly string[] };
   ratio?: number;
   minHours?: number;

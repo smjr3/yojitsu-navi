@@ -1,5 +1,5 @@
 /**
- * メンバー別でチームを選んだときの応援・ヘルプ（SPEC §133）: teamGuests / teamGuestsOf / mergeMemberAggregates / planGaps の guests
+ * メンバー別でチームを選んだときの応援・ヘルプ（SPEC §134）: teamGuests / teamGuestsOf / mergeMemberAggregates / planGaps の guests
  */
 import { describe, expect, it } from "vitest";
 import { buildModel } from "../../src/core/model.js";
@@ -53,7 +53,7 @@ function model(): Model {
 
 const tree = (m: Model) => teamTreeForMonth({ teams: m.teams }, "2026-09");
 
-describe("teamGuests（§133）", () => {
+describe("teamGuests（§134）", () => {
   it("チームの案件に入った他チームの人は応援（計画の有無つき）、所属の無い人・マスタに無い人はヘルプ。上位の組織の人は対象外", () => {
     const m = model();
     const g = teamGuests(m, { period: P, contractIds: ["C1"], ownScope: ownTeamScope(tree(m), "T1") });
@@ -73,7 +73,7 @@ describe("teamGuests（§133）", () => {
   });
 });
 
-describe("mergeMemberAggregates（§133）", () => {
+describe("mergeMemberAggregates（§134）", () => {
   it("所属メンバーの全体＋応援の人のチームの案件の分。合計・人数・稼働率を合わせ直す", () => {
     const m = model();
     const own = aggregateMembers(m, { period: P, memberIds: ["M1"] });
@@ -96,7 +96,7 @@ describe("mergeMemberAggregates（§133）", () => {
   });
 });
 
-describe("planGaps の guests（§133）", () => {
+describe("planGaps の guests（§134）", () => {
   it("応援の人はチームの案件の分だけ判定する（所属チームの案件のずれは出さない）", () => {
     const m = model();
     const g = planGaps(m, { period: P, memberIds: ["M1"], guests: { memberIds: ["M2"], contractIds: ["C1"] } });

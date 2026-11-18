@@ -484,7 +484,7 @@ export function memberRateHistory(source: Pick<Dataset, "members" | "rates" | "t
   return segments;
 }
 
-/** チームの外からチームの案件に入った人の区別（§133）。応援 = 管理対象の他チーム、ヘルプ = 所属チームの無い人・マスタに無い人 */
+/** チームの外からチームの案件に入った人の区別（§134）。応援 = 管理対象の他チーム、ヘルプ = 所属チームの無い人・マスタに無い人 */
 export type TeamGuestOrigin = "support" | "help";
 
 export interface TeamGuest {
@@ -495,7 +495,7 @@ export interface TeamGuest {
 }
 
 /**
- * チームの案件（contractIds）に期間内の計画か実績がある、チームの外の人（§133）。
+ * チームの案件（contractIds）に期間内の計画か実績がある、チームの外の人（§134）。
  * ownScope は担当組織（ownTeamScope: 自分・配下・上位）。所属（基準月）がその中の人は対象外（課長・部長は応援にしない）。
  * ownScope が空（チームが木に無い）なら空。
  */
@@ -517,7 +517,7 @@ export function teamGuestsOf(onTeamContracts: readonly MemberTotals[], ownScope:
   return out;
 }
 
-/** 2 つの集計を合わせる（チームのメンバー＋チームの案件に入った応援・ヘルプ。§133）。b のうち a にいる人は足さない */
+/** 2 つの集計を合わせる（チームのメンバー＋チームの案件に入った応援・ヘルプ。§134）。b のうち a にいる人は足さない */
 export function mergeMemberAggregates(a: MemberAggregate, b: MemberAggregate): MemberAggregate {
   const seen = new Set(a.members.map((m) => m.memberId));
   const extra = b.members.filter((m) => !seen.has(m.memberId));

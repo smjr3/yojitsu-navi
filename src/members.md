@@ -101,7 +101,7 @@ const vm = (() => {
   // 対象の人は「期間全体」で決める（経過月だけで決めると、未来月にだけアサインのある人が期間全体の計画から抜ける）
   const allFull = period.to === fullPeriod.to ? all : aggregateMembersCached(model, { period: fullPeriod, includeOutside });
   const memberIds = memberIdsInTeam(allFull.members, state.team, scope.tree);
-  // チームを選んだときは、チームの案件に入った他チームの人（応援）・所属チームの無い人（ヘルプ）も出す（§133）。
+  // チームを選んだときは、チームの案件に入った他チームの人（応援）・所属チームの無い人（ヘルプ）も出す（§134）。
   // この人たちはチームの案件の分だけを数える（運用保守以外は含めない）。課長・部長など上位の組織の人は応援にしない
   const guests =
     state.team && state.team !== UNASSIGNED_TEAM_ID && !scope.teamMissing && scope.contractIds.length
@@ -196,7 +196,7 @@ const spotView = { on: false };
 ```
 
 ```js
-// 応援・ヘルプのチップ（§133）。所属の行（2 行目）の先頭に付ける（名前が長くても隠れないように）
+// 応援・ヘルプのチップ（§134）。所属の行（2 行目）の先頭に付ける（名前が長くても隠れないように）
 const originChip = (r) =>
   r.origin === "support"
     ? html`<span class="yn-chip yn-chip-neutral" data-origin="support" title=${T.members.supportTitle}>${T.team.support}</span> `
@@ -241,7 +241,7 @@ if (vm) {
   const { unit, period } = vm;
   const q = normalizeName(query ?? "");
   const matched = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
-  // 実績だけの応援・ヘルプ（チームの案件に計画が無い人）は、ボタンを押したときだけ出す（§133。体制図と同じ畳み方）
+  // 実績だけの応援・ヘルプ（チームの案件に計画が無い人）は、ボタンを押したときだけ出す（§134。体制図と同じ畳み方）
   const spotN = matched.filter((r) => r.spot).length;
   const spotBtn = spotN
     ? html`<button type="button" class="yn-btn yn-btn-sm" id="yn-m-spot" aria-pressed=${spotView.on ? "true" : "false"}>${fmt(T.members.spotToggle, { n: spotN })}</button>`
@@ -254,7 +254,7 @@ if (vm) {
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);
-  // 応援・ヘルプの人はチームの案件の分だけ（§133）
+  // 応援・ヘルプの人はチームの案件の分だけ（§134）
   const within = (r) => (r.origin ? { contractIds: vm.scope.contractIds, includeOutside: false } : { includeOutside: vm.includeOutside });
   const sub = (r) => r.memberName;
   const contractHref = (id) => store.href("./contract", {}, { id });
