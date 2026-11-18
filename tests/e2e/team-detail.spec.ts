@@ -144,7 +144,7 @@ test("メンバー別実績: 作業実績軸（所属が別でも含む）。cor
     const row = table.locator(`tbody tr[data-key="${r.memberId}"]`);
     expect(parseNumber(await cellText(row, col(h, "実績")))).toBe(r.amount);
     expect(parseNumber(await cellText(row, col(h, "時間")))).toBeCloseTo(r.hours, 2);
-    if (r.supportHours > 0) await expect(row).toContainText("応援");
+    if (r.supportHours > 0 && r.supportAtLast) await expect(row).toContainText("応援");
     else await expect(row).not.toContainText("応援");
     if (r.helpHours > 0) await expect(row.locator('[data-origin="help"]')).toHaveText("ヘルプ");
     else await expect(row.locator('[data-origin="help"]')).toHaveCount(0);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lastFinalMonth, monthStatus, monthStatusFromMeta } from "../../src/core/status.js";
+import { dataThroughOf, lastFinalMonth, monthStatus, monthStatusFromMeta } from "../../src/core/status.js";
 
 const config = { closingBusinessDay: 3 };
 const none = new Set<string>();
@@ -44,6 +44,34 @@ describe("月の状態 (SPEC §8)", () => {
 
   it("closingBusinessDay = 1", () => {
     expect(monthStatus("2026-09", { asOf: "2026-10-01", config: { closingBusinessDay: 1 }, holidays: none })).toBe("final");
+  });
+});
+
+describe("取り込みが確定日より前で止まっている月は速報のまま（§8・§136）", () => {
+  it("今日が確定日を過ぎても、最後に取り込んだ日が確定日より前なら preliminary", () => {
+    // 2026-10 の確定日 = 2026-11 の第3営業日 = 2026-11-04（祝日なし。1日が日曜）
+    expect(monthStatus("2026-10", { asOf: "2026-11-18", config, holidays: none })).toBe("final");
+    expect(monthStatus("2026-10", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-10-27" })).toBe("preliminary");
+    expect(monthStatus("2026-10", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-11-03" })).toBe("preliminary");
+    expect(monthStatus("2026-10", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-11-04" })).toBe("final");
+    // 前々月は確定日を過ぎてから取り込んでいるので final
+    expect(monthStatus("2026-09", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-10-27" })).toBe("final");
+    expect(lastFinalMonth({ asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-10-27" })).toBe("2026-09");
+  });
+
+  it("取り込んだ日が今日より後・無いときは今日だけで決める。未来・今月は変わらない", () => {
+    expect(monthStatus("2026-09", { asOf: "2026-10-27", config, holidays: none, dataThrough: "2026-10-28" })).toBe("final");
+    expect(monthStatus("2026-09", { asOf: "2026-10-27", config, holidays: none, dataThrough: null })).toBe("final");
+    expect(monthStatus("2026-11", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-10-27" })).toBe("preliminary");
+    expect(monthStatus("2026-12", { asOf: "2026-11-18", config, holidays: none, dataThrough: "2026-10-27" })).toBe("future");
+  });
+
+  it("取得日時は日本時間の日付にする。読めなければ null", () => {
+    expect(dataThroughOf("2026-10-27T09:00:00+09:00")).toBe("2026-10-27");
+    expect(dataThroughOf("2026-10-31T20:00:00Z")).toBe("2026-11-01");
+    expect(dataThroughOf(null)).toBeNull();
+    expect(dataThroughOf("")).toBeNull();
+    expect(dataThroughOf("x")).toBeNull();
   });
 });
 

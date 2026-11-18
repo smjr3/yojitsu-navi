@@ -137,7 +137,8 @@ describe("teamMemberCosts (作業実績軸)", () => {
     const rows = teamMemberCosts(model, ["A"], period, new Set(["T1"]));
     const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
     expect(by.M1).toMatchObject({ supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0 });
-    expect(by.M2).toMatchObject({ supportHours: 20, supportAmount: 20_000, helpHours: 0 });
+    expect(by.M2).toMatchObject({ supportHours: 20, supportAmount: 20_000, helpHours: 0, supportAtLast: true });
+    expect(by.M1!.supportAtLast).toBe(false);
     expect(by.M3).toMatchObject({ supportHours: 0, helpHours: 1, helpAmount: 1_000, memberUnknown: false });
     // teamScope なし: 応援は判定しないが、所属なしはヘルプ
     const plain = Object.fromEntries(teamMemberCosts(model, ["A"], period).map((r) => [r.memberId, r]));
@@ -154,7 +155,7 @@ describe("teamMemberCosts (作業実績軸)", () => {
     const rows = teamMemberCosts(model, ["A", "B"], period, scopes);
     const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
     // M1 は A では自チーム、B では応援。M2 は A で応援
-    expect(by.M1).toMatchObject({ hours: 115, contractIds: ["A", "B"], supportHours: 100, supportAmount: 100_000 });
+    expect(by.M1).toMatchObject({ hours: 115, contractIds: ["A", "B"], supportHours: 100, supportAmount: 100_000, supportAtLast: true });
     expect(by.M2).toMatchObject({ supportHours: 20 });
     const each = ["A", "B"].map((id) => originTotals(teamMemberCosts(model, [id], period, ownTeamScope(model.teamTree, model.contracts.find((r) => r.contract.contractId === id)!.contract.teamId))));
     const t = originTotals(rows);
@@ -202,6 +203,25 @@ describe("teamMemberCosts (作業実績軸)", () => {
     expect(teamMemberCosts(model, ["A"], { from: "2026-06", to: "2026-06" }).map((r) => r.memberId)).toEqual(["M1"]);
     expect(teamMemberCosts(model, [], period)).toEqual([]);
     expect(teamMemberCosts(model, ["A"], { from: "2027-01", to: "2027-02" })).toEqual([]);
+  });
+
+  it("異動してきた人は、異動前の作業が応援に数えられても「応援」の印を付けない。異動後に元のチームを手伝えば元のチームでは印（§136）", () => {
+    const moved = buildModel(
+      dataset({
+        ...ds,
+        members: [member({ memberId: "M5", title: "SE", teamId: "T2", effectiveFrom: "2025-04" }), member({ memberId: "M5", title: "SE", teamId: "T1", effectiveFrom: "2026-07" })],
+        worklogs: [
+          worklog({ date: "2026-05-10", memberId: "M5", hours: 10, customerName: "A社" }), // 異動前（T2）に A（T1）を手伝った = 応援
+          worklog({ date: "2026-08-10", memberId: "M5", hours: 20, customerName: "A社" }), // 異動後は T1 の人
+          worklog({ date: "2026-08-11", memberId: "M5", hours: 3, customerName: "B社" }), // 異動後に元の T2 の B を手伝った
+        ],
+      }),
+      { asOf: "2026-10-27" },
+    );
+    const inT1 = teamMemberCosts(moved, ["A"], period, new Set(["T1"]))[0]!;
+    expect(inT1).toMatchObject({ memberId: "M5", supportHours: 10, supportAtLast: false });
+    const inT2 = teamMemberCosts(moved, ["B"], period, new Set(["T2"]))[0]!;
+    expect(inT2).toMatchObject({ memberId: "M5", supportHours: 3, supportAtLast: true });
   });
 
   it("単価なしのメンバーは rateMissing", () => {

@@ -13,7 +13,7 @@ import { addMonths, fiscalYearMonths, fiscalYearOf, isValidISODate, monthOfDate,
 import { forecastAllMethodsForMonths } from "./forecast.js";
 import { HolidaySet } from "./holidays.js";
 import { teamTreeAt } from "./masters.js";
-import { lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
+import { dataThroughOf, lastFinalMonth, monthStatus, type StatusContext } from "./status.js";
 import type { ContractMonth, ISODate, Model, ModelMeta, YearMonth } from "./types.js";
 
 /**
@@ -50,7 +50,7 @@ export function rebaseModel<M extends Pick<Model, "meta" | "config" | "contracts
   const config = model.config;
   const asOfMonth = monthOfDate(asOf);
   const holidays = new HolidaySet(model.holidays);
-  const statusCtx: StatusContext = { asOf, config, holidays };
+  const statusCtx: StatusContext = { asOf, config, holidays, dataThrough: dataThroughOf(model.meta.worklogFetchedAt) };
   const statusCache = new Map<YearMonth, ContractMonth["status"]>();
   const statusOf = (m: YearMonth): ContractMonth["status"] => {
     let s = statusCache.get(m);

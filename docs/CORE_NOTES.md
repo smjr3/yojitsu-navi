@@ -22,7 +22,7 @@
 | §7 | `CostLine.memberName` | 当月のメンバーマスタの名前を優先、無ければ作業ログの `member_name` |
 | §10 | 平均 × 残り月数 が整数にならない | `remainingCost = Math.round(平均 × 残り月数)`。`averageMonthlyCost` は丸めない値を内訳に持つ |
 | §10 assignment | アサインはあるが残り月に 1 件も掛からない | `noAssignments = false`、明細 0 件、残り原価 0（`noAssignments` は「契約にアサインが 1 件も無い」の意味に限定） |
-| §8 | `lastFinalMonth` | 契約月の有無に関係なく暦から決める（前月の確定日 <= asOf なら前月、そうでなければ前々月） |
+| §8 | `lastFinalMonth` | 契約月の有無に関係なく暦から決める（前月の確定日 <= asOf なら前月、そうでなければ前々月）。`StatusContext.dataThrough`（作業実績を最後に取り込んだ日。`dataThroughOf(worklogFetchedAt)`）があれば asOf と小さい方で比べる（取り込みが止まった月は確定にしない。§136） |
 | §11 | `teamTree` の表示順 | teams ファイルでの初出順（最上位・子ともに） |
 | §11 | 循環参照の切り方 | 循環に含まれるチームのうち **ID が最小** のものの親リンクを切り最上位にする（決定的） |
 | §11 | `Totals.contractCount` | 期間内に 1 か月以上 `ContractMonth` を持つ契約の数（期間外の契約は数えない） |
