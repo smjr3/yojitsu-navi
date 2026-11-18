@@ -780,6 +780,12 @@ h3 {
   font-size: calc(10px * var(--yn-fs));
 }
 /* マージ待ちの変更がある対象の印（§126.3）。本体にはまだ入っていないので点線の枠 */
+/* 承認済みで、ほかの画面にはまだ出ていない対象（§149） */
+.yn-chip-approved {
+  background: var(--yn-good-bg);
+  color: var(--yn-good-text);
+  cursor: help;
+}
 .yn-chip-pending {
   background: transparent;
   color: var(--yn-link);

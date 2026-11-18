@@ -47,7 +47,7 @@ async function open(page: Page, mrs: Mr[]): Promise<void> {
     try {
       const res = await route.fetch();
       const json = await res.json();
-      await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG }), headers: { ...res.headers(), "content-type": "application/json" } });
+      await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG, headCommit: null }), headers: { ...res.headers(), "content-type": "application/json" } });
     } catch (e) {
       if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
     }
@@ -157,7 +157,7 @@ test.describe("競合ありの MR を承認すると載せ直して承認する�
       try {
         const res = await route.fetch();
         const json = await res.json();
-        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG }), headers: { ...res.headers(), "content-type": "application/json" } });
+        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG, headCommit: null }), headers: { ...res.headers(), "content-type": "application/json" } });
       } catch (e) {
         if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
       }
@@ -244,7 +244,7 @@ test.describe("申請中の変更がある対象の印（§126.3）", () => {
       try {
         const res = await route.fetch();
         const json = await res.json();
-        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: DEMO }), headers: { ...res.headers(), "content-type": "application/json" } });
+        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: DEMO, headCommit: null }), headers: { ...res.headers(), "content-type": "application/json" } });
       } catch (e) {
         if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
       }
@@ -288,7 +288,7 @@ test.describe("申請中の変更がある対象の印（§126.3）", () => {
       try {
         const res = await route.fetch();
         const json = await res.json();
-        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG }), headers: { ...res.headers(), "content-type": "application/json" } });
+        await route.fulfill({ response: res, body: JSON.stringify({ ...json, masterEdit: CFG, headCommit: null }), headers: { ...res.headers(), "content-type": "application/json" } });
       } catch (e) {
         if (!/disposed|Target closed|has been closed/i.test(String((e as Error)?.message ?? e))) throw e;
       }

@@ -41,6 +41,8 @@ export interface MastersPayload {
   memberImportedColumns: string[];
   /** 最終コミット ID を取れたか（false なら競合の検出ができない） */
   gitAvailable: boolean;
+  /** このビルドのコミット（HEAD）。編集画面が既定ブランチの先頭と比べ、承認済みでまだ公開されていない変更を先に出す（§149）。取れなければ null */
+  headCommit: string | null;
 }
 
 function git(rootDir: string, args: string[]): string | null {
@@ -92,5 +94,6 @@ export function buildMastersPayload(rootDir: string): MastersPayload {
     memberSourceAdapter: adapter ?? "none",
     memberImportedColumns: memberImportedColumns(config.memberSource),
     gitAvailable: inRepo && !shallow,
+    headCommit: inRepo && !shallow ? ((h) => (h && /^[0-9a-f]{40}$/.test(h) ? h : null))(git(rootDir, ["rev-parse", "HEAD"])) : null,
   };
 }

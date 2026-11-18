@@ -67,7 +67,9 @@ import {
   shiftPlanRange,
 } from "../core/plan.js";
 import { teamTreeAt } from "../core/masters.js";
-import { effectiveSaveMode, fetchCurrentUser, saveToGitLab, webFileUrl } from "../core/gitlab.js";
+import { effectiveSaveMode, fetchCurrentUser, gitlabConfigured, saveToGitLab, webFileUrl } from "../core/gitlab.js";
+import { fetchLatestMasters } from "../core/latestMasters.js";
+import { DEMO_BASE_SHA } from "../core/gitlab-mock.js";
 import { docFromCsvText } from "../core/csvEdit.js";
 import { dateJa, dateTimeJst, formatPercent, integer, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
@@ -75,8 +77,8 @@ import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
 import { infoTip } from "./layout.js";
 import { TOKEN_STORAGE_KEY, clearToken, getToken, gitlabFetch } from "./gitlab-client.js";
-import { mergeRequestsPanel } from "./mr-list.js";
-import { pendingFor } from "../core/mrPending.js";
+import { fileDiff, mergeRequestsPanel } from "./mr-list.js";
+import { pendingFor, pendingKeysOf } from "../core/mrPending.js";
 import { combobox } from "./combobox.js";
 import { onTextInput } from "./text-input.js";
 import { planCellEditor, planCellTooltip } from "./plan-cell.js";
@@ -308,12 +310,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   const local = safeStorage("local");
   const session = safeStorage("session");
   // GitLab（demo のときはブラウザ内の模擬。本体のファイル = このビルドの元データ）
-  const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])));
+  const gitlab = fetchImpl ?? gitlabFetch(data.masterEdit, Object.fromEntries(MASTER_FILE_IDS.map((id) => [data.files[id].repoPath ?? MASTER_FILES[id].path, { text: data.files[id].text, lastCommitId: data.files[id].lastCommitId }])), data.headCommit ?? null);
   /** マージ待ちの変更がある対象（§126.3） */
   let pendingMrs = {};
   let pendingSig = "";
   // マージ待ちの内容も ID ではなく氏名・組織名・「顧客 / 案件名」で出す（§26）
-  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) }, onPending: (p) => {
+  const mrPanel = mergeRequestsPanel({ cfg: data.masterEdit, fetchImpl: gitlab, now, paths: Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, data.files[id].repoPath ?? MASTER_FILES[id].path])), describe: { value: (fileId, column, value) => displayValue(fileId, column, value), target: (kind, id) => goalTargetName(kind, id) }, onMerged: () => void checkLatest(), onPending: (p) => {
     // マージ待ちの変更がある対象に印（§126.3）。変わったときだけ描き直す
     const sig = JSON.stringify(Object.entries(p).map(([id, m]) => [id, [...m].map(([k, list]) => [k, list.map((x) => x.iid)])]));
     if (sig === pendingSig) return;
@@ -410,8 +412,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
 
   // ---- 状態 ---------------------------------------------------------------
-  // 編集の土台は常にこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。書き換えない
-  const bases = Object.freeze(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, Object.freeze({ text: data.files[id].text, lastCommitId: data.files[id].lastCommitId })])));
+  // 編集の土台はこのビルドの元データ（古い下書きは復元時にこの土台へ当て直す。§19.2）。
+  // 承認済みでまだ公開されていない変更があれば、既定ブランチの今の中身に差し替える（§149。adoptLatest）
+  const built = Object.freeze(Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, Object.freeze({ text: data.files[id].text, lastCommitId: data.files[id].lastCommitId })])));
+  let bases = built;
+  /** 承認済みで公開待ちの対象（ビルドと土台の差。ファイル → キー → 印。§149） */
+  let publishWait = {};
+  /** 編集中のファイルのため、まだ土台にしていない既定ブランチの中身（id → {text, lastCommitId}）。やり直すときに使う */
+  let deferredLatest = {};
   let docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
   // 影響の計算に使う周りのデータ（祝日の変更は案件の期間の月すべての予算を変える。§118）
   const impactContext = () => ({ contractPeriods: contractPeriodsOf(docs.contracts) });
@@ -961,8 +969,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   /** マージ待ちの変更がある対象の印（§126.3）。title に誰の何の変更か */
   function pendingChip(fileIds, key) {
     const list = pendingFor(pendingMrs, fileIds, key);
-    if (list.length === 0) return null;
-    return html`<span class="yn-chip yn-chip-pending" title=${list.map((m) => fmt(T.masters.pendingTitle, { name: m.author, title: m.title })).join("\n")}>${T.masters.pendingChip}${list.length > 1 ? ` ${integer(list.length)}` : ""}</span>`;
+    // 承認済みでまだほかの画面に出ていない対象（§149）
+    const approved = pendingFor(publishWait, fileIds, key).length > 0 ? html`<span class="yn-chip yn-chip-approved" title=${T.masters.approvedTitle}>${T.masters.approvedChip}</span>` : null;
+    if (list.length === 0) return approved;
+    const chip = html`<span class="yn-chip yn-chip-pending" title=${list.map((m) => fmt(T.masters.pendingTitle, { name: m.author, title: m.title })).join("\n")}>${T.masters.pendingChip}${list.length > 1 ? ` ${integer(list.length)}` : ""}</span>`;
+    return approved ? [approved, chip] : chip;
   }
 
   /** 変更・エラーの数（台帳の対象・リソース計画の行のチップ） */
@@ -3802,6 +3813,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       for (const c of Object.values(csvEdit)) c.result = null;
       // 作った MR を「マージ待ちの変更」とヘッダーの件数に出す
       if (result.commitMode === "mr") mrPanel.refresh();
+      // 本体に直接入れたときは、そのまま新しい土台にする（§149）
+      else void checkLatest();
     } catch (e) {
       outcome = { kind: "error", error: { kind: e?.kind ?? "other", message: e?.message ?? String(e), detail: e?.detail ?? "", status: e?.status ?? null, partial: e?.partial ?? null } };
       if (outcome.error.kind === "permission" && outcome.error.status === 401) clearToken();
@@ -3841,7 +3854,93 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     focusKey(`dl:${id}`);
   }
 
+  /**
+   * 承認済みでまだ公開されていない変更（既定ブランチの今の中身）を土台にする（§149）。
+   * 保存した直後（申請の結果を出しているとき）は、全部を新しい土台でやり直す。編集中のファイルは書き換えず、やり直すときに使う
+   */
+  let latestSeq = 0;
+  async function checkLatest() {
+    // デモ（§29）は模擬の本体と比べる（ビルドが浅いクローンでもコミット ID が無くても動く）
+    const demo = data.masterEdit.mode === "demo";
+    const builtHead = data.headCommit ?? (demo ? DEMO_BASE_SHA : null);
+    if (!gitlabConfigured(data.masterEdit) || !builtHead) return;
+    const token = getToken();
+    if (token === "") return;
+    const my = ++latestSeq;
+    let latest = null;
+    try {
+      latest = await fetchLatestMasters(
+        gitlab,
+        data.masterEdit,
+        token,
+        builtHead,
+        MASTER_FILE_IDS.map((id) => ({ id, path: data.files[id].repoPath ?? MASTER_FILES[id].path, text: data.files[id].text, lastCommitId: data.files[id].lastCommitId, exists: data.files[id].exists })),
+        { includeUnknown: demo },
+      );
+    } catch {
+      return; // 読めなければビルドの中身のまま（今までと同じ）
+    }
+    if (my !== latestSeq || !latest) return;
+    adoptLatest(latest.files);
+  }
+
+  function adoptLatest(files) {
+    const ids = MASTER_FILE_IDS.filter((id) => files[id] && (files[id].text !== bases[id].text || files[id].lastCommitId !== bases[id].lastCommitId));
+    if (ids.length === 0 || saving) return;
+    const panelSlot = parts.panel;
+    const focused = panelSlot.contains(document.activeElement) ? document.activeElement : null;
+    // 入力中は描き直さない（入れている途中の値が消えるため）。次の確認（画面に戻ったとき・承認したとき）で反映する
+    if (focused && focused.matches("input, textarea, select")) return;
+    const focusKeyNow = focused?.closest?.("[data-fk]")?.dataset.fk;
+    const next = { ...bases };
+    if (locked) {
+      for (const id of ids) next[id] = Object.freeze({ ...files[id] });
+      bases = Object.freeze(next);
+      deferredLatest = {};
+      refreshPublishWait();
+      resetAll(focusKeyNow ?? `add:${active}`);
+      return;
+    }
+    const changedNow = new Set(changedFiles());
+    let touched = false;
+    for (const id of ids) {
+      if (changedNow.has(id) || csvEdit[id].text !== null) {
+        deferredLatest[id] = files[id];
+        continue;
+      }
+      next[id] = Object.freeze({ ...files[id] });
+      docs = { ...docs, [id]: parseMasterDoc(id, files[id].text) };
+      delete deferredLatest[id];
+      touched = true;
+    }
+    if (!touched) return;
+    bases = Object.freeze(next);
+    refreshPublishWait();
+    impactBase = null;
+    // このタブで書いた下書きが新しい土台の上のものなら、聞かずに続きから（読み込んだ時点ではビルドの土台と違って聞いていた。§36.1）
+    if (pendingDraft && pendingDraft.savedAt && session.get(DRAFT_SESSION_KEY) === pendingDraft.savedAt && staleDraftFiles(pendingDraft, bases).length === 0) {
+      const d = pendingDraft;
+      for (const id of MASTER_FILE_IDS.filter((x) => d.files[x])) docs = { ...docs, [id]: rebaseDraftFile(id, d.files[id], bases[id].text, {}).doc };
+      draftSavedAt = d.savedAt;
+      pendingDraft = null;
+    }
+    validation = validateEdited(docs, data.context, config);
+    renderAll();
+    if (focusKeyNow && !panelSlot.contains(document.activeElement)) focusKey(focusKeyNow);
+  }
+
+  function refreshPublishWait() {
+    const changed = MASTER_FILE_IDS.filter((id) => bases[id].text !== built[id].text);
+    publishWait = changed.length ? pendingKeysOf([{ mr: { iid: 0, title: "", author: "" }, files: changed.map((id) => ({ id, diff: fileDiff(id, built[id].text, bases[id].text) })) }]) : {};
+  }
+
   function resetAll(focus = "add:" + active) {
+    if (Object.keys(deferredLatest).length) {
+      bases = Object.freeze({ ...bases, ...Object.fromEntries(Object.entries(deferredLatest).map(([id, f]) => [id, Object.freeze({ ...f })])) });
+      deferredLatest = {};
+      refreshPublishWait();
+      impactBase = null;
+    }
     docs = Object.fromEntries(MASTER_FILE_IDS.map((id) => [id, parseMasterDoc(id, bases[id].text)]));
     rebasedInfo = {};
     for (const c of Object.values(csvEdit)) Object.assign(c, { text: null, result: null });
@@ -4018,10 +4117,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (!e.persisted) return;
     renderSave();
     mrPanel.refresh();
+    void checkLatest();
   });
   root.append(mrPanel.el, parts.draft, parts.tabs, parts.panel, parts.check, parts.diff, parts.impact, parts.save, dialog, tooltip.el, cellEditor.el);
   renderAll();
   mrPanel.refresh();
+  void checkLatest();
   // 他の画面の検証の一覧から来たとき（?jump=ファイル:行番号）は、その行を見せる（§40）
   const jm = /^([a-z]+):(\d+)$/.exec(initialJump ?? "");
   if (jm && pageFiles.includes(jm[1])) {

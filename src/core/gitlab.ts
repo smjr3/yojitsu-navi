@@ -567,6 +567,26 @@ export async function fetchFileForUpdate(fetchImpl: FetchLike, cfg: MasterEditCo
   }
 }
 
+/** ブランチの先頭のコミット ID（GET /repository/branches/:branch。§149）。無ければ null */
+export async function fetchBranchHead(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, branch: string): Promise<string | null> {
+  ensureConfigured(cfg);
+  try {
+    const b = await request<{ commit?: { id?: unknown } }>(fetchImpl, "file", `${projectPath(cfg)}/repository/branches/${encodeURIComponent(branch)}`, token0(token), "GET");
+    return typeof b.commit?.id === "string" && b.commit.id !== "" ? b.commit.id : null;
+  } catch (e) {
+    if (e instanceof GitLabError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** ref 時点でそのファイルを最後に変えたコミット ID（GET /repository/commits?ref_name=&path=&per_page=1。§149）。無ければ null */
+export async function fetchLastCommitForPath(fetchImpl: FetchLike, cfg: MasterEditConfig, token: string, path: string, ref: string): Promise<string | null> {
+  ensureConfigured(cfg);
+  const list = await request<unknown>(fetchImpl, "file", `${projectPath(cfg)}/repository/commits?ref_name=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}&per_page=1`, token0(token), "GET");
+  const first = Array.isArray(list) ? (list[0] as { id?: unknown } | undefined) : undefined;
+  return typeof first?.id === "string" && first.id !== "" ? first.id : null;
+}
+
 export interface FileChange {
   path: string;
   before: string | null;

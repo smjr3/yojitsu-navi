@@ -19,8 +19,8 @@ import { infoTip } from "./layout.js";
 
 const PIPE_CHIP = { success: "yn-chip-ok", failed: "yn-chip-warn" };
 
-/** MR で変わったマスタの行（§19 の差分と同じ形） */
-function fileDiff(fileId, before, after) {
+/** MR で変わったマスタの行（§19 の差分と同じ形。before → after の CSV。承認済みの公開待ちの印にも使う §149） */
+export function fileDiff(fileId, before, after) {
   const doc = parseMasterDoc(fileId, before ?? "");
   const r = docFromCsvText(doc, after ?? "");
   return r.doc ? diffMasterDoc(r.doc) : null;
@@ -108,6 +108,15 @@ export function needsRemake(d) {
   return d.hasConflicts === true || d.mergeStatus === "conflict" || d.mergeStatus === "need_rebase";
 }
 
+/** 検証（パイプライン）が動いている途中か（§149。承認を押すと予約になる） */
+const PIPELINE_RUNNING = new Set(["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"]);
+export function pipelineRunning(d) {
+  return d.pipelineStatus !== null && d.pipelineStatus !== undefined && PIPELINE_RUNNING.has(d.pipelineStatus);
+}
+/** 予約した承認の見張り: 15 秒ごとに最大 30 分 */
+const SCHEDULE_WATCH_MS = 15_000;
+const SCHEDULE_WATCH_TRIES = 120;
+
 /** 一覧を開いておくか（このブラウザに覚える。§126）。null = まだ選んでいない */
 const OPEN_KEY = "yojitsu-navi:mr-list-open";
 /** 選んでいないとき、この件数までは開いて出す（それより多ければ畳む） */
@@ -139,7 +148,7 @@ export function sortMergeRequests(items, me) {
   return items.map((it, i) => ({ it, i, r: rank(it.detail) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.it);
 }
 
-export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {}, onPending = null }) {
+export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), describe = null, paths = {}, onPending = null, onMerged = null }) {
   const el = html`<div class="yn-mr-slot"></div>`;
   const dialog = html`<dialog class="yn-dialog yn-me-dialog" aria-labelledby="yn-mr-dialog-title"></dialog>`;
   dialog.addEventListener("click", (ev) => ev.target === dialog && dialog.close());
@@ -392,7 +401,9 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
         error = e;
       }
       const text = fmt(outcome === "merged" ? T.mr.remadeMerged : outcome === "scheduled" ? T.mr.remadeScheduled : T.mr.remadeNotMerged, vars);
+      if (outcome === "scheduled") watchScheduled(result.mergeRequestIid, d.title);
       await refresh({ notice: { kind: outcome === "pending" ? "error" : "ok", text, detail: error ? (error?.message ?? String(error)) : "" } });
+      if (outcome === "merged") onMerged?.();
     } catch (e) {
       state = { ...state, busy: null, notice: { kind: "error", text: e?.message ?? String(e), detail: e?.detail ?? "" } };
       render();
@@ -421,16 +432,52 @@ export function mergeRequestsPanel({ cfg, fetchImpl, now = () => new Date(), des
     openRemake(item, fk(`mr:merge:${d.iid}`), { thenMerge: true, plan });
   }
 
+  /**
+   * 承認を予約した変更が承認されたら知らせる（§149）。開いている編集画面は承認済みの内容に差し替える（onMerged）。
+   * 間隔をあけて MR の状態だけを読む。閉じられた・長く終わらないときはやめる（一覧の「更新」で分かる）
+   */
+  const watching = new Set();
+  function watchScheduled(iid, title, { tries = SCHEDULE_WATCH_TRIES, intervalMs = SCHEDULE_WATCH_MS } = {}) {
+    if (watching.has(iid)) return;
+    watching.add(iid);
+    let left = tries;
+    const tick = async () => {
+      let d = null;
+      try {
+        d = await getMergeRequest(fetchImpl, cfg, getToken(), iid);
+      } catch {
+        /* 通信の失敗は次の回に */
+      }
+      if (d && d.state === "merged") {
+        watching.delete(iid);
+        await refresh({ notice: { kind: "ok", text: fmt(cfg.mode === "demo" ? T.mr.mergedDemo : T.mr.merged, { iid, title: mrTitleText(title) }) } });
+        onMerged?.();
+        return;
+      }
+      if ((d && d.state !== "" && d.state !== "opened") || --left <= 0) {
+        watching.delete(iid);
+        if (d && d.state !== "opened") await refresh();
+        return;
+      }
+      setTimeout(tick, intervalMs);
+    };
+    setTimeout(tick, intervalMs);
+  }
+
   async function run(kind, item) {
     const d = item.detail;
     if (kind === "merge" && needsRemake(d)) return mergeWithRemake(item);
     state = { ...state, busy: { kind, iid: d.iid }, notice: null };
     render();
     try {
-      if (kind === "merge") await mergeMergeRequest(fetchImpl, cfg, getToken(), d.iid, d.headSha);
+      // 検証（パイプライン）の途中なら、通ったら GitLab が自動で承認する予約にする（終わるのを待って押し直さなくてよい。§149）
+      const scheduled = kind === "merge" && pipelineRunning(d);
+      if (kind === "merge") await mergeMergeRequest(fetchImpl, cfg, getToken(), d.iid, d.headSha, scheduled ? { whenPipelineSucceeds: true } : {});
       else await closeMergeRequest(fetchImpl, cfg, getToken(), d.iid);
-      const text = fmt(kind === "merge" ? (cfg.mode === "demo" ? T.mr.mergedDemo : T.mr.merged) : T.mr.closed, { iid: d.iid, title: mrTitleText(d.title) });
+      const text = fmt(kind === "merge" ? (scheduled ? T.mr.mergeScheduled : cfg.mode === "demo" ? T.mr.mergedDemo : T.mr.merged) : T.mr.closed, { iid: d.iid, title: mrTitleText(d.title) });
+      if (scheduled) watchScheduled(d.iid, d.title);
       await refresh({ notice: { kind: "ok", text } });
+      if (kind === "merge" && !scheduled) onMerged?.();
     } catch (e) {
       state = { ...state, busy: null, notice: { kind: "error", text: e?.message ?? String(e), detail: e?.detail ?? "" } };
       render();
