@@ -504,7 +504,8 @@ body {
   flex: 0 1 220px;
   min-width: 0;
 }
-.yn-filterbar-slot .yn-filter-team label {
+.yn-filterbar-slot .yn-filter-team label,
+.yn-filterbar-slot .yn-filter-method label {
   flex: none;
   white-space: nowrap;
 }
@@ -515,7 +516,7 @@ body {
   max-width: 240px;
 }
 .yn-filterbar-slot .yn-select {
-  /* 期間プリセット・着地見込みのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
+  /* 期間プリセットのボタンの組・カレンダー（いずれも 32px）と同じ高さ（2026-10-31 試用版のコメント） */
   min-height: 32px;
   padding-top: 2px;
   padding-bottom: 2px;
