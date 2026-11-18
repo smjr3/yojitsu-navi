@@ -133,10 +133,11 @@ export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
 export function dailyLegend(dark, { target = false, end = T.daily.ends.month } = {}) {
   const c = chartColors(dark);
   return chartLegend([
+    // 並びは他のグラフと同じ 予算 → 実績 → 見込み。予算は青の実線、目標の上限は赤の破線（§63.3・§131）
+    target ? { label: T.daily.legendCapTarget, color: c.danger, shape: "line-dashed" } : { label: T.daily.legendCap, color: c.budget, shape: "line" },
+    { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
     { label: T.daily.legendActual, color: c.cost, shape: "line" },
     { label: fmt(T.daily.legendProjection, { end }), color: c.cost, shape: "line-dotted" },
-    { label: T.daily.legendPace, color: c.budget, shape: "line-dashed" },
-    { label: target ? T.daily.legendCapTarget : T.daily.legendCap, color: c.danger, shape: "line-dashed" },
   ]);
 }
 
@@ -182,7 +183,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       Plot.rectX(off, { x1: (d) => d.day - 0.5, x2: (d) => d.day + 0.5, fill: c.muted, fillOpacity: 0.08 }),
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),
-      Plot.ruleY([p.cap], { stroke: c.danger, strokeDasharray: "6 4", strokeWidth: 1.5 }),
+      p.target ? Plot.ruleY([p.cap], { stroke: c.danger, strokeDasharray: "6 4", strokeWidth: 1.5 }) : Plot.ruleY([p.cap], { stroke: c.budget, strokeWidth: 2 }),
       Plot.line(pts, { x: "day", y: "pace", stroke: c.budget, strokeWidth: 2, strokeDasharray: "4 3", curve: "linear" }),
       Plot.line(projLine, { x: "day", y: "v", stroke: c.cost, strokeWidth: 2, strokeDasharray: "2 3" }),
       Plot.line(done, { x: "day", y: "cumulative", stroke: c.cost, strokeWidth: 2.5, curve: "linear" }),
