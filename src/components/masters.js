@@ -1646,6 +1646,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const changeRange = (r, fk) => {
       applyPlanRange(r, true);
       renderPanel();
+      // 表示する月で組織の人が変わるので、確認要求の畳み方も数え直す（§136）
+      renderCheck();
       focusKey(fk);
     };
     const rangeOptions = planRangeOptions(asOfMonth, minMonth, plan.range);
