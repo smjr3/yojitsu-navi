@@ -828,6 +828,9 @@ export default {
     monthlyAriaDay: "{title}。実績の棒グラフ（日・週では予算を棒に配らず、横軸の下に月ごとの予算の消化率を出します）。値は下の表で確認できます。",
     // 予算の消化率の帯（§130）。stripMonth は日・週で月ごとにまとめるときの見出し
     stripMonth: "{month}月",
+    // 帯の左に出す名前（§146）。数字だけに詰めたときは % を付ける
+    stripName: "消化率",
+    stripNameUnit: "消化率%",
     stripTip: "{name} 実績 {cost} ／ 予算 {budget}（{rate}）",
     memberHoursAria: "{title}。{unit}ごとの計画時間と実績時間の棒グラフ。値は下の表で確認できます。",
     // グラフの単位の切り替え（§130）
@@ -963,10 +966,10 @@ export default {
     noDeficitTitle: "超過見込みの案件はありません",
     noDeficitText: "{team} の案件はすべて予算内で着地する見込みです。",
     byTeam: "チーム別",
-    childTeams: "{team} の配下チーム",
-    byDivision: "事業部ごとの集計",
-    // {scope} には childTeams か byDivision が入る
-    byTeamHint: "{scope}（{month} 時点の組織）。行をクリックするとそのチームの詳細に移動します。",
+    childTeams: "{team} と配下のチーム",
+    allTeams: "全ての組織",
+    // {scope} には childTeams か allTeams が入る
+    byTeamHint: "{scope}を木で表示（{month} 時点の組織。上位の行は配下の合計）。行をクリックするとそのチームの詳細に移動します。",
     toTeams: "チーム一覧へ",
     noChildTitle: "配下のチームはありません",
     noChildText: "このチームは末端のチームです。案件一覧で案件ごとの数値を確認できます。",
@@ -988,6 +991,24 @@ export default {
   },
 
   // ── 体制図（チーム一覧の表示切替。SPEC §76。表示だけで編集はしない） ──────────
+  // ── 氏名の吹き出し（§148） ─────────────────────────
+  memberTip: {
+    head: "{name}（{title}）",
+    noTeam: "所属チームなし",
+    leader: "リーダー",
+    leftFrom: "{when}から不在",
+    movedIn: "今月異動（前は {team}）",
+    moveTo: "{month}から {team}",
+    plan: "今月の案件の計画",
+    planValue: "{pm}（{hours}）",
+    actual: "今月の案件の実績",
+    projects: "主な案件（実績 / 計画）",
+    projectValue: "{actual} / {plan}",
+    support: "応援（{team}）",
+    more: "ほか {n} 件",
+    none: "今月の案件の計画・実績はありません",
+  },
+
   orgChart: {
     title: "体制図",
     hint: "{month} の組織とメンバー。メンバーの色は「計画」ならその月の計画の合計（1.0人月超・1.0・1.0未満・計画なし）、「計画とのずれ」なら確定した月の実績と計画の差（{minHours}時間以上かつ±{ratio}%）。＋ は前月から加わった人、− は前月までいて抜けた人。組織の数字は配下を含む人数（前月との差）と、その月の残予算率（今月以降は着地見込みの方法の見込み）。応援は他チームから、ヘルプは他部署からこの組織の案件に入った人。カーソルを合わせると担当顧客・負荷の内訳、クリックで詳細へ。",

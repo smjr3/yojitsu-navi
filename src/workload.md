@@ -229,6 +229,7 @@ if (vm) {
           : axis === "customer"
             ? (r) => (noContract(r) ? html`<span>${r.name} <span class="yn-chip yn-chip-neutral" title=${T.work.noContractTitle}>${T.work.noContract}</span></span>` : r.name)
             : undefined,
+      memberTip: axis === "member" ? (r) => r.key : undefined,
       // 列の絞り込みで「案件なし」の顧客だけを選べるようにする
       filterValue: axis === "customer" ? (r) => (noContract(r) ? [r.name, T.work.noContract] : [r.name]) : undefined,
       exportValue: (r) => r.name,

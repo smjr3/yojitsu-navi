@@ -11,7 +11,7 @@ import { h } from "./dom.js";
 import { chartMessage, loadUnit, saveUnit, unitSwitch, weekText } from "./chart-units.js";
 import { maxFractionFormat } from "./format.js";
 import { T, fmt } from "../i18n/index.js";
-import { chartColors, chartLegend } from "./charts.js";
+import { BUDGET_LINE_WIDTH, chartColors, chartLegend } from "./charts.js";
 import { chartFigure } from "./chart-zoom.js";
 import { memberInfoColumns } from "./analysis.js";
 import { statTile } from "./kpi.js";
@@ -188,7 +188,7 @@ export function dailyChart(p, { unit = "yen", dark = false, width = 640, height 
       Plot.gridY({ stroke: c.grid, strokeOpacity: 1 }),
       Plot.ruleY([0], { stroke: c.axis }),
       // 上限（予算）は目標があっても出す（§140）。目標があれば上限（目標）を紫の破線で重ねる
-      Plot.ruleY([p.target ? p.budget : p.cap], { stroke: c.budget, strokeWidth: 2 }),
+      Plot.ruleY([p.target ? p.budget : p.cap], { stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH }),
       p.target ? Plot.ruleY([p.cap], { stroke: c.target, strokeDasharray: "6 4", strokeWidth: 1.5 }) : null,
       Plot.line(pts, { x: "day", y: "pace", stroke: c.budget, strokeWidth: 2, strokeDasharray: "4 3", curve: "linear" }),
       Plot.line(projLine, { x: "day", y: "v", stroke: c.cost, strokeWidth: 2, strokeDasharray: "2 3" }),
@@ -294,7 +294,7 @@ export function dailyMemberTable(p, rows, { model, daily = null, contractIds = [
     },
   }));
   const columns = [
-    { key: "memberName", label: T.daily.colMember, type: "text" },
+    { key: "memberName", label: T.daily.colMember, type: "text", memberTip: (r) => r.memberId },
     ...memberInfoColumns(model, month, { shown: ["title"], team: true }),
     { key: "total", label: T.daily.colTotal, type: "hours" },
     { key: "plan", label: T.daily.colPlan, type: "hours", get: plan, summaryDash: true },

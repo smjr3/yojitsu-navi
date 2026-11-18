@@ -1128,6 +1128,17 @@ h3 {
 .yn-meter {
   width: 100%;
   max-width: 220px;
+  /* 縦線の下の基準の %（§146）の分 */
+  margin-bottom: calc(13px * var(--yn-fs));
+}
+.yn-meter-scale {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
+  font-size: calc(10px * var(--yn-fs));
+  line-height: 1;
+  color: var(--yn-text-2);
+  white-space: nowrap;
 }
 .yn-meter-track {
   position: relative;
@@ -3341,6 +3352,23 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-plan-tip-foot strong {
   color: var(--yn-warn-text);
+}
+
+/* 氏名の吹き出し（§148）。枠・文字は .yn-plan-tip と同じ */
+.yn-member-tip > div > p + p {
+  margin-top: 2px;
+}
+.yn-member-tip-chip {
+  margin-left: 6px;
+  font-size: calc(11px * var(--yn-fs));
+}
+.yn-member-tip-warn {
+  color: var(--yn-warn-text);
+  font-weight: 700;
+}
+.yn-member-tip .yn-member-tip-sub {
+  margin-top: 6px;
+  font-weight: 700;
 }
 
 .yn-plan-pop {
