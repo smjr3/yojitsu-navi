@@ -6,7 +6,7 @@
 import * as Plot from "@observablehq/plot";
 import { html } from "htl";
 import { scaledPx } from "./appearance.js";
-import { dailyMembers, dailyProgress, fiscalQuarterOf, formatHours, formatPercent, progressOverRange, progressRangeOf } from "../core/index.js";
+import { dailyMembers, dailyProgress, dayHoursLines, fiscalQuarterOf, formatHours, formatPercent, progressOverRange, progressRangeOf } from "../core/index.js";
 import { h } from "./dom.js";
 import { chartMessage, loadUnit, saveUnit, unitSwitch, weekText } from "./chart-units.js";
 import { maxFractionFormat } from "./format.js";
@@ -17,6 +17,7 @@ import { memberInfoColumns } from "./analysis.js";
 import { statTile } from "./kpi.js";
 import { sectionTitle } from "./layout.js";
 import { dataTable } from "./table.js";
+import { memberDaySpec, teamDaySpec } from "./breakdown.js";
 import { dateJa, money as moneyBase, monthJa, toCoreUnit } from "./format.js";
 
 /** 1 か月分は金額が小さいので、百万円のときだけ小数 2 桁にする（0.0百万円ばかりにならないように） */
@@ -241,7 +242,7 @@ const h1 = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
  * 他の表と同じ dataTable（並べ替え・列の絞り込み・列の設定・Excel。§124）。日の列は「列」に出さず常に末尾（名前の列は横に送っても固定）。
  * 計画を超えた人は「超過」を赤で出す。
  */
-export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = null }) {
+export function dailyMemberTable(p, rows, { model, daily = null, contractIds = [], nameOf, hrefOf, contractHrefOf = null, exportName = null }) {
   if (rows.length === 0) return null;
   const month = p.month;
   const off = (d) => !p.points[d - 1].businessDay;
@@ -249,6 +250,24 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
   const isOver = (r) => r.plan > 0 && r.remaining < 0;
   const perDay = (r) => (r.plan > 0 && r.perDayRemaining !== null ? Math.round(r.perDayRemaining * 10) / 10 : null);
   const data = rows.map((r) => ({ ...r, key: r.memberId, memberName: nameOf(r.memberId) }));
+  const dateLabel = (d) => fmt(T.daily.tipDateValue, { month: monthJa(month), d, off: p.points[d - 1].businessDay ? "" : T.daily.offDay });
+  // 日の数字を押すと、その日の案件ごと・作業ごとの内訳（data/daily.json の members から。作業は作業ログ明細）
+  const daySpec = (x, i) =>
+    daily
+      ? (r) =>
+          memberDaySpec({
+            model,
+            memberId: r.memberId,
+            name: r.memberName,
+            date: x.date,
+            dateLabel: dateLabel(x.day),
+            hours: r.hours[i],
+            total: r.total,
+            plan: r.plan,
+            lines: dayHoursLines(daily, contractIds, x.day, r.memberId),
+            contractHref: contractHrefOf,
+          })
+      : undefined;
   const dayCols = p.points.map((x, i) => ({
     key: `d${x.day}`,
     label: String(x.day),
@@ -261,6 +280,7 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
     headTitle: fmt(T.daily.tipDateValue, { month: monthJa(month), d: x.day, off: x.businessDay ? "" : T.daily.offDay }),
     get: (r) => r.hours[i],
     render: (r) => (r.hours[i] > 0 ? h1.format(r.hours[i]) : ""),
+    breakdown: daySpec(x, i),
     cellClass: (r) => {
       const v = r.hours[i];
       if (v === null) return `yn-dg-day is-future${off(x.day) ? " is-off" : ""}`;
@@ -299,8 +319,27 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
     });
     const total = Math.round(shown.reduce((a, r) => a + r.total, 0) * 100) / 100;
     const planSum = shown.reduce((a, r) => a + r.plan, 0);
-    return { name: fmt(T.daily.totalRow, { n: shown.length }), total, plan: planSum, remaining: planSum > 0 ? planSum - total : null, hours };
+    return { name: fmt(T.daily.totalRow, { n: shown.length }), total, plan: planSum, remaining: planSum > 0 ? planSum - total : null, hours, shownIds: new Set(shown.map((r) => r.memberId)) };
   };
+  // 合計行の日の数字は、表示中の人のその日の 人 × 案件
+  const dayIndex = new Map(p.points.map((x, i) => [`d${x.day}`, i]));
+  const summaryBreakdown = daily
+    ? (col, row) => {
+        const i = dayIndex.get(col.key);
+        if (i === undefined || !(row.hours?.[i] > 0)) return null;
+        const x = p.points[i];
+        return () =>
+          teamDaySpec({
+            model,
+            dateLabel: dateLabel(x.day),
+            hours: row.hours[i],
+            lines: dayHoursLines(daily, contractIds, x.day).filter((l) => row.shownIds.has(l.memberId)),
+            nameOf,
+            memberHref: hrefOf,
+            contractHref: contractHrefOf,
+          });
+      }
+    : null;
   return dataTable({
     columns,
     rows: data,
@@ -311,6 +350,7 @@ export function dailyMemberTable(p, rows, { model, nameOf, hrefOf, exportName = 
     sort: null,
     rowHref: (r) => hrefOf(r.memberId),
     summary,
+    summaryBreakdown,
   });
 }
 

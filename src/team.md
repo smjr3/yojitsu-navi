@@ -175,7 +175,7 @@ const dailyHistory = lazyJson(FileAttachment("./data/daily-history.json"));
 
 ```js
 if (vm?.exists) {
-  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period, vm.isUnassigned ? null : targetForMonth(model, "team", vm.teamId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, range: { model, period: vm.period, history: dailyHistory, contractIds: vm.contractIds, targetOf: vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m) }, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }) } }));
+  display(dailySection(dailyFor(model, daily, vm.contractIds, vm.period, vm.isUnassigned ? null : targetForMonth(model, "team", vm.teamId, model.meta.asOfMonth)), { unit: vm.unit, dark, subtitle: vm.name, exportName: `team_${vm.teamId}_daily_${model.meta.asOfMonth}`, range: { model, period: vm.period, history: dailyHistory, contractIds: vm.contractIds, targetOf: vm.isUnassigned ? null : (m) => targetForMonth(model, "team", vm.teamId, m) }, members: { model, daily, contractIds: vm.contractIds, nameOf: (id) => memberNameAt(model, id, model.meta.asOfMonth), hrefOf: (id) => store.href("./member", {}, { id }), contractHrefOf: (id) => store.href("./contract", {}, { id }) } }));
 }
 ```
 

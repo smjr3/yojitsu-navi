@@ -3,7 +3,7 @@
  * 年を固定しない（§49）: 月は今年から作り、営業日の数は calendar の関数で数えて比べる。
  */
 import { describe, expect, it } from "vitest";
-import { businessDaysInMonth, dailyMembers, dailyProgress, isBusinessDay, progressFromDays, targetForMonth, type DailyFile } from "../../src/core/index.js";
+import { businessDaysInMonth, dailyMembers, dailyProgress, dayHoursLines, isBusinessDay, progressFromDays, targetForMonth, type DailyFile } from "../../src/core/index.js";
 
 const YEAR = new Date().getFullYear();
 const MONTH = `${YEAR}-06`;
@@ -170,6 +170,31 @@ describe("dailyProgress", () => {
     expect(rows[1]!.total).toBe(0);
     // 対象外の案件は入らない
     expect(dailyMembers(withPlan, daily, p, ["B"]).map((r) => r.memberId)).toEqual(["M2", "M1"]);
+  });
+});
+
+describe("dayHoursLines（日の数字の内訳）", () => {
+  const daily = {
+    members: {
+      A: { M1: [[3, 1.5], [4, 2]], M2: [[3, 0.25]] },
+      B: { M1: [[3, 4]], M3: [[5, 1]] },
+      C: { M1: [[3, 8]] },
+    },
+  } as unknown as Pick<DailyFile, "members">;
+
+  it("対象の案件の、その日の案件×メンバーを時間の多い順に返す", () => {
+    expect(dayHoursLines(daily, ["A", "B"], 3)).toEqual([
+      { contractId: "B", memberId: "M1", hours: 4 },
+      { contractId: "A", memberId: "M1", hours: 1.5 },
+      { contractId: "A", memberId: "M2", hours: 0.25 },
+    ]);
+  });
+
+  it("メンバーを指定するとその人だけ。時間の無い日・案件は入らない", () => {
+    expect(dayHoursLines(daily, ["A", "B"], 3, "M2")).toEqual([{ contractId: "A", memberId: "M2", hours: 0.25 }]);
+    expect(dayHoursLines(daily, ["A", "B"], 6)).toEqual([]);
+    expect(dayHoursLines(daily, ["X"], 3)).toEqual([]);
+    expect(dayHoursLines({ members: undefined } as never, ["A"], 3)).toEqual([]);
   });
 });
 
