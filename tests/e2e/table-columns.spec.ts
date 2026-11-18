@@ -7,7 +7,7 @@
  * - マスタ編集の台帳も同じ部品
  */
 import type { Locator, Page } from "@playwright/test";
-import { test, expect, gotoPage, tableByCaption, dataRows } from "./helpers/app.js";
+import { test, expect, gotoPage, waitForPage, tableByCaption, dataRows } from "./helpers/app.js";
 
 const heads = (table: Locator) => table.locator("thead th").evaluateAll((ths) => ths.map((th) => (th as HTMLElement).dataset.key ?? ""));
 const block = (page: Page, table: Locator) => page.locator(".yn-table-block", { has: table });
@@ -77,6 +77,9 @@ test("選べる列（§106.1）: 既定では出さず、チェックすると�
   await expect(dataRows(table).first().locator("th, td").nth(col)).toHaveText(/h$/);
   await expect(table.locator("tfoot td").nth(col)).toHaveText(/h$/);
   await page.reload();
+  // 描き終わる前に見出しを読まない（読み込み中は骨組みだけ）
+  await waitForPage(page);
+  await expect(tableByCaption(page, "案件一覧").locator("thead th").first()).toBeVisible();
   expect(await heads(tableByCaption(page, "案件一覧"))).toEqual(after);
 });
 

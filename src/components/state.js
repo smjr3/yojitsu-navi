@@ -2,6 +2,8 @@
  * 画面状態（期間・チーム・単位・着地方式）⇄ URL クエリ ⇄ localStorage
  *
  * 優先順位: URL クエリ（共有された表示を再現） > localStorage（前回の表示） > 既定値。
+ * ただしブラウザの「戻る・進む」・再読み込みで開いたときは、期間・単位など（チーム以外）は localStorage（最後に選んだ表示）を優先する。
+ * 前の画面の URL には離れたときの期間・単位が残っているので、URL を優先すると別の画面で選び直した値が戻ってしまう（SPEC §133）。
  * 変更すると URL（history.replaceState）と localStorage の両方に書き戻す。
  *
  * クエリ:  ?from=2026-04&to=2027-03&team=T111&unit=m&method=assignment
@@ -146,14 +148,35 @@ function writeQuery(state) {
 /**
  * ストアを作る。
  *   store.get()            現在の状態
- *   store.set({to: "..."}) 一部を更新（URL と localStorage に反映し購読者へ通知）
+ *   store.set({to: "..."}) 一部を更新（URL と localStorage に反映し購読者へ通知。{ save: false } なら localStorage に書かない）
  *   store.subscribe(fn)    変更通知。戻り値で解除
  *   store.href(path, patch) 状態を引き継いだリンク（別ページへの遷移用）
  */
+/** 最後に選んだ値を、戻る・再読み込み・別のタブでも使う項目（チームはリンクが行き先ごとに変えるので含めない。§133） */
+const LATEST_KEYS = ["from", "to", "unit", "method", "outside"];
+function latestOf(saved) {
+  const out = {};
+  if (saved) for (const k of LATEST_KEYS) if (saved[k] !== undefined) out[k] = saved[k];
+  return out;
+}
+
+/** ブラウザの「戻る・進む」または再読み込みで開いた画面か（URL はその画面を前に開いたときのもの） */
+function isHistoryNavigation() {
+  try {
+    const type = performance.getEntriesByType("navigation")[0]?.type;
+    return type === "back_forward" || type === "reload";
+  } catch {
+    return false;
+  }
+}
+
 export function createStore(model, options = {}) {
   const fromQuery = readQuery();
   const fromStorage = readStorage();
-  let state = sanitize(model, { ...(fromStorage ?? {}), ...(fromQuery ?? {}), ...(options.initial ?? {}) });
+  // 戻る・進む・再読み込みでは、期間・単位など（LATEST_KEYS）は保存してある値を URL より優先する。
+  // チームは URL のまま（「このチームの案件一覧へ」などのリンクが行き先だけで切り替えるので、戻ったら元のチームに戻す）
+  const latest = isHistoryNavigation() ? latestOf(fromStorage) : {};
+  let state = sanitize(model, { ...(fromStorage ?? {}), ...(fromQuery ?? {}), ...latest, ...(options.initial ?? {}) });
   const listeners = new Set();
   // 初回も URL を正規化しておく（共有しやすい）
   if (options.syncUrl !== false) writeQuery(state);
@@ -168,15 +191,15 @@ export function createStore(model, options = {}) {
     for (const fn of [...listeners]) fn(state);
   };
 
-  return {
+  const store = {
     model,
     get: () => state,
-    set(patch) {
+    set(patch, { save = true } = {}) {
       const next = sanitize(model, { ...state, ...patch });
       if (STATE_KEYS.every((k) => next[k] === state[k])) return;
       state = next;
       if (options.syncUrl !== false) writeQuery(state);
-      writeStorage(state);
+      if (save) writeStorage(state);
       notify();
     },
     setPeriod(period) {
@@ -190,6 +213,22 @@ export function createStore(model, options = {}) {
       return buildHref(path, { ...state, ...patch }, extra);
     },
   };
+  // 戻る・進むで、ブラウザが残しておいた画面をそのまま出したとき（bfcache）も、離れていた間に選び直した値に合わせる
+  if (typeof addEventListener === "function") {
+    addEventListener("pageshow", (e) => {
+      if (!e.persisted) return;
+      const s = readStorage();
+      if (s) store.set(latestOf(s));
+    });
+    // 別のタブ・ウィンドウで選び直したら、開いたままのこの画面も合わせる（古い値のリンクから戻さない）
+    addEventListener("storage", (e) => {
+      if (e.key !== STORAGE_KEY || !e.newValue || (typeof document !== "undefined" && document.prerendering)) return;
+      const s = readStorage();
+      // 保存し直さない（このタブのチームで、操作したタブの保存を上書きしない。Codex 指摘）
+      if (s) store.set(latestOf(s), { save: false });
+    });
+  }
+  return store;
 }
 
 /** 保存してある表示条件（URL・保存先は書き換えない。リソース計画の変更の影響 §65 で期間・単位を引き継ぐ） */
