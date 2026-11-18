@@ -159,18 +159,17 @@ function budgetStripMark(segs, { c, unit }) {
     const level = LEVELS.find((lv) => segs.every((s) => textW(lv.text(s), scaledPx(lv.size)) <= room(s))) ?? null;
     const fontSize = scaledPx(level?.size ?? 11);
     const textY = barY + barH + fontSize + scaledPx(2);
-    if (level?.unit) {
-      const u = el("text", { x: dimensions.marginLeft - scaledPx(6), y: textY, "text-anchor": "end", "font-size": fontSize, fill: c.muted });
-      u.textContent = "%";
-      g.append(u);
-    }
+    // 帯の名前を左（縦軸の文字の列）に出し、何のバーかを読めるようにする（§146。2026-11-18 依頼者）。数字だけに詰めたときは「消化率%」
+    const name = el("text", { x: dimensions.marginLeft - scaledPx(6), y: textY, "text-anchor": "end", "font-size": fontSize, fill: c.muted, class: "yn-budget-strip-name" });
+    name.textContent = level?.unit ? T.charts.stripNameUnit : T.charts.stripName;
+    g.append(name);
     for (const s of segs) {
       const x1 = scales.x(s.i0 - 0.5);
       const x2 = scales.x(s.i1 + 0.5);
       const pad = Math.min(2, (x2 - x1) * 0.1);
       const w = Math.max(0, x2 - x1 - pad * 2);
       const seg = el("g", { class: s.over ? "yn-budget-strip-seg is-over" : "yn-budget-strip-seg" });
-      seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.grid }));
+      seg.append(el("rect", { x: x1 + pad, y: barY, width: w, height: barH, rx: barH / 2, fill: c.budget, "fill-opacity": 0.18 }));
       if (s.rate != null && s.rate > 0) seg.append(el("rect", { x: x1 + pad, y: barY, width: w * Math.min(1, s.rate), height: barH, rx: barH / 2, fill: s.over ? c.danger : c.cost }));
       const pct = pctOf(s);
       const text = level ? level.text(s) : "";
@@ -448,12 +447,16 @@ export function memberHoursLegend(dark, series = null, asOfMonth = null, isNow =
   ]);
 }
 
-/** 消化率メーター（0〜120% の目盛、100% に基準線） */
+/**
+ * 消化率メーター（0〜120% の目盛、基準（既定 100%）に縦線）。地＝予算（薄い青）、塗り＝実績（橙）、超過は赤（§131）。
+ * 縦線のすぐ下に基準の % を書き、縦線が何かを読めるようにする（§146。2026-11-18 依頼者）
+ */
 export function burnMeter(rate, threshold = 1) {
   const max = 1.2;
   const v = typeof rate === "number" && Number.isFinite(rate) ? Math.min(rate, max) : 0;
   const over = typeof rate === "number" && rate > threshold;
+  const markLeft = `left:${(Math.min(threshold, max) / max) * 100}%`;
   return html`<div class=${`yn-meter${over ? " is-danger" : ""}`} role="img" aria-label=${fmt(T.charts.meterAria, { rate: rate === null ? T.charts.notComputable : `${(rate * 100).toFixed(1)}%`, threshold: `${(threshold * 100).toFixed(0)}%` })}>
-    <div class="yn-meter-track"><div class="yn-meter-fill" style=${`width:${(v / max) * 100}%`}></div><div class="yn-meter-mark" style=${`left:${(threshold / max) * 100}%`}></div></div>
+    <div class="yn-meter-track"><div class="yn-meter-fill" style=${`width:${(v / max) * 100}%`}></div><div class="yn-meter-mark" style=${markLeft}></div><span class="yn-meter-scale" style=${markLeft} aria-hidden="true">${formatPercent(threshold, 0)}</span></div>
   </div>`;
 }
