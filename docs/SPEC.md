@@ -136,6 +136,7 @@ actualCost      = Σ cost(c, m)    for m in actualMonths
 ```
 残り月の実績の出し方（方式）:
 - `recent3`: 契約期間内で `m < asOfMonth` の月（年度をまたいでよい）のうち直近 `forecastRecentMonths` か月の実績の平均 × 残り月数。基礎月が 0 → 平均 0、`noActuals = true`。基礎月が 3 未満ならある分で平均。
+- `recent12`: 同じく直近 12 か月（固定。`forecastRecentMonths` に依らない）の実績の平均 × 残り月数。12 か月未満ならある分で平均、0 → `noActuals`（§140）。
 - `all`: 契約開始月から `m < asOfMonth` までの全月の実績の平均 × 残り月数。基礎月 0 → `noActuals`。
 - `assignment`: Σ(残り月 m, アサイン a: a.memberId, a.contractId == c, a.startMonth <= m <= a.endMonth) allocation × `monthHours(m)`（§9・§114）× 単価(a.memberId, m)。アサインが0件 → `noAssignments = true`、残り見込み 0。
 
@@ -145,7 +146,7 @@ forecastGrossProfit = targetBudget - forecastCost
 isDeficit           = forecastGrossProfit < 0
 ```
 契約が対象の月に1か月も掛からない場合: `targetBudget = 0, forecastCost = 0, isDeficit = false`、`contractMonthsInTarget = []`。
-3方式すべてを `forecasts` に入れ、画面で切り替える。
+全方式（`FORECAST_METHODS` = 計画値・直近 N か月平均・直近12か月平均・全期間平均）を `forecasts` に入れ、画面で切り替える。
 
 ## 11. 集計（画面側）
 
@@ -2184,3 +2185,12 @@ MR は互いに順番待ちにならない（どれからでもマージでき�
 - 表示: 検索欄の横のチェック「不在の人も表示」。既定は外れていて、不在の人を表の行に出さない。隠した人がいるときは節の見出しの下に「不在の人 n人は非表示」（案件一覧の「期間外の案件 n件は非表示」と同じ）。チェックの状態は URL の `f=left`（案件一覧の絞り込み `f` と同じ。詳細から「戻る」で戻る）。
 - 数値: KPI は従来どおり不在の人を含む（表示だけ隠す）。合計行は検索と同じく表示中の人の合計。計画とのずれ（§64）は検索欄と同じく連動しない。
 - 再発防止: `tests/e2e/members.spec.ts`（既定で隠れる・チェックで出る・KPI は変わらない・URL で戻る）、`tests/e2e/scale-data.spec.ts`（5 倍データで既定で隠れ、チェックで「不在」チップ付きで出る）。
+
+## 140. 着地見込みの方式の名前で期間が分かるようにし、直近12か月平均を足す（2026-11-18 依頼者）
+
+- 依頼者「着地見込み、直近実績だけだと 3 か月とわかりにくい、あと直近 12 か月もほしい」。
+- 名前: 方式名に平均する期間を入れる。計画値・**直近{N}か月平均**（N は `config.json` の `forecastRecentMonths`。既定 3）・**直近12か月平均**（新規）・全期間平均。説明文は足さず、名前で伝える（§37）。選択欄・KPI・計算根拠・案件詳細の方式の比較・目標・各一覧の「?」・計算ルール・使い方はすべて `methodLabel(method, config)` で同じ名前を出す。
+- 計算: `recent12` は直近 12 か月の実績の平均 × 残り月数（§10）。実績の月が足りないとき・0 か月のときの扱いは直近 N か月平均と同じ。計算根拠の「平均の基礎にした月」に使った月を並べる。
+- 値: URL・localStorage・`forecastMethodDefault` の値は `assignment` / `recent3` / `recent12` / `all`。既存の `recent3` は名前だけ変わり値は変えないので、保存済みの表示条件・共有済みの URL はそのまま使える。知らない値は既定（計画値）になる。
+- 上部のフィルタ: 方式が 4 つになり名前も長くなったので、ボタンの組から選択欄（`#yn-filter-method`）に変えた。ボタンの組のままだと 1280px で期間・チームと 1 行に収まらず、上部の固定バーが 1 行ぶん高くなるため。
+- 再発防止: `tests/unit/forecast.test.ts`（recent12 の基礎月・足りないとき・設定に依らない）、`tests/e2e/review-comments.spec.ts`（並びと名前・URL の値・知らない値）、`tests/e2e/numbers.spec.ts`（recent12 の KPI と案件詳細のカードが core と一致）。

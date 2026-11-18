@@ -3,8 +3,8 @@
  * すべてのグラフ・表はこの 1 行の条件で再計算される（グラフごとのフィルタは持たない）。
  */
 import { html } from "htl";
-import { UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, isWorklogStale, monthRange } from "../core/index.js";
-import { METHOD_LABELS, UNITS, dateTimeJst, methodDescription, monthJa } from "./format.js";
+import { FORECAST_METHODS, UNASSIGNED_TEAM_ID, UNASSIGNED_TEAM_LABEL, isWorklogStale, monthRange } from "../core/index.js";
+import { methodLabel, UNITS, dateTimeJst, methodDescription, monthJa } from "./format.js";
 import { periodPresets } from "./state.js";
 import { combobox } from "./combobox.js";
 import { T } from "../i18n/index.js";
@@ -116,20 +116,16 @@ export function filterBar(store, model, { show = ["period", "team", "method", "u
   }
 
   if (show.includes("method")) {
-    const methods = ["assignment", "recent3", "all"];
-    const radios = methods.map((m) => {
-      const input = html`<input type="radio" name="yn-method" value=${m} id=${`yn-method-${m}`}>`;
-      input.addEventListener("change", () => input.checked && store.set({ method: m }));
-      return html`<label class="yn-radio" for=${`yn-method-${m}`}>${input}<span>${METHOD_LABELS[m]}</span></label>`;
-    });
+    // 方式は 4 つで名前に期間が入る（§140）。ボタンの組では 1280px で 1 行に収まらないので選択欄にする
+    const n = model.config.forecastRecentMonths;
+    const sel = html`<select class="yn-select" id="yn-filter-method" name="yn-method" aria-describedby="yn-method-help">${FORECAST_METHODS.map((m) => html`<option value=${m} title=${methodDescription(m, n)}>${methodLabel(m, model.config)}</option>`)}</select>`;
+    sel.addEventListener("change", () => store.set({ method: sel.value }));
     const help = html`<small class="yn-filter-help visually-hidden" id="yn-method-help"></small>`;
-    form.append(html`<fieldset class="yn-filter yn-filter-method" aria-describedby="yn-method-help"><legend>${T.filters.method}</legend><div class="yn-radio-group yn-seg" role="radiogroup">${radios}</div>${help}</fieldset>`);
+    form.append(html`<div class="yn-filter yn-filter-method"><label for="yn-filter-method">${T.filters.method}</label>${sel}${help}</div>`);
     syncers.push((s) => {
-      for (const r of form.querySelectorAll('input[name="yn-method"]')) r.checked = r.value === s.method;
-      help.textContent = methodDescription(s.method, model.config.forecastRecentMonths);
-      for (const r of form.querySelectorAll('input[name="yn-method"]')) {
-        r.closest("label").title = methodDescription(r.value, model.config.forecastRecentMonths);
-      }
+      sel.value = s.method;
+      help.textContent = methodDescription(s.method, n);
+      sel.title = help.textContent;
     });
   }
 

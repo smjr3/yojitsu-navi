@@ -14,9 +14,10 @@
 import { html } from "htl";
 import { h } from "./dom.js";
 import { T, fmt } from "../i18n/index.js";
-import { EMPTY_VALUE, STATUS_LABELS, METHOD_LABELS, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
+import { EMPTY_VALUE, STATUS_LABELS, methodLabel, decimal, formatHours, formatPercent, integer, money as moneyInUnit, monthJa, periodJa, profitLabel } from "./format.js";
 import { grossMarginOf, memberNameAt } from "./analysis.js";
 import { worklogKey } from "./worklog-key.js";
+import { RECENT12_MONTHS } from "../core/index.js";
 
 /**
  * 計算根拠は丸めずに見せる（SPEC §12）: 画面の表示単位（百万円など）に関係なく、内訳の金額は常に円で出す。
@@ -421,7 +422,7 @@ export function forecastSpec({ forecast, contract, unit, config, model = null, s
   const b = forecast.breakdown;
   const method = forecast.method;
   const rows = [
-    { label: T.breakdown.method, value: METHOD_LABELS[method] },
+    { label: T.breakdown.method, value: methodLabel(method, config) },
     { label: T.breakdown.targetPeriod, value: b.targetMonths.length ? periodJa({ from: b.targetMonths[0], to: b.targetMonths[b.targetMonths.length - 1] }) : EMPTY_VALUE },
     { label: T.breakdown.contractMonthsInTarget, value: fmt(T.breakdown.months, { n: b.contractMonthsInTarget.length }), note: b.contractMonthsInTarget.length ? `${b.contractMonthsInTarget[0]}〜${b.contractMonthsInTarget[b.contractMonthsInTarget.length - 1]}` : T.breakdown.notInTarget },
     { label: T.breakdown.actualMonths, value: fmt(T.breakdown.months, { n: b.actualMonths.length }), note: b.actualMonths.join(", ") || T.common.none },
@@ -445,7 +446,7 @@ export function forecastSpec({ forecast, contract, unit, config, model = null, s
       });
     }
   } else {
-    const n = method === "recent3" ? fmt(T.breakdown.recentN, { n: config.forecastRecentMonths }) : T.breakdown.allMonths;
+    const n = method === "recent3" ? fmt(T.breakdown.recentN, { n: config.forecastRecentMonths }) : method === "recent12" ? fmt(T.breakdown.recentN, { n: RECENT12_MONTHS }) : T.breakdown.allMonths;
     formula.splice(1, 0, T.breakdown.fcFormulaAvg, fmt(T.breakdown.fcFormulaAvgBasis, { basis: n }));
     rows.push({ label: T.breakdown.averageBasis, value: fmt(T.breakdown.months, { n: b.averageBasisMonths.length }), note: b.averageBasisMonths.join(", ") || T.breakdown.noActual });
     rows.push({ label: T.breakdown.averageCost, value: money(Math.round(b.averageMonthlyCost), unit), note: b.noActuals ? T.breakdown.noActualZero : fmt(T.breakdown.exactYen, { value: decimal(b.averageMonthlyCost, 2) }) });
@@ -481,7 +482,7 @@ export function forecastTotalsSpec({ model, totals, unit, contractIds, detailHre
     ]);
   }
   return {
-    title: fmt(T.breakdown.forecastTotalsTitle, { period: totals.period ? periodJa(totals.period) : `FY${totals.fiscalYear}`, method: METHOD_LABELS[totals.method] }),
+    title: fmt(T.breakdown.forecastTotalsTitle, { period: totals.period ? periodJa(totals.period) : `FY${totals.fiscalYear}`, method: methodLabel(totals.method, model.config) }),
     formula: [T.breakdown.fcTotalsFormula, T.breakdown.fcTotalsFormulaSum],
     rows: [
       { label: T.breakdown.targetContractsPeriod, value: fmt(T.breakdown.count, { n: rows.length }) },

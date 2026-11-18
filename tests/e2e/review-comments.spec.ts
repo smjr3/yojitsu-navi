@@ -8,26 +8,33 @@ import { test, expect, gotoPage } from "./helpers/app.js";
 const WIDTH_KEY = "yojitsu-navi:plan-name-width";
 
 test.describe("着地見込みの方式", () => {
-  test("計画値が左端で既定に選ばれ、直近実績・全期間平均の順に並ぶ", { tag: "@smoke" }, async ({ page }) => {
+  test("計画値が左端で既定に選ばれ、直近3か月平均・直近12か月平均・全期間平均の順に並ぶ（名前で期間が分かる §140）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, "/");
-    const labels = page.locator(".yn-filter-method .yn-radio span");
-    await expect(labels).toHaveText(["計画値", "直近実績", "全期間平均"]);
-    await expect(page.locator("#yn-method-assignment")).toBeChecked();
+    const labels = page.locator("#yn-filter-method option");
+    await expect(labels).toHaveText(["計画値", "直近3か月平均", "直近12か月平均", "全期間平均"]);
+    await expect(page.locator("#yn-filter-method")).toHaveValue("assignment");
     await expect(page.locator(".yn-filter-method")).not.toContainText("アサイン");
   });
 
   test("URL で選んだ方式は既定より優先される", async ({ page }) => {
     await gotoPage(page, "/contracts?method=recent3");
-    await expect(page.locator("#yn-method-recent3")).toBeChecked();
+    await expect(page.locator("#yn-filter-method")).toHaveValue("recent3");
+    await gotoPage(page, "/contracts?method=recent12");
+    await expect(page.locator("#yn-filter-method")).toHaveValue("recent12");
   });
 
-  test("案件詳細の 3 方式の比較も計画値から並ぶ", async ({ page }) => {
+  test("知らない方式の値（古い保存値・手打ちの URL）は既定の計画値になる", async ({ page }) => {
+    await gotoPage(page, "/contracts?method=recent6");
+    await expect(page.locator("#yn-filter-method")).toHaveValue("assignment");
+  });
+
+  test("案件詳細の方式の比較も計画値から並ぶ", async ({ page }) => {
     await gotoPage(page, "/contracts");
     // 行の中央は数値のボタン（計算根拠）に当たることがあるので、ボタンの無い状態の列を押す
     await page.locator("table tbody tr").first().locator("td").last().click();
     await expect(page).toHaveURL(/\/contract\?/);
     const cards = page.locator(".yn-forecast-card");
-    await expect(cards).toHaveCount(3);
+    await expect(cards).toHaveCount(4);
     await expect(cards.first()).toContainText("計画値");
   });
 });

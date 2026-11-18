@@ -111,13 +111,16 @@ export default {
   methods: {
     labels: {
       assignment: "計画値",
-      recent3: "直近実績",
+      // {n} は直近何か月で平均するか（config.json の forecastRecentMonths）。名前で期間が分かるようにする（§140）
+      recent3: "直近{n}か月平均",
+      recent12: "直近12か月平均",
       all: "全期間平均",
     },
     // {n} は直近何か月で平均するか（config.json の設定値）
     descriptions: {
       assignment: "残り月のリソース計画の配分 × 1人月の時間（その月の営業日 × 1 日の時間）× 単価",
-      recent3: "直近 {n} か月の実績の平均 × 残り月数（N は計算ルール参照）",
+      recent3: "直近 {n} か月の実績の平均 × 残り月数",
+      recent12: "直近 12 か月の実績の平均 × 残り月数",
       all: "契約開始から前月までの実績の平均 × 残り月数",
     },
   },
@@ -1248,13 +1251,13 @@ export default {
     membersHint: "{period} に作業したメンバーごとの時間と実績。所属が担当チーム（配下・上位を含む）の外の人には「応援」、所属チームの無い人（他部署）には「ヘルプ」を付けています。",
     supportTitle: "所属が、案件の担当チーム（配下・上位を含む）の外にある作業を含みます",
     noWorkText: "この期間に紐付いた作業ログはありません。",
-    forecastCompareTitle: "着地見込み（3方式の比較）",
-    forecastCompareHint: "選択中の期間の終わり（{period}）と案件終了時点の着地を 3 つの方式で並べています。選択中の方式（{method}）を強調表示。",
+    forecastCompareTitle: "着地見込み（方式の比較）",
+    forecastCompareHint: "選択中の期間の終わり（{period}）と案件終了時点の着地を方式ごとに並べています。選択中の方式（{method}）を強調表示。",
     noAssignments: "アサインが登録されていません（残り見込み 0）",
     noActuals: "実績が無いため残り見込み 0",
     forecastAria: "{method} の着地見込みの差の計算根拠",
     notInTargetChip: "期間対象外",
-    // 3 方式のカード: 案件終了時点の着地差（期間が契約の全期間でないときだけ）
+    // 方式のカード: 案件終了時点の着地差（期間が契約の全期間でないときだけ）
     endForecastFact: "案件終了時点（{end}）",
     endForecastAria: "{method} の案件終了時点の着地見込みの差の計算根拠",
     worklogStatus: "{n} 件（{period}）。取得: {fetchedAt}",

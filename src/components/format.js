@@ -144,7 +144,13 @@ export function fiscalYearLabel(fy) {
   return `FY${fy}`;
 }
 
-export const METHOD_LABELS = T.methods.labels;
+/**
+ * 着地見込みの方式名。直近 N か月平均（recent3）は N を名前に入れる（§140）。
+ * config は Model の config（forecastRecentMonths を読む。無ければ 3）
+ */
+export function methodLabel(method, config) {
+  return fmt(T.methods.labels[method] ?? method, { n: config?.forecastRecentMonths ?? 3 });
+}
 
 /** 文言の {n} は直近何か月で平均するか。methodDescription(m, n) で差し込む */
 export const METHOD_DESCRIPTIONS = T.methods.descriptions;
