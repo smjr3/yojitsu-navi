@@ -16,7 +16,7 @@ import { aggregate, contractEndForecasts, FORECAST_METHODS, setForecastPeriod } 
 import { customerKey, targetForMonth, originTotals, ownTeamScope, teamMemberCosts } from "./core/index.js";
 import { customerHref } from "./components/customers.js";
 import { createStore } from "./components/state.js";
-import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf, memberInfoColumns } from "./components/analysis.js";
+import { seriesWithForecast, forecastMonthlyCost, contractTeamName, treeAt, treeMonthFor, grossMarginOf, memberInfoColumns, worklogMemberNamer } from "./components/analysis.js";
 import { pageHeader, sectionTitle, emptyState, note, loadModel } from "./components/layout.js";
 import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow, statusChip } from "./components/kpi.js";
@@ -363,7 +363,9 @@ const worklogSection = (() => {
       const data = await bd.fetchWorklogs(c.contractId);
       // 状態は明細のファイル（ビルドした日の状態）ではなく、今日に置き換えた Model の月から取る（SPEC §75）
       const statusOf = new Map(months.map((m) => [m.month, m.status]));
-      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, month: m.month, status: statusOf.get(m.month) })));
+      // 氏名はメンバーマスタから（取得元の氏名の列が社員番号でも氏名で出す。SPEC §139）
+      const nameOf = worklogMemberNamer(model);
+      const entries = data.months.filter((m) => statusOf.has(m.month)).flatMap((m) => m.worklogs.map((w) => ({ ...w, memberName: nameOf(w), month: m.month, status: statusOf.get(m.month) })));
       status.hidden = false;
       status.textContent = fmt(T.contract.worklogStatus, { n: integer(entries.length), period: periodJa(vm.period), fetchedAt: data.worklogFetchedAt ?? "—" });
       loadBtn.remove();
