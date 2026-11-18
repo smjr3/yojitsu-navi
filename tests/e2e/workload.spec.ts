@@ -17,12 +17,12 @@ const rows: WorkRow[] = model.workRows;
 const axisBtn = (page: import("@playwright/test").Page, axis: string) => page.locator(`.yn-work-axis button[data-axis="${axis}"]`);
 const inFy = filterWorkRows(rows, { period: FY });
 const totals = workTotals(inFy, elapsedMonthCount(FY, model.meta.asOfMonth));
-// 運用保守の計画（§149）と、確定した月
+// 運用保守の計画（§150）と、確定した月
 const plansFy = workPlanRows(model.memberMonths).filter((p) => p.month >= FY.from && p.month <= FY.to);
 const judged = confirmedPeriodOf(model.meta, FY);
 const BASE = FY.to < model.meta.asOfMonth ? FY.to : model.meta.asOfMonth;
 const pmSignedText = (h: number) => (Math.abs(personMonths(h, STD)) < 0.005 ? pmText(0) : `${h > 0 ? "+" : "−"}${pmText(Math.abs(h))}`);
-// メンバー別で既定で出す人（基準月に不在の人は隠す。§138・§149）
+// メンバー別で既定で出す人（基準月に不在の人は隠す。§138・§150）
 const shownMembers = (list: ReturnType<typeof aggregateWork>) => list.filter((g) => memberLeftAt(model, g.key, BASE) === null);
 
 test.describe("工数 /workload", () => {
@@ -86,7 +86,7 @@ test.describe("工数 /workload", () => {
     expect(query(page).get("axis")).toBe("customer");
     const byCustomer = aggregateWork(model, inFy, { period: FY, axis: "customer", unassignedLabel: "-" });
     const table = tableByCaption(page, "顧客ごとの稼働実績");
-    // 先頭 10 行だけ出している（§127・§149）
+    // 先頭 10 行だけ出している（§127・§150）
     await expect(dataRows(table)).toHaveCount(Math.min(byCustomer.length, 10));
     await showAllRows(table);
     await expect(dataRows(table)).toHaveCount(byCustomer.length);

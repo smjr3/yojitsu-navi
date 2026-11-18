@@ -54,7 +54,7 @@ import { pm, workGroupChart, workHoursChart, workHoursLegend, workSeriesTable, w
 ```
 
 ```js
-// model.json（全ページ共通）と work-hours.json（工数の明細と運用保守の計画。§149）を並行して読む
+// model.json（全ページ共通）と work-hours.json（工数の明細と運用保守の計画。§150）を並行して読む
 const model = await loadJson(
   {
     json: async () => {
@@ -65,7 +65,7 @@ const model = await loadJson(
   { skeleton: "page-skeleton" },
 );
 const store = model ? createStore(model) : null;
-// グラフの日・週（§149）: メンバーの日ごとの時間。選んだときに初めて読む
+// グラフの日・週（§150）: メンバーの日ごとの時間。選んだときに初めて読む
 const memberDays = lazyJson(FileAttachment("./data/member-days.json"));
 ```
 
@@ -153,7 +153,7 @@ const vm = (() => {
   const ids = new Set([...inPeriod.map((r) => r.memberId), ...plansIn.map((p) => p.memberId)]);
   const people = [...ids].map((memberId) => ({ memberId, teamId: teamOf(memberId) }));
   // チームで絞る: メンバーの所属（上位は配下を含む）。チームの案件に入った他チームの人（応援）・所属の無い人（ヘルプ）は
-  // チームの案件の運用保守の分だけ足す（メンバー別 §134 と同じ。§149）
+  // チームの案件の運用保守の分だけ足す（メンバー別 §134 と同じ。§150）
   const own = memberIdsInTeam(people, state.team, scope.tree);
   const ownSet = own ? new Set(own) : null;
   const contractSet = new Set(scope.contractIds ?? []);
@@ -207,7 +207,7 @@ const pmSigned = (hours, cfg) => {
   const text = pm(Math.abs(hours), cfg);
   return Math.abs(v) < 0.005 ? pm(0, cfg) : v > 0 ? `+${text}` : `−${text}`;
 };
-// 計画との差の根拠（確定した月ごとの計画・運用保守の実績・差。§149）
+// 計画との差の根拠（確定した月ごとの計画・運用保守の実績・差。§150）
 const planSpec = (name, cmp, cfg, judged) => () => ({
   title: `${name} ・ ${T.work.colPlanDiff}`,
   subtitle: judged ? periodJa(judged) : T.work.noJudged,
@@ -276,7 +276,7 @@ if (vm) {
 ```
 
 ```js
-// 月次推移の単位（日・週・月・四半期・年度。§130 のグラフと同じ切り替え。§149）
+// 月次推移の単位（日・週・月・四半期・年度。§130 のグラフと同じ切り替え。§150）
 const chartUnit = (() => {
   const host = html`<div class="yn-unit-figure"></div>`;
   host.value = loadUnit("workload", CHART_UNITS);
@@ -424,7 +424,7 @@ if (vm) {
   const opts = (ax) => ({ period, axis: ax, tree, contractLabel, unassignedLabel: ax === "customer" ? T.numbers.noCustomerName : ax === "contract" ? T.work.noContractRow : T.members.noTeam });
   const groups = aggregateWork(model, vm.rows, opts(axis));
   const label = AXES.find((a) => a.id === axis)?.label ?? "";
-  // 計画を まとめ方のキーごとに（§149）
+  // 計画を まとめ方のキーごとに（§150）
   const planKey = {
     team: (p) => {
       const t = vm.teamOf(p.memberId);
@@ -461,7 +461,7 @@ if (vm) {
     } else row.href = g.key === UNASSIGNED_WORK_KEY ? null : store.href("./team", {}, { id: g.key });
     return row;
   };
-  // 行を開いたときの内訳（§149）: 案件 → メンバー、メンバー・顧客 → 案件
+  // 行を開いたときの内訳（§150）: 案件 → メンバー、メンバー・顧客 → 案件
   const subRows = (r) => {
     const kind = r.rowKind === "contract" ? "member" : "contract";
     const by = groupWorkPlans(r.plans, kind === "member" ? (p) => p.memberId : (p) => p.contractId);
@@ -472,7 +472,7 @@ if (vm) {
   const leftN = axis === "member" && !showLeft ? allRows.filter((r) => r.leftFrom).length : 0;
   const rows = leftN ? allRows.filter((r) => !r.leftFrom) : allRows;
   const unknownN = axis === "member" ? rows.filter((r) => r.unknown).length : 0;
-  // データ確認への導線（マスタに無い人。§149）
+  // データ確認への導線（マスタに無い人。§150）
   const toCheck = unknownN ? html`<a class="yn-btn yn-btn-sm" id="yn-w-check" href="./data-check#dc-unknown">${fmt(T.work.toDataCheck, { n: unknownN })}</a>` : null;
   const hint = fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : axis === "contract" ? T.work.tableHintContract : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) });
   display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), hint, toCheck, leftN ? fmt(T.members.hiddenLeft, { n: leftN }) : null));
@@ -533,7 +533,7 @@ if (vm) {
         },
       ]
     : [];
-  // 月ごとの表示（運用保守の実績の人月。確定した月は計画と比べて色を付ける。§149）。多いときは最後の 12 か月
+  // 月ごとの表示（運用保守の実績の人月。確定した月は計画と比べて色を付ける。§150）。多いときは最後の 12 か月
   const monthCols = tableView === "months"
     ? vm.months.slice(-12).map((m, i, list) => ({
         key: `m:${m}`,

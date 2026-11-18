@@ -54,7 +54,7 @@ PW_CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_SKIP_BUILD=1 npx playwright test 
 | `breakdown.spec.ts` | 計算根拠パネル: 実績・作業ログの遅延読み込み・予算の月割り・消化率・着地見込み、Esc・フォーカス |
 | `navigation.spec.ts` | 遷移・パンくず・木の折りたたみ・並べ替え・絞り込み・Excel 出力（読み戻して照合） |
 | `customers.spec.ts` / `members.spec.ts` / `team-detail.spec.ts` / `workload.spec.ts` | 顧客別・メンバー別・チーム詳細・稼働実績の各画面（数値の突合・遷移・Excel・狭幅・ダーク） |
-| `workload-plan.spec.ts` | 稼働実績の強化（§149）: 計画との差の色と根拠・不在を隠す・先頭 10 行・データ確認への導線・案件の開閉・月ごと・グラフの計画の線と単位と棒を押す・ダーク 390px |
+| `workload-plan.spec.ts` | 稼働実績の強化（§150）: 計画との差の色と根拠・不在を隠す・先頭 10 行・データ確認への導線・案件の開閉・月ごと・グラフの計画の線と単位と棒を押す・ダーク 390px |
 | `detail-view.spec.ts` | 閲覧画面のレビュー指摘の回帰（明細は常に円、単価なしは赤くしない、顧客 → 案件一覧の絞り込み など） |
 | `masters.spec.ts` / `gitlab-merge.spec.ts` | マスタ編集（追加・修正・削除・下書き・差分・保存方式）と GitLab へのマージ方式（デモ・API のモック） |
 | `mr-pending.spec.ts` | マージ待ちの一覧の開閉・対応が必要なものを先に・競合ありのマージで載せ直してマージ・幅ごとのはみ出し（§126） |

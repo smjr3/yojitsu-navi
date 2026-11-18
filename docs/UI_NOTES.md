@@ -332,7 +332,7 @@ core の index.ts には足していない（並行開発の衝突を避ける�
 
 列幅（SPEC §77）: `dataTable` の各見出しに `.yn-col-resizer`（`bindColResizer` は `src/components/col-resize.js` でマスタ編集と共通）。境目は右隣の見出しにまたがるので、見出しの `z-index` を左ほど大きくしている（先頭の列は最前面）。幅は `localStorage` `yojitsu-navi:col-width:<path>:<caption>`。描き直しのたびに `applyColWidths()` で全行のセルに幅を当てる。
 
-開く行（SPEC §149）: `dataTable` の `subRows(row)` は `tree` を使わない表で、`row.hasSub` の行の先頭に開閉（`.yn-disc`）を付け、開くと返した行をすぐ下に `is-sub yn-depth-1` で出す（キーは `親キー\u0000子キー`。先頭 10 行の切り詰めの後に足す）。稼働実績の案件 → 人ごと・顧客／メンバー → 案件ごとに使う。稼働実績のグラフの色は `workColors(dark, "actual"|"plan")`（実績は 運用保守 = 橙・運用保守以外 = 茶・計画の線 = 青、リソース計画の人月グラフは 青・薄い青）。
+開く行（SPEC §150）: `dataTable` の `subRows(row)` は `tree` を使わない表で、`row.hasSub` の行の先頭に開閉（`.yn-disc`）を付け、開くと返した行をすぐ下に `is-sub yn-depth-1` で出す（キーは `親キー\u0000子キー`。先頭 10 行の切り詰めの後に足す）。稼働実績の案件 → 人ごと・顧客／メンバー → 案件ごとに使う。稼働実績のグラフの色は `workColors(dark, "actual"|"plan")`（実績は 運用保守 = 橙・運用保守以外 = 茶・計画の線 = 青、リソース計画の人月グラフは 青・薄い青）。
 
 列の表示・並び順（SPEC §106）: `src/components/column-prefs.js`（`columnsButton`・`arrangeColumns`）。`dataTable` はツールバー右の `.yn-table-actions` に「列」（`.yn-cols-btn`）と Excel 出力を並べ、`visibleCols` を設定から作り直して `renderHead()`/`renderBody()`。マスタ編集の台帳は `drawPanel()` の値の列を並べ替え、描き直しでも一覧を開いたまま（ボタンは `data-fk="cols:<ファイル>"` で付け直す）。設定は `localStorage` `yojitsu-navi:columns:<path>:<caption>`（台帳は `masters:<ファイル>`）。文字だけの列のセルは `.yn-cell-clip`（上限の幅で「…」、title に全文）。 列の `optional: true` は選べる列（既定で出さない。`prefs.shown`）、`exportAlways: true` は画面で隠していても Excel に出す。予実の行の選べる列は `totalsExtraColumns()`（`standardColumns` が足す）、案件の行は `contractInfoColumns()`（§106.1）。
 

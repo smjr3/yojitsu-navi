@@ -112,7 +112,7 @@ export function workTaskSection({ rows, months, unit, config, title = T.work.sec
 }
 
 /**
- * 稼働実績・リソース計画のグラフの色（§131・§149）。kind = "actual"（稼働実績＝実績の側: 運用保守は橙、運用保守以外は茶）、
+ * 稼働実績・リソース計画のグラフの色（§131・§150）。kind = "actual"（稼働実績＝実績の側: 運用保守は橙、運用保守以外は茶）、
  * "plan"（リソース計画＝予定の側: 運用保守は青、運用保守以外は薄い青）。紫は目標の上限（§140）なので使わない
  */
 export function workColors(dark, kind = "actual") {
@@ -134,7 +134,7 @@ export function workHoursLegend(dark, { plan = false, prelim = false } = {}) {
 }
 
 /**
- * 月次推移（運用保守・運用保守以外の人月を積み上げ、運用保守の計画を青の段の線で重ねる。§149）。
+ * 月次推移（運用保守・運用保守以外の人月を積み上げ、運用保守の計画を青の段の線で重ねる。§150）。
  * series は月（core の workMonthlySeries ＋ plannedHours）か、まとめた期間（core の bucketWork）。
  * 今日を含む期間（isNow）は速報なので斜線（§125）。onPick(d, plot) を渡すと棒を押したときに呼ぶ
  */
@@ -225,7 +225,7 @@ export function workHoursChart({ series, config, dark = false, width = 640, heig
   return plot;
 }
 
-/** 月次推移の表（グラフと同じ値）。label(r) を渡すと期間の名前（日・週・四半期・年度。§149） */
+/** 月次推移の表（グラフと同じ値）。label(r) を渡すと期間の名前（日・週・四半期・年度。§150） */
 export function workSeriesTable({ series, config, exportName, label = null, colLabel = T.charts.colMonth }) {
   const std = config.standardHoursPerMonth;
   const hasPlan = series.some((p) => p.plannedHours > 0);

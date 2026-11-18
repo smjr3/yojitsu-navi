@@ -96,7 +96,7 @@ function memberDaysOutput(ctx: OutputContext) {
   return { ...encodeMemberDays(ctx.model(), { assignments: d.assignments, outsidePlans: d.outsidePlans ?? [] }), _build: buildStamp() };
 }
 
-/** 工数の明細（SPEC §30.2）と、稼働実績で比べる運用保守の計画（§149。member-months.json を読まずに済むように小さく詰める） */
+/** 工数の明細（SPEC §30.2）と、稼働実績で比べる運用保守の計画（§150。member-months.json を読まずに済むように小さく詰める） */
 function workHoursOutput(ctx: OutputContext) {
   const model = ctx.model();
   return { asOf: model.meta.asOf, ...encodeWorkRows(model.workRows, workPlanRows(model.memberMonths)), _build: buildStamp() };

@@ -369,7 +369,7 @@ function compareWorkRows(a: WorkRow, b: WorkRow): number {
 // 集計（画面側。WorkRow[] に対して実行する）
 // ---------------------------------------------------------------------------
 
-/** 稼働実績の まとめ方（contract = 案件。§149） */
+/** 稼働実績の まとめ方（contract = 案件。§150） */
 export type WorkAxis = "team" | "customer" | "contract" | "member";
 
 /** 工数の合計（時間）。人月は personMonths で換算する */
@@ -570,7 +570,7 @@ export interface AggregateWorkOptions {
  * 軸ごとの工数一覧。
  * - team: 基準月の所属チームで束ね、上位は配下の合計（木の順）。チームに属さない・木に無い人は末尾の「未設定」
  * - customer: 顧客キーごと（時間の多い順）
- * - contract: 案件（契約）ごと（時間の多い順）。運用保守以外は関連契約（§30.2）の行に数え、関連契約の無いものは末尾の「未設定」（§149）
+ * - contract: 案件（契約）ごと（時間の多い順）。運用保守以外は関連契約（§30.2）の行に数え、関連契約の無いものは末尾の「未設定」（§150）
  * - member: メンバーごと（時間の多い順）
  * 期間内に工数の無いグループは出さない（チーム軸の上位は配下にあれば出す）。
  */
@@ -687,7 +687,7 @@ export function outsideInputs(mappings: ReadonlyArray<{ kind: string; worklog: W
 export interface EncodedWorkRows {
   dict: string[];
   r: Array<[number, number, number, number, number, number, number, number, 0 | 1, 0 | 1, number, number | null]>;
-  /** 運用保守の計画（§149）。各行 = [月, 社員番号, 契約, 計画の時間]（文字列は dict の添字） */
+  /** 運用保守の計画（§150）。各行 = [月, 社員番号, 契約, 計画の時間]（文字列は dict の添字） */
   p?: Array<[number, number, number, number]>;
 }
 
@@ -723,7 +723,7 @@ export function encodeWorkRows(rows: readonly WorkRow[], plans: readonly WorkPla
   return { dict, r, p };
 }
 
-/** data/work-hours.json の運用保守の計画（§149。無ければ空） */
+/** data/work-hours.json の運用保守の計画（§150。無ければ空） */
 export function decodeWorkPlans(data: EncodedWorkRows): WorkPlanRow[] {
   const { dict } = data;
   return (data.p ?? []).map((t) => ({ month: dict[t[0]] ?? "", memberId: dict[t[1]] ?? "", contractId: dict[t[2]] ?? "", hours: t[3] }));
@@ -750,7 +750,7 @@ export function decodeWorkRows(data: EncodedWorkRows): WorkRow[] {
 }
 
 // ---------------------------------------------------------------------------
-// 稼働実績の計画との比較・応援／ヘルプ（SPEC §149）
+// 稼働実績の計画との比較・応援／ヘルプ（SPEC §150）
 // ---------------------------------------------------------------------------
 
 /** 運用保守の計画の 1 行（メンバー × 案件 × 月。リソース計画の時間） */
@@ -779,7 +779,7 @@ function teamAtBase(model: Pick<Model, "members">, memberId: string, baseMonth: 
   return rec?.teamId ? rec.teamId : null;
 }
 
-/** 基準月のメンバーの所属チーム（作業実績の行が無い・計画だけの人にも使う。§149） */
+/** 基準月のメンバーの所属チーム（作業実績の行が無い・計画だけの人にも使う。§150） */
 export function workTeamOf(model: Pick<Model, "members">, memberId: string, baseMonth: YearMonth): string | null {
   return teamAtBase(model, memberId, baseMonth);
 }
@@ -844,7 +844,7 @@ export interface WorkPlanCompare {
 }
 
 /**
- * 計画と運用保守の実績を比べる（§149）。判定・差は確定した月（judged）だけ（速報の月は実績が途中なので入れない。§64 と同じ）。
+ * 計画と運用保守の実績を比べる（§150）。判定・差は確定した月（judged）だけ（速報の月は実績が途中なので入れない。§64 と同じ）。
  * rows は運用保守以外を含んでよい（数えない）
  */
 export function compareWorkPlan(plans: readonly WorkPlanRow[], rows: readonly WorkRow[], judged: Period | null): WorkPlanCompare {

@@ -21,7 +21,7 @@
  *   filter?: false（列ごとの絞り込みを付けない）,
  *   maxHeight?: px, toolbar?: Node, className?: string（table に足す class）,
  *   subRows?(row) -> rows（行を開くと下に出す内訳の行。row.hasSub が真の行に開閉の印を付ける。並べ替え・絞り込み・先頭の数行は
- *             元の行だけにかかり、内訳の行は開いた行のすぐ下に同じ列で出す。Excel は元の行だけ。§149）,
+ *             元の行だけにかかり、内訳の行は開いた行のすぐ下に同じ列で出す。Excel は元の行だけ。§150）,
  *   previewRows?: 行数（先頭のこの行数だけ出し、表の下の「すべて表示」で残りを出す。木構造は対象外。
  *                 たたんでいる間は表の中でスクロールしないので、ページのスクロールが表に取られない。§127）
  * })
@@ -456,7 +456,7 @@ export function dataTable({
   // 利用者が選んだ並べ替えの列を隠したら、既定の並びに戻す
   let sortState = tree ? null : (remembered && visibleCols.some((c) => c.key === remembered.key) ? remembered : null) ?? (sort ? { ...sort } : null);
   const collapsed = new Set();
-  // 内訳を開いている行（subRows。§149）
+  // 内訳を開いている行（subRows。§150）
   const openedSub = new Set();
   const subMode = !tree && typeof subRows === "function";
   let currentRows = rows;
@@ -707,7 +707,7 @@ export function dataTable({
             lead.append(toggle);
           } else lead.append(h("span", { class: "yn-tree-toggle yn-tree-leaf", "aria-hidden": "true" }));
         } else if (subMode) {
-          // 内訳を開く行（§149）。木の表と同じ字下げ・開閉の印
+          // 内訳を開く行（§150）。木の表と同じ字下げ・開閉の印
           lead = h("div", { class: "yn-tree-cell" });
           cell.append(lead);
           lead.append(h("span", { class: "yn-tree-indent", style: `--depth:${isSub ? 1 : 0}` }));

@@ -5974,7 +5974,7 @@ summary:has(> .yn-disc)::-webkit-details-marker {
   }
 }
 
-/* 稼働実績（§149）: まとめ方・表示の切り替えを 1 行に。計画との差の色は リソース計画・体制図と同じ（黄＝計画より多い、赤紫＝計画なし。§131） */
+/* 稼働実績（§150）: まとめ方・表示の切り替えを 1 行に。計画との差の色は リソース計画・体制図と同じ（黄＝計画より多い、赤紫＝計画なし。§131） */
 .yn-work-switches {
   display: flex;
   flex-wrap: wrap;
@@ -6002,7 +6002,7 @@ summary:has(> .yn-disc)::-webkit-details-marker {
   font-style: italic;
   opacity: 0.8;
 }
-/* 行を開いた内訳の行（§149）は地を少し沈める */
+/* 行を開いた内訳の行（§150）は地を少し沈める */
 .yn-table tr.is-sub > th,
 .yn-table tr.is-sub > td {
   background: var(--yn-surface-sunken, color-mix(in srgb, currentColor 3%, transparent));

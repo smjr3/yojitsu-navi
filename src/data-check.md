@@ -581,7 +581,7 @@ if (model) {
 ```
 
 ```js
-// ほかの画面から節を指して開いたとき（稼働実績の「マスタに無い人」など。§149）、節は後から描くので描いた後にその節まで送る
+// ほかの画面から節を指して開いたとき（稼働実績の「マスタに無い人」など。§150）、節は後から描くので描いた後にその節まで送る
 if (sections) {
   const id = decodeURIComponent(location.hash.slice(1));
   if (id && [...sections.values()].some((x) => x.id === id)) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));

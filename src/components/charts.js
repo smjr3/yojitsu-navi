@@ -435,7 +435,7 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
     plot.classList.add("yn-chart-pickable");
     plot.addEventListener("click", (ev) => {
       let i = plot.value?.i;
-      // 計算根拠を閉じた直後など、吹き出しの値が消えたまま同じ棒を押したときは、押した位置から棒を決める（§149）
+      // 計算根拠を閉じた直後など、吹き出しの値が消えたまま同じ棒を押したときは、押した位置から棒を決める（§150）
       if (i === undefined) {
         const svg = plot.tagName?.toLowerCase() === "svg" ? plot : plot.querySelector("svg");
         const sx = plot.scale?.("x");

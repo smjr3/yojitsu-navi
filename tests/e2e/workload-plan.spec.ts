@@ -1,5 +1,5 @@
 /**
- * 稼働実績を他の画面並みに（SPEC §149）
+ * 稼働実績を他の画面並みに（SPEC §150）
  *   - 計画との差（確定した月）: 計画より多い＝黄、計画なし＝赤紫、根拠は月ごと
  *   - まとめ方「案件」と、行を開くと内訳（案件 → メンバー、メンバー → 案件）
  *   - 表示「合計｜月ごと」、先頭 10 行＋すべて表示、不在の人を隠す、マスタに無い人 → データ確認
@@ -28,7 +28,7 @@ const plansByMember = groupWorkPlans(plansFy, (p) => p.memberId);
 const cmpOf = (g: (typeof byMember)[number]) => compareWorkPlan(plansByMember.get(g.key) ?? [], g.rows, judged);
 const shown = byMember.filter((g) => memberLeftAt(model, g.key, BASE) === null);
 
-test.describe("稼働実績 §149", () => {
+test.describe("稼働実績 §150", () => {
   test("前提: ダミーデータに計画より多い人・計画なしの人・不在の人・マスタに無い人がいる", () => {
     expect(judged).not.toBeNull();
     expect(shown.some((g) => cmpOf(g).kind === "over")).toBe(true);
