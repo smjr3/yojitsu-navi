@@ -71,3 +71,18 @@ test("稼働実績: まとめ方を切り替えても見出しの下に残り、
   await expect(page.locator(".yn-work-axis")).toHaveCount(1);
   await expect(axis.locator('button[data-axis="customer"]')).toHaveAttribute("aria-pressed", "true");
 });
+
+test("キーボードで切り替えてもフォーカスが押したボタンに残る（稼働実績・案件一覧・チーム一覧）", async ({ page }) => {
+  for (const [path, sel, next] of [
+    ["/workload", ".yn-work-axis", '[data-axis="customer"]'],
+    ["/contracts", ".yn-view-toggle", '[data-view="timeline"]'],
+    ["/teams", ".yn-view-toggle", '[data-view="chart"]'],
+  ] as const) {
+    await gotoPage(page, path);
+    const btn = page.locator(`.yn-section-switch ${sel} ${next}`);
+    await btn.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(`.yn-section-switch ${sel} ${next}`)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(`.yn-section-switch ${sel} ${next}`), path).toBeFocused();
+  }
+});

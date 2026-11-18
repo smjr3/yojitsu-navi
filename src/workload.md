@@ -66,6 +66,8 @@ const axisControl = (() => {
     const b = html`<button type="button" class="yn-seg-btn" data-axis=${a.id} aria-pressed=${a.id === form.value ? "true" : "false"}>${a.label}</button>`;
     b.addEventListener("click", () => {
       if (form.value === a.id) return;
+      // 見出しと一緒に描き直すとき要素を移すのでフォーカスが外れる。キーボードで押したときは戻す（§144）
+      form.refocus = document.activeElement === b ? a.id : null;
       form.value = a.id;
       for (const x of btns) x.setAttribute("aria-pressed", x.dataset.axis === a.id ? "true" : "false");
       const url = new URL(location.href);
@@ -184,6 +186,11 @@ if (vm) {
   const groups = aggregateWork(model, vm.rows, { period, axis, tree: vm.scope.tree, unassignedLabel: axis === "customer" ? T.numbers.noCustomerName : T.members.noTeam });
   const label = AXES.find((a) => a.id === axis)?.label ?? "";
   display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) }), null, null, axisControl));
+  if (axisControl.refocus) {
+    const id = axisControl.refocus;
+    axisControl.refocus = null;
+    requestAnimationFrame(() => axisControl.querySelector(`[data-axis="${id}"]`)?.focus());
+  }
   // 分布のグラフ（チームは末端の組織だけ。上位は配下の合計で二重になるため）
   const chartGroups = axis === "team" ? groups.filter((g) => !g.hasChildren) : groups;
   // 画面内は上位 20 件。拡大表示では全件を出す（行が多ければダイアログ内で縦にスクロール）
