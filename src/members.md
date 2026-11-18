@@ -13,7 +13,7 @@ title: メンバー別
 import { html } from "htl";
 import { T, fmt } from "./i18n/index.js";
 import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO, UNASSIGNED_TEAM_ID, aggregateMembers, normalizeName, ownTeamScope, planGaps } from "./core/index.js";
-import { mergeMemberAggregates, teamGuestsOf } from "./core/members.js";
+import { mergeMemberAggregates, teamGuests } from "./core/members.js";
 import { createStore } from "./components/state.js";
 import { onTextInput } from "./components/text-input.js";
 import { scopeFor, teamName, memberIdsInTeam } from "./components/analysis.js";
@@ -86,6 +86,23 @@ const aggregateMembersCached = (() => {
 ```
 
 ```js
+// 応援・ヘルプの判定（§134）も条件ごとに使い回す（単位・検索を変えたときに作業の月を走査し直さない）
+const teamGuestsCached = (() => {
+  const cache = new Map();
+  return (period, team, contractIds, tree) => {
+    const key = JSON.stringify([period.from, period.to, team, contractIds]);
+    let v = cache.get(key);
+    if (!v) {
+      v = teamGuests(model, { period, contractIds, ownScope: ownTeamScope(tree, team) });
+      if (cache.size >= 16) cache.delete(cache.keys().next().value);
+      cache.set(key, v);
+    }
+    return v;
+  };
+})();
+```
+
+```js
 const vm = (() => {
   if (!model || !state) return null;
   const scope = scopeFor(model, state);
@@ -105,7 +122,7 @@ const vm = (() => {
   // この人たちはチームの案件の分だけを数える（運用保守以外は含めない）。課長・部長など上位の組織の人は応援にしない
   const guests =
     state.team && state.team !== UNASSIGNED_TEAM_ID && !scope.teamMissing && scope.contractIds.length
-      ? teamGuestsOf(aggregateMembersCached(model, { period: fullPeriod, contractIds: scope.contractIds }).members, ownTeamScope(scope.tree, state.team))
+      ? teamGuestsCached(fullPeriod, state.team, scope.contractIds, scope.tree)
       : [];
   const guestOrigin = new Map(guests.map((g) => [g.memberId, g.origin]));
   // 計画のある応援・ヘルプ（実績だけの人は表の上のボタンで出す。体制図の「実績だけの応援・ヘルプ」と同じ）

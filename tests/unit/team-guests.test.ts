@@ -1,9 +1,9 @@
 /**
- * メンバー別でチームを選んだときの応援・ヘルプ（SPEC §134）: teamGuests / teamGuestsOf / mergeMemberAggregates / planGaps の guests
+ * メンバー別でチームを選んだときの応援・ヘルプ（SPEC §134）: teamGuests / mergeMemberAggregates / planGaps の guests
  */
 import { describe, expect, it } from "vitest";
 import { buildModel } from "../../src/core/model.js";
-import { aggregateMembers, mergeMemberAggregates, teamGuests, teamGuestsOf } from "../../src/core/members.js";
+import { aggregateMembers, mergeMemberAggregates, teamGuests } from "../../src/core/members.js";
 import { planGaps } from "../../src/core/planGaps.js";
 import { ownTeamScope } from "../../src/core/team-detail.js";
 import { teamTreeForMonth } from "../../src/core/index.js";
@@ -54,6 +54,23 @@ function model(): Model {
 const tree = (m: Model) => teamTreeForMonth({ teams: m.teams }, "2026-09");
 
 describe("teamGuests（§134）", () => {
+  it("チームから異動して出た人の、異動前（チームの所属のとき）の作業では応援にしない", () => {
+    // M1 が 2026-08 から T2 へ異動（5 月の C1 の作業は T1 の所属のとき）
+    const moved = buildModel(
+      dataset({
+        contracts: [contract({ contractId: "C1", customerName: "ABC株式会社", startMonth: "2026-04", endMonth: "2027-03", teamId: "T1" })],
+        mappings: [rule("ABC株式会社", "", "C1")],
+        teams: [team("D", null), team("T1", "D"), team("T2", "D")],
+        members: [member({ memberId: "M1", teamId: "T1" }), member({ memberId: "M1", teamId: "T2", effectiveFrom: "2026-08" })],
+        rates: [rate("SE", 5000)],
+        worklogs: [worklog({ date: "2026-05-11", memberId: "M1", hours: 10 })],
+      }),
+      { asOf: "2026-10-27", generatedAt: "x" },
+    );
+    expect(teamGuests(moved, { period: P, contractIds: ["C1"], ownScope: ownTeamScope(tree(moved), "T1") })).toEqual([]);
+  });
+
+
   it("チームの案件に入った他チームの人は応援（計画の有無つき）、所属の無い人・マスタに無い人はヘルプ。上位の組織の人は対象外", () => {
     const m = model();
     const g = teamGuests(m, { period: P, contractIds: ["C1"], ownScope: ownTeamScope(tree(m), "T1") });
@@ -69,7 +86,6 @@ describe("teamGuests（§134）", () => {
     const m = model();
     expect(teamGuests(m, { period: P, contractIds: ["C1"], ownScope: new Set() })).toEqual([]);
     expect(teamGuests(m, { period: P, contractIds: [], ownScope: ownTeamScope(tree(m), "T1") })).toEqual([]);
-    expect(teamGuestsOf([], ownTeamScope(tree(m), "T1"))).toEqual([]);
   });
 });
 

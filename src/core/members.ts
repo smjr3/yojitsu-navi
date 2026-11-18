@@ -497,22 +497,29 @@ export interface TeamGuest {
 /**
  * チームの案件（contractIds）に期間内の計画か実績がある、チームの外の人（§134）。
  * ownScope は担当組織（ownTeamScope: 自分・配下・上位）。所属（基準月）がその中の人は対象外（課長・部長は応援にしない）。
+ * 応援は「今の所属（基準月）のまま」チームの案件に計画か実績がある人だけ（チーム詳細の応援 §136 と同じ。
+ * チームから異動して出た人の、異動前の作業では付けない）。ヘルプは所属チームの無い人・マスタに無い人。
  * ownScope が空（チームが木に無い）なら空。
  */
 export function teamGuests(model: Pick<Model, "meta" | "members" | "memberMonths">, scope: { period: Period; contractIds: readonly string[]; ownScope: ReadonlySet<string> }): TeamGuest[] {
   if (scope.contractIds.length === 0 || scope.ownScope.size === 0) return [];
-  return teamGuestsOf(aggregateMembers(model, { period: scope.period, contractIds: scope.contractIds }).members, scope.ownScope);
-}
-
-/** teamGuests の判定だけ（チームの案件に絞った aggregateMembers の結果を渡す。画面で集計を使い回すため） */
-export function teamGuestsOf(onTeamContracts: readonly MemberTotals[], ownScope: ReadonlySet<string>): TeamGuest[] {
-  if (ownScope.size === 0) return [];
+  const agg = aggregateMembers(model, { period: scope.period, contractIds: scope.contractIds });
+  const contractSet = new Set(scope.contractIds);
+  const current = new Map(agg.members.map((m) => [m.memberId, m.teamId]));
+  // 今の所属のままチームの案件に計画・実績がある人
+  const asNow = new Set<string>();
+  for (const mm of model.memberMonths) {
+    if (mm.month < scope.period.from || mm.month > scope.period.to || asNow.has(mm.memberId)) continue;
+    const now = current.get(mm.memberId);
+    if (!now || mm.teamId !== now) continue;
+    if (mm.byContract.some((r) => !isOutsideRow(r) && contractSet.has(r.contractId) && (r.plannedHours > 0 || r.actualHours > 0))) asNow.add(mm.memberId);
+  }
   const out: TeamGuest[] = [];
-  for (const m of onTeamContracts) {
+  for (const m of agg.members) {
     if (!(m.plannedHours > 0) && !(m.actualHours > 0)) continue;
     const planned = m.plannedHours > 0;
     if (m.memberUnknown || !m.teamId) out.push({ memberId: m.memberId, origin: "help", planned });
-    else if (!ownScope.has(m.teamId)) out.push({ memberId: m.memberId, origin: "support", planned });
+    else if (!scope.ownScope.has(m.teamId) && asNow.has(m.memberId)) out.push({ memberId: m.memberId, origin: "support", planned });
   }
   return out;
 }
