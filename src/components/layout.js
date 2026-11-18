@@ -20,7 +20,7 @@ export function preliminaryBadge(includes) {
  */
 export function pageHeader({ model, title, lead, breadcrumbs = [], includesPreliminary = false, extra = null }) {
   const meta = model?.meta;
-  // 氏名の吹き出し（§144）は全ページ共通。model.json だけで作る
+  // 氏名の吹き出し（§148）は全ページ共通。model.json だけで作る
   if (model?.members && model?.contracts) setMemberTipModel(model);
   // 1 段だけのパンくずは上部タブと重複するので出さない
   const crumbs = breadcrumbs.length > 1

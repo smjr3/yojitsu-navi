@@ -3314,7 +3314,7 @@ html:has(dialog.yn-dialog[open]) {
   color: var(--yn-warn-text);
 }
 
-/* 氏名の吹き出し（§144）。枠・文字は .yn-plan-tip と同じ */
+/* 氏名の吹き出し（§148）。枠・文字は .yn-plan-tip と同じ */
 .yn-member-tip > div > p + p {
   margin-top: 2px;
 }

@@ -1,5 +1,5 @@
 /**
- * 氏名にカーソルを合わせる・フォーカスすると出す、メンバーの吹き出し（SPEC §144）
+ * 氏名にカーソルを合わせる・フォーカスすると出す、メンバーの吹き出し（SPEC §148）
  *
  *   setMemberTipModel(model)      … pageHeader が呼ぶ（全ページ共通。model.json だけで作る）
  *   memberTipAttrs(memberId)      … 氏名の要素に付ける属性 { "data-member-tip": id }
