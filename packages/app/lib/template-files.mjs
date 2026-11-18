@@ -32,6 +32,7 @@ const DEV_FILES = new Set([
   "CONTRIBUTING.md",
   "scripts/build-app.mjs",
   "scripts/bump-version.mjs",
+  "scripts/check-commit-authors.mjs",
   "scripts/check-publish.mjs",
   "scripts/lib/image-detect.mjs",
   "scripts/lib/package-guard.mjs",
@@ -45,7 +46,7 @@ const DEV_FILES = new Set([
 const DEV_DIRS = [".github/", "packages/"];
 
 /** 開発元だけで使う package.json の scripts（利用環境の package.json から外す。中のファイルを配らないので） */
-export const DEV_SCRIPTS = ["app:build", "app:pack", "version:bump", "test:e2e", "test:e2e:smoke"];
+export const DEV_SCRIPTS = ["app:build", "app:pack", "version:bump", "test:e2e", "test:e2e:smoke", "check:authors"];
 
 /** サンプルではなく、利用環境でもそのまま使えるデータ（祝日・作業種類の既定） */
 export const STARTER_DATA_KEEP = new Set(["data/holidays.csv", "data/task-types.csv"]);
@@ -109,7 +110,11 @@ export const PROJECT_PACKAGE_NAME = "yojitsu-navi-site";
 /** 利用環境の package.json（開発元だけの scripts を外し、名前を PROJECT_PACKAGE_NAME にする。書式は 2 文字下げ＋最後に改行） */
 export function userPackageJson(text) {
   const pkg = JSON.parse(text);
-  for (const s of DEV_SCRIPTS) delete pkg.scripts?.[s];
+  for (const s of DEV_SCRIPTS) {
+    delete pkg.scripts?.[s];
+    // ほかの scripts から呼んでいれば外す（npm run check の最初の check:authors など。開発元の決まりなので利用環境では動かさない）
+    for (const [k, v] of Object.entries(pkg.scripts ?? {})) pkg.scripts[k] = v.split(`npm run ${s} && `).join("");
+  }
   pkg.name = PROJECT_PACKAGE_NAME;
   return `${JSON.stringify(pkg, null, 2)}\n`;
 }

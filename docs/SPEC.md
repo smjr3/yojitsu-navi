@@ -2328,6 +2328,6 @@ MR は互いに順番待ちにならない（どれからでもマージでき�
 ## 151. コミットの作者を決まったアドレスだけにする（2026-11-18 依頼者）
 - 依頼者「Contributors に知らない人がいる」→ 作業中の取り込みのコミットが仮の名前・アドレスで作られ、スカッシュマージの Co-authored-by として main に残っていた（GitHub はアドレスで Contributors を数える）。
 - 作者・コミッター・Co-authored-by に使ってよいアドレスは Claude の noreply、GitHub のマージの noreply、GitHub の利用者・bot の noreply（`users.noreply.github.com`）だけ（一覧は `scripts/check-commit-authors.mjs` の `ALLOWED`）。個人のアドレスも使わない（公開リポジトリに残る）。
-- 検査: `scripts/check-commit-authors.mjs`（`npm run check:authors`。既定の範囲は `origin/main..HEAD`、読めないときは何もしない）。`npm run check` の最初に動く。PR では `.github/workflows/commit-authors.yml` が PR の全コミットを見る（どのファイルの変更でも動く、依存は入れない）。違反のアドレスはログに出さず、コミットと欄だけを出す。
+- 検査: `scripts/check-commit-authors.mjs`（`npm run check:authors`。既定の範囲は `origin/main..HEAD`、読めないときは何もしない）。`npm run check` の最初に動く（開発元だけ。利用環境に配る `package.json` からは外し、スクリプトも配らない。導入先のコミットの作者は導入先の決まりに任せる）。PR では `.github/workflows/commit-authors.yml` が PR の全コミットを見る（どのファイルの変更でも動く、依存は入れない）。違反のアドレスはログに出さず、コミットと欄だけを出す。
 - コミットの前に `git -c user.name=…`・`GIT_AUTHOR_*` で仮の名前を付けない。テストで一時リポジトリにコミットするときは、そのリポジトリの中だけで設定する（`--global` を使わない）。
 - 再発防止: `tests/unit/commit-authors.test.ts`。
