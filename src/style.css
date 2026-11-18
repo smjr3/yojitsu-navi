@@ -4473,6 +4473,10 @@ html:has(dialog.yn-dialog[open]) {
   font-size: calc(15px * var(--yn-fs));
   line-height: 1;
 }
+/* 棒を押すと内訳が開くグラフ（メンバー詳細の時間。§130） */
+.yn-chart-pickable {
+  cursor: pointer;
+}
 .yn-chart-plot {
   min-width: 0;
 }
@@ -4665,6 +4669,13 @@ html:has(dialog.yn-dialog[open]) {
 }
 .yn-dg-table td.yn-dg-day.is-future {
   background: transparent;
+}
+/* 日の数字は押すと内訳（計算根拠）。狭いマスでも押しやすいよう、マス全体をボタンにする */
+.yn-dg-table td.yn-dg-day .yn-num {
+  display: block;
+  width: 100%;
+  min-height: 1.5em;
+  text-decoration: none;
 }
 .yn-dg-table td.yn-dg-l1 { background: color-mix(in srgb, var(--yn-series-cost) 12%, transparent); }
 .yn-dg-table td.yn-dg-l2 { background: color-mix(in srgb, var(--yn-series-cost) 22%, transparent); }

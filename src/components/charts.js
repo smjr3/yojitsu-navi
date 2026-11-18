@@ -370,7 +370,7 @@ export function seriesTable(series, { unit = "yen", exportName = "monthly", labe
  * series は core の memberMonthlySeries() の出力。基準月以降の月は背景を薄く塗り、実績がまだ無いことを示す。
  * 日・週・四半期・年度（§130）は core の bucketMemberHours の出力と、tick・tipLabel・isFuture（背景を塗る最初の棒）・isNow（斜線）を渡す
  */
-export function memberHoursChart({ series, dark = false, width = 640, height = 260, asOfMonth, title = T.charts.memberHoursTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, isFuture = null, isNow: isNowOpt = null, minBar = 6, unitName = T.charts.unitLabels.month }) {
+export function memberHoursChart({ series, dark = false, width = 640, height = 260, asOfMonth, title = T.charts.memberHoursTitle, tick = null, tipLabel = null, tipName = T.charts.tipMonth, isFuture = null, isNow: isNowOpt = null, minBar = 6, unitName = T.charts.unitLabels.month, onPick = null }) {
   const c = chartColors(dark);
   const data = series.map((d, i) => ({ ...d, i }));
   const n = data.length;
@@ -428,6 +428,14 @@ export function memberHoursChart({ series, dark = false, width = 640, height = 2
   plot.setAttribute("role", "img");
   plot.setAttribute("aria-label", fmt(T.charts.memberHoursAria, { title, unit: unitName }));
   hatch?.attach(plot);
+  if (onPick) {
+    // 棒を押す（タップ）と、その期間の内訳（計算根拠）を開く。どの棒かは吹き出しと同じ pointer の値
+    plot.classList.add("yn-chart-pickable");
+    plot.addEventListener("click", () => {
+      const d = plot.value;
+      if (d) onPick(series[d.i], plot);
+    });
+  }
   return plot;
 }
 

@@ -268,6 +268,32 @@ export function dailyMembers(
   return [...rows.values()].sort((a, b) => b.plan - a.plan || b.total - a.total || a.memberId.localeCompare(b.memberId));
 }
 
+/** その日の時間の内訳（チーム詳細のメンバー×日の表で日の数字を押したとき。§61） */
+export interface DayHoursLine {
+  contractId: string;
+  memberId: string;
+  hours: number;
+}
+
+/**
+ * 今月の d 日の、対象の案件の作業時間を案件×メンバーで返す（時間の多い順）。memberId を渡すとその人だけ。
+ * data/daily.json の members から作るので追加の読み込みは無い
+ */
+export function dayHoursLines(daily: Pick<DailyFile, "members">, contractIds: readonly string[], day: number, memberId: string | null = null): DayHoursLine[] {
+  const out: DayHoursLine[] = [];
+  for (const id of new Set(contractIds)) {
+    const byMember = daily.members?.[id];
+    if (!byMember) continue;
+    for (const [mid, list] of Object.entries(byMember)) {
+      if (memberId !== null && mid !== memberId) continue;
+      let hours = 0;
+      for (const [d, h] of list) if (d === day) hours += h;
+      if (hours > 0) out.push({ contractId: id, memberId: mid, hours: Math.round(hours * 100) / 100 });
+    }
+  }
+  return out.sort((a, b) => b.hours - a.hours || a.contractId.localeCompare(b.contractId) || a.memberId.localeCompare(b.memberId));
+}
+
 // ---------------------------------------------------------------------------
 // 今週・今四半期・今年度の進捗（§130）
 // ---------------------------------------------------------------------------
