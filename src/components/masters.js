@@ -1804,6 +1804,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         tooltip.hide();
         openCellEditor(r, m, btn, focusTarget, fk);
       });
+      // キーで開く（数字で始める・Enter で反映したら次の月へ。§145）
+      if (editable)
+        cellOpeners.set(btn, (opts) => {
+          tooltip.hide();
+          openCellEditor(r, m, btn, focusTarget, fk, opts);
+        });
       // 不在した月から（不在した月も計画・実績があれば稼働。§35）
       const left = r.leftFrom != null && m >= r.leftFrom && !r.activeMonths[months.indexOf(m)];
       return h("td", { class: `num yn-me-plan-cell${level ? ` is-${level}` : ""}${left ? " is-left" : ""}` }, btn);
@@ -2151,7 +2157,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       <div class="yn-me-panel-head">
         <div>
           <div class="yn-title-with-tip"><h2 class="yn-section-title">${T.planEdit.title}</h2>${infoTip(
-            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span><span class="yn-me-help">${rich(T.plan.amountHelp)}</span>`,
+            html`<span class="yn-me-help">${rich(T.plan.helpWhat)}</span><span class="yn-me-help">${rich(T.plan.helpHowto, { perDay: integer(config.hoursPerBusinessDay) })}</span><span class="yn-me-help">${rich(T.plan.helpKeys)}</span><span class="yn-me-help">${rich(T.planEdit.helpHistory)}</span><span class="yn-me-help">${T.planEdit.legend}</span><span class="yn-me-help">${T.plan.unitHelp}</span><span class="yn-me-help">${T.plan.sortFilterHelp}</span><span class="yn-me-help">${rich(T.plan.targetAlertHelp)}</span><span class="yn-me-help">${rich(T.plan.amountHelp)}</span>`,
             { label: fmt(T.layout.aboutSection, { title: T.planEdit.title }) },
           )}</div>
         </div>
@@ -2197,6 +2203,8 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       ${removedList("assignments", diffMasterDoc(docs.assignments).removed, MASTER_FILES.assignments.columns)}
       ${removedList("outside", diffMasterDoc(docs.outside).removed, MASTER_FILES.outside.columns)}
     </section>`);
+    // onfocusin は htl の属性で付けられない（プロパティが無いブラウザがある）ので直接付ける
+    parts.panel.querySelector(".yn-me-plan .yn-me-table-wrap")?.addEventListener("focusin", revealCell);
     // 開いている絞り込みの吹き出しを、描き直した見出しのボタンに付け直す
     for (const c of pcols) pop.rebind(c.key, parts.panel.querySelector(`.yn-filter-btn[data-fcol="${CSS.escape(c.key)}"]`));
   }
@@ -2434,26 +2442,96 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
   }
 
   // ---- リソース計画のセル: その場で修正（§31.4） -----------------------------------
-  /** 表の中の矢印キーで隣のセルへ（人の行・案件の行・契約外予定の行） */
+  /** セルのボタン → 編集欄を開く関数（キーで開くとき用。人 × 月の数だけあるので要素に持たせず WeakMap で引く） */
+  const cellOpeners = new WeakMap();
+  /** 人の行・作業の行（空の行を除く）か */
+  const isGridRow = (row) => row.classList.contains("yn-me-plan-row") || (row.classList.contains("yn-me-plan-sub") && !row.classList.contains("is-empty"));
+  /**
+   * 表の中のキー操作（§145）。マウスの操作は変えない。
+   * セル: 矢印で隣、Home/End で行の最初・最後の月、← の端で名前（人の行の開閉）、
+   *       Enter・F2 で編集欄、数字を打つとその値で編集を始める、Delete・BackSpace で空にして始める
+   * 名前（開閉のボタン）: → で最初の月、↑↓ でほかの人の名前
+   * 日本語の変換中（isComposing）のキーは扱わない
+   */
   function gridKeys(ev) {
+    if (ev.isComposing || ev.keyCode === 229 || ev.altKey || ev.metaKey) return;
+    const toggleBtn = ev.target.closest?.(".yn-me-plan-toggle");
+    if (toggleBtn) {
+      if (ev.ctrlKey) return;
+      const tr = toggleBtn.closest("tr");
+      let target = null;
+      if (ev.key === "ArrowRight") target = tr.querySelector(".yn-plan-cell-btn");
+      else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+        let row = tr;
+        do row = ev.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+        while (row && !row.classList.contains("yn-me-plan-row"));
+        target = row?.querySelector(".yn-me-plan-toggle");
+      }
+      if (target) {
+        ev.preventDefault();
+        target.focus();
+      }
+      return;
+    }
     const btn = ev.target.closest?.(".yn-plan-cell-btn");
-    if (!btn || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)) return;
+    if (!btn) return;
     const td = btn.closest("td");
     const tr = td.closest("tr");
+    const cellsOf = (row) => row.querySelectorAll(".yn-plan-cell-btn");
     let target = null;
     if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+      if (ev.ctrlKey) return;
       target = (ev.key === "ArrowLeft" ? td.previousElementSibling : td.nextElementSibling)?.querySelector(".yn-plan-cell-btn");
-    } else {
+      // 最初の月から ← で名前（作業の行は人の行の名前）へ
+      if (!target && ev.key === "ArrowLeft") {
+        const owner = tr.classList.contains("yn-me-plan-row") ? tr : tr.parentElement.querySelector(`tr.yn-me-plan-row[data-member="${CSS.escape(tr.dataset.member ?? "")}"]`);
+        target = owner?.querySelector(".yn-me-plan-toggle") ?? null;
+      }
+    } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+      if (ev.ctrlKey) return;
       const idx = [...tr.children].indexOf(td);
       let row = tr;
       do row = ev.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
-      while (row && !(row.classList.contains("yn-me-plan-row") || (row.classList.contains("yn-me-plan-sub") && !row.classList.contains("is-empty"))));
+      while (row && !isGridRow(row));
       target = row?.children[idx]?.querySelector(".yn-plan-cell-btn");
+    } else if (ev.key === "Home" || ev.key === "End") {
+      const cells = cellsOf(tr);
+      target = ev.key === "Home" ? cells[0] : cells[cells.length - 1];
+      if (target === btn) target = null;
+    } else if (!ev.ctrlKey && !ev.shiftKey && cellOpeners.has(btn)) {
+      // 修正できないセル（申請中・保存後）は opener が無いので何もしない
+      const open = cellOpeners.get(btn);
+      if (ev.key === "F2") {
+        ev.preventDefault();
+        open({ viaKey: true });
+      } else if (/^[0-9.]$/.test(ev.key)) {
+        ev.preventDefault();
+        open({ viaKey: true, initial: ev.key });
+      } else if (ev.key === "Delete" || ev.key === "Backspace") {
+        ev.preventDefault();
+        open({ viaKey: true, initial: "" });
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        // ボタンの既定（click）より先に、キーで開いたことを伝える
+        ev.preventDefault();
+        open({ viaKey: true });
+      }
+      return;
     }
     if (target) {
       ev.preventDefault();
       target.focus();
     }
+  }
+
+  /** 名前の列（左に固定）の下にセルが隠れないよう、表を横にずらす（狭い画面で ← で戻ったとき） */
+  function revealCell(ev) {
+    const btn = ev.target;
+    if (!btn.classList?.contains("yn-plan-cell-btn")) return;
+    const wrap = btn.closest(".yn-table-wrap");
+    const head = btn.closest("tr")?.firstElementChild;
+    if (!wrap || !head) return;
+    const covered = head.getBoundingClientRect().right - btn.closest("td").getBoundingClientRect().left;
+    if (covered > 0) wrap.scrollLeft -= covered;
   }
 
   const SCOPE_KEY = "yojitsu-navi:plan-cell-scope";
@@ -2462,7 +2540,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
    * セルの編集欄。その月に掛かる案件ごとの人月・契約外予定・新しい案件の行。
    * 反映すると行を月で分けて書き直し、隣り合う同じ配分の行はまとめ直す
    */
-  function openCellEditor(r, month, anchor, focusTarget = null, fk = `plan:cell:${r.memberId}:all:${month}`) {
+  function openCellEditor(r, month, anchor, focusTarget = null, fk = `plan:cell:${r.memberId}:all:${month}`, { viaKey = false, initial = null } = {}) {
     const fyLast = plan.months[plan.months.length - 1];
     const name = r.name || fmt(T.masters.unknownMemberValue, { id: r.memberId });
     const active = memberPeriodRows("assignments", r.memberId).filter((a) => a.startMonth <= month && month <= a.endMonth);
@@ -2602,6 +2680,28 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       msg.textContent = "";
       if (confirmed) reset();
     });
+    // Enter で反映したら次の月のセルへ進む（§145）。マウスで反映・取り消したときは今のセルに戻る。
+    // 変換中の Enter（isComposing）は確定だけなので数えない
+    let enterSubmit = false;
+    let closeFk = fk;
+    form.addEventListener("keydown", (ev) => {
+      enterSubmit = ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229 && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey;
+    });
+    form.addEventListener("pointerdown", () => (enterSubmit = false));
+    const nextCellKey = () => {
+      const i = plan.months.indexOf(month);
+      return i >= 0 && i < plan.months.length - 1 ? fk.replace(new RegExp(`:${month}$`), `:${plan.months[i + 1]}`) : null;
+    };
+    /** Enter で反映したときだけ次の月へ（無ければ今のセルのまま） */
+    const advance = () => {
+      if (!enterSubmit) return;
+      const next = nextCellKey();
+      const el = next ? root.querySelector(`[data-fk="${CSS.escape(next)}"]`) : null;
+      if (!el) return;
+      // 閉じたときの「元のセルに戻す」は close イベント（後から来る）なので、戻す先も次の月にする
+      closeFk = next;
+      el.focus();
+    };
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
       const result = buildCellEdit();
@@ -2613,6 +2713,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       }
       if (!result.changes.length) {
         cellEditor.close();
+        advance();
         return;
       }
       const months = new Set();
@@ -2637,6 +2738,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       returnFocusKey = null;
       cellEditor.close();
       commitMany(result.changes, fk);
+      advance();
     });
 
     const isNum = (text) => text.trim() === "" || Number.isFinite(parseNumberCell(allocationFromInput(text, "personMonth", 0)));
@@ -2719,9 +2821,41 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       return { changes };
     }
 
-    cellEditor.open(anchor, form, { onClose: () => focusKey(fk) });
-    const first = focusTarget?.kind === "outside" ? (outs.find((o) => sameType(o.type, focusTarget.type ?? "") && !o.input.disabled)?.input ?? null) : focusTarget ? (inputs.find(({ a }) => projectOfContract(a.contractId).key === focusTarget.key)?.input ?? (focusTarget.kind === "project" ? proj.input : null)) : null;
-    const el = first ?? inputs[0]?.input ?? proj.input;
+    cellEditor.open(anchor, form, { onClose: () => focusKey(closeFk) });
+    // 作業の行で計画の無い月: その作業を選んだ状態で人月の欄から（この月に契約がある案件だけ。§145）
+    let presetNew = false;
+    if (focusTarget?.kind === "project" && !inputs.some(({ a }) => projectOfContract(a.contractId).key === focusTarget.key)) {
+      const p = cIndex().projects.get(focusTarget.key);
+      if (p && contractSegments(p.contracts, month, month).length) {
+        proj.setValue(focusTarget.key);
+        presetNew = true;
+        updateRooms();
+      }
+    }
+    const first = presetNew
+      ? newNum
+      : focusTarget?.kind === "outside"
+        ? (outs.find((o) => sameType(o.type, focusTarget.type ?? "") && !o.input.disabled)?.input ?? null)
+        : focusTarget
+          ? (inputs.find(({ a }) => projectOfContract(a.contractId).key === focusTarget.key)?.input ?? (focusTarget.kind === "project" ? proj.input : null))
+          : null;
+    // 人の行: 入っている値の欄（案件 → 運用保守以外）から。何も無ければ作業の選択から
+    const filled = [...inputs.map((x) => x.input), ...outs.filter((o) => !o.input.disabled && o.before !== "").map((o) => o.input)];
+    const el = first ?? filled[0] ?? proj.input;
+    // 数字・Delete で始めたとき（§145）: 最初に入る欄（Enter で開いたときと同じ欄）をその文字にする。
+    // 作業の選択から始めるときは人月の欄に入れて、作業を選ばせる
+    if (viaKey && initial !== null) {
+      const target = el === proj.input ? null : el;
+      if (target) {
+        target.value = initial;
+        updateRooms();
+        target.focus();
+        target.setSelectionRange?.(target.value.length, target.value.length);
+        return;
+      }
+      if (initial !== "") newNum.value = initial;
+      updateRooms();
+    }
     el.focus();
     el.select?.();
   }
