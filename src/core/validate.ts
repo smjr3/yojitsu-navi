@@ -436,7 +436,7 @@ function validateTitleRates(dataset: Dataset, push: IssueSink): void {
   for (const [title, ids] of byTitle) {
     const members = names.members([...ids]);
     const message = title === "" ? fmt(T.checks.memberNoTitleNoRate, { file, members }) : fmt(T.checks.titleRateUndefined, { file, title, members });
-    push({ severity: "warning", code: "MEMBER_RATE_UNDEFINED", message, file, ref: { title, count: ids.size } });
+    push({ severity: "warning", code: "MEMBER_RATE_UNDEFINED", message, file, ref: { title, count: ids.size, memberIds: [...ids].sort().join(",") } });
   }
 }
 

@@ -100,6 +100,8 @@ export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
   const sp = spanOf(p);
   const overPace = p.actual > p.paceToDate;
   const overCap = p.projection > p.cap;
+  // 経過した営業日の実績がまだ無い（月初・今月分を取り込む前・取り込みが止まった）ときは、目安内・上限内の緑を出さない（§61）
+  const noData = p.elapsedBusinessDays === 0;
   // 予実の KPI（.yn-kpi-grid）とは別の行。幅が足りれば 4 列、足りなければ 2×2
   const capSub = p.target ? (p.target.mixed ? T.daily.capSubMixed : fmt(T.daily.capSubTarget, { rate: ratePct(p.target.remainingRate), cap: ratePct(1 - p.target.remainingRate) })) : fmt(T.daily.capSub, { month: rangeText(p, startMonth) });
   return html`<section class="yn-daily-kpis" aria-label=${fmt(T.daily.kpiLabel, sp)}>${[
@@ -108,7 +110,7 @@ export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
         label: T.daily.actualLabel,
         value: money(p.actual, unit),
         sub: fmt(T.daily.actualSub, { pace: money(p.paceToDate, unit), elapsed: p.elapsedBusinessDays, total: p.businessDays }),
-        status: overPace ? { kind: "danger", text: T.daily.overPace } : { kind: "ok", text: T.daily.withinPace },
+        status: overPace ? { kind: "danger", text: T.daily.overPace } : noData ? null : { kind: "ok", text: T.daily.withinPace },
         breakdown: spec("actual"),
         id: "yn-daily-actual",
       }),
@@ -123,7 +125,7 @@ export function dailyKpis(p, { unit, subtitle, startMonth = 4 }) {
         label: fmt(T.daily.projectionLabel, sp),
         value: money(p.projection, unit),
         sub: fmt(T.daily.projectionSub, { diff: money(p.projection - p.cap, unit) }),
-        status: overCap ? { kind: "danger", text: T.daily.overCap } : { kind: "ok", text: T.daily.withinCap },
+        status: overCap ? { kind: "danger", text: T.daily.overCap } : noData ? null : { kind: "ok", text: T.daily.withinCap },
         breakdown: spec("projection"),
         id: "yn-daily-projection",
         emphasis: true,
