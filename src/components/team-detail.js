@@ -156,7 +156,7 @@ export function originLine(origin, unit) {
 /** メンバー表の氏名の横のチップ（応援・ヘルプ）。supportTitle は画面ごとの説明 */
 export function originChips(r, supportTitle) {
   const chips = [];
-  if (r.supportHours > 0) chips.push(html` <span class="yn-chip yn-chip-neutral" data-origin="support" title=${supportTitle}>${T.team.support}</span>`);
+  if (r.supportHours > 0 && r.supportAtLast !== false) chips.push(html` <span class="yn-chip yn-chip-neutral" data-origin="support" title=${supportTitle}>${T.team.support}</span>`);
   if (r.helpHours > 0) chips.push(html` <span class="yn-chip yn-chip-neutral yn-chip-help" data-origin="help" title=${r.memberUnknown ? T.team.helpUnknownTitle : T.team.helpTitle}>${T.team.help}</span>`);
   return chips;
 }
