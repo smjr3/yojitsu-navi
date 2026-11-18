@@ -1,0 +1,26 @@
+# Pull Request のコミットの作者・Co-authored-by が決まったアドレスだけかを確かめる（SPEC §151）
+# 仮の名前（x <x@x> など）や個人のアドレスがスカッシュマージで main に入り、Contributors に知らない人が出るのを防ぐ
+# どのファイルの変更でも動かす（ci.yml・docs.yml はファイルで絞るため別にする）。依存は入れない
+
+name: Commit authors
+
+on:
+  pull_request:
+
+concurrency:
+  group: commit-authors-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: コミットの作者の検査
+        run: node scripts/check-commit-authors.mjs "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

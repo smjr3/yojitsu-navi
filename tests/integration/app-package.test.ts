@@ -134,6 +134,9 @@ describe("パッケージの中身", () => {
     // 開発元だけの npm scripts は外す（中で使うファイルを配らないので）
     const scripts = JSON.parse(readFileSync(join(PKG, "template", "package.json"), "utf-8")).scripts;
     for (const s of tpl.DEV_SCRIPTS) expect(scripts[s]).toBeUndefined();
+    // 外した scripts をほかの scripts から呼ばない（npm run check の check:authors は開発元だけ。SPEC §151）
+    for (const [k, v] of Object.entries(scripts as Record<string, string>)) for (const s of tpl.DEV_SCRIPTS) expect(v, k).not.toContain(`npm run ${s}`);
+    expect(scripts.check).toBe(rootJson.scripts.check.replace("npm run check:authors && ", ""));
     expect(scripts.test).toBe(rootJson.scripts.test);
   });
 

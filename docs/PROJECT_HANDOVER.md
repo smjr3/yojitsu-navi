@@ -331,6 +331,7 @@ PR #1〜#80 はすべて main にマージ済み（#17 は #19 経由。#43・#6
 | `npm ci` で脆弱性 18 件（critical 2）（導入先、11-04） | Vitest 3 の依存・使っていない `exceljs` | Vitest 4・`exceljs` 削除。残りは理由を SPEC §84.2 に記載 |
 | `npm ci` で脆弱性 7 件・`esbuild` のインストールスクリプトが止められた警告（導入先、11-05） | Framework が古い `esbuild`・`glob` を要求していた。npm 12 が依存のスクリプトを既定で止める | `overrides` で 4 件に（残りの理由と予定は SPEC §84.2）。`allowScripts` で `esbuild` を許可（§84.3）。社内証明書に `NODE_USE_SYSTEM_CA`（docs/DEPLOY_GITLAB.md） |
 | 導入先の CI でテストに 20 分以上・本番の設定で失敗・サンプルの作業実績 13 MB が data/ に入った（0.2.0、11-04） | リポジトリ一式をそのまま配り、テストがリポジトリの config.json・data/ を読んでいた | 配るものを分ける（§93）。配るテストは運用の 9 ファイル、設定・データはテスト専用、data/ は空で作る。配ったファイルだけで型チェックとテストが通ることを統合テストで確かめる |
+| GitHub の Contributors に知らない人が出た（11-18） | 作業中の main の取り込みのコミットが仮の名前・アドレスで作られ、スカッシュマージの Co-authored-by に残った | 作者のアドレスを決まったものだけにする検査（`npm run check:authors`、PR の `commit-authors.yml`。SPEC §151）。CLAUDE.md・CONTRIBUTING.md に明記 |
 | 最終 QA の不具合 10 件 | ― | すべて修正済み。回帰テスト tests/e2e/qa-regressions.spec.ts、screen-text.spec.ts、モンキーテスト |
 
 ---
