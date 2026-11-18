@@ -10,6 +10,9 @@ import { T, fmt } from "../i18n/index.js";
 import { STATUS_LABELS, formatHours, formatPercent, maxFractionFormat, millions, money, monthJa, monthShort } from "./format.js";
 import { dataTable } from "./table.js";
 
+/** 予算の線の太さ（月次推移・今月の進捗・リソース計画の金額のグラフで同じ。§147） */
+export const BUDGET_LINE_WIDTH = 3.5;
+
 export function chartColors(dark) {
   return dark
     ? { budget: "#3987e5", cost: "#d95926", gp: "#199e70", surface: "#1e2533", text: "#bfc6d2", muted: "#8b93a1", grid: "#2d3545", axis: "#3a4354", danger: "#d03b3b", target: "#b38cf6" }
@@ -267,8 +270,8 @@ export function monthlyChart({ series, unit = "yen", dark = false, width = 640, 
       // 見込みのうち予算を超える分は薄い赤（速報の斜線の上に重ねても斜線が透けて見える）
       noBudget ? null : Plot.rectY(remaining.filter((d) => d.forecastCost > d.budget), { x1: (d) => d.i - half, x2: (d) => d.i + half, y1: "budget", y2: "forecastCost", fill: c.danger, fillOpacity: 0.35, stroke: c.danger, strokeWidth: 1, strokeDasharray: "3 2" }),
       // 予算の線は棒より前に出す（超えた分の境目が見えるように）
-      noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5 }),
-      !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: 2.5, strokeOpacity: 0.55 }) : null,
+      noBudget ? null : Plot.line(budgetPast, { x: "x", y: "y", stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH }),
+      !noBudget && budgetFuture.length ? Plot.line(budgetFuture, { x: "x", y: "y", stroke: c.budget, strokeWidth: BUDGET_LINE_WIDTH, strokeOpacity: 0.55 }) : null,
       // 目標の上限（予算 ×（1 − 目標の残予算率））: 予算と実績の棒をまたぐ紫の破線（§140）。実績の棒が線を超えたら目標を外れている
       !noBudget && targets.length ? Plot.ruleY(targets, { y: "targetCap", x1: (d) => d.i - half - 0.06, x2: (d) => d.i + half + 0.06, stroke: c.target, strokeWidth: 2, strokeDasharray: "4 2" }) : null,
       // 粗利（実績）
