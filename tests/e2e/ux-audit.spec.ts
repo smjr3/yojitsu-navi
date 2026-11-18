@@ -44,13 +44,14 @@ test("データ確認: 計算時の警告の参照・検証のコードは画面
   await expect(page.locator("#observablehq-main")).not.toContainText("ASSIGNMENT_AFTER_LEFT");
 });
 
-test("全体サマリーの組織別: 最上位の組織の下に直下の組織を一段下げて並べる", async ({ page }) => {
+test("全体サマリーの組織別: 最上位の組織の下に配下の組織を一段ずつ下げて並べる（§141 で全ての組織）", async ({ page }) => {
   await gotoPage(page, "/");
   const table = page.locator("#observablehq-main table.yn-table").filter({ has: page.locator(".yn-tree-indent") }).first();
-  await expect(table.locator(".yn-tree-toggle:not(.yn-tree-leaf)")).toHaveCount(1);
+  expect(await table.locator(".yn-tree-toggle:not(.yn-tree-leaf)").count()).toBeGreaterThan(1);
   const depths = await table.locator("tbody .yn-tree-indent").evaluateAll((els) => els.map((e) => getComputedStyle(e).getPropertyValue("--depth").trim()));
   expect(depths[0]).toBe("0");
   expect(depths.slice(1).some((d) => d === "1")).toBe(true);
+  expect(depths.slice(1).some((d) => d === "2")).toBe(true);
 });
 
 test("リソース計画（文字 特大・1280px）: 操作の列の「＋ 作業」が画面の中に見える", async ({ page }) => {
