@@ -211,8 +211,9 @@ if (vm) {
       isTimeline
         ? fmt(T.contracts.timelineHint, { period: periodJa(scope.period), team: scope.teamLabel })
         : fmt(T.contracts.sectionHint, { period: periodJa(scope.period), team: scope.teamLabel, method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }),
-      viewToggle,
+      null,
       outside > 0 && !f.showOutside ? fmt(T.contracts.hiddenOutside, { n: outside }) : null,
+      viewToggle,
     ),
   );
   const columns = [

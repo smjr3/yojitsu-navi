@@ -4981,11 +4981,6 @@ html:has(dialog.yn-dialog[open]) {
   min-width: 160px;
   max-width: 420px;
 }
-.yn-org-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
 .yn-org-legend {
   display: flex;
   flex-wrap: wrap;
@@ -5895,5 +5890,26 @@ a.yn-org-person:hover {
 @media (min-width: 720px) and (max-width: 1023px) {
   .yn-tl {
     --yn-tl-label: 220px;
+  }
+}
+
+/* 表示の切り替え（表／体制図・表／期間・まとめ方・色の基準）は見出しのすぐ下の左（SPEC §144）。
+   リンク・「列」・Excel 出力は従来どおり右 */
+.yn-section-switch {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.yn-switch-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+@media print {
+  .yn-section-switch {
+    display: none !important;
   }
 }

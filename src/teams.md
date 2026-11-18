@@ -21,7 +21,7 @@ import * as bd from "./components/breakdown.js";
 import { hasTargets, targetColumn } from "./components/targets.js";
 import { money, monthJa, periodJa, METHOD_LABELS } from "./components/format.js";
 import { PLAN_GAP_MIN_HOURS, PLAN_GAP_RATIO } from "./core/index.js";
-import { orgChartView, clampOrgMonth } from "./components/org-chart.js";
+import { orgChartView, orgColorSwitch, clampOrgMonth } from "./components/org-chart.js";
 ```
 
 ```js
@@ -132,7 +132,7 @@ const viewToggle = (current) => {
 if (vm && viewState.view === "chart" && memberMonths) {
   // 体制図（表示だけ。§76）
   const month = clampOrgMonth(model, viewState.month, vm.scope.treeMonth);
-  display(sectionTitle(T.orgChart.title, fmt(T.orgChart.hint, { month: monthJa(month), minHours: PLAN_GAP_MIN_HOURS, ratio: Math.round(PLAN_GAP_RATIO * 100) }), viewToggle("chart")));
+  display(sectionTitle(T.orgChart.title, fmt(T.orgChart.hint, { month: monthJa(month), minHours: PLAN_GAP_MIN_HOURS, ratio: Math.round(PLAN_GAP_RATIO * 100) }), null, null, [viewToggle("chart"), orgColorSwitch({ color: viewState.color, onChange: (patch) => setView(patch) })]));
   display(orgChartView({ model: { ...model, memberMonths }, store, state, month, color: viewState.color, onChange: (patch) => setView(patch), restorePeriod: vm.scope.period }));
 }
 if (refocus.sel) {
@@ -142,7 +142,7 @@ if (refocus.sel) {
 }
 if (vm && viewState.view === "table") {
   const { scope, rows, unit } = vm;
-  display(sectionTitle(T.teams.sectionTitle, fmt(T.teams.sectionHint, { period: periodJa(scope.period), month: monthJa(scope.treeMonth), method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }), viewToggle("table")));
+  display(sectionTitle(T.teams.sectionTitle, fmt(T.teams.sectionHint, { period: periodJa(scope.period), month: monthJa(scope.treeMonth), method: METHOD_LABELS[vm.method], fy: model.meta.fiscalYear }), null, null, viewToggle("table")));
   if (scope.period.to < model.meta.asOfMonth) {
     display(note(fmt(T.teams.orgNote, { month: monthJa(scope.period.to), asOfMonth: monthJa(model.meta.asOfMonth) })));
   }

@@ -286,8 +286,9 @@ if (vm) {
     sectionTitle(
       T.members.sectionTitle,
       fmt(T.members.sectionHint, { period: periodJa(period), elapsed: period.to !== vm.fullPeriod.to ? T.members.elapsedSuffix : "", month: monthJa(vm.baseMonth) }),
-      spotBtn,
+      null,
       leftN ? fmt(T.members.hiddenLeft, { n: leftN }) : null,
+      spotBtn,
     ),
   );
   const monthsOf = (r) => (monthsByMember.get(r.memberId) ?? []).filter((mm) => period.from <= mm.month && mm.month <= period.to);

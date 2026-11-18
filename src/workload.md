@@ -51,7 +51,7 @@ const state = Generators.observe((notify) => {
 ```
 
 ```js
-// 集計の軸（URL の axis。ストアの外＝このページだけ）
+// 集計の軸（URL の axis。ストアの外＝このページだけ）。表の見出しのすぐ下の左に出す（SPEC §144。描き直しても同じ要素を移す）
 const AXES = [
   { id: "team", label: T.work.axisTeam },
   { id: "customer", label: T.work.axisCustomer },
@@ -59,7 +59,7 @@ const AXES = [
 ];
 const axisControl = (() => {
   const initial = new URLSearchParams(location.search).get("axis");
-  const form = html`<div class="yn-chip-filters yn-work-axis"><span class="yn-filter-label" id="yn-axis-label">${T.work.axisLabel}</span></div>`;
+  const form = html`<div class="yn-switch-field yn-work-axis"><span class="yn-filter-label" id="yn-axis-label">${T.work.axisLabel}</span></div>`;
   const group = html`<div class="yn-seg" role="group" aria-labelledby="yn-axis-label"></div>`;
   form.value = AXES.some((a) => a.id === initial) ? initial : "team";
   const btns = AXES.map((a) => {
@@ -174,10 +174,6 @@ if (vm) {
 ```
 
 ```js
-if (axisControl) display(axisControl);
-```
-
-```js
 const axis = axisControl ? Generators.input(axisControl) : "team";
 ```
 
@@ -187,7 +183,7 @@ if (vm) {
   const { period } = vm;
   const groups = aggregateWork(model, vm.rows, { period, axis, tree: vm.scope.tree, unassignedLabel: axis === "customer" ? T.numbers.noCustomerName : T.members.noTeam });
   const label = AXES.find((a) => a.id === axis)?.label ?? "";
-  display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) })));
+  display(sectionTitle(fmt(T.work.tableTitle, { axis: label }), fmt(axis === "team" ? T.work.tableHintTeam : axis === "customer" ? T.work.tableHintCustomer : T.work.tableHintMember, { period: periodJa(period), month: monthJa(vm.baseMonth) }), null, null, axisControl));
   // 分布のグラフ（チームは末端の組織だけ。上位は配下の合計で二重になるため）
   const chartGroups = axis === "team" ? groups.filter((g) => !g.hasChildren) : groups;
   // 画面内は上位 20 件。拡大表示では全件を出す（行が多ければダイアログ内で縦にスクロール）

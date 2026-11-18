@@ -98,11 +98,15 @@ export function infoTip(content, { label = T.layout.infoLabel } = {}) {
   return root;
 }
 
-/** セクション見出し。説明（hint）は「?」に入れ、status（非表示件数など今の状態）は見出しの下に出す */
-export function sectionTitle(title, hint, actions = null, status = null) {
+/**
+ * セクション見出し。説明（hint）は「?」に入れ、status（非表示件数など今の状態）は見出しの下に出す。
+ * actions（リンク・ボタン）は右、switcher（表示の切り替え: 表／体制図・まとめ方など）は見出しのすぐ下の左（SPEC §144）
+ */
+export function sectionTitle(title, hint, actions = null, status = null, switcher = null) {
   return html`<div class="yn-section-head">
     <div><div class="yn-title-with-tip"><h2 class="yn-section-title">${title}</h2>${hint ? infoTip(hint, { label: tipLabel(T.layout.aboutSection, title) }) : null}</div>${status ? html`<p class="yn-section-hint">${status}</p>` : null}</div>
     ${actions ? html`<div class="yn-section-actions">${actions}</div>` : null}
+    ${switcher ? html`<div class="yn-section-switch">${switcher}</div>` : null}
   </div>`;
 }
 
