@@ -86,6 +86,8 @@ describe("検証（DUMMY_DATA.md「検証結果の期待値」）", () => {
     expect(issues.find((i) => i.code === "TASK_UNCLASSIFIED")?.ref?.task).toBe("勉強会");
     // 単価の無い役職: 技術顧問（基本シナリオ M025）・専門職（実運用規模の 1 人）・パートナー（個人単価の無いパートナー 1 人）
     expect(issues.filter((i) => i.code === "MEMBER_RATE_UNDEFINED").map((i) => i.ref?.title).sort()).toEqual(["パートナー", "専門職", "技術顧問"]);
+    // リソース計画で組織を選んだときに畳めるよう、対象の社員番号を持つ（§133）
+    for (const i of issues.filter((x) => x.code === "MEMBER_RATE_UNDEFINED")) expect(String(i.ref?.memberIds).split(",").length).toBe(i.ref?.count);
     expect(issues.find((i) => i.code === "UNKNOWN_MEMBER")?.ref?.memberId).toBe("M099");
     // 単価なしの 3 人は、どの人も全 19 か月
     const missing = issues.filter((i) => i.code === "RATE_MISSING");

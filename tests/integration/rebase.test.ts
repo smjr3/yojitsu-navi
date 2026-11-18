@@ -55,6 +55,18 @@ describe("rebaseModel", () => {
     expect(comparable(rebased)).toEqual(comparable(fresh));
   });
 
+  it("取り込みが前月の確定日より前で止まっていれば、確定日を過ぎても前月は速報のまま（§8・§133）", () => {
+    expect(dataset.worklogFetchedAt?.slice(0, 10)).toBe(BASE);
+    const rebased = rebaseModel(base, plusDays(22)); // 11 月の確定日（第 3 営業日）の後
+    expect(rebased.meta.lastFinalMonth).toBe("2026-09");
+    const oct = rebased.contracts.flatMap((r) => r.months.filter((cm) => cm.month === "2026-10"));
+    expect(oct.length).toBeGreaterThan(0);
+    expect(oct.every((cm) => cm.status === "preliminary")).toBe(true);
+    // 取り込みが追いつけば確定
+    const caughtUp = buildModel({ ...dataset, worklogFetchedAt: `${plusDays(22)}T09:00:00+09:00` }, { asOf: plusDays(22), generatedAt: GEN });
+    expect(caughtUp.meta.lastFinalMonth).toBe("2026-10");
+  });
+
   it("同じ日なら元の Model をそのまま返し、元の Model は変えない", () => {
     expect(rebaseModel(base, BASE)).toBe(base);
     const before = JSON.stringify(comparable(base));

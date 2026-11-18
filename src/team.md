@@ -48,6 +48,19 @@ const state = Generators.observe((notify) => {
 ```
 
 ```js
+// 上部のタブ（全体・顧客・案件・メンバー・稼働実績）とリソース計画へは、このチームで絞ったまま移る（§133）
+if (vm && vm.exists !== false) {
+  const tabs = ["./", "./customers", "./contracts", "./members", "./workload"];
+  for (const a of document.querySelectorAll(".yn-topbar a.yn-tab, .yn-topbar a.yn-tool")) {
+    a.dataset.ynPage ??= a.getAttribute("href") ?? "";
+    const page = a.dataset.ynPage;
+    if (tabs.includes(page)) a.href = store.href(page, { team: vm.teamId });
+    else if (page === "./plan" && !vm.isUnassigned) a.href = `./plan?team=${encodeURIComponent(vm.teamId)}`;
+  }
+}
+```
+
+```js
 // 画面の状態（期間・単位・方式）と ?id= から、このチームの母集団（配下含む契約）を決める
 const vm = (() => {
   if (!model || !state) return null;

@@ -158,11 +158,12 @@ if (store && exists) mountFilterBar(store, model, { show: ["period", "outside", 
 ```
 
 ```js
-// 今月の残り（§113）。期間の絞り込み・運用保守以外のチェックに関係なく、今月（開いた人の今日の月）の計画と実績
+// 今月の残り（§113）。期間の絞り込みに関係なく、今月（開いた人の今日の月）の計画と実績。
+// 運用保守以外は、下の表・グラフと数字が合うよう「運用保守以外を含む」に従う（§133）
 if (vm) {
   const month = model.meta.asOfMonth;
   const contracts = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
-  const rows = myHoursRows(allMonths.find((mm) => mm.month === month), (id) => contracts.get(id));
+  const rows = myHoursRows(allMonths.find((mm) => mm.month === month), (id) => contracts.get(id)).filter((r) => state.outside === "1" || r.contractId !== null);
   display(sectionTitle(fmt(T.myHours.sectionTitle, { month: monthJa(month) }), T.myHours.sectionHint));
   display(myHoursCard(document, { rows }, T.myHours));
 }

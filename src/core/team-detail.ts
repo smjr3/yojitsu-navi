@@ -164,6 +164,11 @@ export interface TeamMemberCost {
   /** 応援（所属が teamScope の外）の時間・原価。teamScope を渡さなければ 0 */
   supportHours: number;
   supportAmount: number;
+  /**
+   * 今の所属（期間内で最後に作業した月の所属チーム）のまま応援した作業があるか。氏名の横の「応援」の印はこれで決める。
+   * 異動してきた人は異動前の月の作業が応援に数えられるが、今はこのチームの人なので印を付けない（§133）
+   */
+  supportAtLast: boolean;
   /** ヘルプ（所属チームなし・メンバーマスタに無い人）の時間・原価 */
   helpHours: number;
   helpAmount: number;
@@ -189,7 +194,7 @@ export function teamMemberCosts(
   teamScope: ReadonlySet<string> | null | ((contractId: string) => ReadonlySet<string> | null) = null,
 ): TeamMemberCost[] {
   const set = new Set(contractIds);
-  const acc = new Map<string, TeamMemberCost & { months: Set<YearMonth>; contracts: Set<string>; teams: Set<string>; rateSet: Set<number>; orgs: Set<string> }>();
+  const acc = new Map<string, TeamMemberCost & { lastMonth: YearMonth | ""; lastTeam: string | null; supportTeams: Set<string | null>; months: Set<YearMonth>; contracts: Set<string>; teams: Set<string>; rateSet: Set<number>; orgs: Set<string> }>();
   const known = new Set(model.members.map((m) => m.memberId));
   let total = 0;
   for (const r of model.contracts as ContractResult[]) {
@@ -200,7 +205,7 @@ export function teamMemberCosts(
       for (const l of cm.costLines) {
         let a = acc.get(l.memberId);
         if (!a) {
-          a = { memberId: l.memberId, memberName: l.memberName, hours: 0, amount: 0, monthCount: 0, contractIds: [], teamIds: [], rateMissing: false, rates: [], supportHours: 0, supportAmount: 0, helpHours: 0, helpAmount: 0, memberUnknown: !known.has(l.memberId), orgLabels: [], share: null, months: new Set(), contracts: new Set(), teams: new Set(), rateSet: new Set(), orgs: new Set() };
+          a = { memberId: l.memberId, memberName: l.memberName, hours: 0, amount: 0, monthCount: 0, contractIds: [], teamIds: [], rateMissing: false, rates: [], supportHours: 0, supportAmount: 0, supportAtLast: false, lastMonth: "", lastTeam: null, supportTeams: new Set(), helpHours: 0, helpAmount: 0, memberUnknown: !known.has(l.memberId), orgLabels: [], share: null, months: new Set(), contracts: new Set(), teams: new Set(), rateSet: new Set(), orgs: new Set() };
           acc.set(l.memberId, a);
         }
         a.hours += l.hours;
@@ -211,6 +216,11 @@ export function teamMemberCosts(
         a.rateSet.add(l.hourlyRate);
         if (l.memberTeamId) a.teams.add(l.memberTeamId);
         const origin = workOriginOf(l.memberTeamId, scope);
+        if (cm.month > a.lastMonth) {
+          a.lastMonth = cm.month;
+          a.lastTeam = l.memberTeamId ?? null;
+        }
+        if (origin === "support") a.supportTeams.add(l.memberTeamId ?? null);
         if (origin === "help") {
           a.helpHours += l.hours;
           a.helpAmount += l.amount;
@@ -225,7 +235,7 @@ export function teamMemberCosts(
     }
   }
   return [...acc.values()]
-    .map(({ months, contracts, teams, rateSet, orgs, ...a }) => ({ ...a, monthCount: months.size, contractIds: [...contracts].sort(), teamIds: [...teams].sort(), rates: [...rateSet].sort((x, y) => x - y), orgLabels: [...orgs].sort(), share: total !== 0 ? a.amount / total : null }))
+    .map(({ months, contracts, teams, rateSet, orgs, lastMonth: _lastMonth, lastTeam, supportTeams, ...a }) => ({ ...a, supportAtLast: supportTeams.has(lastTeam), monthCount: months.size, contractIds: [...contracts].sort(), teamIds: [...teams].sort(), rates: [...rateSet].sort((x, y) => x - y), orgLabels: [...orgs].sort(), share: total !== 0 ? a.amount / total : null }))
     .sort((a, b) => b.amount - a.amount || (a.memberId < b.memberId ? -1 : a.memberId > b.memberId ? 1 : 0));
 }
 
