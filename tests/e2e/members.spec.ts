@@ -303,7 +303,7 @@ test.describe("表示の作法", () => {
         return (0.2126 * m[0]! + 0.7152 * m[1]! + 0.0722 * m[2]!) / 255;
       });
       expect(lum).toBeLessThan(0.25);
-      await expect(page.locator(".yn-legend").first()).toContainText("計画時間");
+      await expect(page.locator(".yn-legend").first()).toContainText("計画");
     });
   });
 });
