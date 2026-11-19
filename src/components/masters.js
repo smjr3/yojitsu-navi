@@ -3017,6 +3017,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ${value !== "" && !opts.includes(value) ? html`<option value=${value} selected>${value}</option>` : null}
       </select>`;
     }
+    if (col.name === "note") {
+      // メモは複数行を書ける（CSV の改行入りのメモを 1 行の欄で読み込むと改行が消え、ほかの列だけ直しても書き戻してしまうため。§152）
+      const ta = html`<textarea id=${id} name=${col.name} class="yn-input yn-me-note" rows="2" disabled=${disabled} autocomplete="off" aria-describedby=${`${id}-hint`}></textarea>`;
+      ta.value = value;
+      return ta;
+    }
     return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
   }
 
@@ -3111,8 +3117,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     const isOriginal = !!(row && doc.originals[row.id]);
     // 画面で足す行（§103 の案件）は、保存するまで取り込みの列も入れられる
     const newRow = !!def.addable && ((mode === "add" && !template) || (mode === "edit" && !isOriginal));
-    // 正式な案件ID の無い案件（取り込みで書き換わらない行。§137）は、登録済みでも正式な案件を選んで結び付けるか、顧客名・案件名を直せる
-    const linkable = fileId === "contracts" && !!row && cellOf(doc, row, "project_id") === "";
+    // 正式な案件ID の無い案件（取り込みで書き換わらない行。§137）は、登録済みでも正式な案件を選んで結び付けるか、顧客名・案件名を直せる。
+    // 結び付いた案件も、正式な案件の一覧があれば結び付け先を選び直す・外すことができる（顧客名・案件名は選んだ正式な案件の値。§152）
+    const linkable = fileId === "contracts" && !!row && (cellOf(doc, row, "project_id") === "" || officialProjects().length > 0);
     const importedCol = (name) => !!def.editableColumns && !def.editableColumns.includes(name) && !newRow && !(linkable && CONTRACT_LINK_COLUMNS.includes(name));
     // 目標の対象の種類は、対象の欄（種類:ID）でまとめて入れる
     // 取り込む列（案件の顧客名・案件名など。§80）は入力欄にせず、上に値だけ出す

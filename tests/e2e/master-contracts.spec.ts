@@ -1,7 +1,7 @@
 /**
  * マスタ編集「案件」タブ（SPEC §80）
  * - contracts.csv の全行を、顧客・案件名・開始月・終了月・金額・担当チームで一覧（担当チームは名前、金額は円）
- * - 変えられるのは期間・金額・担当チームだけ（顧客名・案件名などは他システムから取り込む）。追加・削除・CSV で編集は無い
+ * - 変えられるのは期間・金額・担当チーム・メモ（顧客名・案件名は正式な案件の値。結び付け先は選び直せる §152）。追加・削除・CSV で編集は無い
  * - 期間の修正 → ダウンロードした CSV は期間だけ変わり変更日付き
  * - 金額の修正は、過去の月の予算が変わることを確認で知らせる
  * - 390px・ダークで横スクロールしない
@@ -45,7 +45,7 @@ test("一覧: 全案件を顧客・案件名・期間・金額・担当チーム
   await expect(rows.first()).toContainText(`${max.toLocaleString("ja-JP")}円`);
 });
 
-test("登録済みの案件の顧客名・案件名は変えられない（他システムから取り込む）。担当チームは変えられる。取り込み済みの行の削除・CSV で編集は無い（追加は §103 の「＋ 新しい案件」）", async ({ page }) => {
+test("登録済みの案件の顧客名・案件名は直接変えられない（正式な案件の名前。結び付け先は選び直せる §152）。担当チーム・メモは変えられる。取り込み済みの行の削除・CSV で編集は無い（追加は §103 の「＋ 新しい案件」）", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   await expect(page.getByRole("button", { name: /新しい案件/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "CSV で編集" })).toHaveCount(0);
@@ -53,14 +53,18 @@ test("登録済みの案件の顧客名・案件名は変えられない（他�
   await expect(first.getByRole("button", { name: "削除" })).toHaveCount(0);
   await first.getByRole("button", { name: "修正" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  // 取り込む列は入力欄にせず、値だけ見せる
-  for (const name of ["contract_id", "customer_name", "project_name", "note"]) await expect(d.locator(`#yn-me-f-${name}`)).toHaveCount(0);
+  // 案件ID は値だけ見せる。顧客名・案件名は結び付けた正式な案件の値で、直接は変えられない（§152）
+  await expect(d.locator("#yn-me-f-contract_id")).toHaveCount(0);
   const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
   const rec = rowRecord(doc, doc.rows[0]!);
-  await expect(d.locator(".yn-me-fixed")).toContainText(rec.customer_name!);
-  await expect(d.locator(".yn-me-fixed")).toContainText(rec.project_name!);
+  await expect(d.locator(".yn-me-fixed")).toContainText(rec.contract_id!);
   await expect(d).toContainText("他システムから取り込むため変更できません");
-  for (const name of ["start_month", "end_month", "total_amount", "team_id"]) await expect(d.locator(`#yn-me-f-${name}`)).toBeEnabled();
+  await expect(d.locator("#yn-me-f-customer_name")).toBeDisabled();
+  await expect(d.locator("#yn-me-f-customer_name")).toHaveValue(rec.customer_name!);
+  await expect(d.locator("#yn-me-f-project_name")).toBeDisabled();
+  await expect(d.locator("#yn-me-f-project_name")).toHaveValue(rec.project_name!);
+  for (const name of ["start_month", "end_month", "total_amount", "team_id", "note"]) await expect(d.locator(`#yn-me-f-${name}`)).toBeEnabled();
+  await expect(d.locator("#yn-me-f-note")).toHaveValue(rec.note!);
   // 担当チームを変えると、始まっている月のチーム別の集計が変わる確認 → 一覧に新しいチーム名
   const other = rec.team_id === "T121" ? "T111" : "T121";
   await d.locator("#yn-me-f-team_id").selectOption(other);
@@ -93,6 +97,60 @@ test("期間の修正: 予算の月割りが変わるので過去の月にかか
   const text = readFileSync((await dl.path())!, "utf-8");
   const today = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()));
   expect(text).toBe(serializeMasterDoc(stampChangedRows(updateRow(doc, target.id, { end_month: newEnd }), "", today)).text);
+});
+
+test("メモの修正（§152）: 登録済みの案件のメモを後から直せる。予算・集計は変わらないので確認は出ず、CSV はメモだけ変わる。長いメモ・カンマ・引用符もそのまま", async ({ page }) => {
+  await gotoPage(page, "/masters?view=contracts");
+  const doc = parseMasterDoc("contracts", CONTRACTS_TEXT);
+  const target = doc.rows[0]!;
+  const note = `更新時に金額見直し、"要確認" ${"とても長いメモ".repeat(20)}`;
+  const row = page.locator(`table.yn-me-table tbody tr[data-key="${target.id}"]`);
+  await row.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await d.locator("#yn-me-f-note").fill(note);
+  await d.locator('[data-role="submit"]').click();
+  await expect(d.locator(".yn-me-impact")).toHaveCount(0);
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(row).toContainText("変更");
+  await expect(row).toContainText("とても長いメモ");
+  // 長いメモでも画面は横にはみ出さない
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /contracts\.csv をダウンロード/ }).click()]);
+  const text = readFileSync((await dl.path())!, "utf-8");
+  const today = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()));
+  expect(text).toBe(serializeMasterDoc(stampChangedRows(updateRow(doc, target.id, { note }), "", today)).text);
+  // 元に戻すと変更なし
+  await row.getByRole("button", { name: "元に戻す" }).click();
+  await expect(row).not.toContainText("変更");
+});
+
+test("改行入りのメモ（§152・Codex 指摘）: メモは複数行の欄で、金額だけ直しても改行は消えない。ダウンロードした CSV は金額だけ変わる", async ({ page }) => {
+  const note = "1行目\n2行目";
+  const text = CONTRACTS_TEXT.replace(/^(C001,.*?,48000000,)FY2025/m, `$1"${note}"`);
+  expect(text).not.toBe(CONTRACTS_TEXT);
+  await page.route(/\/_file\/data\/masters\.[^/]*json/, async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    await route.fulfill({ response: res, body: JSON.stringify({ ...json, files: { ...json.files, contracts: { ...json.files.contracts, text } } }), headers: { ...res.headers(), "content-type": "application/json" } });
+  });
+  await gotoPage(page, "/masters?view=contracts");
+  const doc = parseMasterDoc("contracts", text);
+  const target = doc.rows.find((r) => rowRecord(doc, r).contract_id === "C001")!;
+  expect(rowRecord(doc, target).note).toBe(note);
+  const row = page.locator(`table.yn-me-table tbody tr[data-key="${target.id}"]`);
+  await row.getByRole("button", { name: "修正" }).click();
+  const d = page.locator("dialog.yn-me-dialog[open]");
+  await expect(d.locator("textarea#yn-me-f-note")).toHaveValue(note);
+  await d.locator("#yn-me-f-total_amount").fill("50000000");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d.locator(".yn-me-change-list")).not.toContainText("メモ");
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: /contracts\.csv をダウンロード/ }).click()]);
+  const out = readFileSync((await dl.path())!, "utf-8");
+  const today = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date()));
+  expect(out).toBe(serializeMasterDoc(stampChangedRows(updateRow(doc, target.id, { total_amount: "50000000" }), "", today)).text);
 });
 
 test("金額の修正は過去の月の予算が変わることを知らせる。「48,000,000円」のような書き方も数値として並べる", async ({ page }) => {

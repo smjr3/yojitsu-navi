@@ -140,8 +140,9 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
       { name: "leader_member_id", label: T.masterFiles.colLeader, input: "member", required: false },
     ],
   },
-  // 案件（§80）。1 行 = 1 契約。顧客名・案件名は案件管理システムから取り込むので、画面で変えられるのは期間・金額・担当チームだけ。
-  // ただし正式な案件ID の無い行（取り込みで書き換わらない行）は、正式な案件を選んで結び付けるか、顧客名・案件名を直せる（§137）
+  // 案件（§80）。1 行 = 1 契約。顧客名・案件名は案件管理システムから取り込むので、画面で変えられるのは期間・金額・担当チーム・メモだけ（§152）。
+  // ただし正式な案件ID の無い行（取り込みで書き換わらない行）は、正式な案件を選んで結び付けるか、顧客名・案件名を直せる（§137）。
+  // 正式な案件ID のある行も、正式な案件の一覧があれば結び付け先を選び直せる（§152。masters.js の linkable）
   contracts: {
     id: "contracts",
     path: "data/contracts.csv",
@@ -150,7 +151,7 @@ export const MASTER_FILES: Record<MasterFileId, MasterFileDef> = {
     history: "list",
     keyColumns: ["contract_id"],
     placeAfter: ["customer_name"],
-    editableColumns: ["start_month", "end_month", "total_amount", "team_id"],
+    editableColumns: ["start_month", "end_month", "total_amount", "team_id", "note"],
     addable: true,
     columns: [
       { name: "contract_id", label: T.masterFiles.colContractKey, input: "text", required: true },
