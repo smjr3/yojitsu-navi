@@ -35,14 +35,36 @@ test("正式な案件IDの無い案件（候補つき）とマスタに無い正
   expect(names).toContain("電子カルテ連携保守");
 });
 
-test("マスタ編集の案件: 正式な案件IDは修正のダイアログに値だけ出る（一覧の列にはしない）", async ({ page }) => {
+test("マスタ編集の案件: 正式な案件IDは一覧の列にしない。結び付いた案件は修正のダイアログで結び付け先を選び直せ、顧客名・案件名は選んだ正式な案件の値になる（SPEC §152）", async ({ page }) => {
   await gotoPage(page, "/masters?view=contracts");
   await expect(page.getByRole("columnheader", { name: /正式な案件ID/ })).toHaveCount(0);
   const first = page.locator("table.yn-me-table tbody tr.yn-me-group").first();
   await first.getByRole("button", { name: "修正" }).click();
   const d = page.locator("dialog.yn-me-dialog[open]");
-  await expect(d.locator("#yn-me-f-project_id")).toHaveCount(0);
-  await expect(d.locator(".yn-me-fixed")).toContainText(/PJ-\d{4}/);
+  const pick = d.locator("#yn-me-f-project_id");
+  await expect(pick).toBeEnabled();
+  await expect(pick).toHaveValue(/\S/);
+  await expect(d.locator("#yn-me-f-customer_name")).toBeDisabled();
+  // 別の正式な案件を選ぶと、顧客名・案件名もその値になる
+  await pick.fill("監視基盤");
+  const opt = d.locator("#yn-me-f-project_id-listbox li.yn-combo-opt").first();
+  await expect(opt).toContainText("監視基盤更改");
+  await opt.click();
+  await expect(d.locator("#yn-me-f-project_name")).toHaveValue("監視基盤更改");
+  await expect(d.locator("#yn-me-f-project_name")).toBeDisabled();
+  await d.locator('[data-role="submit"]').click();
+  await expect(d.locator(".yn-me-change-list")).toContainText(/正式な案件ID: .*→ 監視基盤更改（PJ-\d{4}）/);
+  await d.locator('[data-role="submit"]').click();
+  await expect(d).toHaveCount(0);
+  await expect(first).toContainText("監視基盤更改");
+  await expect(first).toContainText("変更");
+  // 結び付けを外すと、顧客名・案件名を直せる（§137 と同じ）
+  await first.getByRole("button", { name: "修正" }).click();
+  await pick.fill("");
+  await pick.blur();
+  await expect(d.locator("#yn-me-f-customer_name")).toBeEnabled();
+  await expect(d.locator("#yn-me-f-project_name")).toBeEnabled();
+  await d.getByRole("button", { name: "キャンセル" }).click();
 });
 
 test("マスタ編集の案件: 正式な案件IDの無い案件は正式な案件を案件名で選んで結び付けられる。選ぶと顧客名・案件名は正式な値で変えられない（SPEC §137）", async ({ page }) => {
@@ -73,10 +95,10 @@ test("マスタ編集の案件: 正式な案件IDの無い案件は正式な案�
   await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   await expect(row).toContainText("変更");
-  // 結び付けた後は取り込みで書き換わる行なので、顧客名・案件名は変えられない
+  // 結び付けた後は取り込みで書き換わる行なので、顧客名・案件名は直接変えられない（結び付け先は選び直せる。§152）
   await row.getByRole("button", { name: "修正" }).click();
-  await expect(d.locator("#yn-me-f-customer_name")).toHaveCount(0);
-  await expect(d.locator(".yn-me-fixed")).toContainText(/PJ-\d{4}/);
+  await expect(d.locator("#yn-me-f-customer_name")).toBeDisabled();
+  await expect(d.locator("#yn-me-f-project_id")).toHaveValue("電子カルテ連携保守");
 });
 
 test("マスタ編集の案件: 正式な案件IDの無い案件は顧客を候補から選んで直せる（新しい顧客名も書ける。SPEC §137）", async ({ page }) => {
