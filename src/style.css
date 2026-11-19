@@ -2746,6 +2746,10 @@ li.is-jumped,
 .yn-me-combo {
   display: block;
 }
+.yn-me-fields textarea.yn-me-note {
+  resize: vertical;
+  min-height: 3.2em;
+}
 .yn-me-req {
   color: var(--yn-text-muted);
 }

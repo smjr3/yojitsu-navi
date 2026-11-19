@@ -3017,6 +3017,12 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
         ${value !== "" && !opts.includes(value) ? html`<option value=${value} selected>${value}</option>` : null}
       </select>`;
     }
+    if (col.name === "note") {
+      // メモは複数行を書ける（CSV の改行入りのメモを 1 行の欄で読み込むと改行が消え、ほかの列だけ直しても書き戻してしまうため。§152）
+      const ta = html`<textarea id=${id} name=${col.name} class="yn-input yn-me-note" rows="2" disabled=${disabled} autocomplete="off" aria-describedby=${`${id}-hint`}></textarea>`;
+      ta.value = value;
+      return ta;
+    }
     return html`<input id=${id} name=${col.name} class="yn-input" type="text" value=${value} required=${req} disabled=${disabled} autocomplete="off" inputmode=${col.input === "number" ? "decimal" : null} aria-describedby=${`${id}-hint`}>`;
   }
 
