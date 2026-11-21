@@ -6,7 +6,7 @@
  *   - 月次推移の単位（日・週・月・四半期・年度）と計画の線、棒を押すと作業した人
  *   - 色: 実績の側（運用保守＝橙）。紫（目標）は使わない
  */
-import { aggregateWork, compareWorkPlan, confirmedPeriodOf, filterWorkRows, groupWorkPlans, isUnknownMember, memberLeftAt, personMonths, workPlanRows } from "../../src/core/index.js";
+import { aggregateWork, compareWorkPlan, confirmedPeriodOf, filterWorkRows, groupWorkPlans, isUnknownMember, memberLeaveKindAt, memberLeftAt, personMonths, workPlanRows } from "../../src/core/index.js";
 import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, dialog, query, showAllRows } from "./helpers/app.js";
 import { fiscalPeriod, getModel } from "./helpers/core.js";
 
@@ -26,7 +26,8 @@ const contractLabel = (id: string) => {
 const byMember = aggregateWork(model, inFy, { period: FY, axis: "member", unassignedLabel: "-" });
 const plansByMember = groupWorkPlans(plansFy, (p) => p.memberId);
 const cmpOf = (g: (typeof byMember)[number]) => compareWorkPlan(plansByMember.get(g.key) ?? [], g.rows, judged);
-const shown = byMember.filter((g) => memberLeftAt(model, g.key, BASE) === null);
+// 終了した人だけ隠す（一時不在の人は出す。§155）
+const shown = byMember.filter((g) => memberLeftAt(model, g.key, BASE) === null || memberLeaveKindAt(model, g.key, BASE) === "temporary");
 
 test.describe("稼働実績 §150", () => {
   test("前提: ダミーデータに計画より多い人・計画なしの人・不在の人・マスタに無い人がいる", () => {
@@ -60,12 +61,12 @@ test.describe("稼働実績 §150", () => {
     await expect(d.locator("tbody tr")).toHaveCount([...cmpOf(over).byMonth.values()].filter((m) => m.judged).length);
   });
 
-  test("不在の人は既定で隠し、「不在の人も表示」で出す（URL f=left）", async ({ page }) => {
+  test("終了した人は既定で隠し、「終了した人も表示」で出す（URL f=left。§155）", async ({ page }) => {
     await gotoPage(page, `/workload?from=${FY.from}&to=${FY.to}&axis=member`);
     const table = tableByCaption(page, "メンバーごとの稼働実績");
     await showAllRows(table);
     await expect(dataRows(table)).toHaveCount(shown.length);
-    await expect(page.locator(".yn-section-hint", { hasText: `不在の人 ${byMember.length - shown.length}人は非表示` })).toBeVisible();
+    await expect(page.locator(".yn-section-hint", { hasText: `終了した人 ${byMember.length - shown.length}人は非表示` })).toBeVisible();
     await page.locator("#yn-w-left").check();
     expect(query(page).get("f")).toBe("left");
     await showAllRows(table);

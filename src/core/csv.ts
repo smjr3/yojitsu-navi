@@ -6,7 +6,7 @@
  */
 import { isValidISODate } from "./calendar.js";
 import { normalizeName, splitKeywords } from "./normalize.js";
-import type { Assignment, FetchFailure, OutsidePlan, ProjectAlias, Target, Config, Contract, Dataset, Holiday, MappingRule, Project, CustomerTeam, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
+import type { Assignment, FetchFailure, OutsidePlan, ProjectAlias, Target, Config, Contract, Dataset, Holiday, MappingRule, Project, CustomerTeam, LeaveKind, MemberKind, MemberRecord, RateRecord, TaskTypeRule, TeamRecord, Worklog } from "./types.js";
 import { parseTaskCategory } from "./workTypes.js";
 import { validateDataset, type ValidationIssue } from "./validate.js";
 import { T, fmt } from "../i18n/index.js";
@@ -232,14 +232,17 @@ function parseTable(file: string, text: string, required: readonly string[], iss
   return table;
 }
 
+/** 一時的な不在と読む status の値（§155。休職・育休・産休・休業・一時不在など）。ほかの値は離脱（退職・契約終了など） */
+const TEMPORARY_LEAVE = /休|一時/;
+
 /**
- * members.csv の status 列（§35）: 空・「在籍」・active = 在籍。それ以外は何が書いてあっても不在（status "left"）。
- * 退職・休職・契約終了など理由は固定しない（いないことが分かればよい）
+ * members.csv の status 列（§35・§155）: 空・「在籍」・active = 在籍。それ以外は何が書いてあっても不在（status "left"）。
+ * 理由の値は書き換えない。「休」「一時」を含む値は一時的な不在（leave "temporary"）、それ以外は離脱（leave "permanent"）
  */
-export function memberStatus(raw: string): { status?: string } {
+export function memberStatus(raw: string): { status?: string; leave?: LeaveKind } {
   const v = raw.normalize("NFKC").trim();
   if (v === "" || v === "在籍" || v.toLowerCase() === "active") return {};
-  return { status: "left" };
+  return { status: "left", leave: TEMPORARY_LEAVE.test(v) ? "temporary" : "permanent" };
 }
 
 /** ISO 8601 → 日本時間の「YYYY-MM-DD HH:mm」（読めなければそのまま） */

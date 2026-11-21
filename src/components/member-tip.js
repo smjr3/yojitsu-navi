@@ -11,8 +11,8 @@
 import { T, fmt } from "../i18n/index.js";
 import { h } from "./dom.js";
 import { placeNear } from "./plan-cell.js";
-import { dateJa, decimal, formatHours, monthJa } from "./format.js";
-import { createMonthHours } from "../core/index.js";
+import { dateJa, decimal, formatHours, leaveLabel, monthJa } from "./format.js";
+import { createMonthHours, leaveKindOf } from "../core/index.js";
 import { treeAt } from "./analysis.js";
 
 const ATTR = "data-member-tip";
@@ -97,7 +97,7 @@ function content(id) {
   // 不在の行が続いていれば、いちばん早い行の日付から
   let leftRec = cur;
   for (let i = recs.indexOf(cur) - 1; isLeft && i >= 0 && recs[i].status === "left"; i--) leftRec = recs[i];
-  if (isLeft) kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(leftRec) })));
+  if (isLeft) kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(leftRec), label: leaveLabel(leaveKindOf(cur)) })));
   else if (prev && cur.effectiveFrom === month && prev.teamId !== cur.teamId) kids.push(h("p", null, fmt(T.memberTip.movedIn, { team: prev.teamId ? teamName(prev.teamId) : T.memberTip.noTeam })));
   // 来月以降の予定: 役職だけの変更は飛ばし、最初の異動・不在を出す
   let next = null;
@@ -109,7 +109,7 @@ function content(id) {
     }
   }
   if (!isLeft && next) {
-    if (next.status === "left") kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(next) })));
+    if (next.status === "left") kids.push(h("p", { class: "yn-member-tip-warn" }, fmt(T.memberTip.leftFrom, { when: when(next), label: leaveLabel(leaveKindOf(next)) })));
     else if (next.teamId !== cur.teamId) kids.push(h("p", null, fmt(T.memberTip.moveTo, { month: monthJa(next.effectiveFrom), team: next.teamId ? teamName(next.teamId) : T.memberTip.noTeam })));
   }
 

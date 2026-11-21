@@ -8,10 +8,10 @@
  *   所属チームが無い人・マスタに無い人はヘルプ。主担当チームのノードに載せる
  */
 import { addMonths } from "./calendar.js";
-import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, monthPresenceAt, teamTreeAt } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, isWorkingAt, leaveKindOf, memberMonthKey, monthPresenceAt, teamTreeAt } from "./masters.js";
 import { HolidaySet } from "./holidays.js";
 import { ownTeamScope, workOriginOf, type WorkOrigin } from "./team-detail.js";
-import type { MemberMonth, MemberRecord, Model, TeamNode, YearMonth } from "./types.js";
+import type { LeaveKind, MemberMonth, MemberRecord, Model, TeamNode, YearMonth } from "./types.js";
 
 /** その月の負荷の 1 行（案件、または運用保守以外の種別） */
 export interface OrgLoadLine {
@@ -26,7 +26,8 @@ export interface OrgLoadLine {
   support: boolean;
 }
 
-export type OrgChange = "joined" | "left" | null;
+/** joined = 前月から加わった、left = 今月はいない（異動・離脱）、away = 一時的な不在で所属のまま（§155。人数に数えない） */
+export type OrgChange = "joined" | "left" | "away" | null;
 
 export interface OrgPerson {
   memberId: string;
@@ -42,6 +43,8 @@ export interface OrgPerson {
   otherTeamId: string | null;
   /** 不在の行だが不在した月に計画・実績があるので稼働扱い（§35） */
   leaving: boolean;
+  /** その月の不在の種類（§155）。在籍なら null */
+  leave: LeaveKind | null;
   /** その月に稼働できる量（人月。§119）。在籍・不在が切り替わる日のある月は在籍の営業日の割合、他は 1 */
   capacity: number;
   memberUnknown: boolean;
@@ -162,7 +165,8 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
       origin,
       change,
       otherTeamId,
-      leaving: change !== "left" && isLeftRecord(at(memberId, month)),
+      leaving: change !== "left" && change !== "away" && isLeftRecord(at(memberId, month)),
+      leave: leaveKindOf(at(memberId, month)),
       capacity: presenceShare(memberId),
       memberUnknown: !idx.has(memberId),
       ...sum(lines),
@@ -193,10 +197,14 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
       unplaced.push(person(memberId, tid, "own", null, null, linesOf(mmAt.get(memberId), null)));
     }
     if (before) prevDirect.set(before, (prevDirect.get(before) ?? 0) + 1);
+    // 一時的な不在（§155）: 稼働しない月も最後の所属に薄く残す（人数には数えない）
+    const awayTeam = !now && leaveKindOf(at(memberId, month)) === "temporary" ? (at(memberId, month)?.teamId ?? null) : null;
+    const away = awayTeam && Object.hasOwn(nodes, awayTeam) ? awayTeam : null;
     if (before && Object.hasOwn(nodes, before)) {
       nodes[before]!.prevHeadcount += 1;
-      if (before !== now) nodes[before]!.members.push(person(memberId, now, "own", "left", now, []));
+      if (before !== now && before !== away) nodes[before]!.members.push(person(memberId, now, "own", "left", now, []));
     }
+    if (away) nodes[away]!.members.push(person(memberId, away, "own", "away", null, []));
     // 応援・ヘルプ: 主担当チームの外から、その月にその案件へ計画か実績がある
     const mm = mmAt.get(memberId);
     if (!mm) continue;
@@ -217,7 +225,8 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
   }
 
   for (const n of Object.values(nodes)) {
-    n.members.sort((a, b) => Number(a.change === "left") - Number(b.change === "left") || byId(a, b));
+    const rank = (p: OrgPerson) => (p.change === "left" ? 2 : p.change === "away" ? 1 : 0);
+    n.members.sort((a, b) => rank(a) - rank(b) || byId(a, b));
     n.guests.sort((a, b) => (a.origin === b.origin ? byId(a, b) : a.origin === "support" ? -1 : 1));
   }
   // 配下を含む人数。前月は前月の組織の配下で数える（親の付け替えで増減が消えないように。前月に無かった組織は 0）

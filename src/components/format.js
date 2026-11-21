@@ -170,3 +170,8 @@ export function profitLabel(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return EMPTY_VALUE;
   return value < 0 ? T.common.deficit : T.common.surplus;
 }
+
+/** 不在の種類の画面の言葉（§155）。temporary = 一時不在、それ以外（permanent・種類なし）= 終了 */
+export function leaveLabel(kind) {
+  return kind === "temporary" ? T.members.leave.temporary : T.members.leave.permanent;
+}

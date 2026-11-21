@@ -28,6 +28,7 @@ import {
   elapsedMonthCount,
   groupWorkPlans,
   isUnknownMember,
+  memberLeaveKindAt,
   memberLeftAt,
   memberTeamsAt,
   monthRange,
@@ -46,7 +47,7 @@ import { mountFilterBar } from "./components/filters.js";
 import { statTile, kpiRow } from "./components/kpi.js";
 import { dataTable, PREVIEW_ROWS } from "./components/table.js";
 import { customerHref } from "./components/customers.js";
-import { EMPTY_VALUE, formatHours, formatPercent, monthJa, monthShort, periodCompact, periodJa } from "./components/format.js";
+import { EMPTY_VALUE, formatHours, formatPercent, leaveLabel, monthJa, monthShort, periodCompact, periodJa } from "./components/format.js";
 import { chartFigure } from "./components/chart-zoom.js";
 import { bucketLabel, bucketTick, bucketTipValue, chartMessage, lazyJson, loadUnit, saveUnit, unitSwitch } from "./components/chart-units.js";
 import { openBreakdown } from "./components/breakdown.js";
@@ -121,7 +122,7 @@ const segControl = ({ param, items, fallback, label, id, cls }) => {
 };
 const axisControl = segControl({ param: "axis", items: AXES, fallback: "team", label: T.work.axisLabel, id: "yn-axis-label", cls: "yn-work-axis" });
 const viewControl = segControl({ param: "view", items: VIEWS, fallback: "total", label: T.work.viewLabel, id: "yn-view-label", cls: "yn-work-view" });
-// 不在の人も表示（メンバー別 §138 と同じ。URL の f=left。まとめ方がメンバーのときだけ出す）
+// 終了した人も表示（メンバー別 §138 と同じ。URL の f=left。まとめ方がメンバーのときだけ出す）
 const leftControl = (() => {
   const on = (new URLSearchParams(location.search).get("f") ?? "").split(",").includes("left");
   const input = html`<input type="checkbox" id="yn-w-left" checked=${on}>`;
@@ -451,6 +452,7 @@ if (vm) {
       row.origin = vm.guests.get(g.key) ?? null;
       row.unknown = isUnknownMember(model, g.key);
       row.leftFrom = row.unknown ? null : memberLeftAt(model, g.key, vm.baseMonth);
+      row.leftKind = row.leftFrom ? memberLeaveKindAt(model, g.key, vm.baseMonth) : null;
       row.href = store.href("./member", {}, { id: g.key });
     } else if (kind === "contract") {
       const c = contractById.get(g.key);
@@ -469,9 +471,11 @@ if (vm) {
     return aggregateWork(model, r.rows, opts(kind)).map((g) => makeRow(g, kind, by.get(g.key), true));
   };
   const allRows = groups.map((g) => makeRow(g, axis, plansBy.get(g.key)));
-  // 不在の人は「不在の人も表示」を入れたときだけ（メンバー別 §138 と同じ。KPI・グラフは含む）
-  const leftN = axis === "member" && !showLeft ? allRows.filter((r) => r.leftFrom).length : 0;
-  const rows = leftN ? allRows.filter((r) => !r.leftFrom) : allRows;
+  // 終了した人は「終了した人も表示」を入れたときだけ（メンバー別 §138 と同じ。KPI・グラフは含む）
+  // 終了した人だけ隠す。一時不在の人はいつも出す（§155）
+  const gone = (r) => r.leftFrom && r.leftKind !== "temporary";
+  const leftN = axis === "member" && !showLeft ? allRows.filter(gone).length : 0;
+  const rows = leftN ? allRows.filter((r) => !gone(r)) : allRows;
   const unknownN = axis === "member" ? rows.filter((r) => r.unknown).length : 0;
   // データ確認への導線（マスタに無い人。§150）
   const toCheck = unknownN ? html`<a class="yn-btn yn-btn-sm" id="yn-w-check" href="./data-check#dc-unknown">${fmt(T.work.toDataCheck, { n: unknownN })}</a>` : null;
@@ -510,7 +514,7 @@ if (vm) {
     r.origin === "support" ? html`<span class="yn-chip yn-chip-neutral" data-origin="support" title=${T.members.supportTitle}>${T.team.support}</span> ` : null,
     r.origin === "help" ? html`<span class="yn-chip yn-chip-neutral yn-chip-help" data-origin="help" title=${r.unknown ? T.team.helpUnknownTitle : T.members.helpTitle}>${T.team.help}</span> ` : null,
     r.unknown && r.origin !== "help" ? html`<span class="yn-chip yn-chip-neutral" title=${T.members.chipUnknownTitle}>${T.members.chipUnknown}</span> ` : null,
-    r.leftFrom ? html`<span class="yn-chip yn-chip-neutral">${T.members.chipLeft}</span> ` : null,
+    r.leftFrom ? html`<span class="yn-chip yn-chip-neutral">${leaveLabel(r.leftKind)}</span> ` : null,
   ];
   const nameCell = (r) => {
     if (r.rowKind === "member") return html`<span class="yn-cell-2line"><span class="yn-cell-main">${r.name}</span><span class="yn-cell-sub">${chips(r)}${r.teamName}</span></span>`;

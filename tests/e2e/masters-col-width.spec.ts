@@ -129,12 +129,13 @@ test("ダーク・スマホ幅でも区切りが見え、狭くした列で行�
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 
-test("在籍の列は理由（退職・休職など）を出さず一律「不在」（§35）", async ({ page }) => {
+test("在籍の列は理由（退職・休職など）を出さず「一時不在」か「終了」（§35・§155）", async ({ page }) => {
   await gotoPage(page, "/masters");
   const idx = await handle(page, "status").evaluate((h) => (h.closest("th") as HTMLTableCellElement).cellIndex);
   const texts = await panel(page).locator("tbody tr.yn-me-group").evaluateAll((trs, i) => trs.map((tr) => (tr as HTMLTableRowElement).cells[i]!.innerText.trim()), idx);
-  expect(texts).toContain("不在");
+  expect(texts).toContain("終了");
+  expect(texts).toContain("一時不在");
   // 在籍・不在の開始日（§119）は「D日から」を添える
-  for (const t of texts) expect(["不在", "在籍", "—", ""]).toContain(t.replace(/\s*\d+日から$/, ""));
-  expect(texts).toContain("不在\n6日から");
+  for (const t of texts) expect(["一時不在", "終了", "在籍", "—", ""]).toContain(t.replace(/\s*\d+日から$/, ""));
+  expect(texts).toContain("終了\n6日から");
 });

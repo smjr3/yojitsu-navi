@@ -22,7 +22,7 @@ import {
   setForecastPeriod,
 } from "../core/index.js";
 import { forecastMonthlyCost, grossMarginOf, memberNameAt } from "./analysis.js";
-import { maxFractionFormat, money, monthJa } from "./format.js";
+import { maxFractionFormat, leaveLabel, money, monthJa } from "./format.js";
 import { planCellTooltip } from "./plan-cell.js";
 
 /** 体制図で選べる月（データの最初の月〜最後の月。今月は必ず含む） */
@@ -149,9 +149,10 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     if (p.origin === "support") sub.push(fmt(T.orgChart.tipGuestSupport, { team: teamName(p.teamId) }));
     if (p.origin === "help") sub.push(p.memberUnknown ? T.orgChart.tipGuestHelpUnknown : T.orgChart.tipGuestHelpNoOrg);
     if (p.change === "joined") sub.push(p.otherTeamId ? fmt(T.orgChart.tipJoinedFrom, { team: teamName(p.otherTeamId) }) : T.orgChart.tipJoinedNew);
-    if (p.change === "left") sub.push(p.otherTeamId ? fmt(T.orgChart.tipLeftTo, { team: teamName(p.otherTeamId) }) : T.orgChart.tipLeftAbsent);
-    if (p.leaving) sub.push(T.orgChart.tipLeaving);
-    if (p.change === "left") return html`<div>${head}<p>${monthJa(month)}</p>${sub.map((t) => html`<p>${t}</p>`)}</div>`;
+    if (p.change === "left") sub.push(p.otherTeamId ? fmt(T.orgChart.tipLeftTo, { team: teamName(p.otherTeamId) }) : fmt(T.orgChart.tipLeftAbsent, { label: leaveLabel(p.leave) }));
+    if (p.change === "away") sub.push(T.orgChart.tipAway);
+    if (p.leaving) sub.push(fmt(T.orgChart.tipLeaving, { label: leaveLabel(p.leave) }));
+    if (p.change === "left" || p.change === "away") return html`<div>${head}<p>${monthJa(month)}</p>${sub.map((t) => html`<p>${t}</p>`)}</div>`;
     const planLabel = isFuture || isCurrent ? T.orgChart.tipForecast : T.orgChart.tipPlan;
     const showActual = !isFuture;
     const rows = p.lines.map(
@@ -161,7 +162,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     return html`<div>${head}<p>${monthJa(month)}</p>${sub.map((t) => html`<p>${t}</p>`)}${p.lines.length ? html`<ul class="yn-plan-tip-list">${rows}${total}</ul>` : html`<p>${T.orgChart.tipNoLoad}</p>`}</div>`;
   };
   const levelClass = (p) => {
-    if (p.change === "left") return "is-left";
+    if (p.change === "left" || p.change === "away") return "is-left";
     if (gapMode) {
       if (!confirmed || (p.plannedHours <= 0 && p.actualHours <= 0)) return "is-none";
       const k = planGapKindOf(p.plannedHours, p.actualHours);
@@ -172,7 +173,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     return level === "none" ? "is-empty" : `is-${level}`;
   };
   const chipValue = (p) => {
-    if (p.change === "left") return "";
+    if (p.change === "left" || p.change === "away") return "";
     if (gapMode) {
       if (!confirmed || (p.plannedHours <= 0 && p.actualHours <= 0)) return "";
       const d = p.actualHours - p.plannedHours;

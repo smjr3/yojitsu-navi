@@ -29,7 +29,7 @@ const memberKpiRow = (tiles) => {
 };
 import { dataTable, contractNameCell, PREVIEW_ROWS } from "./components/table.js";
 import * as bd from "./components/breakdown.js";
-import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, dateJa, monthJa, periodJa } from "./components/format.js";
+import { EMPTY_VALUE, money, moneySigned, varianceNote, formatHours, formatPercent, dateJa, leaveLabel, monthJa, periodJa } from "./components/format.js";
 ```
 
 ```js
@@ -66,7 +66,7 @@ const state = Generators.observe((notify) => {
 ```js
 // 検索欄の初期値（URL の q。ストアの外＝ページ固有）
 const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
-// 不在の人も表示するか（URL の f=left。既定は隠す。案件一覧の「期間外の案件も表示」と同じ扱い。§138）
+// 終了した人も表示するか（一時不在の人はいつも出す。§155）（URL の f=left。既定は隠す。案件一覧の「期間外の案件も表示」と同じ扱い。§138）
 const initialShowLeft = (new URLSearchParams(location.search).get("f") ?? "").split(",").includes("left");
 ```
 
@@ -274,9 +274,10 @@ if (vm) {
   const { unit, period } = vm;
   const q = normalizeName(listFilter?.text ?? "");
   const searched = q ? vm.rows.filter((r) => r.searchText.includes(q) || normalizeName(r.teamName).includes(q)) : vm.rows;
-  // 不在の人は「不在の人も表示」を入れたときだけ（§138）
-  const leftN = listFilter?.showLeft ? 0 : searched.filter((r) => r.leftFrom).length;
-  const matched = leftN ? searched.filter((r) => !r.leftFrom) : searched;
+  // 終了した人は「終了した人も表示」を入れたときだけ（§138）。一時不在の人はいつも出す（§155）
+  const gone = (r) => r.leftFrom && r.leftKind !== "temporary";
+  const leftN = listFilter?.showLeft ? 0 : searched.filter(gone).length;
+  const matched = leftN ? searched.filter((r) => !gone(r)) : searched;
   // 実績だけの応援・ヘルプ（チームの案件に計画が無い人）は、ボタンを押したときだけ出す（§134。体制図と同じ畳み方）
   const spotN = matched.filter((r) => r.spot).length;
   const spotBtn = spotN
@@ -298,7 +299,7 @@ if (vm) {
   const contractHref = (id) => store.href("./contract", {}, { id });
   const chips = (r) => {
     const list = [];
-    if (r.leftFrom) list.push({ kind: "neutral", text: T.members.chipLeft, title: fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) }) });
+    if (r.leftFrom) list.push({ kind: "neutral", text: leaveLabel(r.leftKind), title: fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom), label: leaveLabel(r.leftKind) }) });
     if (r.memberUnknown) list.push({ kind: "neutral", text: T.members.chipUnknown, title: T.members.chipUnknownTitle });
     if (r.rateMissing) list.push({ kind: "neutral", text: T.breakdown.rateMissing, title: T.members.chipRateMissingTitle });
     if (r.unplannedHours > 0) list.push({ kind: "neutral", text: fmt(T.members.chipUnplanned, { hours: formatHours(r.unplannedHours) }), title: T.members.chipUnplannedTitle });
@@ -325,7 +326,7 @@ if (vm) {
     { key: "division", label: T.members.colDivision, type: "text", optional: true },
     { key: "department", label: T.members.colDepartment, type: "text", optional: true },
     { key: "section", label: T.members.colSection, type: "text", optional: true },
-    { key: "presence", label: T.members.colPresence, type: "text", optional: true, get: (r) => (r.leftFrom ? T.members.chipLeft : T.members.presenceActive) },
+    { key: "presence", label: T.members.colPresence, type: "text", optional: true, get: (r) => (r.leftFrom ? leaveLabel(r.leftKind) : T.members.presenceActive) },
     { key: "contractCount", label: T.columns.contractCount, type: "int", optional: true },
     { key: "unplannedHours", label: T.members.colUnplannedHours, type: "hours", optional: true },
     { key: "unplannedCost", label: T.members.colUnplannedCost, type: "money", optional: true },

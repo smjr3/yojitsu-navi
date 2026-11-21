@@ -71,7 +71,7 @@ import { effectiveSaveMode, fetchCurrentUser, gitlabConfigured, saveToGitLab, we
 import { fetchLatestMasters } from "../core/latestMasters.js";
 import { DEMO_BASE_SHA } from "../core/gitlab-mock.js";
 import { docFromCsvText } from "../core/csvEdit.js";
-import { dateJa, dateTimeJst, formatPercent, integer, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
+import { dateJa, dateTimeJst, formatPercent, integer, leaveLabel, maxFractionFormat, money, moneySigned, monthJa, periodJa, pointsSigned } from "./format.js";
 import { buildHref, savedState } from "./state.js";
 import { targetChip, targetPct, targetSpec } from "./targets.js";
 import { numberButton } from "./breakdown.js";
@@ -585,8 +585,9 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     return [...latest.entries()].map(([id, v]) => {
       const get = (c) => cellOf(docs.members, v.row, c);
       const team = get("team_id") ? (tNames.get(get("team_id")) ?? "") : "";
-      const left = memberStatus(get("status")).status === "left";
-      const sub = [left ? T.members.chipLeft : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
+      const st = memberStatus(get("status"));
+      const left = st.status === "left";
+      const sub = [left ? leaveLabel(st.leave) : "", team || get("section") || get("department") || get("division"), get("title"), get("kind") === "partner" && get("title") !== T.members.kindPartner ? T.members.kindPartner : ""].filter(Boolean).join(" ・ ");
       return { value: id, label: get("name") || id, sub, search: `${id} ${get("division")} ${get("department")} ${get("section")}`, left, muted: left };
     })
       // 不在の人は候補の後ろへ（過去の行の修正では選べるように残す。§35）
@@ -623,8 +624,11 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
     if (column === "target_type") return T.targets.kinds[value] ?? value;
     // 区分は日本語を主に（CSV の値 employee などは入力欄の選択肢に残す。§115）
     if (fileId === "members" && column === "kind") return KIND_LABELS[value] ?? value;
-    // 在籍状態（§35）: 理由（退職・休職など）は出さず一律「不在」。CSV の値はそのまま残す
-    if (fileId === "members" && column === "status") return memberStatus(value).status === "left" ? T.members.chipLeft : T.masters.statusActive;
+    // 在籍状態（§35・§155）: 理由（退職・休職など）は出さず「一時不在」か「終了」。CSV の値はそのまま残す
+    if (fileId === "members" && column === "status") {
+      const st = memberStatus(value);
+      return st.status === "left" ? leaveLabel(st.leave) : T.masters.statusActive;
+    }
     // 仮の値（§103）: 仮なら「仮」、それ以外（空・0 など）は本番の値なので何も出さない
     if (column === "provisional") return isProvisionalCell(value) ? T.masterFiles.provisionalYes : "";
     return value;
@@ -2047,7 +2051,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       const main = html`<tr class=${`yn-me-plan-row${plan.focusMember === r.memberId ? " is-focus" : ""}${open ? " is-open" : ""}`} data-member=${r.memberId}>
         <th scope="row"><div class="yn-me-plan-who">
           <button type="button" class="yn-me-plan-toggle" data-fk=${`plan:toggle:${r.memberId}`} aria-expanded=${open ? "true" : "false"} aria-controls=${detailId} aria-label=${fmt(T.planEdit.toggleAria, { name, n: workCount })} title=${[name, teamName, fmt(T.planEdit.countTitle, { n: integer(workCount) })].filter(Boolean).join(" ・ ")} onclick=${() => toggle(r.memberId)}><span class="yn-disc" aria-hidden="true"></span><span class="yn-me-plan-name">${name}</span><span class="yn-me-plan-count" aria-hidden="true">${integer(workCount)}</span>${teamName ? html`<span class="yn-me-plan-team">${teamName}</span>` : null}</button>
-          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom) })}>${T.members.chipLeft} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
+          ${r.support ? html`<span class="yn-chip yn-chip-neutral">${T.plan.support}</span>` : null}${r.leftFrom ? html`<span class="yn-chip yn-chip-neutral" title=${fmt(T.members.chipLeftTitle, { month: r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom), label: leaveLabel(r.leftKind) })}>${leaveLabel(r.leftKind)} ${r.leftDate ? dateJa(r.leftDate) : monthJa(r.leftFrom)}</span>` : null}${r.afterLeftMonths.length ? html`<span class="yn-chip yn-chip-warn" title=${T.plan.afterLeftTitle}><span aria-hidden="true">!</span> ${fmt(T.plan.afterLeftChip, { n: integer(r.afterLeftMonths.length) })}</span>` : null}${overMonths.length ? html`<span class="yn-chip yn-chip-warn">${fmt(T.plan.overChip, { n: integer(overMonths.length) })}</span>` : null}${empty.size ? html`<span class="yn-chip yn-chip-empty" title=${fmt(T.plan.emptyChipTitle, { months: monthRuns(months.filter((_, i) => empty.has(i))) })}>${T.plan.emptyChip}</span>` : null}${stateChips(counts.changed + oCounts.changed, counts.added + oCounts.added, counts.errors + oCounts.errors)}${pendingChip(["assignments", "outside", "members"], r.memberId)}
         </div></th>
         ${months.map((m, i) => cellButton({ ...r, name }, m, monthly[i], name, null, empty.has(i) ? "empty" : allocLevel(monthly[i], limitAt(r, i))))}
         <td class="num">${pm(monthly.reduce((a, b) => a + b, 0))}</td>
@@ -2883,11 +2887,14 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
       </select>`;
     }
     if (col.input === "status") {
-      // 在籍状態（§35）。CSV では空 = 在籍、何か書いてあれば不在（退職・休職など、書いた値はそのまま残す）
-      const left = memberStatus(value).status === "left";
+      // 在籍状態（§35・§155）。CSV では空 = 在籍、何か書いてあれば不在。「休」「一時」を含めば一時不在、ほかは終了。
+      // 書いてある値（退職・休職など）は、同じ種類を選んでいる間はそのまま残す
+      const st = memberStatus(value);
+      const kept = (kind) => (st.leave === kind ? value : T.members.leave[kind]);
       return html`<select id=${id} name=${col.name} class="yn-select" disabled=${disabled} aria-describedby=${`${id}-hint`}>
-        <option value="" selected=${!left}>${T.masters.statusActive}</option>
-        <option value=${left ? value : T.members.chipLeft} selected=${left}>${T.members.chipLeft}</option>
+        <option value="" selected=${!st.leave}>${T.masters.statusActive}</option>
+        <option value=${kept("temporary")} selected=${st.leave === "temporary"}>${T.members.leave.temporary}</option>
+        <option value=${kept("permanent")} selected=${st.leave === "permanent"}>${T.members.leave.permanent}</option>
       </select>`;
     }
     if (col.input === "team") {
@@ -3207,7 +3214,7 @@ export function mastersEditor({ data, config, asOfMonth, minMonth, model = null,
           const pair = pairs[c.name];
           const value = pair ? pairedDateValue(initial, c.name, pair) : c.input === "target" ? (tType || tId ? `${tType}:${tId}` : "") : (initial[c.name] ?? "").trim();
           return html`<div class="yn-me-field">
-            <label for=${`yn-me-f-${c.name}`}>${pair ? pair.label : withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>
+            ${((label) => (c.input === "status" ? html`<span class="yn-me-label-row">${label}${infoTip(html`${T.masters.statusTip.map((t, i) => html`${i ? html`<br>` : ""}${t}`)}`, { label: T.masters.statusTipLabel })}</span>` : label))(html`<label for=${`yn-me-f-${c.name}`}>${pair ? pair.label : withOutside && c.input === "project" ? T.masters.colWork : c.label}${c.required ? html`<span class="yn-me-req" aria-hidden="true"> *</span>` : null}</label>`)}
             ${fieldFor(fileId, pair ? { ...c, input: "date" } : c, value, disabled, { withOutside, projectName: (initial.project_name ?? "").trim() })}
             <span class="yn-me-field-hint" id=${`yn-me-f-${c.name}-hint`}>${keyLocked ? T.masters.keyLocked : disabled && lockedByDef(c.name) ? T.masters.importedReadonly : disabled ? T.masters.hrReadonly : pair ? pair.hint : fileId === "members" && c.name === "member_id" ? T.masters.hintMemberKey : c.name === "team_id" && c.input !== "text" ? "" : fileId === "targets" && c.name === "start_month" ? T.masters.hintTargetStart : fileId === "targets" && c.name === "end_month" ? T.masters.hintEndMonth : fileId === "contracts" ? (CONTRACT_HINTS[c.name] ?? FIELD_HINTS[c.name] ?? "") : (FIELD_HINTS[c.name] ?? "")}${fileId === "contracts" && c.name === "team_id" && customerDefaults().size > 0 ? T.masters.hintContractTeamDefault : ""}</span>
           </div>`;

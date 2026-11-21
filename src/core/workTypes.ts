@@ -8,14 +8,14 @@
  */
 import { isValidISODate, monthOfDate, monthRange } from "./calendar.js";
 import { NONE_CUSTOMER_KEY, NONE_CUSTOMER_LABEL, customerKey } from "./customers.js";
-import { createEffectiveIndex, isLeftRecord, leftMonthOf, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
+import { createEffectiveIndex, isLeftRecord, leaveKindOf, leftMonthOf, memberAt, type EffectiveIndex, type MasterIndex } from "./masters.js";
 import { planGapKindOf, type PlanGapKind } from "./planGaps.js";
 import { createKeywordRouter } from "./mapping.js";
 import { normalizeCode, normalizeKeyword, normalizeName } from "./normalize.js";
 import type { ProjectMatcher } from "./projectFromTask.js";
 import type { TaskNameExtractor } from "./taskFromName.js";
 import { monthStatusFromMeta } from "./status.js";
-import type { ContractResult, KeywordUnmatchedGroup, MappingRule, MemberMonth, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
+import type { ContractResult, KeywordUnmatchedGroup, LeaveKind, MappingRule, MemberMonth, MemberRecord, Model, MonthStatus, Period, TaskCategory, TaskTypeRule, TeamNode, Warning, Worklog, WorkRow, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 import { addMemberHours, memberHoursList, type MemberHoursAcc } from "./worklogMembers.js";
 
@@ -794,6 +794,11 @@ export function memberLeftAt(model: Pick<Model, "members">, memberId: string, ba
   const rec = memberIndexOf(model.members).at(memberId, baseMonth);
   if (!isLeftRecord(rec)) return null;
   return leftMonthOf(model.members.filter((r) => r.memberId === memberId && r.effectiveFrom <= baseMonth));
+}
+
+/** 基準月の不在の種類（§155。不在でなければ null） */
+export function memberLeaveKindAt(model: Pick<Model, "members">, memberId: string, baseMonth: YearMonth): LeaveKind | null {
+  return leaveKindOf(memberIndexOf(model.members).at(memberId, baseMonth));
 }
 
 /** 計画を まとめ方のキーごとに分ける。チームは所属（基準月）の組織とその上位すべてに数える。keyOf が null の計画は数えない */
