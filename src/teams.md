@@ -45,7 +45,7 @@ const state = Generators.observe((notify) => {
 const viewEvents = new EventTarget();
 const readView = () => {
   const q = new URLSearchParams(location.search);
-  return { view: q.get("view") === "chart" ? "chart" : "table", month: q.get("month") ?? "", color: q.get("color") === "gap" ? "gap" : "plan" };
+  return { view: q.get("view") === "chart" ? "chart" : "table", month: q.get("month") ?? "", color: ["gap", "kind"].includes(q.get("color")) ? q.get("color") : "plan" };
 };
 // 描き直した後に、押したボタン・選んだ欄へフォーカスを戻す
 const refocus = { sel: null };
