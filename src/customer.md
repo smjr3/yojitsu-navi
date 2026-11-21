@@ -242,43 +242,6 @@ const outsideState = outsideToggle ? Generators.input(outsideToggle) : null;
 
 ```js
 if (vm) {
-  const { scope, unit } = vm;
-  const f = outsideState ?? listFilter;
-  const all = scope.contractIds.map((id) => {
-    const r = model.contracts.find((x) => x.contract.contractId === id);
-    return { ...contractRow(model, r, scope.period, vm.method, vm.tree), key: id };
-  });
-  const rows = all.filter((r) => f.showOutside || r.inPeriod);
-  const hidden = all.length - all.filter((r) => r.inPeriod).length;
-  display(
-    sectionTitle(
-      T.customer.contractsTitle,
-      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: methodLabel(vm.method, model.config), fy: fiscalYearLabel(model.meta.fiscalYear) }),
-      null,
-      hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : null,
-    ),
-  );
-  if (outsideToggle && hidden > 0) display(outsideToggle);
-  if (rows.length === 0) {
-    display(emptyState({ title: T.customer.noContractsTitle, text: T.customer.noContractsText, icon: "○" }));
-  } else {
-    display(
-      dataTable({
-        columns: contractListColumns({ model, store, period: scope.period, unit }),
-        rows,
-        unit,
-        caption: T.customer.contractsCaption,
-        exportName: `customer_contracts_${scope.period.from}_${scope.period.to}`,
-        sort: { key: "status", dir: "asc" },
-        rowHref: (r) => store.href("./contract", {}, { id: r.contractId }),
-      }),
-    );
-  }
-}
-```
-
-```js
-if (vm) {
   const { scope, unit, method, tree } = vm;
   // 契約の teamId ごと（配下をまとめず、契約に登録された主担当チームそのもの）
   const byTeam = new Map();
@@ -310,6 +273,43 @@ if (vm) {
         exportName: `customer_teams_${scope.period.from}_${scope.period.to}`,
         sort: { key: "status", dir: "asc" },
         rowHref: (r) => store.href("./contracts", { team: r.teamId }, { customer: group.key, direct: 1 }),
+      }),
+    );
+  }
+}
+```
+
+```js
+if (vm) {
+  const { scope, unit } = vm;
+  const f = outsideState ?? listFilter;
+  const all = scope.contractIds.map((id) => {
+    const r = model.contracts.find((x) => x.contract.contractId === id);
+    return { ...contractRow(model, r, scope.period, vm.method, vm.tree), key: id };
+  });
+  const rows = all.filter((r) => f.showOutside || r.inPeriod);
+  const hidden = all.length - all.filter((r) => r.inPeriod).length;
+  display(
+    sectionTitle(
+      T.customer.contractsTitle,
+      fmt(T.customer.contractsHint, { period: periodJa(scope.period), method: methodLabel(vm.method, model.config), fy: fiscalYearLabel(model.meta.fiscalYear) }),
+      null,
+      hidden > 0 && !f.showOutside ? fmt(T.customer.hiddenOutside, { n: hidden }) : null,
+    ),
+  );
+  if (outsideToggle && hidden > 0) display(outsideToggle);
+  if (rows.length === 0) {
+    display(emptyState({ title: T.customer.noContractsTitle, text: T.customer.noContractsText, icon: "○" }));
+  } else {
+    display(
+      dataTable({
+        columns: contractListColumns({ model, store, period: scope.period, unit }),
+        rows,
+        unit,
+        caption: T.customer.contractsCaption,
+        exportName: `customer_contracts_${scope.period.from}_${scope.period.to}`,
+        sort: { key: "status", dir: "asc" },
+        rowHref: (r) => store.href("./contract", {}, { id: r.contractId }),
       }),
     );
   }
