@@ -99,19 +99,23 @@ test.describe("メンバー一覧 /members", () => {
     await expect(table.locator("tbody")).toContainText("検索に一致するメンバーがいません");
   });
 
-  test("不在の人は既定で表に出さず、「不在の人も表示」で出る。KPI は常に含み、チェックは URL で戻る（§138）", { tag: "@smoke" }, async ({ page }) => {
+  test("終了した人は既定で表に出さず、「終了した人も表示」で出る。一時不在の人はいつも出る。KPI は常に含み、チェックは URL で戻る（§138・§155）", { tag: "@smoke" }, async ({ page }) => {
     await gotoPage(page, `/members?from=${FY.from}&to=${FY.to}&${U}`);
     const agg = aggregateMembers(model, { period: CMP });
-    const left = agg.members.filter((m) => m.leftFrom);
-    const active = agg.members.filter((m) => !m.leftFrom);
+    const left = agg.members.filter((m) => m.leftFrom && m.leftKind !== "temporary");
+    const active = agg.members.filter((m) => !(m.leftFrom && m.leftKind !== "temporary"));
+    const away = agg.members.filter((m) => m.leftKind === "temporary");
     expect(left.length).toBeGreaterThan(0);
+    expect(away.length).toBeGreaterThan(0);
     const table = tableByCaption(page, "メンバー別の計画と実績");
     const h = await headerIndex(table);
     const box = page.locator("#yn-m-left");
     await expect(box).not.toBeChecked();
     await expect(dataRows(table)).toHaveCount(active.length);
     for (const m of left) await expect(table.locator(`tbody tr[data-key="${m.memberId}"]`)).toHaveCount(0);
-    await expect(page.locator(".yn-section-hint").filter({ hasText: `不在の人 ${left.length}人は非表示` })).toBeVisible();
+    await expect(page.locator(".yn-section-hint").filter({ hasText: `終了した人 ${left.length}人は非表示` })).toBeVisible();
+    // 一時不在の人は隠さず、チップは「一時不在」
+    for (const m of away) await expect(table.locator(`tbody tr[data-key="${m.memberId}"]`).locator(".yn-chip", { hasText: "一時不在" })).toBeVisible();
     // KPI は不在の人を含む。合計行は表示中の人だけ
     await expect(kpiValue(page, 1)).toHaveText(yen(agg.total.actualCost));
     const shown = aggregateMembers(model, { period: CMP, memberIds: active.map((m) => m.memberId) });
@@ -119,8 +123,8 @@ test.describe("メンバー一覧 /members", () => {
 
     await box.check();
     await expect(dataRows(table)).toHaveCount(agg.members.length);
-    await expect(page.locator(".yn-section-hint").filter({ hasText: "不在の人" })).toHaveCount(0);
-    await expect(table.locator(`tbody tr[data-key="${left[0]!.memberId}"]`).locator(".yn-chip", { hasText: "不在" })).toBeVisible();
+    await expect(page.locator(".yn-section-hint").filter({ hasText: "終了した人" })).toHaveCount(0);
+    await expect(table.locator(`tbody tr[data-key="${left[0]!.memberId}"]`).locator(".yn-chip", { hasText: "終了" })).toBeVisible();
     expect(await cellText(table.locator("tfoot tr"), col(h, "実績"))).toBe(yen(agg.total.actualCost));
     expect(new URL(page.url()).searchParams.get("f")).toBe("left");
     // 詳細へ移動して「戻る」でもチェックしたまま

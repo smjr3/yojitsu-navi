@@ -22,15 +22,15 @@ const header = memberLines[0]!.split(",");
 const rows = memberLines.slice(1).map((l) => Object.fromEntries(l.split(",").map((v, i) => [header[i], v])) as Record<string, string>);
 /** 今年度より前に退職し、今年度は計画も実績も無い人 */
 const leftBefore = rows.find((r) => r.status === "退職" && r.effective_from! < FY[0]!)!;
-/** 今年度に育休に入った人（status は「育休」でも表示は「不在」） */
+/** 今年度に育休に入った人（status は「育休」、表示は「一時不在」。§155） */
 const onLeave = rows.find((r) => r.status === "育休")!;
 
-test("退職者の詳細: 不在チップと最後の所属。すべて 0h のグラフは全高の棒にならない", async ({ page }) => {
+test("退職者の詳細: 終了チップと最後の所属。すべて 0h のグラフは全高の棒にならない", async ({ page }) => {
   expect(leftBefore, "今年度より前に退職した人がダミーデータにいる").toBeTruthy();
   await gotoPage(page, `/member?id=${leftBefore.member_id}`);
   await expect(page.locator("h1")).toHaveText(leftBefore.name!);
-  await expect(page.locator(".yn-chip", { hasText: "不在" }).first()).toBeVisible();
-  await expect(page.getByText(/不在（最後の所属:/)).toBeVisible();
+  await expect(page.locator(".yn-chip", { hasText: "終了" }).first()).toBeVisible();
+  await expect(page.getByText(/終了（最後の所属:/)).toBeVisible();
   const svg = page.locator("figure svg, .yn-chart svg").first();
   await expect(svg).toBeVisible();
   await expect(svg).not.toContainText("0.000000");
@@ -40,18 +40,18 @@ test("退職者の詳細: 不在チップと最後の所属。すべて 0h の�
   expect(heights.filter((h) => h > plotH * 0.5).length, "全高に近い棒が無い").toBeLessThanOrEqual(1); // 未来月の背景の帯だけ
 });
 
-test("育休の人の詳細: 理由に関係なく「不在」のチップと最後の所属", async ({ page }) => {
+test("育休の人の詳細: 理由そのものは出さず「一時不在」のチップと最後の所属（§155）", async ({ page }) => {
   expect(onLeave, "育休の人がダミーデータにいる").toBeTruthy();
   await gotoPage(page, `/member?id=${onLeave.member_id}`);
-  await expect(page.locator(".yn-chip", { hasText: "不在" }).first()).toBeVisible();
-  await expect(page.getByText(/不在（最後の所属:/)).toBeVisible();
+  await expect(page.locator(".yn-chip", { hasText: "一時不在" }).first()).toBeVisible();
+  await expect(page.getByText(/一時不在（最後の所属:/)).toBeVisible();
   await expect(page.locator(".yn-chip", { hasText: "育休" })).toHaveCount(0);
 });
 
-test("メンバー一覧: 不在の人は既定で隠し、「不在の人も表示」で「不在」チップ（色だけに頼らず文字）付きで出る（§138）", async ({ page }) => {
+test("メンバー一覧: 終了した人は既定で隠し、「終了した人も表示」で「終了」チップ（色だけに頼らず文字）付きで出る（§138・§155）", async ({ page }) => {
   await gotoPage(page, "/members");
-  const left = page.locator("tbody tr").filter({ has: page.locator(".yn-chip", { hasText: "不在" }) });
-  await expect(page.locator(".yn-section-hint").filter({ hasText: /不在の人 \d+人は非表示/ })).toBeVisible();
+  const left = page.locator("tbody tr").filter({ has: page.locator(".yn-chip", { hasText: "終了" }) });
+  await expect(page.locator(".yn-section-hint").filter({ hasText: /終了した人 \d+人は非表示/ })).toBeVisible();
   expect(await left.count()).toBe(0);
   await page.locator("#yn-m-left").check();
   await expect(left.first()).toBeVisible();

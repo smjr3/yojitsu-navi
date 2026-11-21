@@ -1,7 +1,7 @@
 /**
  * 履歴マスタの有効レコード検索（SPEC §5）、時間単価（§6）、チーム階層（§11）
  */
-import type { Assignment, Dataset, MemberRecord, OutsidePlan, Worklog, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
+import type { Assignment, Dataset, LeaveKind, MemberRecord, OutsidePlan, Worklog, RateRecord, TeamNode, TeamRecord, Warning, YearMonth } from "./types.js";
 import { T, fmt } from "../i18n/index.js";
 import { addMonths, isBusinessDay, isValidISODate, isValidYearMonth, monthOfDate, monthRange, toHolidaySet, type HolidayLookup } from "./calendar.js";
 
@@ -107,6 +107,11 @@ export function createMasterIndex(
 /** 不在の行か（SPEC §35。members.csv の status 列に退職・休職など何か書いてある） */
 export function isLeftRecord(m: Pick<MemberRecord, "status"> | null | undefined): boolean {
   return m?.status === "left";
+}
+
+/** 不在の種類（§155）。不在の行でなければ null。種類の無い古いデータは離脱として扱う */
+export function leaveKindOf(m: Pick<MemberRecord, "status" | "leave"> | null | undefined): LeaveKind | null {
+  return isLeftRecord(m) ? (m!.leave ?? "permanent") : null;
 }
 
 /** 月 m に在籍しているか（その月の有効レコードがあり、不在の行でない） */

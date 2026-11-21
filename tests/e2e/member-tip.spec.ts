@@ -46,14 +46,14 @@ test("キーボードのフォーカスでも出て、Esc で消える", async (
   await expect(tip(page)).toBeHidden();
 });
 
-test("不在の人は「から不在」を出す", async ({ page }) => {
-  // 今月から不在の人（前月までの実績があるのでメンバー別の「不在の人も表示」で出る）
+test("不在の人は「から終了」「から一時不在」を出す（§155）", async ({ page }) => {
+  // 今月から不在の人（前月までの実績があるのでメンバー別の「終了した人も表示」で出る）
   const left = model.members.find((r) => r.status === "left" && r.effectiveFrom === asOf);
   test.skip(!left, "不在の人がいない");
   await gotoPage(page, "/members?f=left");
   const cell = page.locator(`table [data-member-tip="${left!.memberId}"]`).first();
   await cell.hover();
-  await expect(tip(page).locator(".yn-member-tip-warn")).toContainText("から不在");
+  await expect(tip(page).locator(".yn-member-tip-warn")).toContainText(left!.leave === "temporary" ? "から一時不在" : "から終了");
 });
 
 test("チーム詳細のリーダー・作業時間のメンバーにも出る。ダークでも読める", async ({ page }) => {

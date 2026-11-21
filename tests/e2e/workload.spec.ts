@@ -4,7 +4,7 @@
  *   - 契約外は案件の実績に入らない（案件詳細の内訳の合計 = 案件の実績）
  *   - 軸の切替が URL に残る、内訳パネル、チーム絞り込み、Excel、ダーク・390px で横スクロールなし
  */
-import { aggregateWork, compareWorkPlan, confirmedPeriodOf, elapsedMonthCount, filterWorkRows, memberLeftAt, memberTeamsAt, ownTeamScope, personMonths, workByTask, workGuests, workPlanRows, workTeamOf, workTotals, type WorkRow } from "../../src/core/index.js";
+import { aggregateWork, compareWorkPlan, confirmedPeriodOf, elapsedMonthCount, filterWorkRows, memberLeaveKindAt, memberLeftAt, memberTeamsAt, ownTeamScope, personMonths, workByTask, workGuests, workPlanRows, workTeamOf, workTotals, type WorkRow } from "../../src/core/index.js";
 import { test, expect, useDarkTheme, gotoPage, tableByCaption, dataRows, headerIndex, col, cellText, kpiValue, dialog, dialogRow, query, showAllRows } from "./helpers/app.js";
 import { fiscalPeriod, getModel, treeAt, aggregate, teamContractIds } from "./helpers/core.js";
 
@@ -23,7 +23,8 @@ const judged = confirmedPeriodOf(model.meta, FY);
 const BASE = FY.to < model.meta.asOfMonth ? FY.to : model.meta.asOfMonth;
 const pmSignedText = (h: number) => (Math.abs(personMonths(h, STD)) < 0.005 ? pmText(0) : `${h > 0 ? "+" : "−"}${pmText(Math.abs(h))}`);
 // メンバー別で既定で出す人（基準月に不在の人は隠す。§138・§150）
-const shownMembers = (list: ReturnType<typeof aggregateWork>) => list.filter((g) => memberLeftAt(model, g.key, BASE) === null);
+// 終了した人だけ隠す（一時不在の人は出す。§155）
+const shownMembers = (list: ReturnType<typeof aggregateWork>) => list.filter((g) => memberLeftAt(model, g.key, BASE) === null || memberLeaveKindAt(model, g.key, BASE) === "temporary");
 
 test.describe("工数 /workload", () => {
   test("ダミーデータに契約外の工数がある（前提）", () => {

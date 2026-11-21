@@ -28,7 +28,7 @@ const group = (page: Page, key: string) => page.locator(`tr.yn-me-group[data-gro
 test("リソース計画: 不在のチップに日付、その月の吹き出しに在籍の営業日", { tag: "@smoke" }, async ({ page }) => {
   await gotoPage(page, "/plan?team=T421");
   const row = planRow(page, LEAVER);
-  await expect(row.locator(".yn-chip-neutral", { hasText: "不在" })).toHaveText("不在 2026年6月6日");
+  await expect(row.locator(".yn-chip-neutral", { hasText: "終了" })).toHaveText("終了 2026年6月6日");
   const june = cell(page, LEAVER, "2026-06");
   await june.evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
   await june.hover();
@@ -44,9 +44,9 @@ test("リソース計画: 不在のチップに日付、その月の吹き出し
 
 test("メンバー詳細: 不在のチップと所属の変遷に日付", async ({ page }) => {
   await gotoPage(page, `/member?id=${LEAVER}`);
-  await expect(page.locator(".yn-facts")).toContainText("不在 2026年6月6日");
+  await expect(page.locator(".yn-facts")).toContainText("終了 2026年6月6日");
   await page.locator(".yn-member-history summary").click();
-  await expect(page.locator(".yn-member-history")).toContainText("不在（2026年6月6日から）");
+  await expect(page.locator(".yn-member-history")).toContainText("終了（2026年6月6日から）");
 });
 
 test("マスタ編集: 適用開始日の 1 欄で日付まで入れ、台帳の在籍の列に添える。「＋ 変更」では写さない（§123）", async ({ page }) => {
@@ -66,13 +66,13 @@ test("マスタ編集: 適用開始日の 1 欄で日付まで入れ、台帳の
 
   // 在籍の人を月の途中から不在にする
   await group(page, "M010").getByRole("button", { name: /の変更を追加/ }).click();
-  await d.locator('[name="status"]').selectOption({ label: "不在" });
+  await d.locator('[name="status"]').selectOption({ label: "終了" });
   await d.locator('[name="effective_from"]').fill("2026-11-16");
   await d.locator('[data-role="submit"]').click();
   if (await d.isVisible()) await d.locator('[data-role="submit"]').click();
   await expect(d).toHaveCount(0);
   // 先の変更の予告も日付から
-  await expect(group(page, "M010")).toContainText("2026年11月16日〜 不在");
+  await expect(group(page, "M010")).toContainText("2026年11月16日〜 終了");
   await expect(page.locator('tr.yn-me-hist[data-parent="M010"]').last()).toContainText("16日から");
 });
 

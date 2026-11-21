@@ -9,8 +9,8 @@ import { addMonths, isValidYearMonth, monthRange } from "./calendar.js";
 import { parseNumberCell } from "./csv.js";
 import type { HolidayLookup } from "./calendar.js";
 import { periodShareAt } from "./periodDates.js";
-import { createEffectiveIndex, isLeftRecord, isWorkingAt, memberMonthKey, monthPresenceAt, statusDateOf, teamTreeAt, workedMonthKeys, type MonthPresence } from "./masters.js";
-import type { MemberRecord, OutsidePlan, TeamNode, TeamRecord, YearMonth } from "./types.js";
+import { createEffectiveIndex, isLeftRecord, isWorkingAt, leaveKindOf, memberMonthKey, monthPresenceAt, statusDateOf, teamTreeAt, workedMonthKeys, type MonthPresence } from "./masters.js";
+import type { LeaveKind, MemberRecord, OutsidePlan, TeamNode, TeamRecord, YearMonth } from "./types.js";
 
 /** 画面で編集中のアサイン 1 行（rowId はマスタ編集の行 id） */
 export interface PlanAssignment {
@@ -58,6 +58,8 @@ export interface PlanMemberRow {
   leftFrom: YearMonth | null;
   /** 不在になった日（§119。leftFrom の月の不在の行の status_date）。無ければ null（月の初めから） */
   leftDate: string | null;
+  /** 不在の種類（§155。期間の最終月までの最後の不在の行）。在籍中なら null */
+  leftKind: LeaveKind | null;
   /** 不在した月より後に配分が残っている月（§35。アサインの終了し忘れ） */
   afterLeftMonths: YearMonth[];
   /** months と同じ順の稼働（その月の台帳の行があり、不在していない。不在した月も計画か実績があれば稼働。復職後は在籍に戻る。§58 の人数 × 1.0） */
@@ -158,6 +160,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
     let last: MemberRecord | null = null;
     let leftFrom: YearMonth | null = null;
     let leftDate: string | null = null;
+    let leftKind: LeaveKind | null = null;
     for (const m of ms) {
       const rec = memberIdx.at(memberId, m);
       if (rec && !isLeftRecord(rec)) last = rec;
@@ -166,7 +169,11 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
           leftFrom = rec!.effectiveFrom;
           leftDate = statusDateOf(rec);
         }
-      } else if (rec) leftFrom = leftDate = null; // 復職
+        leftKind = leaveKindOf(rec);
+      } else if (rec) {
+        leftFrom = leftDate = null; // 復職
+        leftKind = null;
+      }
     }
     if (!last) last = memberIdx.at(memberId, to) ?? null;
     const activeMonths = ms.map((m) => working(memberId, m));
@@ -183,6 +190,7 @@ export function planView(src: PlanSources, teamId: string | null, months: readon
       assignments: list,
       leftFrom,
       leftDate,
+      leftKind,
       afterLeftMonths: ms.filter((m, i) => (monthly[i] as number) > EPS && isLeftRecord(memberIdx.at(memberId, m)) && !working(memberId, m)),
       activeMonths,
       capacity,

@@ -2644,9 +2644,16 @@ li.is-jumped,
   margin: 12px 0;
 }
 .yn-me-field > label,
+.yn-me-label-row > label,
 .yn-me-label {
   font-weight: 600;
   font-size: calc(13px * var(--yn-fs));
+}
+/* 入力欄の名前の横の「?」（§155 の在籍） */
+.yn-me-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .yn-me-field-hint {
   font-size: calc(12px * var(--yn-fs));
@@ -5262,6 +5269,10 @@ a.yn-org-person:hover {
 .yn-org-person.is-left .yn-org-pname {
   text-decoration: line-through;
   font-weight: 400;
+}
+/* 一時不在（§155）: 所属のまま薄く・破線。取り消し線は付けない（戻ってくる） */
+.yn-org-person[data-change="away"] .yn-org-pname {
+  text-decoration: none;
 }
 .yn-org-person.is-leaving {
   border-style: dashed;

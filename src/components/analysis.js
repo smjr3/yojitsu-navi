@@ -13,10 +13,12 @@ import {
   setForecastPeriod,
   forecastTotals,
   isLeftRecord,
+  leaveKindOf,
   monthlySeries,
   teamTreeForMonth,
 } from "../core/index.js";
 import { memberRecordAt } from "../core/members.js";
+import { leaveLabel } from "./format.js";
 
 
 /** 木からチームを引く（URL の team=constructor などで Object.prototype のプロパティを拾わない） */
@@ -310,6 +312,6 @@ export function memberInfoColumns(model, month, { shown = [], idOf = (r) => r.me
     { key: "division", label: T.members.colDivision, type: "text", optional: opt("division"), get: (r) => text(rec(r)?.division) },
     { key: "department", label: T.members.colDepartment, type: "text", optional: opt("department"), get: (r) => text(rec(r)?.department) },
     { key: "section", label: T.members.colSection, type: "text", optional: opt("section"), get: (r) => text(rec(r)?.section) },
-    { key: "presence", label: T.members.colPresence, type: "text", optional: opt("presence"), get: (r) => { const m = rec(r); return m ? (isLeftRecord(m) ? T.members.chipLeft : T.members.presenceActive) : null; } },
+    { key: "presence", label: T.members.colPresence, type: "text", optional: opt("presence"), get: (r) => { const m = rec(r); return m ? (isLeftRecord(m) ? leaveLabel(leaveKindOf(m)) : T.members.presenceActive) : null; } },
   ];
 }

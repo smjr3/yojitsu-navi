@@ -330,6 +330,8 @@ export interface TeamRecord {
 }
 
 export type MemberKind = "employee" | "partner";
+/** 不在の種類（§155）。temporary = 一時的な不在（戻ってくる）、permanent = 離脱（戻らない） */
+export type LeaveKind = "temporary" | "permanent";
 
 export interface MemberRecord {
   memberId: string;
@@ -349,6 +351,8 @@ export interface MemberRecord {
    * 省略・空・「在籍」 = 在籍。CSV にそれ以外の値があれば "left"
    */
   status?: string;
+  /** 不在の種類（§155。status が "left" のときだけ）。temporary = 一時的な不在（休職・育休など）、permanent = 離脱（退職・契約終了など） */
+  leave?: LeaveKind;
   /**
    * 在籍・不在が切り替わる日（任意の列 status_date。SPEC §119）。この行の effective_from の月の中の日付（YYYY-MM-DD）。
    * 不在の行 = この日から不在（前日まで在籍）、在籍の行（入社・復帰）= この日から在籍。空なら項目を持たない（月の初めから）
@@ -887,6 +891,8 @@ export interface MemberTotals {
   leftFrom: YearMonth | null;
   /** 不在になった日（§119。leftFrom の月の不在の行の status_date）。無ければ null */
   leftDate: string | null;
+  /** 不在の種類（§155。基準月の不在の行）。在籍なら null */
+  leftKind: LeaveKind | null;
   plannedHours: number;
   plannedCost: number;
   actualHours: number;
