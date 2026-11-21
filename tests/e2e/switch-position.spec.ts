@@ -26,14 +26,17 @@ async function check(page: Page, path: string, switches: string[]) {
   await expect(first).toHaveCount(1);
   const title = await box(first.locator(".yn-section-title"));
   let prevRight = -1;
+  let prevBottom = -1;
   for (const sel of switches) {
     const sw = first.locator(`.yn-section-switch ${sel}`);
     await expect(sw).toBeVisible();
     const b = await box(sw);
     expect(b.y, `${path} ${sel} は見出しの下`).toBeGreaterThanOrEqual(title.y + title.height - 1);
     if (prevRight < 0) expect(Math.abs(b.x - title.x), `${path} ${sel} は見出しと左端がそろう`).toBeLessThanOrEqual(1);
+    else if (b.y >= prevBottom - 1) expect(Math.abs(b.x - title.x), `${path} ${sel} は折り返しても左端がそろう`).toBeLessThanOrEqual(1);
     else expect(b.x, `${path} ${sel} は前の切り替えの右`).toBeGreaterThan(prevRight - 1);
     prevRight = b.x + b.width;
+    prevBottom = b.y + b.height;
   }
   const vw = page.viewportSize()!.width;
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(vw);

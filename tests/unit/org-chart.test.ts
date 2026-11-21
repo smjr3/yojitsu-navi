@@ -128,3 +128,43 @@ describe("orgChartAt: 組織の付け替えとリーダー名（Codex レビュ�
     expect([c.nodes.R!.totalHeadcount, c.nodes.R!.prevTotalHeadcount]).toEqual([1, 1]);
   });
 });
+
+describe("orgChartAt: チーム内の並び（SPEC §154）", () => {
+  const ds3 = dataset({
+    contracts: [contract({ contractId: "A", customerName: "A社", teamId: "T1", startMonth: "2026-04", endMonth: "2027-03", totalAmount: 1_200_000 })],
+    mappings: [rule("A社", "", "A")],
+    teams: [{ ...team("R", null), leaderMemberId: "L9" }, { ...team("T1", "R"), leaderMemberId: "M5" }, team("T2", "R")],
+    members: [
+      member({ memberId: "M1", kind: "partner", title: "SE", teamId: "T1", effectiveFrom: "2026-04" }),
+      member({ memberId: "M2", title: "SE", teamId: "T1", effectiveFrom: "2026-04" }),
+      member({ memberId: "M3", kind: "partner", title: "SE", teamId: "T1", effectiveFrom: "2026-04" }),
+      member({ memberId: "M4", title: "SE", teamId: "T1", effectiveFrom: "2026-04" }),
+      member({ memberId: "M5", title: "課長", teamId: "T1", effectiveFrom: "2026-04" }), // T1 のリーダー
+      member({ memberId: "M6", title: "SE", teamId: "T1", effectiveFrom: "2026-04" }),
+      member({ memberId: "M6", title: "SE", teamId: "T2", effectiveFrom: "2026-05" }), // 5月に抜ける
+      member({ memberId: "M7", kind: "partner", title: "SE", teamId: "T2", effectiveFrom: "2026-04" }),
+      member({ memberId: "M8", title: "SE", teamId: "T2", effectiveFrom: "2026-04" }),
+      member({ memberId: "L9", kind: "partner", title: "部長", teamId: "T2", effectiveFrom: "2026-04" }), // R のリーダーだが T2 所属（兼務）
+    ],
+    rates: [rate("SE", 1000), rate("課長", 2000), rate("部長", 3000)],
+    assignments: [
+      assignment({ memberId: "M7", contractId: "A", startMonth: "2026-05", endMonth: "2026-05", allocation: 0.5 }),
+      assignment({ memberId: "M8", contractId: "A", startMonth: "2026-05", endMonth: "2026-05", allocation: 0.5 }),
+    ],
+  });
+  const m3 = buildModel(ds3, { asOf: "2026-10-27" });
+  const c = orgChartAt(m3, "2026-05");
+
+  it("リーダー → 社員 → パートナー、同じ区分は社員番号順。抜けた人は最後", () => {
+    expect(c.nodes.T1!.members.map((p) => p.memberId)).toEqual(["M5", "M2", "M4", "M1", "M3", "M6"]);
+  });
+
+  it("リーダーが別のチームの所属でも、所属チームでは区分の順（リーダーを先頭にするのはリーダーのチームだけ）", () => {
+    expect(c.nodes.T2!.members.map((p) => p.memberId)).toEqual(["M6", "M8", "L9", "M7"]);
+    expect(c.nodes.R!.members).toEqual([]);
+  });
+
+  it("応援も社員 → パートナーの順", () => {
+    expect(c.nodes.T1!.guests.map((p) => p.memberId)).toEqual(["M8", "M7"]);
+  });
+});

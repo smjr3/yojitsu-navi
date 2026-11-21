@@ -60,7 +60,7 @@ export interface OrgChartNode {
   depth: number;
   children: string[];
   descendantIds: string[];
-  /** 直属のメンバー（今月いる人 → 抜けた人の順。それぞれ社員番号順） */
+  /** 直属のメンバー（今月いる人 → 抜けた人の順。それぞれリーダー → 社員 → パートナーの順、同じ区分は社員番号順。§154） */
   members: OrgPerson[];
   /** このノードが主担当の案件に入った応援・ヘルプ */
   guests: OrgPerson[];
@@ -216,10 +216,18 @@ export function orgChartAt(model: OrgSource, month: YearMonth): OrgChart {
     }
   }
 
+  // 並び（§154）: リーダー → 社員 → パートナー → マスタに無い人。同じ区分の中は社員番号順
+  const kindRank = (p: OrgPerson): number => {
+    const k = (at(p.memberId, month) ?? at(p.memberId, prevMonth))?.kind;
+    return k === "employee" ? 1 : k === "partner" ? 2 : 3;
+  };
+  const rankIn = (leaderId: string | null) => (p: OrgPerson) => (leaderId !== null && p.memberId === leaderId ? 0 : kindRank(p));
   for (const n of Object.values(nodes)) {
-    n.members.sort((a, b) => Number(a.change === "left") - Number(b.change === "left") || byId(a, b));
-    n.guests.sort((a, b) => (a.origin === b.origin ? byId(a, b) : a.origin === "support" ? -1 : 1));
+    const rank = rankIn(n.leaderMemberId);
+    n.members.sort((a, b) => Number(a.change === "left") - Number(b.change === "left") || rank(a) - rank(b) || byId(a, b));
+    n.guests.sort((a, b) => (a.origin === b.origin ? kindRank(a) - kindRank(b) || byId(a, b) : a.origin === "support" ? -1 : 1));
   }
+  unplaced.sort((a, b) => kindRank(a) - kindRank(b) || byId(a, b));
   // 配下を含む人数。前月は前月の組織の配下で数える（親の付け替えで増減が消えないように。前月に無かった組織は 0）
   for (const n of Object.values(nodes)) {
     for (const d of n.descendantIds) n.totalHeadcount += nodes[d]?.headcount ?? 0;
