@@ -21,6 +21,7 @@ import {
   planGapKindOf,
   setForecastPeriod,
 } from "../core/index.js";
+import { memberRecordAt } from "../core/members.js";
 import { forecastMonthlyCost, grossMarginOf, memberNameAt } from "./analysis.js";
 import { maxFractionFormat, leaveLabel, money, monthJa } from "./format.js";
 import { planCellTooltip } from "./plan-cell.js";
@@ -80,10 +81,10 @@ function nodeMoney(model, chart, month, method, restorePeriod) {
 
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "±0");
 
-/** 色の基準の切り替え（計画／計画とのずれ）。見出しの下の左に「表／体制図」と並べる（SPEC §144） */
+/** 色の基準の切り替え（計画／計画とのずれ／区分 §154）。見出しの下の左に「表／体制図」と並べる（SPEC §144） */
 export function orgColorSwitch({ color, onChange }) {
   const colorBtn = (id, label) => html`<button type="button" class="yn-seg-btn" aria-pressed=${String(color === id)} data-color=${id} onclick=${() => onChange({ color: id })}>${label}</button>`;
-  return html`<div class="yn-switch-field yn-org-color"><span class="yn-filter-label" id="yn-org-color-label">${T.orgChart.colorLabel}</span><div class="yn-seg" role="group" aria-labelledby="yn-org-color-label">${colorBtn("plan", T.orgChart.colorPlan)}${colorBtn("gap", T.orgChart.colorGap)}</div></div>`;
+  return html`<div class="yn-switch-field yn-org-color"><span class="yn-filter-label" id="yn-org-color-label">${T.orgChart.colorLabel}</span><div class="yn-seg" role="group" aria-labelledby="yn-org-color-label">${colorBtn("plan", T.orgChart.colorPlan)}${colorBtn("gap", T.orgChart.colorGap)}${colorBtn("kind", T.orgChart.colorKind)}</div></div>`;
 }
 
 export function orgChartView({ model, store, state, month, color, onChange, restorePeriod }) {
@@ -97,6 +98,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
   const isFuture = month > model.meta.asOfMonth;
   const isCurrent = month === model.meta.asOfMonth;
   const gapMode = color === "gap";
+  const kindMode = color === "kind";
   const contractById = new Map(model.contracts.map((r) => [r.contract.contractId, r.contract]));
   const teamName = (id) => (id && chart.nodes[id] ? chart.nodes[id].name : (id ?? ""));
   const tip = planCellTooltip();
@@ -125,7 +127,9 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
 
   const sw = (cls, label) => html`<span class="yn-org-legend-item"><span class=${`yn-org-swatch ${cls}`} aria-hidden="true"></span>${label}</span>`;
   const legend = html`<div class="yn-org-legend" aria-hidden="true">
-    ${gapMode
+    ${kindMode
+      ? [sw("is-employee", T.orgChart.legendEmployee), sw("is-partner", T.orgChart.legendPartner)]
+      : gapMode
       ? [sw("is-over", T.orgChart.legendGapOver), sw("is-under", T.orgChart.legendGapUnder), sw("is-full", T.orgChart.legendGapNone)]
       : [sw("is-over", T.orgChart.legendOver), sw("is-full", T.orgChart.legendFull), sw("is-under", T.orgChart.legendUnder), sw("is-empty", T.orgChart.legendNone)]}
     <span class="yn-org-legend-item">${T.orgChart.legendJoined}</span>
@@ -162,7 +166,12 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     return html`<div>${head}<p>${monthJa(month)}</p>${sub.map((t) => html`<p>${t}</p>`)}${p.lines.length ? html`<ul class="yn-plan-tip-list">${rows}${total}</ul>` : html`<p>${T.orgChart.tipNoLoad}</p>`}</div>`;
   };
   const levelClass = (p) => {
-    if (p.change === "left" || p.change === "away") return "is-left";
+    if ((p.change === "left" || p.change === "away")) return "is-left";
+    if (kindMode) {
+      // 区分（§154）: その月の行（無ければ最初の行）の社員・パートナー。マスタに無い人は地
+      const k = p.memberUnknown ? null : memberRecordAt(model, p.memberId, month)?.kind;
+      return k === "employee" ? "is-employee" : k === "partner" ? "is-partner" : "is-none";
+    }
     if (gapMode) {
       if (!confirmed || (p.plannedHours <= 0 && p.actualHours <= 0)) return "is-none";
       const k = planGapKindOf(p.plannedHours, p.actualHours);
@@ -173,7 +182,7 @@ export function orgChartView({ model, store, state, month, color, onChange, rest
     return level === "none" ? "is-empty" : `is-${level}`;
   };
   const chipValue = (p) => {
-    if (p.change === "left" || p.change === "away") return "";
+    if ((p.change === "left" || p.change === "away") || kindMode) return "";
     if (gapMode) {
       if (!confirmed || (p.plannedHours <= 0 && p.actualHours <= 0)) return "";
       const d = p.actualHours - p.plannedHours;

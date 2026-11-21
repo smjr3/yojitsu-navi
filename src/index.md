@@ -173,40 +173,6 @@ if (vm) {
 ```js
 if (vm) {
   const { scope, unit, method } = vm;
-  const ids = scope.contractIds ? new Set(scope.contractIds) : null;
-  const rows = model.contracts
-    .filter((r) => !ids || ids.has(r.contract.contractId))
-    .filter((r) => r.forecasts[method].isDeficit)
-    .map((r) => ({ ...contractRow(model, r, scope.period, method, scope.tree), key: r.contract.contractId }))
-    .sort((a, b) => a.forecastGrossProfit - b.forecastGrossProfit);
-  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { period: periodJa(scope.period), method: methodLabel(method, model.config) })));
-  if (rows.length === 0) {
-    display(emptyState({ title: T.index.noDeficitTitle, text: fmt(T.index.noDeficitText, { team: scope.teamLabel }), icon: "✓" }));
-  } else {
-    const columns = [
-      { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
-      { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
-      ...contractInfoColumns(),
-      ...standardColumns({ costTypes: model.config.costTypes,
-        breakdowns: {
-          budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
-          cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
-          grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
-          margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
-          burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.customerName} / ${r.projectName}` }),
-          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
-        },
-      }),
-      { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
-    ];
-    display(dataTable({ columns, rows, unit, caption: T.breakdown.deficitContracts, exportName: `deficit_contracts_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contract", {}, { id: r.contractId }) }));
-  }
-}
-```
-
-```js
-if (vm) {
-  const { scope, unit, method } = vm;
   const { tree } = scope;
   // 全ての組織を木で出す（チーム一覧と同じ並び・開閉。上位の行は配下の合計。§141）。チームを選んでいればそのチームと配下
   let rootIds = [];
@@ -247,6 +213,40 @@ if (vm) {
       { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
     ];
     display(dataTable({ columns, rows, unit, tree: true, caption: T.index.byTeamCaption, exportName: `teams_summary_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./team", {}, { id: r.teamId }) }));
+  }
+}
+```
+
+```js
+if (vm) {
+  const { scope, unit, method } = vm;
+  const ids = scope.contractIds ? new Set(scope.contractIds) : null;
+  const rows = model.contracts
+    .filter((r) => !ids || ids.has(r.contract.contractId))
+    .filter((r) => r.forecasts[method].isDeficit)
+    .map((r) => ({ ...contractRow(model, r, scope.period, method, scope.tree), key: r.contract.contractId }))
+    .sort((a, b) => a.forecastGrossProfit - b.forecastGrossProfit);
+  display(sectionTitle(T.breakdown.deficitContracts, fmt(T.index.deficitHint, { period: periodJa(scope.period), method: methodLabel(method, model.config) })));
+  if (rows.length === 0) {
+    display(emptyState({ title: T.index.noDeficitTitle, text: fmt(T.index.noDeficitText, { team: scope.teamLabel }), icon: "✓" }));
+  } else {
+    const columns = [
+      { key: "name", label: T.columns.contract, type: "text", render: (r) => contractNameCell(r), sortValue: (r) => `${r.customerName} ${r.projectName}`, exportValue: (r) => `${r.customerName} / ${r.projectName}` },
+      { key: "contractId", label: T.columns.contractId, type: "text", exportOnly: true },
+      ...contractInfoColumns(),
+      ...standardColumns({ costTypes: model.config.costTypes,
+        breakdowns: {
+          budget: (r) => bd.budgetAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit }),
+          cost: (r) => bd.costAggregateSpec({ model, contractIds: [r.contractId], period: scope.period, unit, detailHref: (id) => store.href("./contract", {}, { id }) }),
+          grossProfit: (r) => bd.grossProfitSpec({ budget: r.budget, cost: r.cost, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
+          margin: (r) => bd.marginSpec({ totals: r.totals, unit, subtitle: `${r.customerName} / ${r.projectName}` }),
+          burnRate: (r) => bd.burnRateSpec({ totals: r.totals, unit, threshold: model.config.burnRateDangerThreshold, asOfMonth: model.meta.asOfMonth, subtitle: `${r.customerName} / ${r.projectName}` }),
+          forecast: (r) => bd.forecastSpec({ forecast: r.forecast, contract: r.contract, unit, config: model.config, model }),
+        },
+      }),
+      { key: "status", label: T.columns.status, type: "status", get: (r) => rowStatus(r), sortable: false, hideNarrow: true },
+    ];
+    display(dataTable({ columns, rows, unit, caption: T.breakdown.deficitContracts, exportName: `deficit_contracts_${scope.period.from}_${scope.period.to}`, rowHref: (r) => store.href("./contract", {}, { id: r.contractId }) }));
   }
 }
 ```

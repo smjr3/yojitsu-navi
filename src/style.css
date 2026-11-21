@@ -80,6 +80,10 @@
   --yn-under-bg: #e2f4fb;
   --yn-empty-text: #9c1f6e; /* リソース計画の計画なし（§116。黄＝1.0 超・青＝1.0 未満・赤＝目標の超過・紫＝運用保守以外のグラフと分ける赤紫） */
   --yn-empty-bg: #fbe6f2;
+  --yn-kind-employee-text: #0a5873; /* 体制図の色「区分」の社員 = 水色（§154） */
+  --yn-kind-employee-bg: #d9f1fb;
+  --yn-kind-partner-text: #9e3a26; /* パートナー = 少し赤みのサーモン（超過の赤・計画なしの赤紫と分ける） */
+  --yn-kind-partner-bg: #fbe2d9;
 }
 
 :root[data-theme="dark"] {
@@ -124,6 +128,10 @@
   --yn-under-bg: #0c2e3b;
   --yn-empty-text: #f291cf;
   --yn-empty-bg: #3d1731;
+  --yn-kind-employee-text: #8fd6f0;
+  --yn-kind-employee-bg: #0d3343;
+  --yn-kind-partner-text: #f2a690;
+  --yn-kind-partner-bg: #3f2219;
 }
 
 /* テーマカラー（GitLab のテーマの色合い）。文字に使うのでカード・ページの面に対して 6:1 以上（tests/unit/appearance.test.ts） */
@@ -5108,6 +5116,17 @@ html:has(dialog.yn-dialog[open]) {
 .yn-org-person.is-empty {
   background: var(--yn-empty-bg);
   color: var(--yn-empty-text);
+}
+/* 色「区分」: 社員 = 水色、パートナー = 少し赤み（§154）。マスタに無い人は地 */
+.yn-org-swatch.is-employee,
+.yn-org-person.is-employee {
+  background: var(--yn-kind-employee-bg);
+  color: var(--yn-kind-employee-text);
+}
+.yn-org-swatch.is-partner,
+.yn-org-person.is-partner {
+  background: var(--yn-kind-partner-bg);
+  color: var(--yn-kind-partner-text);
 }
 .yn-org-tree {
   display: grid;

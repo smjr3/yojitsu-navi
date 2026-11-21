@@ -3,6 +3,7 @@
  */
 import { test, expect, gotoPage, useDarkTheme } from "./helpers/app.js";
 import { getModel } from "./helpers/core.js";
+import { memberRecordAt } from "../../src/core/members.js";
 import { addMonths, createMonthHours, loadLevelOf, orgChartAt, personMonths } from "../../src/core/index.js";
 
 const model = getModel();
@@ -147,3 +148,33 @@ for (const width of [390, 768, 1024, 1280]) {
     expect(bad).toBe(0);
   });
 }
+
+test("チーム内の並びはリーダー → 社員 → パートナー（§154）、色「区分」で社員 = 水色・パートナー = 赤み", async ({ page }) => {
+  const kindOf = new Map<string, string | undefined>();
+  for (const n of Object.values(chart.nodes)) for (const p of n.members) kindOf.set(p.memberId, memberRecordAt(model, p.memberId, asOf)?.kind);
+  // 社員とパートナーが両方いるチーム
+  const node = Object.values(chart.nodes).find((n) => {
+    const ks = new Set(n.members.filter((p) => p.change !== "left").map((p) => kindOf.get(p.memberId)));
+    return ks.has("employee") && ks.has("partner");
+  })!;
+  expect(node).toBeTruthy();
+  await gotoPage(page, "/teams?view=chart&color=kind");
+  const own = page.locator(`.yn-org-node[data-team="${node.teamId}"] > .yn-org-people > [data-origin="own"]`);
+  await expect(own).toHaveCount(node.members.length);
+  const shown = await own.evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.member!));
+  expect(shown).toEqual(node.members.map((p) => p.memberId));
+  // 今月いる人: リーダー（いれば先頭）→ 社員 → パートナー
+  const rank = (id: string) => (id === node.leaderMemberId ? 0 : kindOf.get(id) === "employee" ? 1 : 2);
+  const ranks = node.members.filter((p) => p.change !== "left").map((p) => rank(p.memberId));
+  expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+  for (const p of node.members) {
+    const cls = p.change === "left" ? "is-left" : kindOf.get(p.memberId) === "partner" ? "is-partner" : "is-employee";
+    await expect(chip(page, node.teamId, p.memberId)).toHaveClass(new RegExp(cls));
+  }
+  await expect(page.locator(".yn-org-legend .is-employee")).toHaveCount(1);
+  await expect(page.locator(".yn-org-legend .is-partner")).toHaveCount(1);
+  await expect(page.locator('button[data-color="kind"]')).toHaveAttribute("aria-pressed", "true");
+  // 色は社員とパートナーで違う
+  const bg = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await bg(".yn-org-legend .is-employee")).not.toBe(await bg(".yn-org-legend .is-partner"));
+});
