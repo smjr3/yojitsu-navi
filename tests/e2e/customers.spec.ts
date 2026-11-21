@@ -228,11 +228,11 @@ test.describe("顧客詳細 /customer", () => {
     await expect(kpiValue(page, 2)).toHaveText(yen(t.grossProfit));
     await expect(kpiValue(page, 3)).toHaveText(formatPercent(t.burnRate));
     await expect(kpiValue(page, 4)).toHaveText(yen(f.forecastGrossProfit));
-    // 見出しの順: KPI → 月次推移 → 今月の進捗（今月の予算がある顧客だけ。§61）→ 案件 → 担当チーム別 → 作業種別の内訳（工数の明細は後から読む）
+    // 見出しの順: KPI → 月次推移 → 今月の進捗（今月の予算がある顧客だけ。§61）→ 担当チーム別 → 案件（§153）→ メンバー別の実績 → 作業種別の内訳（工数の明細は後から読む）
     await expect(page.locator("h2.yn-section-title", { hasText: "作業種別の内訳" })).toBeVisible();
     const heads = await page.locator("h2.yn-section-title").allTextContents();
     const daily = dailyProgress(model, encodeDaily(model), g.contractIds) ? [`今月の進捗（${model.meta.asOfMonth.slice(0, 4)}年${Number(model.meta.asOfMonth.slice(5, 7))}月・速報）`] : [];
-    expect(heads.map((x) => x.trim())).toEqual(["月次推移", ...daily, "この顧客の案件", "担当チーム別", "メンバー別の実績", "作業種別の内訳"]);
+    expect(heads.map((x) => x.trim())).toEqual(["月次推移", ...daily, "担当チーム別", "この顧客の案件", "メンバー別の実績", "作業種別の内訳"]);
     // 案件一覧 = その顧客の（期間内の）案件だけ
     const contracts = tableByCaption(page, "顧客の案件一覧");
     const inPeriod = g.contractIds.filter((id) => inFy([id]).contractCount > 0);
